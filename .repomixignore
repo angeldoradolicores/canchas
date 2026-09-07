@@ -1,0 +1,35 @@
+# Archivos específicos con alto consumo de tokens
+app/globals.css
+**/prueba.tsx
+
+# Archivos de estilos y assets
+*.css
+*.scss
+*.sass
+*.svg
+*.png
+*.jpg
+*.jpeg
+*.ico
+*.gif
+public/
+
+# Archivos de configuración y bloqueos
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+*.json
+
+# Carpetas de construcción y dependencias
+node_modules/
+.next/
+build/
+dist/
+.git/
+# Archivos de build e caché de TypeScript
+*.tsbuildinfo
+
+# Extensiones de archivos de configuración si los ignoraste con *.json
+*.json
+*.config.js
+*.config.ts

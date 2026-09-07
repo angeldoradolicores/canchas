@@ -1,0 +1,25 @@
+{
+    "ignore": {
+        "customPatterns": [
+            "app/globals.css",
+            "**/prueba.tsx",
+            "*.css",
+            "*.svg",
+            "*.png",
+            "*.jpg",
+            "*.json",
+            "package-lock.json",
+            "pnpm-lock.yaml",
+            "yarn.lock",
+            "node_modules/**",
+            ".next/**",
+            "build/**",
+            "dist/**"
+        ]
+    },
+    "output": {
+        "removeComments": true,
+        "removeEmptyLines": true,
+        "topFilesLen": 5
+    }
+}
