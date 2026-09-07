@@ -349,7 +349,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
           </div>
           <span className="status pending text-xs">Pendiente</span>
         </div>
-        <button className="btn-primary" onClick={() => (onFinish || onBack)()}>Volver al perfil</button>
+        <button className="btn-primary" onClick={() => router.push(`/cancha/${pitch.id}`)}>Volver al perfil</button>
       </div>
     );
   }

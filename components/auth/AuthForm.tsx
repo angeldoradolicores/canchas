@@ -79,7 +79,7 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
       <form onSubmit={handleSubmit} className="auth-form">
         {mode === 'register' && (
           <label className="auth-field">
-            <span>Nombre completo</span>
+            <span>¿Cómo te llamas?</span>
             <input
               type="text"
               value={fullName}

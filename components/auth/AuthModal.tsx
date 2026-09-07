@@ -126,7 +126,7 @@ export function AuthModal({ onClose }: AuthModalProps) {
             {/* Nombre (solo en registro) */}
             {mode === 'register' && (
               <label className="auth-field">
-                <span>Nombre completo</span>
+                <span>¿Cómo te llamas?</span>
                 <input
                   type="text"
                   value={fullName}

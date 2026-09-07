@@ -256,6 +256,13 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
           </div>
 
           <div className="flex items-center gap-2">
+            <Link
+              href={`/cancha/${pitch.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="px-3.5 py-2 bg-secondary text-foreground hover:bg-secondary/80 font-bold text-xs rounded-xl transition-colors shadow-sm flex items-center gap-1.5"
+            >
+              Ver Perfil
+            </Link>
 
             {onBook && (
               <button

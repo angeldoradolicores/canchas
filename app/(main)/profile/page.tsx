@@ -1,11 +1,61 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth-context';
-import { Loader2, Save, LogOut, User, Shield, HelpCircle, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import { Loader2, Save, LogOut, User, Shield, HelpCircle, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+
+export function CustomSelect({ value, onChange, options }: {
+  value: string;
+  onChange: (val: string) => void;
+  options: { value: string; label: string; icon?: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = options.find(o => o.value === value);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative mt-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full h-11 px-3 border border-border rounded-xl bg-background text-sm flex items-center justify-between gap-2 hover:border-primary/50 focus:border-primary focus:ring-1 focus:ring-primary/20 transition-colors outline-none"
+      >
+        <span className="flex items-center gap-2">
+          {selected?.icon && <span>{selected.icon}</span>}
+          <span className={selected ? 'text-foreground font-medium' : 'text-muted-foreground'}>{selected?.label || 'Seleccionar...'}</span>
+        </span>
+        <ChevronDown size={16} className={`text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute z-30 top-full mt-1 left-0 right-0 bg-card border border-border rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-1">
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left hover:bg-secondary transition-colors ${value === opt.value ? 'bg-primary/10 text-primary font-bold' : 'text-foreground'}`}
+            >
+              {opt.icon && <span>{opt.icon}</span>}
+              {opt.label}
+              {value === opt.value && <CheckCircle2 size={14} className="ml-auto text-primary" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   const { user, profile, signOut } = useAuth();
@@ -120,61 +170,76 @@ export default function ProfilePage() {
         <h3 className="font-bold text-lg border-b border-border pb-3">Información personal</h3>
 
         <div className="grid sm:grid-cols-2 gap-4">
-          <label className="auth-field">
-            <span>Nombre completo</span>
-            <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Tu nombre" />
-          </label>
-          <label className="auth-field">
-            <span>Teléfono (WhatsApp)</span>
-            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="3001234567" />
-          </label>
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Nombre completo</span>
+            <input 
+              type="text" 
+              value={fullName} 
+              onChange={e => setFullName(e.target.value)} 
+              placeholder="Tu nombre" 
+              className="w-full h-11 px-3 border border-border rounded-xl bg-background text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-colors placeholder:text-muted-foreground"
+            />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Teléfono (WhatsApp)</span>
+            <input 
+              type="tel" 
+              value={phone} 
+              onChange={e => {
+                const val = e.target.value.replace(/\D/g, '');
+                setPhone(val);
+              }} 
+              placeholder="3001234567" 
+              className="w-full h-11 px-3 border border-border rounded-xl bg-background text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-colors placeholder:text-muted-foreground"
+            />
+          </div>
         </div>
 
         <h3 className="font-bold text-lg border-b border-border pb-3 mt-2">Datos de jugador</h3>
 
         <div className="grid sm:grid-cols-3 gap-4">
-          <label className="auth-field">
-            <span>Pierna hábil</span>
-            <select
-              className="h-[46px] px-3 border border-border rounded-lg bg-card text-sm"
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Pierna hábil</span>
+            <CustomSelect
               value={preferredFoot}
-              onChange={e => setPreferredFoot(e.target.value)}
-            >
-              <option value="">Sin especificar</option>
-              <option value="diestro"> Diestro</option>
-              <option value="zurdo"> Zurdo</option>
-              <option value="ambidiestro"> Ambidiestro</option>
-            </select>
-          </label>
+              onChange={setPreferredFoot}
+              options={[
+                { value: '', label: 'Sin especificar' },
+                { value: 'diestro', label: 'Diestro' },
+                { value: 'zurdo', label: 'Zurdo' },
+                { value: 'ambidiestro', label: 'Ambidiestro' },
+              ]}
+            />
+          </div>
 
-          <label className="auth-field">
-            <span>Nivel de juego</span>
-            <select
-              className="h-[46px] px-3 border border-border rounded-lg bg-card text-sm"
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Nivel de juego</span>
+            <CustomSelect
               value={skillLevel}
-              onChange={e => setSkillLevel(e.target.value)}
-            >
-              <option value="">Sin especificar</option>
-              <option value="amateur"> Recreativo</option>
-              <option value="intermedio"> Intermedio</option>
-              <option value="avanzado"> Avanzado</option>
-            </select>
-          </label>
+              onChange={setSkillLevel}
+              options={[
+                { value: '', label: 'Sin especificar' },
+                { value: 'amateur', label: 'Recreativo' },
+                { value: 'intermedio', label: 'Intermedio' },
+                { value: 'avanzado', label: 'Avanzado' },
+              ]}
+            />
+          </div>
 
-          <label className="auth-field">
-            <span>Posición <span className="text-muted-foreground text-xs">(Opcional)</span></span>
-            <select
-              className="h-[46px] px-3 border border-border rounded-lg bg-card text-sm"
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Posición <span className="text-muted-foreground text-[10px] normal-case font-normal">(Opcional)</span></span>
+            <CustomSelect
               value={position}
-              onChange={e => setPosition(e.target.value)}
-            >
-              <option value="">Sin posición fija</option>
-              <option value="Portero">Portero</option>
-              <option value="Defensa">Defensa</option>
-              <option value="Mediocampista">Mediocampista</option>
-              <option value="Delantero">Delantero</option>
-            </select>
-          </label>
+              onChange={setPosition}
+              options={[
+                { value: '', label: 'Sin posición fija' },
+                { value: 'Portero', label: 'Portero' },
+                { value: 'Defensa', label: 'Defensa' },
+                { value: 'Mediocampista', label: 'Mediocampista' },
+                { value: 'Delantero', label: 'Delantero' },
+              ]}
+            />
+          </div>
         </div>
 
 

@@ -469,7 +469,13 @@ export default function TournamentsPage() {
                   {(t.location || t.pitches) && (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <MapPin size={12} className="text-primary flex-shrink-0" />
-                      <span className="truncate">{t.pitches?.name || t.location}</span>
+                      {t.pitch_id ? (
+                        <Link href={`/cancha/${t.pitch_id}`} onClick={(e) => e.stopPropagation()} className="truncate text-primary font-semibold hover:underline">
+                          {t.pitches?.name}
+                        </Link>
+                      ) : (
+                        <span className="truncate">{t.location}</span>
+                      )}
                     </div>
                   )}
 
@@ -592,26 +598,26 @@ export default function TournamentsPage() {
                   </p>
                 </div>
 
-                {(selectedTournament as any).registration_end_date && (
+                {selectedTournament.registration_end_date && (
                   <div className="bg-amber-500/10 rounded-xl p-3 border border-amber-500/20">
                     <div className="flex items-center gap-1.5 mb-1">
                       <Clock size={13} className="text-amber-500" />
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Fin Inscripciones</p>
                     </div>
                     <p className="font-bold text-sm capitalize">
-                      {new Date((selectedTournament as any).registration_end_date + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      {new Date(selectedTournament.registration_end_date + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}
                     </p>
                   </div>
                 )}
 
-                {(selectedTournament as any).final_date && (
+                {selectedTournament.final_date && (
                   <div className="bg-primary/10 rounded-xl p-3 border border-primary/20">
                     <div className="flex items-center gap-1.5 mb-1">
                       <Trophy size={13} className="text-primary" />
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Gran Final</p>
                     </div>
                     <p className="font-bold text-sm capitalize">
-                      {new Date((selectedTournament as any).final_date + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      {new Date(selectedTournament.final_date + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}
                     </p>
                   </div>
                 )}
@@ -626,10 +632,10 @@ export default function TournamentsPage() {
                       <p className="text-[10px] font-bold text-emerald-800/80 uppercase tracking-wider">Sede</p>
                     </div>
                     {selectedTournament.pitches ? (
-                      /* CORRECCIÓN: Quitamos 'truncate' para que el nombre de la cancha se lea completo en varias líneas */
-                      <p className="font-extrabold text-sm text-foreground dark:text-emerald-50 leading-tight">
-                        {selectedTournament.pitches.name}
-                      </p>
+                      /* CORRECCIÓN: Enlace directo al perfil de la cancha */
+                      <Link href={`/cancha/${selectedTournament.pitch_id}`} className="font-extrabold text-sm text-primary underline-offset-4 hover:underline leading-tight flex items-center gap-1">
+                        {selectedTournament.pitches.name} <ExternalLink size={12} />
+                      </Link>
                     ) : (
                       /* CORRECCIÓN: Quitamos 'truncate' para que la locación manual se muestre completa siempre */
                       <p className="font-bold text-sm text-foreground dark:text-emerald-50 leading-tight">

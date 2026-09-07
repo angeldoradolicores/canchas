@@ -606,8 +606,13 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, onCancel }: any) {
           const effectiveBooking = isDraft && draftExpired ? null : slotBooking;
           const isManual = effectiveBooking?.source === 'owner_panel';
 
+          const allowedSlots = pitch.custom_pricing?.time_slots || TIME_SLOTS;
+          const isOperating = allowedSlots.includes(slot);
+
           let bgClass = 'bg-card border-border/80';
-          if (effectiveBooking) {
+          if (!isOperating && !effectiveBooking) {
+            bgClass = 'bg-red-50/50 border-red-200/50 dark:bg-red-950/20';
+          } else if (effectiveBooking) {
             if (effectiveBooking.status === 'draft') bgClass = 'bg-orange-50 border-orange-300 dark:bg-orange-950/30';
             else if (effectiveBooking.status === 'pending') bgClass = 'bg-amber-50 border-amber-300 dark:bg-amber-950/30';
             else if (isManual) bgClass = 'bg-purple-50 border-purple-300 dark:bg-purple-950/30';
@@ -615,9 +620,13 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, onCancel }: any) {
           }
 
           return (
-            <div key={slot} className={`relative p-2 rounded-xl border text-center transition-all ${bgClass}`}>
-              <span className={`font-bold text-xs block leading-tight ${effectiveBooking ? 'text-foreground' : 'text-muted-foreground'}`}>{h12}:00</span>
-              <span className="text-[9px] uppercase opacity-60 font-semibold">{ampm}</span>
+            <div key={slot} className={`relative p-2 rounded-xl border text-center transition-all flex flex-col justify-center min-h-[64px] ${bgClass}`}>
+              <span className={`font-bold text-xs block leading-tight ${effectiveBooking ? 'text-foreground' : (!isOperating ? 'text-red-400/50' : 'text-muted-foreground')}`}>{h12}:00</span>
+              <span className={`text-[9px] uppercase opacity-60 font-semibold ${!isOperating && !effectiveBooking ? 'text-red-400/50' : ''}`}>{ampm}</span>
+
+              {!isOperating && !effectiveBooking && (
+                <div className="mt-1 text-[9px] font-bold text-red-500/60 leading-tight">Cerrado</div>
+              )}
 
               {effectiveBooking && (
                 <div className="mt-1 text-[10px] font-semibold leading-tight space-y-0.5">
@@ -744,21 +753,29 @@ function PitchGridMatrixCard({ pitch, dates, supabase, onDayClick }: any) {
                     });
 
                     const isManual = slotBooking?.source === 'owner_panel';
+                    const allowedSlots = pitch.custom_pricing?.time_slots || TIME_SLOTS;
+                    const isOperating = allowedSlots.includes(slot);
+                    
+                    let cellClass = 'bg-secondary/10 border-border/30 text-muted-foreground/40';
+                    if (!isOperating && !slotBooking) {
+                      cellClass = 'bg-red-50/50 border-red-200/50 text-red-500/50 dark:bg-red-950/20';
+                    } else if (slotBooking) {
+                      cellClass = isManual
+                        ? 'bg-purple-100 dark:bg-purple-950/40 border-purple-300 text-purple-900 dark:text-purple-200'
+                        : 'bg-primary/10 border-primary/40 text-foreground';
+                    }
 
                     return (
                       <div
                         key={`${dateStr}-${slot}`}
-                        className={`min-h-[36px] p-1 rounded-lg border flex flex-col justify-center text-center transition-all ${slotBooking
-                          ? isManual
-                            ? 'bg-purple-100 dark:bg-purple-950/40 border-purple-300 text-purple-900 dark:text-purple-200'
-                            : 'bg-primary/10 border-primary/40 text-foreground'
-                          : 'bg-secondary/10 border-border/30 text-muted-foreground/40'
-                          }`}
+                        className={`min-h-[36px] p-1 rounded-lg border flex flex-col justify-center text-center transition-all ${cellClass}`}
                       >
                         {slotBooking ? (
                           <div className="text-[10px] font-bold leading-tight truncate">
                             {slotBooking.customer_name || 'Reservado'}
                           </div>
+                        ) : !isOperating ? (
+                          <span className="text-[9px] font-bold leading-tight">Cerrado</span>
                         ) : (
                           <span className="text-[9px] opacity-20 font-medium">—</span>
                         )}

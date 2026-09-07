@@ -10,6 +10,7 @@ import { toPng } from 'html-to-image';
 export default function UserReservationsPage() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [dateFilter, setDateFilter] = useState<'todas' | 'hoy' | 'pasados_3' | 'pasados_7' | 'historial'>('todas');
+  const [statusFilter, setStatusFilter] = useState<'todas' | 'confirmed' | 'pending' | 'cancelled'>('todas');
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
@@ -147,6 +148,9 @@ export default function UserReservationsPage() {
     if (dateFilter === 'pasados_7') return diffDays >= 0 && diffDays <= 7;
     if (dateFilter === 'historial') return diffDays > 7;
     return true;
+  }).filter(b => {
+    if (statusFilter === 'todas') return true;
+    return b.status === statusFilter;
   });
 
   const confirmed = filteredBookings.filter(b => b.status === 'confirmed');
@@ -290,6 +294,26 @@ export default function UserReservationsPage() {
             </button>
           ))}
         </div>
+        
+        <div className="flex items-center gap-2 min-w-max mt-3">
+          {[
+            { id: 'todas', label: 'Todos los estados' },
+            { id: 'confirmed', label: 'Aprobadas' },
+            { id: 'pending', label: 'En revisión' },
+            { id: 'cancelled', label: 'Canceladas' },
+          ].map(f => (
+            <button
+              key={f.id}
+              onClick={() => setStatusFilter(f.id as any)}
+              className={`px-4 py-2 rounded-full text-sm font-bold transition-all active:scale-95 ${statusFilter === f.id
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'bg-secondary text-foreground hover:bg-border border border-border'
+                }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
 
 
@@ -383,7 +407,7 @@ export default function UserReservationsPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px 16px', marginBottom: 20 }}>
                   <div>
                     <p style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.1em', marginBottom: 4 }}>JUGADOR</p>
-                    <p style={{ fontWeight: 700, color: '#fff', textTransform: 'capitalize' }}>{user?.email?.split('@')[0] || 'Usuario'}</p>
+                    <p style={{ fontWeight: 700, color: '#fff', textTransform: 'capitalize' }}>{selectedTicket.customer_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Jugador'}</p>
                   </div>
                   <div>
                     <p style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.1em', marginBottom: 4 }}>ESTADO</p>
