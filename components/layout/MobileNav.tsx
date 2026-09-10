@@ -21,6 +21,8 @@ export function MobileNav() {
         <Link
           key={path}
           href={path}
+          id={path === '/favorites' ? 'nav-favorites-mobile' : undefined}
+          data-favorites-nav={path === '/favorites' ? 'mobile' : undefined}
           className={`flex flex-col items-center gap-1 min-w-[58px] text-[9px] text-muted-foreground ${
             pathname === path ? 'active text-primary' : ''
           }`}

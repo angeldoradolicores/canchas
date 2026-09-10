@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth-context';
-import { Loader2, CalendarDays, MapPin, X, Share2, Ticket, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Loader2, CalendarDays, MapPin, X, Share2, Ticket, Clock, CheckCircle, XCircle, AlertCircle, LayoutGrid, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { toPng } from 'html-to-image';
 
@@ -15,6 +15,7 @@ export default function UserReservationsPage() {
   const [authChecked, setAuthChecked] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
   const [isSharing, setIsSharing] = useState(false);
+  const [notification, setNotification] = useState<{ show: boolean; title: string; message: string; status: string } | null>(null);
   const ticketRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const supabase = createClient();
@@ -27,12 +28,81 @@ export default function UserReservationsPage() {
     return () => clearTimeout(t);
   }, [user]);
 
+  // Carga inicial
   useEffect(() => {
     if (user) {
       setAuthChecked(true);
       fetchMyBookings();
     }
   }, [user]);
+
+  // Sincronización en TIEMPO REAL: actualización inmediata cuando el dueño aprueba o cancela
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`user-reservations:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'bookings',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload: any) => {
+          if (payload.eventType === 'UPDATE' && payload.new) {
+            const oldStatus = payload.old?.status;
+            const newStatus = payload.new.status;
+
+            if (newStatus && newStatus !== oldStatus) {
+              const statusMap: Record<string, { label: string; text: string }> = {
+                confirmed: {
+                  label: '¡Reserva Aprobada! 🎉',
+                  text: 'El dueño de la cancha ha aprobado tu reserva. ¡Tu partido está confirmado!',
+                },
+                cancelled: {
+                  label: 'Reserva Cancelada ❌',
+                  text: 'Tu solicitud de reserva ha sido cancelada.',
+                },
+                pending: {
+                  label: 'Reserva en Revisión ⏳',
+                  text: 'Tu comprobante está en proceso de validación.',
+                },
+              };
+
+              const info = statusMap[newStatus] || {
+                label: 'Reserva Actualizada',
+                text: `El estado de tu reserva ahora es: ${newStatus}.`,
+              };
+
+              setNotification({
+                show: true,
+                title: info.label,
+                message: info.text,
+                status: newStatus,
+              });
+
+              setTimeout(() => {
+                setNotification(prev => (prev ? { ...prev, show: false } : null));
+              }, 7000);
+            }
+          }
+
+          // Refrescar reservas al instante
+          fetchMyBookings();
+        }
+      )
+      .subscribe();
+
+    // Sondeo de respaldo cada 4 segundos
+    const interval = setInterval(fetchMyBookings, 4000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
+  }, [user, supabase]);
 
   const fetchMyBookings = async () => {
     try {
@@ -90,7 +160,7 @@ export default function UserReservationsPage() {
       const blob = await (await fetch(dataUrl)).blob();
       const file = new File([blob], 'ticket-reserva.png', { type: 'image/png' });
       const pitchUrl = `${window.location.origin}/cancha/${b.pitch_id}`;
-      const text = `⚽ ¡Partido confirmado!\n\n📍 Cancha: ${b.pitches.name}\n🗓 Fecha: ${new Date(b.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}\n⏰ Hora: ${new Date(b.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}\n\n🔗 Ver cancha y ubicación: ${pitchUrl}\n\n¡Allá nos vemos!`;
+      const text = `⚽ ¡Partido confirmado!\n\n📍 Cancha: ${b.pitches?.name?.toUpperCase() || ''}\n🗓 Fecha: ${new Date(b.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}\n⏰ Hora: ${new Date(b.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}\n\n🔗 Ver cancha y ubicación: ${pitchUrl}\n\n¡Allá nos vemos!`;
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: 'Ticket de Reserva', text });
       } else {
@@ -262,6 +332,38 @@ export default function UserReservationsPage() {
 
   return (
     <div className="page-content fade-in max-w-3xl mx-auto">
+      {/* Notificación Flotante en Tiempo Real */}
+      {notification?.show && (
+        <div className="fixed top-20 right-4 sm:right-8 z-[1000] max-w-md w-full animate-in slide-in-from-top-4 duration-300">
+          <div className="bg-card/95 backdrop-blur-xl border border-primary/40 rounded-2xl shadow-2xl p-4 flex items-start gap-3 text-foreground ring-1 ring-primary/20">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${notification.status === 'confirmed'
+              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+              : notification.status === 'cancelled'
+                ? 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300'
+                : 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
+              }`}>
+              {notification.status === 'confirmed' ? (
+                <CheckCircle size={22} className="animate-bounce" />
+              ) : notification.status === 'cancelled' ? (
+                <XCircle size={22} />
+              ) : (
+                <AlertCircle size={22} />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-black text-sm text-foreground">{notification.title}</h4>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{notification.message}</p>
+            </div>
+            <button
+              onClick={() => setNotification(null)}
+              className="p-1 text-muted-foreground hover:text-foreground rounded-lg hover:bg-secondary transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="page-heading mb-6">
         <div>
           <p className="eyebrow accent-label">MI ACTIVIDAD</p>
@@ -274,45 +376,75 @@ export default function UserReservationsPage() {
         </div>
       </div>
 
-      <div className="mb-8 overflow-x-auto pb-2 scrollbar-hide">
-        <div className="flex items-center gap-2 min-w-max">
-          {[
-            { id: 'todas', label: 'Todas' },
-            { id: 'hoy', label: 'Hoy' },
-            { id: 'pasados_3', label: 'Últimos 3 días' },
-            { id: 'pasados_7', label: 'Últimos 7 días' },
-          ].map(f => (
-            <button
-              key={f.id}
-              onClick={() => setDateFilter(f.id as any)}
-              className={`px-4 py-2 rounded-full text-sm font-bold transition-all active:scale-95 ${dateFilter === f.id
-                ? 'bg-primary text-white shadow-md'
-                : 'bg-secondary text-foreground hover:bg-border border border-border'
-                }`}
-            >
-              {f.label}
-            </button>
-          ))}
+      <div className="mb-6 flex flex-col gap-3">
+        {/* Barra de Filtros por Estado: diseño idéntico al de Torneos */}
+        <div>
+          <h2 className="text-[10px] font-extrabold text-[#4D715B] uppercase tracking-wider mb-2 px-1">
+            Filtrar por estado
+          </h2>
+
+          <div className="bg-[#CDE0D1]/70 border border-[#BACFC0] rounded-2xl p-1 flex items-center gap-1 w-full overflow-x-auto scrollbar-hide">
+            {[
+              { id: 'todas', label: 'Todas', showIcon: true },
+              { id: 'confirmed', label: 'Aprobadas', showIcon: false },
+              { id: 'pending', label: 'En revisión', showIcon: false },
+              { id: 'cancelled', label: 'Canceladas', showIcon: false },
+            ].map(f => {
+              const isActive = statusFilter === f.id;
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => setStatusFilter(f.id as any)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-black transition-all duration-200 select-none whitespace-nowrap ${
+                    isActive
+                      ? 'bg-[#DCE7DE] text-[#054D27] shadow-xs border border-[#BACFC0]'
+                      : 'text-[#4D715B] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
+                  }`}
+                >
+                  {f.showIcon && (
+                    <LayoutGrid
+                      size={13}
+                      strokeWidth={2.5}
+                      className={isActive ? 'text-[#008744]' : 'text-[#4D715B]'}
+                    />
+                  )}
+                  <span>{f.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-        
-        <div className="flex items-center gap-2 min-w-max mt-3">
-          {[
-            { id: 'todas', label: 'Todos los estados' },
-            { id: 'confirmed', label: 'Aprobadas' },
-            { id: 'pending', label: 'En revisión' },
-            { id: 'cancelled', label: 'Canceladas' },
-          ].map(f => (
-            <button
-              key={f.id}
-              onClick={() => setStatusFilter(f.id as any)}
-              className={`px-4 py-2 rounded-full text-sm font-bold transition-all active:scale-95 ${statusFilter === f.id
-                ? 'bg-emerald-600 text-white shadow-md'
-                : 'bg-secondary text-foreground hover:bg-border border border-border'
-                }`}
+
+        {/* 2. Selector de Fecha con la paleta y estética de la app */}
+        <div className="flex items-center justify-between sm:justify-end gap-2 pt-1 px-1">
+          <span className="text-[10px] font-black uppercase tracking-wider text-[#4D715B] flex items-center gap-1">
+            <CalendarDays size={13} className="text-[#008744]" /> Fecha:
+          </span>
+
+          <div className="relative inline-block min-w-[170px]">
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value as any)}
+              className="w-full appearance-none cursor-pointer outline-none text-xs font-bold rounded-xl pl-3 pr-8 py-2 transition-all shadow-xs border bg-[#DCE7DE] text-[#054D27] border-[#BACFC0] hover:bg-[#CDE0D1] focus:ring-2 focus:ring-[#008744]/20"
             >
-              {f.label}
-            </button>
-          ))}
+              <option value="todas" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">
+                Cualquier fecha
+              </option>
+              <option value="hoy" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">
+                Hoy
+              </option>
+              <option value="pasados_3" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">
+                Últimos 3 días
+              </option>
+              <option value="pasados_7" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">
+                Últimos 7 días
+              </option>
+            </select>
+
+            <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none text-[#054D27]">
+              <ChevronDown size={14} strokeWidth={2.5} />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -379,7 +511,7 @@ export default function UserReservationsPage() {
                   <div style={{ marginBottom: 16, borderRadius: 12, overflow: 'hidden', height: 160 }}>
                     <img
                       src={selectedTicket.pitches.media_urls?.[0] || selectedTicket.pitches.image_url}
-                      alt={selectedTicket.pitches.name}
+                      alt={selectedTicket.pitches?.name?.toUpperCase() || 'Cancha'}
                       style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.85 }}
                     />
                   </div>

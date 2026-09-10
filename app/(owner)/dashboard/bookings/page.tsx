@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth-context';
 import {
   Loader2, CheckCircle, XCircle, FileText, CalendarDays,
   LayoutList, Calendar as CalendarIcon, Plus, X, Download, Clock,
-  ChevronLeft, ChevronRight, Wrench, Search
+  ChevronLeft, ChevronRight, Wrench, Search, AlertTriangle
 } from 'lucide-react';
 import { useToday } from '@/lib/use-today';
 import { ManualBookingModal } from '@/components/booking/ManualBookingModal';
@@ -104,6 +104,9 @@ export default function BookingsPage() {
     }
   }, [user, supabase]);
 
+  const [cancelConfirm, setCancelConfirm] = useState<{ id: string; name: string; time: string } | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+
   const updateStatus = async (id: string, newStatus: 'confirmed' | 'cancelled') => {
     const updatePayload: Record<string, any> = {
       status: newStatus,
@@ -116,9 +119,52 @@ export default function BookingsPage() {
     const { error } = await supabase.from('bookings').update(updatePayload).eq('id', id);
     if (!error) {
       setBookings(prev => prev.map(b => b.id === id ? { ...b, ...updatePayload } : b));
+
+      // Notificar al cliente inmediatamente a través de la tabla de notificaciones
+      const target = bookings.find(b => b.id === id);
+      if (target?.user_id) {
+        try {
+          const isApproved = newStatus === 'confirmed';
+          const startTime = new Date(target.start_time);
+          const timeStr = startTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+          const dateStr = startTime.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' });
+
+          await supabase.from('notifications').insert({
+            user_id: target.user_id,
+            sender_id: user?.id,
+            title: isApproved ? '🎉 ¡Reserva Confirmada!' : '⚠️ Reserva Cancelada',
+            message: isApproved
+              ? `Tu reserva para el ${dateStr} a las ${timeStr} fue confirmada por el dueño. ¡A jugar!`
+              : `Tu solicitud de reserva para el ${dateStr} a las ${timeStr} fue cancelada por el establecimiento.`,
+            type: 'booking_status',
+            is_read: false,
+          });
+        } catch (notifErr) {
+          console.error('[Notification insert error]', notifErr);
+        }
+      }
     } else {
       alert('Error: ' + error.message);
     }
+  };
+
+  const handleCancelRequest = (booking: any) => {
+    const startTime = new Date(booking.start_time);
+    const timeStr = startTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+    const dateStr = startTime.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' });
+    setCancelConfirm({
+      id: booking.id,
+      name: booking.customer_name || 'Anónimo',
+      time: `${dateStr} · ${timeStr}`,
+    });
+  };
+
+  const confirmCancel = async () => {
+    if (!cancelConfirm) return;
+    setCancelling(true);
+    await updateStatus(cancelConfirm.id, 'cancelled');
+    setCancelling(false);
+    setCancelConfirm(null);
   };
 
   // Genera el rango de fechas continuas "YYYY-MM-DD" sin errores de zona horaria
@@ -378,12 +424,12 @@ export default function BookingsPage() {
                     <div className="flex-1 min-w-0 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2">
                       <div className="col-span-2 sm:col-span-1">
                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Cliente</p>
-                        <p className="font-bold text-sm text-foreground">{b.customer_name || 'Anónimo'}</p>
+                        <p className="font-bold text-sm text-foreground capitalize">{b.customer_name || 'Anónimo'}</p>
                         {b.customer_phone && <p className="text-[11px] text-muted-foreground">{b.customer_phone}</p>}
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Cancha</p>
-                        <p className="font-semibold text-sm">{b.pitches?.name || '—'}</p>
+                        <p className="font-semibold text-sm">{b.pitches?.name.toUpperCase() || '—'}</p>
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Fecha y Hora</p>
@@ -416,13 +462,13 @@ export default function BookingsPage() {
                           <button onClick={() => updateStatus(b.id, 'confirmed')} className="p-2 bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/40 dark:text-green-300 rounded-xl transition-colors" title="Confirmar">
                             <CheckCircle size={16} />
                           </button>
-                          <button onClick={() => updateStatus(b.id, 'cancelled')} className="p-2 bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 rounded-xl transition-colors" title="Rechazar">
+                          <button onClick={() => handleCancelRequest(b)} className="p-2 bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 rounded-xl transition-colors" title="Rechazar">
                             <XCircle size={16} />
                           </button>
                         </div>
                       )}
                       {b.status === 'confirmed' && (
-                        <button onClick={() => updateStatus(b.id, 'cancelled')} className="p-2 bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 rounded-xl transition-colors" title="Cancelar reserva">
+                        <button onClick={() => handleCancelRequest(b)} className="p-2 bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 rounded-xl transition-colors" title="Cancelar reserva">
                           <XCircle size={16} />
                         </button>
                       )}
@@ -477,6 +523,8 @@ export default function BookingsPage() {
                     selectedDate={selectedDate}
                     supabase={supabase}
                     onCancel={updateStatus}
+                    onCancelRequest={handleCancelRequest}
+                    onViewProof={(url: string) => setProofUrl(url)}
                   />
                 ) : (
                   <PitchGridMatrixCard
@@ -485,6 +533,7 @@ export default function BookingsPage() {
                     dates={getDaysRange(selectedDate, calView)}
                     supabase={supabase}
                     onDayClick={(dateStr: string) => { setSelectedDate(dateStr); setCalView('day'); }}
+                    onViewProof={(url: string) => setProofUrl(url)}
                   />
                 )
               ))}
@@ -502,6 +551,57 @@ export default function BookingsPage() {
           onClose={() => setShowManualBooking(false)}
           onSuccess={() => { setShowManualBooking(false); fetchBookingsAndPitches(); }}
         />
+      )}
+
+      {/* ── Modal de Confirmación de Cancelación ── */}
+      {cancelConfirm && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-card w-full max-w-md rounded-3xl shadow-2xl border border-border p-6 sm:p-7 animate-in zoom-in-95 duration-200 space-y-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/25 flex items-center justify-center shrink-0">
+                <AlertTriangle size={24} className="text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <h3 className="font-black text-lg text-foreground tracking-tight">¿Cancelar reserva?</h3>
+                <p className="text-xs text-muted-foreground">El horario se liberará de inmediato</p>
+              </div>
+            </div>
+
+            <div className="bg-secondary/50 rounded-2xl p-4 border border-border/60 space-y-2">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground font-semibold">Cliente:</span>
+                <span className="font-black text-foreground capitalize text-sm">{cancelConfirm.name}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground font-semibold">Fecha y Hora:</span>
+                <span className="font-bold text-primary">{cancelConfirm.time}</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground/90 pt-2 border-t border-border/50 leading-relaxed">
+                Esta acción cancelará la reserva en el calendario y permitirá que el espacio vuelva a estar disponible para nuevos partidos o reservas manuales.
+              </p>
+            </div>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={confirmCancel}
+                disabled={cancelling}
+                className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 active:scale-98 text-white text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
+              >
+                {cancelling ? <Loader2 size={16} className="animate-spin" /> : <XCircle size={16} />}
+                <span>{cancelling ? 'Cancelando...' : 'Sí, cancelar'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCancelConfirm(null)}
+                disabled={cancelling}
+                className="flex-1 py-3 rounded-xl border border-border bg-secondary/80 hover:bg-secondary active:scale-98 text-foreground text-xs sm:text-sm font-bold transition-all text-center"
+              >
+                No, mantener
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {proofUrl && (
@@ -557,9 +657,37 @@ function MonthlyBookingSummary({ bookings, selectedDate, onSelectDate }: { booki
   );
 }
 
-function PitchScheduleCard({ pitch, selectedDate, supabase, onCancel }: any) {
+// ─── Mini countdown timer para slots en proceso ───────────────────────────
+function SlotCountdown({ expiresAt, onExpire }: { expiresAt: string; onExpire: () => void }) {
+  const [secs, setSecs] = useState(() => {
+    const diff = Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);
+    return Math.max(0, diff);
+  });
+
+  useEffect(() => {
+    if (secs <= 0) { onExpire(); return; }
+    const id = setInterval(() => setSecs(s => {
+      if (s <= 1) { onExpire(); return 0; }
+      return s - 1;
+    }), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (secs <= 0) return <span className="text-[8px] text-orange-500 font-bold">Liberando...</span>;
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return (
+    <span className="font-mono font-black text-[9px] text-orange-600 dark:text-orange-400">
+      {m}:{s.toString().padStart(2, '0')}
+    </span>
+  );
+}
+
+function PitchScheduleCard({ pitch, selectedDate, supabase, onCancel, onCancelRequest, onViewProof }: any) {
   const [slots, setSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [realtimeOk, setRealtimeOk] = useState(false);
 
   const fetchSlots = useCallback(async () => {
     if (!selectedDate) return;
@@ -572,10 +700,33 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, onCancel }: any) {
       .lte('start_time', `${selectedDate}T23:59:59-05:00`)
       .neq('status', 'cancelled');
     setSlots(data || []);
+    setLastRefresh(new Date());
     setLoading(false);
   }, [selectedDate, pitch.id, supabase]);
 
+  // Carga inicial
   useEffect(() => { fetchSlots(); }, [fetchSlots]);
+
+  // Auto-refresh cada 2 segundos (crítico para evitar doble reserva)
+  useEffect(() => {
+    const interval = setInterval(() => { fetchSlots(); }, 2000);
+    return () => clearInterval(interval);
+  }, [fetchSlots]);
+
+  // Supabase Realtime — cambios inmediatos sin esperar el polling
+  useEffect(() => {
+    const channel = supabase
+      .channel(`schedule:${pitch.id}:${selectedDate}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings', filter: `pitch_id=eq.${pitch.id}` },
+        () => { fetchSlots(); }
+      )
+      .subscribe((status: string) => {
+        setRealtimeOk(status === 'SUBSCRIBED');
+      });
+    return () => { supabase.removeChannel(channel); };
+  }, [pitch.id, selectedDate, supabase, fetchSlots]);
 
   return (
     <div className="bg-card p-4 rounded-2xl border border-border shadow-sm">
@@ -583,7 +734,34 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, onCancel }: any) {
         <h3 className="font-bold text-sm flex items-center gap-2">
           <div className="w-2 h-4 bg-primary rounded-full" /> {pitch.name}
         </h3>
-        {loading && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
+      <div className="flex items-center gap-2">
+          {loading && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
+          <button
+            onClick={fetchSlots}
+            title="Actualizar disponibilidad"
+            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-primary transition-colors"
+          >
+            <Clock size={13} />
+          </button>
+          <div className="flex items-center gap-1.5">
+            <span
+              title={realtimeOk ? 'Tiempo real activo' : 'Tiempo real desconectado'}
+              className={`w-2 h-2 rounded-full ${realtimeOk ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40'}`}
+            />
+            <span className="text-[9px] text-muted-foreground hidden sm:block">
+              {lastRefresh.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Leyenda */}
+      <div className="flex flex-wrap items-center gap-2 mb-3 text-[9px] font-bold uppercase tracking-wide">
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-primary/10 border border-primary/40 inline-block" />Reservado</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-purple-50 border border-purple-300 dark:bg-purple-950/40 inline-block" />Manual</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-50 border border-amber-300 dark:bg-amber-950/30 inline-block" />Pendiente</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-50 border border-orange-300 dark:bg-orange-950/30 inline-block" />En proceso</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-card border border-border/80 inline-block" />Libre</span>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
@@ -620,7 +798,7 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, onCancel }: any) {
           }
 
           return (
-            <div key={slot} className={`relative p-2 rounded-xl border text-center transition-all flex flex-col justify-center min-h-[64px] ${bgClass}`}>
+            <div key={slot} className={`relative p-2 rounded-xl border text-center transition-all flex flex-col justify-center min-h-[72px] ${bgClass}`}>
               <span className={`font-bold text-xs block leading-tight ${effectiveBooking ? 'text-foreground' : (!isOperating ? 'text-red-400/50' : 'text-muted-foreground')}`}>{h12}:00</span>
               <span className={`text-[9px] uppercase opacity-60 font-semibold ${!isOperating && !effectiveBooking ? 'text-red-400/50' : ''}`}>{ampm}</span>
 
@@ -628,9 +806,22 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, onCancel }: any) {
                 <div className="mt-1 text-[9px] font-bold text-red-500/60 leading-tight">Cerrado</div>
               )}
 
-              {effectiveBooking && (
+              {effectiveBooking?.status === 'draft' && effectiveBooking.expires_at && (
+                <div className="mt-1 flex flex-col items-center gap-0.5">
+                  <Clock size={10} className="text-orange-500 animate-pulse" />
+                  <SlotCountdown
+                    expiresAt={effectiveBooking.expires_at}
+                    onExpire={fetchSlots}
+                  />
+                  <span className="text-[8px] text-orange-500/80 font-semibold">En proceso</span>
+                </div>
+              )}
+
+              {effectiveBooking && effectiveBooking.status !== 'draft' && (
                 <div className="mt-1 text-[10px] font-semibold leading-tight space-y-0.5">
-                  <div className="truncate text-foreground font-medium">{effectiveBooking.customer_name || '—'}</div>
+                  <div className="truncate text-foreground font-bold text-[9px]" title={effectiveBooking.customer_name}>
+                    {effectiveBooking.customer_name || '—'}
+                  </div>
                   {isManual ? (
                     <div className="flex items-center gap-0.5 text-purple-600 dark:text-purple-400 justify-center text-[9px]">
                       <Wrench size={8} /> Manual
@@ -640,9 +831,28 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, onCancel }: any) {
                       {effectiveBooking.status === 'pending' ? 'Pend.' : 'OK'}
                     </div>
                   )}
+                  {effectiveBooking.payment_proof_url && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewProof?.(effectiveBooking.payment_proof_url);
+                      }}
+                      className="w-full flex items-center justify-center gap-1 text-[8px] font-bold text-primary border border-primary/20 bg-primary/10 hover:bg-primary/20 rounded py-0.5 transition-colors mt-0.5"
+                      title="Ver comprobante de pago"
+                    >
+                      <FileText size={8} /> Comprobante
+                    </button>
+                  )}
                   {(effectiveBooking.status === 'confirmed' || effectiveBooking.status === 'pending') && (
                     <button
-                      onClick={() => onCancel(effectiveBooking.id, 'cancelled').then(() => fetchSlots())}
+                      onClick={() => {
+                        if (onCancelRequest) {
+                          onCancelRequest(effectiveBooking);
+                        } else {
+                          onCancel(effectiveBooking.id, 'cancelled').then(() => fetchSlots());
+                        }
+                      }}
                       className="w-full text-[8px] bg-red-100 text-red-600 dark:bg-red-950/50 hover:bg-red-200 rounded py-0.5 transition-colors font-bold mt-1"
                       title="Cancelar"
                     >
@@ -659,8 +869,9 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, onCancel }: any) {
   );
 }
 
+
 /* Matriz de Horarios en Grilla: Filas = Horas | Columnas = Días */
-function PitchGridMatrixCard({ pitch, dates, supabase, onDayClick }: any) {
+function PitchGridMatrixCard({ pitch, dates, supabase, onDayClick, onViewProof }: any) {
   const [allSlots, setAllSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -755,7 +966,7 @@ function PitchGridMatrixCard({ pitch, dates, supabase, onDayClick }: any) {
                     const isManual = slotBooking?.source === 'owner_panel';
                     const allowedSlots = pitch.custom_pricing?.time_slots || TIME_SLOTS;
                     const isOperating = allowedSlots.includes(slot);
-                    
+
                     let cellClass = 'bg-secondary/10 border-border/30 text-muted-foreground/40';
                     if (!isOperating && !slotBooking) {
                       cellClass = 'bg-red-50/50 border-red-200/50 text-red-500/50 dark:bg-red-950/20';
@@ -771,8 +982,23 @@ function PitchGridMatrixCard({ pitch, dates, supabase, onDayClick }: any) {
                         className={`min-h-[36px] p-1 rounded-lg border flex flex-col justify-center text-center transition-all ${cellClass}`}
                       >
                         {slotBooking ? (
-                          <div className="text-[10px] font-bold leading-tight truncate">
-                            {slotBooking.customer_name || 'Reservado'}
+                          <div className="flex flex-col items-center">
+                            <div className="text-[10px] font-bold leading-tight truncate w-full" title={slotBooking.customer_name}>
+                              {slotBooking.customer_name || 'Reservado'}
+                            </div>
+                            {slotBooking.payment_proof_url && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onViewProof?.(slotBooking.payment_proof_url);
+                                }}
+                                className="mt-0.5 text-[8px] font-bold text-primary hover:underline flex items-center gap-0.5"
+                                title="Ver comprobante de pago"
+                              >
+                                <FileText size={8} /> Comprobante
+                              </button>
+                            )}
                           </div>
                         ) : !isOperating ? (
                           <span className="text-[9px] font-bold leading-tight">Cerrado</span>

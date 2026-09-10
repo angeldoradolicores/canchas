@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Check, Upload, CheckCircle2, Loader2, Image as ImageIcon, CalendarDays, Clock3, XCircle, Copy, CheckCheck, X } from 'lucide-react';
 import { Pitch } from '@/lib/types';
@@ -10,6 +10,7 @@ import { useToday } from '@/lib/use-today';
 import { CustomMonthCalendar } from '../explore/CustomMonthCalendar';
 import { useActiveBooking } from '@/lib/active-booking-context';
 import { CancelBookingModal } from '@/components/booking/CancelBookingModal';
+import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
 
 
 const DEFAULT_TIME_SLOTS = [
@@ -122,6 +123,13 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showCalendar, setShowCalendar] = useState(false);
+  const [alertState, setAlertState] = useState<AlertModalState>({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: ''
+  });
+
 
 
   const { user, profile } = useAuth();
@@ -133,6 +141,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     cancelActiveBooking,
     clearActiveBooking,
     setIsFloating,
+    lockError,
   } = useActiveBooking();
   const router = useRouter();
 
@@ -153,11 +162,22 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     }
   }, [pitch.id, selectedDate, preselectedTimes]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const isExpiredAlertRef = useRef(false);
+  const hadActiveLockRef = useRef(false);
+
+  // Registrar si hubo un bloqueo activo para esta cancha
+  useEffect(() => {
+    if (activeBooking && activeBooking.pitch.id === pitch.id) {
+      hadActiveLockRef.current = true;
+    }
+  }, [activeBooking, pitch.id]);
+
   useEffect(() => {
     if (!selectedDate || !pitch.id) return;
     setLoadingSlots(true);
 
-    const fetchTaken = async () => {
+    const fetchTaken = async (silent = false) => {
+      if (!silent) setLoadingSlots(true);
       const dayStart = `${selectedDate}T00:00:00-05:00`;
       const dayEnd = `${selectedDate}T23:59:59-05:00`;
 
@@ -186,13 +206,13 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         }
       });
       setTakenSlots(taken);
-      setLoadingSlots(false);
+      if (!silent) setLoadingSlots(false);
     };
 
-    fetchTaken();
+    fetchTaken(false);
 
-    // Polling continuo cada 3.5s para sincronizar estado de reservas sin depender solo de websockets
-    const pollInterval = setInterval(fetchTaken, 3500);
+    // Polling continuo cada 3.5s silencioso en segundo plano sin interrumpir ni mostrar loaders
+    const pollInterval = setInterval(() => fetchTaken(true), 3500);
 
     const channel = supabase
       .channel(`public:bookings:flow:pitch_id=eq.${pitch.id}`)
@@ -200,7 +220,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         'postgres_changes',
         { event: '*', schema: 'public', table: 'bookings', filter: `pitch_id=eq.${pitch.id}` },
         () => {
-          fetchTaken();
+          fetchTaken(true);
         }
       )
       .subscribe();
@@ -236,24 +256,65 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     abonoPrice = (totalPrice * Number((pitch as any).booking_percentage || 50)) / 100;
   }
 
-  const [timeLeft, setTimeLeft] = useState(300);
+  // Manejo de expiración del temporizador con salida garantizada
+  const triggerExpiredAlert = useCallback(() => {
+    if (isExpiredAlertRef.current) return;
+    isExpiredAlertRef.current = true;
 
+    setAlertState({
+      isOpen: true,
+      type: 'warning',
+      title: '¡Tiempo de reserva agotado!',
+      message: (
+        <div className="text-center space-y-2">
+          <p className="text-sm font-semibold text-foreground">
+            El tiempo de <strong className="text-primary">5 minutos</strong> para completar el pago ha expirado.
+          </p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Las horas han sido liberadas automáticamente para que otros jugadores puedan reservarlas. Te redirigiremos a la cancha.
+          </p>
+        </div>
+      ),
+      confirmText: 'Volver a Canchas',
+      confirmButtonClassName: 'btn-primary w-full shadow-md',
+      onConfirm: () => {
+        isExpiredAlertRef.current = false;
+        setAlertState(prev => ({ ...prev, isOpen: false }));
+        onBack();
+      },
+    });
+
+    // Auto-redirección de seguridad a los 4 segundos si el usuario no interactúa
+    setTimeout(() => {
+      if (isExpiredAlertRef.current) {
+        isExpiredAlertRef.current = false;
+        setAlertState(prev => ({ ...prev, isOpen: false }));
+        onBack();
+      }
+    }, 4500);
+  }, [onBack]);
+
+  // Escuchar evento del temporizador activo cuando expira a 0
   useEffect(() => {
-    if (step !== 2) return;
-    setTimeLeft(300);
-    const id = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(id);
-          alert('El tiempo para completar el pago ha expirado. Las horas han sido liberadas.');
-          setStep(1);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [step]);
+    const handleExpiredEvent = (e: any) => {
+      const pitchId = e.detail?.pitchId;
+      if (!pitchId || pitchId === pitch.id) {
+        triggerExpiredAlert();
+      }
+    };
+
+    window.addEventListener('active-booking-expired', handleExpiredEvent);
+    return () => {
+      window.removeEventListener('active-booking-expired', handleExpiredEvent);
+    };
+  }, [pitch.id, triggerExpiredAlert]);
+
+  // Si estaba en el paso de confirmación y el tiempo llegó a 0
+  useEffect(() => {
+    if (step === 2 && hadActiveLockRef.current && secondsLeft <= 0) {
+      triggerExpiredAlert();
+    }
+  }, [step, secondsLeft, triggerExpiredAlert]);
 
   const toggleTime = (slot: string) => {
     setSelectedTimes(prev =>
@@ -262,24 +323,106 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   };
 
   const handleLockBooking = async () => {
-    if (!user) { alert('Debes iniciar sesión para reservar'); return; }
-    if (selectedTimes.length === 0) { setError('Por favor selecciona al menos una hora'); return; }
-
-    setLoading(true);
-    setError('');
-
-    const ok = await startLock(pitch, selectedDate, selectedTimes);
-    if (!ok) {
-      setError('Alguien más está reservando estas horas en este momento.');
-      setLoading(false);
+    if (selectedTimes.length === 0 || !selectedDate) {
+      setError('Por favor selecciona al menos una hora.');
       return;
     }
-    setLoading(false);
-    setStep(2);
+
+    const messageNode = (
+      <div className="flex flex-col gap-3 items-center text-center mt-2">
+        <p className="text-sm text-muted-foreground">Estás a punto de iniciar una reserva en:</p>
+        <p className="text-xl font-black uppercase text-primary bg-primary/10 px-5 py-2.5 rounded-xl border border-primary/20 tracking-wider w-full shadow-sm">
+          {pitch.name}
+        </p>
+        <div className="bg-secondary/60 border border-border rounded-xl p-3.5 w-full space-y-2 mt-1">
+          <p className="flex justify-between items-center text-xs">
+            <span className="text-muted-foreground font-bold flex items-center gap-1"><CalendarDays size={13} /> Fecha</span>
+            <span className="font-bold text-foreground capitalize">{formattedDate}</span>
+          </p>
+          <div className="summary-line flex-col items-start gap-1.5">
+            <span>Desglose de Horas</span>
+            <div className="w-full space-y-1 mt-1">
+              {[...selectedTimes].sort().map(t => {
+                const slotPrice = Number(customPricing[t] || pricePerHour);
+                return (
+                  <div key={t} className="flex justify-between text-xs bg-primary/5 px-2 py-1 rounded-md">
+                    <span className="font-bold text-primary">{fmtSlot(t)}</span>
+                    <span className="font-semibold">${slotPrice.toLocaleString('es-CO')}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="border-t border-border/60 mt-2 pt-2 flex justify-between items-center">
+            <span className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider">Total Estimado</span>
+            <span className="font-black text-emerald-600 dark:text-emerald-400 text-base">${totalPrice.toLocaleString('es-CO')}</span>
+          </div>
+          <div className="flex flex-col justify-between items-center text-xs bg-amber-500/10 p-2 rounded-lg mt-1 border border-amber-500/20">
+            <span className="text-amber-700 dark:text-amber-400 font-bold uppercase text-[10px] tracking-wider flex items-center gap-1">
+              Abono Requerido
+            </span>
+
+            <span className="font-black text-amber-700 dark:text-amber-400 text-sm">
+              ${abonoPrice.toLocaleString('es-CO')}
+            </span>
+
+            {customPricing?.booking_type === 'fixed' ? (
+              <p className="text-[11px] text-muted-foreground text-center mt-2">
+                Abono fijo de <strong>${Number(customPricing.booking_fixed || 0).toLocaleString('es-CO')}</strong> por hora para confirmar
+              </p>
+            ) : (customPricing?.booking_percentage || (pitch as any).booking_percentage) ? (
+              <p className="text-[11px] text-muted-foreground text-center mt-2">
+                Abono del <strong>{customPricing?.booking_percentage || (pitch as any).booking_percentage || 50}%</strong> del valor total para confirmar
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+          La cancha se bloqueará por 5 minutos para que completes el pago de tu reserva de manera segura.
+        </p>
+      </div>
+    );
+
+    setAlertState({
+      isOpen: true,
+      type: 'info',
+      title: 'Confirmar Reserva',
+      message: messageNode,
+      showCancel: true,
+      confirmText: 'Bloquear y Continuar',
+      cancelText: 'Cancelar',
+      cancelButtonClassName: 'flex-1 h-12 rounded-xl font-bold flex items-center justify-center transition-all bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-500/10 dark:text-red-500 dark:hover:bg-red-500/20',
+      onConfirm: async () => {
+        setAlertState(prev => ({ ...prev, isOpen: false }));
+        setLoading(true);
+        setError('');
+        const success = await startLock(pitch, selectedDate, selectedTimes);
+        setLoading(false);
+
+        if (success) {
+          setStep(2);
+        } else {
+          setAlertState({
+            isOpen: true,
+            type: 'error',
+            title: 'Horario no disponible',
+            message: lockError || 'Una de las horas seleccionadas está siendo reservada por otra persona en este momento. Por favor elige otro horario.',
+          });
+        }
+      }
+    });
   };
 
   const handleBooking = async () => {
-    if (!user) { alert('Debes iniciar sesión para reservar'); return; }
+    if (!user) {
+      setAlertState({
+        isOpen: true,
+        type: 'login_required',
+        title: 'Inicia Sesión',
+        message: 'Debes iniciar sesión para confirmar tu reserva.',
+      });
+      return;
+    }
     if (selectedTimes.length === 0) { setError('Por favor selecciona al menos una hora'); return; }
     if (!file) { setError('Por favor sube el comprobante de pago'); return; }
 
@@ -349,8 +492,13 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
           </div>
           <span className="status pending text-xs">Pendiente</span>
         </div>
-        <button className="btn-primary" onClick={() => router.push(`/cancha/${pitch.id}`)}>Volver al perfil</button>
-      </div>
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={() => router.push(`/cancha/${pitch.id || (pitch as any).pitch_id}`)}
+        >
+          Volver al perfil de la cancha
+        </button>      </div>
     );
   }
 
@@ -364,28 +512,41 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   });
 
   return (
-    <div className="page-content fade-in">
+    <div className="page-content fade-in max-w-5xl mx-auto px-4 sm:px-8 md:px-12 pb-24">
+      <CustomAlertModal
+        alertState={alertState}
+        onClose={() => {
+          const wasExpired = isExpiredAlertRef.current;
+          setAlertState(s => ({ ...s, isOpen: false }));
+          if (wasExpired) {
+            isExpiredAlertRef.current = false;
+            onBack();
+          }
+        }}
+      />
+
       <button
         type="button"
         onClick={() => {
           if (activeBooking && secondsLeft > 0) {
             setShowCancelPrompt(true);
           } else {
-            onBack(selectedTimes, selectedDate);
+            // Redirige al perfil de la cancha
+            router.push(`/cancha/${pitch.id || (pitch as any).pitch_id}`);
           }
         }}
-        className="back-link flex items-center gap-2 mb-6"
+        className="back-link flex items-center gap-2 mb-6 cursor-pointer text-sm font-semibold hover:text-primary transition-colors"
       >
-        <ArrowLeft size={15} /> Volver al perfil
+        <ArrowLeft size={15} /> Volver al perfil de la cancha
       </button>
 
       <div className="booking-layout">
         <div className="booking-main">
-          <div className="flex items-center gap-2 mb-6">
+          <div className="flex items-center gap-3 mb-6 bg-secondary/40 p-2.5 rounded-2xl border border-border/60 max-w-md">
             {[1, 2].map(s => (
               <div key={s} className="flex items-center gap-2">
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${step >= s ? 'bg-primary text-white' : 'bg-secondary text-muted-foreground'}`}>{s}</div>
-                <span className={`text-xs font-semibold ${step === s ? 'text-foreground' : 'text-muted-foreground'}`}>
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black transition-all shadow-xs ${step >= s ? 'bg-primary text-white shadow-primary/20' : 'bg-secondary text-muted-foreground'}`}>{s}</div>
+                <span className={`text-xs font-bold ${step === s ? 'text-foreground' : 'text-muted-foreground'}`}>
                   {s === 1 ? 'Fecha y hora' : 'Confirmar pago'}
                 </span>
                 {s < 2 && <div className={`flex-1 h-px w-8 ${step > s ? 'bg-primary' : 'bg-border'}`} />}
@@ -395,7 +556,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
 
           <div className={`booking-hero ${(pitch as any).tone || 'field-emerald'}`}>
             <div className="pitch-lines" />
-            <span>{pitch.name}</span>
+            <span>{pitch.name.toUpperCase()}</span>
           </div>
 
           {/* Banner: ya hay una reserva activa de OTRA cancha */}
@@ -530,7 +691,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                 </div>
 
                 <div className="rounded-xl border border-border bg-card p-3 shadow-inner">
-                  {loadingSlots ? (
+                  {loadingSlots && takenSlots.size === 0 ? (
                     <div className="flex justify-center py-6">
                       <Loader2 size={24} className="animate-spin text-primary" />
                     </div>
@@ -572,7 +733,9 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                                     </span>
                                   </>
                                 ) : (
-                                  <XCircle size={16} className="mx-auto opacity-40 mb-1" />
+                                  <span className="text-[10px] font-black tracking-widest text-red-500 -rotate-6">
+                                    OCUPADO
+                                  </span>
                                 )}
                               </div>
                             ) : (
@@ -604,26 +767,39 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
 
           {step === 2 && (
             <div className="slide-up mt-6">
-              <div className="flex justify-between items-center bg-amber-500/10 text-amber-600 dark:text-amber-400 p-3.5 rounded-2xl mb-5 border border-amber-500/30">
-                <span className="text-xs sm:text-sm font-bold flex items-center gap-2">
-                  <Clock3 size={16} className="animate-spin text-amber-500" /> Tiempo para confirmar reserva:
-                </span>
-                <div className="flex items-center gap-3">
-                  <span className="font-mono font-black text-sm sm:text-base bg-amber-500/20 px-2.5 py-1 rounded-xl">
-                    {Math.floor((secondsLeft > 0 ? secondsLeft : timeLeft) / 60)}:{((secondsLeft > 0 ? secondsLeft : timeLeft) % 60).toString().padStart(2, '0')}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowCancelPrompt(true)}
-                    className="text-xs text-red-500 hover:text-red-600 font-bold underline transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
+              {(() => {
+                const isCritical = secondsLeft <= 50;
+                return (
+                  <div className={`flex justify-between items-center p-3.5 rounded-2xl mb-5 border transition-all ${isCritical
+                    ? 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/40 ring-2 ring-red-500/20 animate-pulse'
+                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                    }`}>
+                    <span className="text-xs sm:text-sm font-bold flex items-center gap-2">
+                      <Clock3 size={16} className={`animate-spin ${isCritical ? 'text-red-500' : 'text-amber-500'}`} />
+                      <span>Tiempo para confirmar reserva:</span>
+                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className={`font-mono font-black text-sm sm:text-base px-2.5 py-1 rounded-xl shadow-xs ${isCritical
+                        ? 'bg-red-500 text-white dark:bg-red-600'
+                        : 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                        }`}>
+                        {Math.floor(Math.max(0, secondsLeft) / 60)}:{(Math.max(0, secondsLeft) % 60).toString().padStart(2, '0')}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowCancelPrompt(true)}
+                        className={`text-xs font-bold underline transition-colors ${isCritical ? 'text-red-600 hover:text-red-700 dark:text-red-300' : 'text-red-500 hover:text-red-600'
+                          }`}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <p className="text-sm text-muted-foreground mb-5">
-                Para asegurar tu reserva, realiza un abono de <strong>${abonoPrice.toLocaleString()}</strong> a la cuenta de la cancha y sube el comprobante.
+                Para asegurar tu reserva, realiza un abono de <strong>${abonoPrice.toLocaleString('es-CO')}</strong> a la cuenta de la cancha y sube el comprobante.
               </p>
 
               {(() => {
@@ -632,7 +808,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                   return (
                     <div className="bg-secondary p-4 rounded-xl mb-5 border border-border">
                       <p className="text-xs text-muted-foreground mb-1">Cuenta autorizada</p>
-                      <strong className="text-sm block">{pitch.name}</strong>
+                      <strong className="text-sm block">{pitch.name.toUpperCase()}</strong>
                       <p className="text-xs text-muted-foreground mt-1">Consulta con el establecimiento el método de pago.</p>
                     </div>
                   );
@@ -672,9 +848,9 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
               {error && <p className="auth-error mb-4">{error}</p>}
 
               <div className="flex gap-3">
-                <button className="btn-primary bg-secondary text-foreground hover:bg-border" onClick={() => setStep(1)} disabled={loading}>
+                {/* <button className="btn-primary bg-secondary text-foreground hover:bg-border" onClick={() => setStep(1)} disabled={loading}>
                   ← Atrás
-                </button>
+                </button> */}
                 <button className="btn-primary flex-1" onClick={handleBooking} disabled={loading}>
                   {loading ? <Loader2 size={18} className="animate-spin" /> : 'Confirmar Reserva ✓'}
                 </button>
@@ -683,49 +859,68 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
           )}
         </div>
 
-        <aside className="booking-aside">
-          <h2>Resumen</h2>
-          <div className="summary-line mt-4">
-            <span>Cancha</span>
-            <strong className="uppercase">{pitch.name}</strong>
-          </div>
-          <div className="summary-line">
-            <span>Fecha</span>
-            <strong>{formattedDate || '-'}</strong>
-          </div>
+        <aside className="booking-aside bg-white dark:bg-zinc-900 p-5 rounded-2xl shadow-sm border border-emerald-100 dark:border-zinc-800">
+          <h2 className="text-xl font-bold text-zinc-900 dark:text-white pb-3 border-b border-zinc-100 dark:border-zinc-800">
+            Resumen de Reserva
+          </h2>
 
-          <div className="summary-line flex-col items-start gap-1.5">
-            <span>Desglose de Horas</span>
-            {selectedTimes.length === 0 ? (
-              <strong className="text-muted-foreground">-</strong>
-            ) : (
-              <div className="w-full space-y-1 mt-1">
-                {[...selectedTimes].sort().map(t => (
-                  <div key={t} className="flex justify-between text-xs bg-primary/5 px-2 py-1 rounded-md">
-                    <span className="font-bold text-primary">{fmtSlot(t)}</span>
-                    <span className="font-semibold">${getSlotPrice(t).toLocaleString()}</span>
-                  </div>
-                ))}
+          <div className="space-y-3.5 mt-4 text-sm">
+            <div className="summary-line flex justify-between items-center">
+              <span className="text-zinc-500 font-medium">Cancha</span>
+              <strong className="uppercase font-semibold text-zinc-800 dark:text-zinc-200">{pitch.name}</strong>
+            </div>
+
+            <div className="summary-line flex justify-between items-center">
+              <span className="text-zinc-500 font-medium">Fecha</span>
+              <strong className="font-semibold text-zinc-800 dark:text-zinc-200">{formattedDate || '-'}</strong>
+            </div>
+
+            <div className="summary-line flex flex-col items-start gap-1.5 pt-1">
+              <span className="text-zinc-500 font-medium">Desglose de Horas</span>
+              {selectedTimes.length === 0 ? (
+                <strong className="text-zinc-400 font-normal">-</strong>
+              ) : (
+                <div className="w-full space-y-1.5 mt-1">
+                  {[...selectedTimes].sort().map(t => (
+                    <div key={t} className="flex justify-between items-center text-xs bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/50 px-2.5 py-1.5 rounded-lg">
+                      <span className="font-bold text-emerald-700 dark:text-emerald-400">{fmtSlot(t)}</span>
+                      <span className="font-bold text-zinc-700 dark:text-zinc-300">${getSlotPrice(t).toLocaleString('es-CO')}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="summary-line flex justify-between items-center pt-1">
+              <span className="text-zinc-500 font-medium">Duración</span>
+              <strong className="font-semibold text-zinc-800 dark:text-zinc-200">
+                {totalHours > 0 ? `${totalHours} hora${totalHours > 1 ? 's' : ''}` : '-'}
+              </strong>
+            </div>
+
+            <div className="summary-line flex justify-between items-center pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-800">
+              <span className="text-zinc-600 font-medium">Precio total</span>
+              <strong className="text-base font-bold text-zinc-900 dark:text-white">
+                ${totalPrice > 0 ? totalPrice.toLocaleString('es-CO') : '-'}
+              </strong>
+            </div>
+
+            {/* Sección de Abono Requerido estilizada y minimalista */}
+            <div className="mt-4 p-3.5 bg-emerald-500/10 border border-emerald-600/20 rounded-xl space-y-1">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-semibold text-emerald-950 dark:text-emerald-200">
+                  Abono requerido
+                </span>
+                <strong className="text-lg font-extrabold text-emerald-700 dark:text-emerald-400">
+                  ${totalPrice > 0 ? abonoPrice.toLocaleString('es-CO') : '-'}
+                </strong>
               </div>
-            )}
+
+            </div>
           </div>
 
-          <div className="summary-line">
-            <span>Duración</span>
-            <strong>{totalHours > 0 ? `${totalHours} hora${totalHours > 1 ? 's' : ''}` : '-'}</strong>
-          </div>
-
-          <div className="summary-line">
-            <span>Precio total</span>
-            <strong className="text-foreground">${totalPrice > 0 ? totalPrice.toLocaleString() : '-'}</strong>
-          </div>
-
-          <div className="summary-total">
-            <span>Abono requerido</span>
-            <strong>${totalPrice > 0 ? abonoPrice.toLocaleString() : '-'}</strong>
-          </div>
-          <p className="text-xs text-muted-foreground mt-3 text-center">
-            El valor restante se paga en la cancha
+          <p className="text-xs text-zinc-500 mt-3 text-center">
+            El valor restante se paga directamente en la cancha
           </p>
         </aside>
       </div>

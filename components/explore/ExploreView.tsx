@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useToday, BOOKING_HOURS } from '@/lib/use-today';
 import { CalendarDays, Grid2X2, ListFilter, Loader2, Search, Clock3, ChevronRight, ChevronDown, CheckCircle2 } from 'lucide-react';
@@ -87,6 +87,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
   };
 
   const [alertState, setAlertState] = useState<AlertModalState>({ isOpen: false, type: 'info', title: '', message: '' });
+  const handleSearchRef = useRef<(silent?: boolean) => void>(() => {});
 
   const handleBook = useCallback((pitch: Pitch, preselectedTime?: string | string[], preselectedDate?: string) => {
     if (!user) {
@@ -213,8 +214,52 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
         confirmText: 'Bloquear y Continuar',
         cancelText: 'Cancelar',
         cancelButtonClassName: 'flex-1 h-12 rounded-xl font-bold flex items-center justify-center transition-all bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-500/10 dark:text-red-500 dark:hover:bg-red-500/20',
-        onConfirm: () => {
+        onConfirm: async () => {
           setAlertState(prev => ({ ...prev, isOpen: false }));
+
+          // Verificación de conflicto en tiempo real antes de iniciar la reserva
+          if (preselectedDate && Array.isArray(preselectedTime) && preselectedTime.length > 0) {
+            const dayStartISO = `${preselectedDate}T00:00:00-05:00`;
+            const dayEndISO = `${preselectedDate}T23:59:59-05:00`;
+
+            const { data: conflicts } = await supabase
+              .from('bookings')
+              .select('start_time, status, expires_at')
+              .eq('pitch_id', pitch.id)
+              .gte('start_time', dayStartISO)
+              .lte('start_time', dayEndISO)
+              .neq('status', 'cancelled');
+
+            const now = new Date();
+            const isTaken = (conflicts || []).some((b: any) => {
+              let bHour: string;
+              try {
+                const d = new Date(b.start_time);
+                const localH = (d.getUTCHours() - 5 + 24) % 24;
+                bHour = `${String(localH).padStart(2, '0')}:00`;
+              } catch {
+                bHour = b.start_time?.substring(11, 16) || '';
+              }
+
+              if (preselectedTime.includes(bHour)) {
+                if (b.status === 'confirmed' || b.status === 'pending') return true;
+                if (b.status === 'draft' && b.expires_at && new Date(b.expires_at) > now) return true;
+              }
+              return false;
+            });
+
+            if (isTaken) {
+              setAlertState({
+                isOpen: true,
+                type: 'error',
+                title: 'Horario no disponible',
+                message: 'Lo sentimos, esta cancha acaba de ser reservada o bloqueada por otro usuario. Hemos actualizado la disponibilidad.',
+              });
+              handleSearchRef.current(true);
+              return;
+            }
+          }
+
           onBook(pitch, preselectedTime, preselectedDate);
         }
       });
@@ -222,7 +267,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
     }
 
     onBook(pitch, preselectedTime, preselectedDate);
-  }, [user, onBook]);
+  }, [user, onBook, supabase]);
 
   const showAlert = (type: 'success' | 'error' | 'warning' | 'info', title: string, message: string) => {
     setAlertState({ isOpen: true, type, title, message });
@@ -319,18 +364,20 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
     }), [query, selectedFormats, pitches, selectedCity]);
 
   // ── Buscar disponibilidad (multi-hora) ────────────────────────────────────
-  const handleSearch = useCallback(async () => {
+  const handleSearch = useCallback(async (silent = false) => {
     if (!selectedDate) {
-      showAlert('warning', 'Fecha requerida', 'Por favor selecciona la fecha.');
+      if (!silent) showAlert('warning', 'Fecha requerida', 'Por favor selecciona la fecha.');
       return;
     }
     if (selectedHours.length === 0) {
-      showAlert('warning', 'Hora requerida', 'Por favor selecciona al menos una hora.');
+      if (!silent) showAlert('warning', 'Hora requerida', 'Por favor selecciona al menos una hora.');
       return;
     }
 
-    setSearching(true);
-    setSearchResults(null);
+    if (!silent) {
+      setSearching(true);
+      setSearchResults(null);
+    }
 
     // Traer todas las reservas del día seleccionado (no canceladas)
     // Usar rango amplio del día completo para evitar problemas con offset horario
@@ -389,7 +436,9 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
 
     // Canchas disponibles: NO tienen reservas confirmadas ni borradores activos en las horas seleccionadas
     let available = filteredByFormat.filter(p => !confirmedPitchIds.has(p.id) && !draftPitchMap.has(p.id));
-    available = available.sort(() => Math.random() - 0.5);
+    if (!silent) {
+      available = available.sort(() => Math.random() - 0.5);
+    }
 
     // Canchas que están siendo reservadas con cronómetro activo
     let inProgress = filteredByFormat
@@ -400,24 +449,59 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
         slot: draftPitchMap.get(p.id)!.slot,
       }));
 
-    inProgress = inProgress.sort(() => Math.random() - 0.5);
+    if (!silent) {
+      inProgress = inProgress.sort(() => Math.random() - 0.5);
+    }
 
     setSearchResults(available);
     setInProgressResults(inProgress);
-    setSearching(false);
 
-    if (available.length === 0 && inProgress.length === 0) {
-      showAlert(
-        'info',
-        'Sin disponibilidad',
-        'Todas las canchas están ocupadas en las horas seleccionadas. Prueba con otra fecha u horario.'
-      );
+    if (!silent) {
+      setSearching(false);
+      if (available.length === 0 && inProgress.length === 0) {
+        showAlert(
+          'info',
+          'Sin disponibilidad',
+          'Todas las canchas están ocupadas en las horas seleccionadas. Prueba con otra fecha u horario.'
+        );
+      }
+
+      setTimeout(() => {
+        document.getElementById('search-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
     }
+  }, [selectedDate, selectedHours, pitches, selectedFormats, supabase]);
 
-    setTimeout(() => {
-      document.getElementById('search-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
-  }, [selectedDate, selectedHours, pitches, selectedFormats]);
+  useEffect(() => {
+    handleSearchRef.current = handleSearch;
+  }, [handleSearch]);
+
+  // Sincronización en TIEMPO REAL sin recargar la página
+  useEffect(() => {
+    if (searchResults === null || !selectedDate || selectedHours.length === 0) return;
+
+    // Canal en tiempo real para escuchar cambios de reservas
+    const channel = supabase
+      .channel(`realtime:explore:bookings:${selectedDate}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings' },
+        () => {
+          handleSearch(true);
+        }
+      )
+      .subscribe();
+
+    // Verificación continua cada 3.5 segundos para reflejar expiración de borradores
+    const interval = setInterval(() => {
+      handleSearch(true);
+    }, 3500);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
+  }, [searchResults, selectedDate, selectedHours, handleSearch, supabase]);
 
   const formattedSelectedDate = selectedDate
     ? new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -442,7 +526,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Buscar canchas, barrios o complejos..."
+            placeholder="Buscar canchas o complejos"
           />
         </div>
         <div className="filter-pills">
@@ -475,7 +559,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                     {((pitch as any).media_urls?.[0] || (pitch as any).image_url) ? (
                       <img
                         src={(pitch as any).media_urls?.[0] || (pitch as any).image_url}
-                        alt={pitch.name}
+                        alt={pitch.name.toUpperCase()}
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -484,7 +568,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                   </div>
                   <div className="flex-1 min-w-0 pr-2">
                     <h4 className="font-bold text-xs text-foreground break-words whitespace-normal">
-                      {pitch.name}
+                      {pitch.name.toUpperCase()}
                     </h4>
                     <p className="text-xs text-muted-foreground break-words whitespace-normal">
                       {pitch.type}
@@ -509,11 +593,21 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
       </div>
 
       {/* Carrusel de canchas destacadas */}
-      <div className="discovery-stack">
-        <DiscoverRail title="Cerca de ti" subtitle="Canchas a menos de 2 km"
-          items={pitches} onOpen={onOpen} onBook={handleBook} />
-        <DiscoverRail title="Populares en Pasto" subtitle="Las más reservadas esta semana"
-          items={[...pitches].reverse()} onOpen={onOpen} onBook={handleBook} />
+      <div className="discovery-stack flex flex-col gap-4 my-2">
+        <DiscoverRail
+          title="Cerca de ti"
+          subtitle="Canchas a menos de 2 km"
+          items={pitches}
+          onOpen={onOpen}
+          onBook={handleBook}
+        />
+        <DiscoverRail
+          title="Populares en Pasto"
+          subtitle="Las más reservadas esta semana"
+          items={[...pitches].reverse()}
+          onOpen={onOpen}
+          onBook={handleBook}
+        />
       </div>
 
       {/* Layout: Reserva rápida + Mapa */}
@@ -752,7 +846,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
             {/* Botón Buscar */}
             <button
               type="button"
-              onClick={handleSearch}
+              onClick={() => handleSearch()}
               disabled={!selectedDate || selectedHours.length === 0 || searching}
               className="w-full h-12 mt-5 rounded-xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
             >
@@ -773,14 +867,14 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                       ? `${searchResults.length} cancha${searchResults.length > 1 ? 's' : ''} disponible${searchResults.length > 1 ? 's' : ''}`
                       : 'Sin disponibilidad'}
                   </h3>
-                  <p className="text-sm text-muted-foreground capitalize">
-                    📅 {formattedSelectedDate} · ⏰ {[...selectedHours].sort().map(h => {
+                  {/* <p className="text-sm text-muted-foreground capitalize">
+                    📅 {formattedSelectedDate} <br /> 🕓 {[...selectedHours].sort().map(h => {
                       const hNum = parseInt(h.split(':')[0]);
                       const h12 = hNum === 0 ? 12 : hNum > 12 ? hNum - 12 : hNum;
                       const ampm = hNum < 12 ? 'am' : 'pm';
                       return `${h12}:00 ${ampm}`;
                     }).join(', ')}
-                  </p>
+                  </p> */}
                 </div>
                 <button
                   type="button"
@@ -798,86 +892,121 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                   <p className="text-sm text-muted-foreground">Intenta con otras horas o fecha en el calendario.</p>
                 </div>
               ) : (
-                <div className="grid gap-4">
-                  {searchResults.map(pitch => (
-                    <div key={pitch.id} className="flex items-center gap-4 p-4 bg-card border border-border rounded-2xl hover:border-primary/40 hover:shadow-sm transition-all">
-                      <div className="w-20 h-20 rounded-xl flex-shrink-0 overflow-hidden bg-muted">
-                        {((pitch as any).media_urls?.[0] || (pitch as any).image_url) ? (
-                          <img
-                            src={(pitch as any).media_urls?.[0] || (pitch as any).image_url}
-                            alt={pitch.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className={`w-full h-full ${(pitch as any).tone || 'field-emerald'}`} />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-base">{pitch.name}</h4>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {(Array.isArray((pitch as any).supported_types)
-                            ? (pitch as any).supported_types
-                            : [pitch.type]
-                          ).map((type: string, index: number) => (
-                            <span key={index} className="text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">
-                              {type}
-                            </span>
-                          ))}
+                <div className="grid gap-3">
+                  {searchResults.map(pitch => {
+                    const totalPrice = selectedHours.reduce(
+                      (sum, h) => sum + Number((pitch as any).custom_pricing?.[h] || (pitch as any).price_per_hour || 0),
+                      0
+                    );
+
+                    return (
+                      <div
+                        key={pitch.id}
+                        className="p-3.5 bg-card border border-border rounded-2xl hover:border-primary/40 hover:shadow-sm transition-all flex flex-col gap-3"
+                      >
+                        {/* 1. Encabezado: Imagen + Info de Cancha */}
+                        <div className="flex items-center gap-3">
+                          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex-shrink-0 overflow-hidden bg-muted">
+                            {((pitch as any).media_urls?.[0] || (pitch as any).image_url) ? (
+                              <img
+                                src={(pitch as any).media_urls?.[0] || (pitch as any).image_url}
+                                alt={pitch.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className={`w-full h-full ${(pitch as any).tone || 'field-emerald'}`} />
+                            )}
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-sm sm:text-base leading-tight uppercase text-foreground truncate">
+                              {pitch.name}
+                            </h4>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {(Array.isArray((pitch as any).supported_types)
+                                ? (pitch as any).supported_types
+                                : [pitch.type]
+                              ).map((type: string, index: number) => (
+                                <span key={index} className="text-[10px] text-muted-foreground bg-secondary px-2 py-0.5 rounded-md font-semibold uppercase">
+                                  {type}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
                         </div>
 
-                        <div className="mt-2 space-y-1.5">
-                          {selectedHours.length === 1 ? (
-                            <p className="text-sm font-bold text-primary">
-                              Total: ${Number((pitch as any).custom_pricing?.[selectedHours[0]] || (pitch as any).price_per_hour || 0).toLocaleString('es-CO')}
-                            </p>
-                          ) : (
-                            <div className="bg-primary/5 rounded-lg p-2 border border-primary/10">
-                              <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 tracking-wider">Desglose por hora</p>
+                        {/* 2. Bloque Resumen: Fecha, Hora(s) y Total Dinámico */}
+                        <div className="bg-primary/5 border border-primary/15 rounded-xl p-3 flex items-center justify-between gap-3">
+                          {/* Lado izquierdo: Fecha e Horas elegidas */}
+                          <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+                            {/* Fecha con icono */}
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                              <Calendar size={13} className="text-primary shrink-0" />
+                              <span className="capitalize truncate">
+                                {selectedDate
+                                  ? new Date(selectedDate + 'T00:00:00').toLocaleDateString('es-CO', {
+                                    weekday: 'short',
+                                    day: 'numeric',
+                                    month: 'short',
+                                  })
+                                  : 'Fecha no seleccionada'}
+                              </span>
+                            </div>
+
+                            {/* Badges de Hora(s) */}
+                            <div className="flex flex-wrap items-center gap-1">
                               {[...selectedHours].sort().map(h => {
                                 const price = Number((pitch as any).custom_pricing?.[h] || (pitch as any).price_per_hour || 0);
                                 return (
-                                  <div key={h} className="flex justify-between items-center py-0.5 text-xs">
-                                    <span className="font-semibold text-foreground">{fmtSlot(h)}</span>
-                                    <span className="font-bold text-primary">${price.toLocaleString('es-CO')}</span>
-                                  </div>
+                                  <span
+                                    key={h}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-card border border-border rounded-lg text-[11px] font-bold text-foreground shadow-2xs"
+                                  >
+                                    <Clock size={11} className="text-muted-foreground shrink-0" />
+                                    <span>{fmtSlot(h)}</span>
+                                    {selectedHours.length > 1 && (
+                                      <span className="text-[10px] text-muted-foreground font-normal">
+                                        (${price.toLocaleString('es-CO')})
+                                      </span>
+                                    )}
+                                  </span>
                                 );
                               })}
-                              <div className="border-t border-primary/10 mt-1.5 pt-1.5 flex justify-between items-center">
-                                <span className="font-bold text-foreground text-[10px] uppercase">Total</span>
-                                <span className="font-black text-primary text-sm">
-                                  ${selectedHours.reduce((sum, h) => sum + Number((pitch as any).custom_pricing?.[h] || (pitch as any).price_per_hour || 0), 0).toLocaleString('es-CO')}
-                                </span>
-                              </div>
                             </div>
-                          )}
+                          </div>
+
+                          {/* Lado derecho: Etiqueta y Precio Dinámico */}
+                          <div className="text-right shrink-0 border-l border-primary/10 pl-3">
+                            <span className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground leading-none mb-1">
+                              {selectedHours.length > 1 ? `Total (${selectedHours.length} hrs)` : 'Precio'}
+                            </span>
+                            <span className="text-base font-black text-primary leading-none">
+                              ${totalPrice.toLocaleString('es-CO')}
+                            </span>
+                          </div>
                         </div>
 
-                        {selectedHours.length > 1 && (
-                          <p className="text-[10px] text-emerald-600 font-semibold mt-1">
-                            ✓ Disponible en las {selectedHours.length} horas seleccionadas
-                          </p>
-                        )}
+                        {/* 3. Botones de Acción */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onOpen(pitch)}
+                            className="h-10 bg-secondary text-foreground font-bold rounded-xl hover:bg-border transition-colors text-xs flex items-center justify-center"
+                          >
+                            Ver Cancha
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleBook(pitch, selectedHours, selectedDate)}
+                            className="h-10 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center shadow-sm"
+                          >
+                            Reservar
+                          </button>
+                        </div>
+
                       </div>
-                      <div className="flex flex-col gap-2 flex-shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleBook(pitch, selectedHours, selectedDate);
-                          }}
-                          className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary/90 transition-colors"
-                        >
-                          Reservar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onOpen(pitch)}
-                          className="px-4 py-2 bg-secondary text-muted-foreground font-semibold rounded-xl hover:bg-border transition-colors text-xs"
-                        >
-                          Ver Cancha
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 

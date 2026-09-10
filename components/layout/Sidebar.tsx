@@ -44,6 +44,8 @@ export function Sidebar() {
           <Link
             key={path}
             href={path}
+            id={path === '/favorites' ? 'nav-favorites-sidebar' : undefined}
+            data-favorites-nav={path === '/favorites' ? 'sidebar' : undefined}
             className={`nav-item ${pathname === path ? 'active' : ''}`}
           >
             <Icon size={19} />

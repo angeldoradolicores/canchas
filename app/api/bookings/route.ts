@@ -81,8 +81,30 @@ export async function POST(req: NextRequest) {
             const isSameUser = user_id && existing.user_id === user_id;
 
             if (isExpired) {
-              // Eliminar borrador expirado
-              await supabase.from('bookings').delete().eq('id', existing.id);
+              // Reutilizar borrador expirado actualizándolo (evita constraint 23505)
+              const { data: updated, error: upErr } = await supabase
+                .from('bookings')
+                .update({
+                  user_id: user_id || null,
+                  customer_name: null,
+                  customer_phone: null,
+                  status: 'draft',
+                  payment_status: null,
+                  payment_proof_url: null,
+                  source: null,
+                  expires_at: expiresAt,
+                  end_time: item.end_time,
+                })
+                .eq('id', existing.id)
+                .select()
+                .single();
+
+              if (updated && !upErr) {
+                lockedBookingIds.push(updated.id);
+                continue;
+              } else {
+                await supabase.from('bookings').delete().eq('id', existing.id);
+              }
             } else if (isSameUser) {
               // Renovar tiempo de expiración para el mismo usuario
               const { data: updated } = await supabase
@@ -100,6 +122,33 @@ export async function POST(req: NextRequest) {
                 secondsLeft: secsLeft,
                 expires_at: existing.expires_at,
               }, { status: 400 });
+            }
+          }
+
+          if (existing.status === 'cancelled') {
+            // Reutilizar la fila cancelada actualizándola a draft (evita constraint 23505)
+            const { data: updated, error: upErr } = await supabase
+              .from('bookings')
+              .update({
+                user_id: user_id || null,
+                customer_name: null,
+                customer_phone: null,
+                status: 'draft',
+                payment_status: null,
+                payment_proof_url: null,
+                source: null,
+                expires_at: expiresAt,
+                end_time: item.end_time,
+              })
+              .eq('id', existing.id)
+              .select()
+              .single();
+
+            if (updated && !upErr) {
+              lockedBookingIds.push(updated.id);
+              continue;
+            } else {
+              await supabase.from('bookings').delete().eq('id', existing.id);
             }
           }
         }

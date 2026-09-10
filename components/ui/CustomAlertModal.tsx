@@ -15,6 +15,8 @@ export interface AlertModalState {
   confirmText?: string;
   cancelText?: string;
   cancelButtonClassName?: string;
+  confirmButtonClassName?: string;
+  confirmOnLeft?: boolean;
 }
 
 interface CustomAlertModalProps {
@@ -25,7 +27,7 @@ interface CustomAlertModalProps {
 export function CustomAlertModal({ alertState, onClose }: CustomAlertModalProps) {
   if (!alertState.isOpen) return null;
 
-  const { type, title, message, onConfirm, showCancel, confirmText, cancelText, cancelButtonClassName } = alertState;
+  const { type, title, message, onConfirm, showCancel, confirmText, cancelText, cancelButtonClassName, confirmButtonClassName, confirmOnLeft } = alertState;
 
   const icons = {
     info: <Info className="text-blue-500" size={32} />,
@@ -86,25 +88,47 @@ export function CustomAlertModal({ alertState, onClose }: CustomAlertModalProps)
               </Link>
             </>
           ) : showCancel ? (
-            <>
-              <button
-                type="button"
-                onClick={onClose}
-                className={cancelButtonClassName || "btn-primary bg-secondary text-foreground hover:bg-border flex-1"}
-              >
-                {cancelText || 'Cancelar'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  if (onConfirm) onConfirm();
-                }}
-                className="btn-primary flex-1 text-center"
-              >
-                {confirmText || 'Aceptar'}
-              </button>
-            </>
+            confirmOnLeft ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    if (onConfirm) onConfirm();
+                  }}
+                  className={confirmButtonClassName || "btn-primary flex-1"}
+                >
+                  {confirmText || 'Aceptar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className={cancelButtonClassName || "btn-primary bg-secondary text-foreground hover:bg-border flex-1"}
+                >
+                  {cancelText || 'Cancelar'}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className={cancelButtonClassName || "btn-primary bg-secondary text-foreground hover:bg-border flex-1"}
+                >
+                  {cancelText || 'Cancelar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    if (onConfirm) onConfirm();
+                  }}
+                  className={confirmButtonClassName || "btn-primary flex-1"}
+                >
+                  {confirmText || 'Aceptar'}
+                </button>
+              </>
+            )
           ) : (
             <button
               type="button"

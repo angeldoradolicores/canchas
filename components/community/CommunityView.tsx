@@ -232,39 +232,56 @@ function RetosTab({ showAlert }: { showAlert: (type: AlertModalState['type'], ti
     <div className="max-w-4xl">
       {/* Pitch Preview Modal */}
       {previewPitch && <PitchPreviewModal pitch={previewPitch} onClose={() => setPreviewPitch(null)} />}
-
+      <div className="p-5 bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-2xl mb-6">
+        <h3 className="font-bold text-base mb-1">⚽ Retos y Partidos</h3>
+        <p className="text-sm text-muted-foreground">
+          ¿Tu equipo está listo para jugar? Desafía a otros grupos, acuerda el nivel y organiza un partido competitivo.
+        </p>
+      </div>
+      {/* Fila 2: Botón Principal */}
+      <button
+        type="button"
+        onClick={() => {
+          if (!user) return showAlert('login_required', 'Iniciar Sesión', 'Debes iniciar sesión para crear un reto.');
+          setEditingChallenge(null);
+          setShowForm(!showForm);
+        }}
+        className="btn-primary text-xs h-10 py-2 px-4 flex items-center justify-center gap-2 w-full font-bold"
+      >
+        <Plus size={15} /> Crear reto
+      </button>
       {/* Barra de Filtros */}
-      <div className="p-4 bg-card border border-border rounded-2xl mb-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-3">
-        <div className="flex flex-wrap items-center gap-2.5">
+      <div className="p-3.5 bg-card border border-border rounded-2xl mb-6 shadow-sm flex flex-col gap-3">
+        {/* Fila 1: Filtros organizados proporcionalmente */}
+        <div className="grid grid-cols-3 gap-2">
+          {/* Filtro Urgente */}
           <button
             type="button"
             onClick={() => setFilterUrgent(!filterUrgent)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${filterUrgent
+            className={`h-9 px-2 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1 border ${filterUrgent
               ? 'bg-red-500 text-white border-red-500 shadow-sm'
-              : 'bg-secondary text-muted-foreground border-transparent hover:border-red-300'
+              : 'bg-secondary text-muted-foreground border-transparent'
               }`}
           >
-            <Flame size={14} /> Por Empezar
+            <Flame size={13} />
+            <span className="truncate">Urgente</span>
           </button>
 
-          {/* Filtro Fecha */}
+          {/* Filtro Fecha (Dropdown) */}
           <div className="relative">
             <button
               type="button"
-              onClick={() => setOpenDropdown(openDropdown === 'date' ? null : 'date' as any)}
-              className="h-9 px-3 border border-border rounded-xl bg-card text-xs font-semibold flex items-center gap-2 outline-none focus:border-primary hover:border-primary/40"
+              onClick={() => setOpenDropdown(openDropdown === 'date' ? null : ('date' as any))}
+              className="w-full h-9 px-2 border border-border rounded-xl bg-card text-[11px] font-semibold flex items-center justify-between outline-none"
             >
-              <span className="capitalize">{
-                filterDate === 'todas' ? 'Todas las fechas' :
-                  filterDate === 'hoy' ? 'Hoy' :
-                    filterDate === 'pasados_3' ? 'Últimos 3 días' :
-                      filterDate === 'pasados_7' ? 'Últimos 7 días' : 'Historial antiguo'
-              }</span>
-              <ChevronDown size={14} className={`transition-transform text-muted-foreground ${openDropdown === 'date' as any ? 'rotate-180' : ''}`} />
+              <span className="truncate">
+                {filterDate === 'todas' ? 'Fechas' : filterDate === 'hoy' ? 'Hoy' : 'Filtrado'}
+              </span>
+              <ChevronDown size={13} className="text-muted-foreground shrink-0" />
             </button>
 
-            {openDropdown === 'date' as any && (
-              <div className="absolute top-10 left-0 min-w-[170px] p-2 bg-card border border-border rounded-xl shadow-xl z-50 flex flex-col gap-1 animate-in fade-in slide-in-from-top-1">
+            {openDropdown === ('date' as any) && (
+              <div className="absolute top-10 left-0 w-44 p-2 bg-card border border-border rounded-xl shadow-xl z-50 flex flex-col gap-1">
                 {[
                   { val: 'todas', label: 'Todas las fechas' },
                   { val: 'hoy', label: 'Hoy' },
@@ -278,9 +295,7 @@ function RetosTab({ showAlert }: { showAlert: (type: AlertModalState['type'], ti
                       setFilterDate(dt.val as any);
                       setOpenDropdown(null);
                     }}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-all ${filterDate === dt.val
-                      ? 'bg-primary text-white shadow-sm'
-                      : 'text-foreground hover:bg-primary/10 hover:text-primary'
+                    className={`py-2 px-3 rounded-lg text-xs font-bold text-left ${filterDate === dt.val ? 'bg-primary text-white' : 'text-foreground hover:bg-primary/10'
                       }`}
                   >
                     {dt.label}
@@ -290,18 +305,21 @@ function RetosTab({ showAlert }: { showAlert: (type: AlertModalState['type'], ti
             )}
           </div>
 
-          {/* Nivel dropdown */}
+          {/* Filtro Nivel (Dropdown) */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setOpenDropdown(openDropdown === 'level' ? null : 'level')}
-              className="h-9 px-3 border border-border rounded-xl bg-card text-xs font-semibold flex items-center gap-2 outline-none focus:border-primary hover:border-primary/40"
+              className="w-full h-9 px-2 border border-border rounded-xl bg-card text-[11px] font-semibold flex items-center justify-between outline-none"
             >
-              <span className="capitalize">{filterLevel === 'todos' ? 'Todos los niveles' : filterLevel}</span>
-              <ChevronDown size={14} className={`transition-transform text-muted-foreground ${openDropdown === 'level' ? 'rotate-180' : ''}`} />
+              <span className="truncate">
+                {filterLevel === 'todos' ? 'Nivel' : filterLevel}
+              </span>
+              <ChevronDown size={13} className="text-muted-foreground shrink-0" />
             </button>
+
             {openDropdown === 'level' && (
-              <div className="absolute top-10 left-0 min-w-[160px] p-2 bg-card border border-border rounded-xl shadow-xl z-50 flex flex-col gap-1 animate-in fade-in slide-in-from-top-1">
+              <div className="absolute top-10 right-0 w-40 p-2 bg-card border border-border rounded-xl shadow-xl z-50 flex flex-col gap-1">
                 {[
                   { val: 'todos', label: 'Todos los niveles' },
                   { val: 'recreativo', label: 'Recreativo' },
@@ -315,7 +333,8 @@ function RetosTab({ showAlert }: { showAlert: (type: AlertModalState['type'], ti
                       setFilterLevel(lvl.val);
                       setOpenDropdown(null);
                     }}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-all ${filterLevel === lvl.val ? 'bg-primary text-white shadow-sm' : 'text-foreground hover:bg-primary/10 hover:text-primary'}`}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold text-left ${filterLevel === lvl.val ? 'bg-primary text-white' : 'text-foreground hover:bg-primary/10'
+                      }`}
                   >
                     {lvl.label}
                   </button>
@@ -325,22 +344,13 @@ function RetosTab({ showAlert }: { showAlert: (type: AlertModalState['type'], ti
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            if (!user) return showAlert('login_required', 'Iniciar Sesión', 'Debes iniciar sesión para crear un reto.');
-            setEditingChallenge(null);
-            setShowForm(!showForm);
-          }}
-          className="btn-primary text-xs py-2 px-4 flex items-center gap-2"
-        >
-          <Plus size={15} /> Crear reto
-        </button>
+
       </div>
 
       {/* Formulario Modal Crear / Editar Reto */}
       {(showForm || editingChallenge) && (
         <ChallengeFormModal
+          key={editingChallenge?.id || 'new-challenge'}
           editingItem={editingChallenge}
           showAlert={showAlert}
           isConvocatoria={false}
@@ -371,11 +381,10 @@ function RetosTab({ showAlert }: { showAlert: (type: AlertModalState['type'], ti
                       <div className="w-8 h-8 bg-primary/10 rounded-xl flex items-center justify-center text-primary flex-shrink-0">
                         <Trophy size={16} />
                       </div>
-                      <span className="font-bold">{c.profiles?.full_name || 'Jugador'}</span>
-                      <LevelBadge level={c.level} />
+                      <span className="font-bold capitalize">{c.profiles?.full_name || 'Jugador'}</span>                      <LevelBadge level={c.level} />
                       {c.is_urgent && (
                         <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-600 text-[10px] font-bold animate-pulse flex items-center gap-1">
-                          <Flame size={11} /> Por Empezar
+                          <Flame size={11} /> Urgente
                         </span>
                       )}
                     </div>
@@ -397,14 +406,21 @@ function RetosTab({ showAlert }: { showAlert: (type: AlertModalState['type'], ti
                           onClick={() => setPreviewPitch(c.pitches)}
                           className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all border border-emerald-200/80 shadow-sm cursor-pointer"
                         >
-                          🏟️ {c.pitches.name} · {c.pitches.companies?.zone} <span className="text-[10px] text-emerald-600 font-semibold">(Ver cancha)</span>
+                          🏟️ {c.pitches.name.toUpperCase()}  <span className="text-[10px] text-emerald-600 font-semibold">(Ver cancha)</span>
                         </button>
                       ) : (
                         <span className="px-3 py-1.5 bg-secondary text-foreground rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 border border-border">
-                          📍 Cancha: {c.custom_pitch_name || (c.location_zone && c.location_zone !== 'Todas' ? `Zona ${c.location_zone}` : 'Por definir')}
+                          📍 CANCHA: {c.custom_pitch_name || 'Por definir'.toUpperCase()}
                         </span>
                       )}
                     </div>
+
+                    {c.message && (
+                      <div className="mt-2 p-2.5 rounded-xl bg-secondary/60 border border-border/70 text-xs flex items-start gap-2">
+                        <span className="text-primary text-sm shrink-0 leading-none">💬</span>
+                        <p className="text-foreground/90 italic leading-relaxed break-words">{c.message}</p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
@@ -460,13 +476,13 @@ function BuscarJugadorTab({ showAlert }: { showAlert: (type: AlertModalState['ty
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [previewPitch, setPreviewPitch] = useState<any | null>(null);
-  const [openDropdown, setOpenDropdown] = useState<'zone' | 'level' | null>(null);
+  const [openDropdown, setOpenDropdown] = useState<'zone' | 'level' | 'date' | null>(null);
 
   // Filtros
   const [filterUrgent, setFilterUrgent] = useState(false);
   const [filterZone, setFilterZone] = useState('Todas');
   const [filterLevel, setFilterLevel] = useState('todos');
-
+  const [filterDate, setFilterDate] = useState('todas');
   const { user, profile } = useAuth();
   const supabase = createClient();
 
@@ -557,7 +573,21 @@ function BuscarJugadorTab({ showAlert }: { showAlert: (type: AlertModalState['ty
     const matchesUrgent = !filterUrgent || c.is_urgent === true;
     const matchesZone = filterZone === 'Todas' || (c.pitches?.companies?.zone || c.location_zone || 'Todas') === filterZone;
     const matchesLevel = filterLevel === 'todos' || c.level === filterLevel;
-    return matchesUrgent && matchesZone && matchesLevel;
+
+    let matchesDate = true;
+    if (filterDate !== 'todas') {
+      const challengeDate = new Date(c.date + 'T12:00:00');
+      challengeDate.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const diffDays = Math.floor((today.getTime() - challengeDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (filterDate === 'hoy') matchesDate = diffDays === 0;
+      else if (filterDate === 'pasados_3') matchesDate = diffDays >= 0 && diffDays <= 3;
+      else if (filterDate === 'pasados_7') matchesDate = diffDays >= 0 && diffDays <= 7;
+      else if (filterDate === 'historial') matchesDate = diffDays > 7;
+    }
+
+    return matchesUrgent && matchesZone && matchesLevel && matchesDate;
   });
 
   if (loading) return <div className="py-16 flex justify-center"><Loader2 size={32} className="animate-spin text-primary" /></div>;
@@ -573,36 +603,114 @@ function BuscarJugadorTab({ showAlert }: { showAlert: (type: AlertModalState['ty
           ¿Tienes un partido reservado pero te falta gente? Publica aquí y encuentra los jugadores exactos que necesitas.
         </p>
       </div>
+      {/* Fila 2 (Móvil) / Derecha (Desktop): Botón de Acción Principal */}
+      <button
+        type="button"
+        onClick={() => {
+          if (!user)
+            return showAlert(
+              'login_required',
+              'Iniciar Sesión',
+              'Debes iniciar sesión para publicar una convocatoria.'
+            );
+          setEditingItem(null);
+          setShowForm(!showForm);
+        }}
+        className="btn-primary text-xs h-10 sm:h-9 py-2 px-4 flex items-center justify-center gap-2 w-full sm:w-auto font-bold shrink-0"
+      >
+        <Plus size={15} /> Necesito un jugador
+      </button>
 
-      <div className="p-4 bg-card border border-border rounded-2xl mb-6 shadow-sm flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2.5">
+      <div className="p-3.5 bg-card border border-border rounded-2xl mb-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        {/* Fila 1: Filtros distribuidos equitativamente en 3 columnas en móvil */}
+        <div className="grid grid-cols-3 gap-2 w-full sm:w-auto sm:flex sm:items-center">
+
+          {/* Filtro Urgente / Por Empezar */}
           <button
             type="button"
             onClick={() => setFilterUrgent(!filterUrgent)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${filterUrgent
+            className={`h-9 px-2 sm:px-3 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 border ${filterUrgent
               ? 'bg-red-500 text-white border-red-500 shadow-sm'
               : 'bg-secondary text-muted-foreground border-transparent hover:border-red-300'
               }`}
           >
-            <Flame size={14} />Por Empezar
+            <Flame size={14} className="shrink-0" />
+            <span className="truncate">Urgente</span>
           </button>
 
+          {/* Filtro Fecha (Dropdown) */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setOpenDropdown(openDropdown === 'date' ? null : ('date' as any))}
+              className="w-full sm:w-auto h-9 px-2 sm:px-3 border border-border rounded-xl bg-card text-[11px] sm:text-xs font-semibold flex items-center justify-between sm:justify-start gap-1.5 outline-none focus:border-primary hover:border-primary/40"
+            >
+              <span className="truncate">
+                {filterDate === 'todas'
+                  ? 'Fechas'
+                  : filterDate === 'hoy'
+                    ? 'Hoy'
+                    : filterDate === 'pasados_3'
+                      ? '3 días'
+                      : filterDate === 'pasados_7'
+                        ? '7 días'
+                        : 'Antiguo'}
+              </span>
+              <ChevronDown
+                size={14}
+                className={`transition-transform text-muted-foreground shrink-0 ${openDropdown === ('date' as any) ? 'rotate-180' : ''
+                  }`}
+              />
+            </button>
 
+            {openDropdown === ('date' as any) && (
+              <div className="absolute top-10 left-0 w-44 p-2 bg-card border border-border rounded-xl shadow-xl z-50 flex flex-col gap-1 animate-in fade-in slide-in-from-top-1">
+                {[
+                  { val: 'todas', label: 'Todas las fechas' },
+                  { val: 'hoy', label: 'Hoy' },
+                  { val: 'pasados_3', label: 'Últimos 3 días' },
+                  { val: 'pasados_7', label: 'Últimos 7 días' },
+                ].map((dt) => (
+                  <button
+                    key={dt.val}
+                    type="button"
+                    onClick={() => {
+                      setFilterDate(dt.val as any);
+                      setOpenDropdown(null);
+                    }}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-all ${filterDate === dt.val
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'text-foreground hover:bg-primary/10 hover:text-primary'
+                      }`}
+                  >
+                    {dt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
-          {/* Nivel dropdown */}
+          {/* Filtro Nivel (Dropdown) */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setOpenDropdown(openDropdown === 'level' ? null : 'level')}
-              className="h-9 px-3 border border-border rounded-xl bg-card text-xs font-semibold flex items-center gap-2 outline-none focus:border-primary hover:border-primary/40"
+              className="w-full sm:w-auto h-9 px-2 sm:px-3 border border-border rounded-xl bg-card text-[11px] sm:text-xs font-semibold flex items-center justify-between sm:justify-start gap-1.5 outline-none focus:border-primary hover:border-primary/40"
             >
-              <span className="capitalize">{filterLevel === 'todos' ? ' Todos los niveles' : filterLevel}</span>
-              <ChevronDown size={14} className={`transition-transform text-muted-foreground ${openDropdown === 'level' ? 'rotate-180' : ''}`} />
+              <span className="truncate capitalize">
+                {filterLevel === 'todos' ? 'Nivel' : filterLevel}
+              </span>
+              <ChevronDown
+                size={14}
+                className={`transition-transform text-muted-foreground shrink-0 ${openDropdown === 'level' ? 'rotate-180' : ''
+                  }`}
+              />
             </button>
+
             {openDropdown === 'level' && (
-              <div className="absolute top-10 left-0 min-w-[160px] p-2 bg-card border border-border rounded-xl shadow-xl z-50 flex flex-col gap-1 animate-in fade-in slide-in-from-top-1">
+              <div className="absolute top-10 right-0 sm:right-auto sm:left-0 w-40 p-2 bg-card border border-border rounded-xl shadow-xl z-50 flex flex-col gap-1 animate-in fade-in slide-in-from-top-1">
                 {[
-                  { val: 'todos', label: ' Todos los niveles' },
+                  { val: 'todos', label: 'Todos los niveles' },
                   { val: 'recreativo', label: 'Recreativo' },
                   { val: 'competitivo', label: 'Competitivo' },
                   { val: 'profesional', label: 'Profesional' },
@@ -614,7 +722,10 @@ function BuscarJugadorTab({ showAlert }: { showAlert: (type: AlertModalState['ty
                       setFilterLevel(lvl.val);
                       setOpenDropdown(null);
                     }}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-all ${filterLevel === lvl.val ? 'bg-primary text-white shadow-sm' : 'text-foreground hover:bg-primary/10 hover:text-primary'}`}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-all ${filterLevel === lvl.val
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'text-foreground hover:bg-primary/10 hover:text-primary'
+                      }`}
                   >
                     {lvl.label}
                   </button>
@@ -624,21 +735,11 @@ function BuscarJugadorTab({ showAlert }: { showAlert: (type: AlertModalState['ty
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            if (!user) return showAlert('login_required', 'Iniciar Sesión', 'Debes iniciar sesión para publicar una convocatoria.');
-            setEditingItem(null);
-            setShowForm(!showForm);
-          }}
-          className="btn-primary text-xs py-2 px-4 flex items-center gap-2"
-        >
-          <Plus size={15} /> Necesito un jugador
-        </button>
-      </div>
 
+      </div>
       {(showForm || editingItem) && (
         <ChallengeFormModal
+          key={editingItem?.id || 'new-convocatoria'}
           editingItem={editingItem}
           showAlert={showAlert}
           isConvocatoria={true}
@@ -666,12 +767,13 @@ function BuscarJugadorTab({ showAlert }: { showAlert: (type: AlertModalState['ty
                   <div className="flex-1 min-w-0 space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <div className="w-8 h-8 bg-primary/10 rounded-xl flex items-center justify-center text-primary flex-shrink-0"><Users size={15} /></div>
-                      <span className="font-bold">{c.profiles?.full_name || 'Jugador'}</span>
+                      {/* <span className="font-bold">{c.profiles?.full_name || 'Jugador'}</span> */}
+                      <span className="font-bold capitalize">{c.profiles?.full_name || 'Jugador'}</span>
                       <span className="text-muted-foreground text-xs">necesita</span>
                       <span className="font-bold text-primary">{c.players_needed} jugador{c.players_needed > 1 ? 'es' : ''}</span>
                       {c.is_urgent && (
                         <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-600 text-[10px] font-bold animate-pulse flex items-center gap-1">
-                          <Flame size={11} /> Por Empezar
+                          <Flame size={11} /> Urgente
                         </span>
                       )}
                     </div>
@@ -689,14 +791,21 @@ function BuscarJugadorTab({ showAlert }: { showAlert: (type: AlertModalState['ty
                           onClick={() => setPreviewPitch(c.pitches)}
                           className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all border border-emerald-200/80 shadow-sm cursor-pointer"
                         >
-                          🏟️ {c.pitches.name} · {c.pitches.companies?.zone} <span className="text-[10px] text-emerald-600 font-semibold">(Ver cancha )</span>
+                          🏟️ {c.pitches.name.toUpperCase()}  <span className="text-[10px] text-emerald-600 font-semibold">(Ver cancha )</span>
                         </button>
                       ) : (
                         <span className="px-3 py-1.5 bg-secondary text-foreground rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 border border-border">
-                          📍 Cancha: {c.custom_pitch_name || (c.location_zone && c.location_zone !== 'Todas' ? `Zona ${c.location_zone}` : 'Por definir')}
+                          📍 CANCHA: {c.custom_pitch_name || 'POR DEFINIR'.toUpperCase()}
                         </span>
                       )}
                     </div>
+
+                    {c.message && (
+                      <div className="mt-2 p-2.5 rounded-xl bg-secondary/60 border border-border/70 text-xs flex items-start gap-2">
+                        <span className="text-primary text-sm shrink-0 leading-none">💬</span>
+                        <p className="text-foreground/90 italic leading-relaxed break-words">{c.message}</p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
@@ -766,6 +875,7 @@ function ChallengeFormModal({
   const [isUrgent, setIsUrgent] = useState(editingItem?.is_urgent ?? false);
   const [locationZone, setLocationZone] = useState(editingItem?.location_zone || 'Todas');
   const [customPitchName, setCustomPitchName] = useState(editingItem?.custom_pitch_name || '');
+  const [message, setMessage] = useState(editingItem?.message || '');
   const [loading, setLoading] = useState(false);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [showAllHours, setShowAllHours] = useState(false);
@@ -844,7 +954,7 @@ function ChallengeFormModal({
     setLoading(true);
     await ensureProfile();
 
-    const updateData = {
+    const updateData: Record<string, any> = {
       creator_id: user.id,
       pitch_id: pitchId || null,
       custom_pitch_name: pitchId ? null : (pitchQuery.trim() || null),
@@ -855,6 +965,7 @@ function ChallengeFormModal({
       is_urgent: isUrgent,
       location_zone: locationZone,
       status: 'open',
+      message: message.trim() || null,
     };
 
     try {
@@ -1199,6 +1310,32 @@ function ChallengeFormModal({
           </p>
         </div>
 
+        {/* Mensaje / Descripción Opcional */}
+        <div className="auth-field">
+          <label className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+            <span className="flex items-center gap-1.5">
+              💬 {isConvocatoria ? 'Mensaje o indicaciones para jugadores' : 'Mensaje o detalles del reto'}
+            </span>
+            <span className="text-[10px] lowercase text-muted-foreground/70 font-normal">(opcional)</span>
+          </label>
+          <textarea
+            value={message}
+            onChange={e => setMessage(e.target.value)}
+            placeholder={
+              isConvocatoria
+                ? 'Ej: Nos falta arquero y delantero, jugamos a divertirnos, llevar camiseta blanca...'
+                : 'Ej: Buscamos equipo nivel medio para amistoso de 1 hora, dividimos la cancha 50/50...'
+            }
+            rows={2}
+            maxLength={250}
+            className="w-full p-3 border border-border rounded-xl bg-card text-sm font-medium focus:ring-2 focus:ring-primary/30 outline-none resize-none transition-all placeholder:text-muted-foreground/60"
+          />
+          <div className="flex justify-between items-center text-[10px] text-muted-foreground mt-0.5 px-1">
+            <span>Información adicional que verán los demás usuarios</span>
+            <span>{message.length}/250</span>
+          </div>
+        </div>
+
         {/* Toggle Por Empezar */}
         <label className="flex items-center gap-3 p-3 bg-secondary/50 rounded-xl cursor-pointer hover:bg-secondary">
           <input
@@ -1209,7 +1346,7 @@ function ChallengeFormModal({
           />
           <div>
             <p className="text-sm font-bold flex items-center gap-1.5 text-red-600">
-              <Flame size={15} /> Marcar como Por Empezar
+              <Flame size={15} /> Marcar como Urgente
             </p>
             <p className="text-xs text-muted-foreground">Destacará tu publicación con una insignia de urgencia.</p>
           </div>

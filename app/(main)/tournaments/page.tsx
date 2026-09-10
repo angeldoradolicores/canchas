@@ -7,7 +7,7 @@ import {
   Trophy, Plus, X, Loader2, CalendarDays, MapPin, Ticket,
   Award, Edit3, Trash2, Upload, Star, Shield, ExternalLink,
   ChevronDown, Search, Crown, Gift, Sparkles, Users, AlertCircle,
-  Info, Clock, Target, CheckCircle2, ChevronLeft, ChevronRight, Maximize2
+  Info, Clock, Target, CheckCircle2, ChevronLeft, ChevronRight, Maximize2, LayoutGrid
 } from 'lucide-react';
 import Link from 'next/link';
 import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
@@ -200,7 +200,7 @@ export default function TournamentsPage() {
     const timer = setTimeout(searchPitches, 300);
     return () => clearTimeout(timer);
   }, [pitchQuery, supabase]);
-
+  const [currentImageIdx, setCurrentImageIdx] = useState(0);
   // ── Image upload ──────────────────────────────────────────────────────────
   const handleImageUpload = async (files: FileList) => {
     if (!files.length) return;
@@ -305,9 +305,15 @@ export default function TournamentsPage() {
   // ── Delete ────────────────────────────────────────────────────────────────
   const handleDelete = (id: string) => {
     setAlertState({
-      isOpen: true, type: 'warning', title: '¿Eliminar campeonato?',
+      isOpen: true,
+      type: 'warning',
+      title: '¿Eliminar campeonato?',
       message: 'Esta acción es irreversible. Se eliminará el campeonato y todos sus datos.',
-      showCancel: true, confirmText: 'Sí, eliminar', cancelText: 'Cancelar',
+      showCancel: true,
+      confirmText: 'Sí, eliminar',
+      cancelText: 'Cancelar',
+      confirmButtonClassName: 'btn-primary bg-secondary text-foreground hover:bg-border flex-1',
+      cancelButtonClassName: 'btn-primary bg-red-600 hover:bg-red-700 text-white flex-1 shadow-sm',
       onConfirm: async () => {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token || '';
@@ -328,166 +334,311 @@ export default function TournamentsPage() {
     <div className="page-content fade-in max-w-6xl mx-auto">
       <CustomAlertModal alertState={alertState} onClose={() => setAlertState(prev => ({ ...prev, isOpen: false }))} />
 
-      {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-foreground flex items-center gap-3">
-            <Trophy className="text-amber-500" size={32} /> Campeonatos
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Torneos organizados por centros deportivos y jugadores.</p>
-        </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center justify-center gap-2 bg-primary text-white font-bold px-5 py-3 rounded-xl hover:bg-primary/90 transition-colors shadow-md text-sm"
-        >
-          <Plus size={18} /> Crear Campeonato
-        </button>
-      </div>
+      {/* ── Contenedor Principal de Controles (Header + Filtros) ── */}
+      <div className="bg-[#DCE7DE] border border-[#C8DACB] rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
 
-      {/* ── Status filter tabs ── */}
-      <div className="flex gap-2 mb-8 flex-wrap">
-        {[
-          { key: 'all', label: 'Todos' },
-          { key: 'active', label: ' Abiertos' },
-          { key: 'closed', label: 'Llenos' },
-          { key: 'finished', label: 'Finalizados' },
-        ].map(f => (
+        {/* Encabezado: Título y Botón de Acción */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-[#C8DACB]">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <Trophy className="text-[#054D27]" size={26} strokeWidth={2.5} />
+              <h1 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
+                Campeonatos
+              </h1>
+            </div>
+            <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1">
+              Explora, regístrate y participa en los torneos y campeonatos organizados por centros deportivos y la comunidad de jugadores.            </p>
+          </div>
+
           <button
-            key={f.key}
-            onClick={() => setStatusFilter(f.key as any)}
-            className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${statusFilter === f.key
-              ? 'bg-primary text-white border-primary'
-              : 'bg-card text-muted-foreground border-border hover:border-primary/50'
-              }`}
+            onClick={openCreate}
+            className="flex items-center justify-center gap-2 bg-[#008744] hover:bg-[#054D27] text-white font-black px-5 py-3 rounded-xl transition-colors shadow-md text-sm shrink-0"
           >
-            {f.label}
+            <Plus size={18} strokeWidth={3} /> Crear Campeonato
           </button>
-        ))}
+        </div>
+
+        {/* Barra de Filtros en una sola línea continua compacta */}
+        <div>
+          <h2 className="text-[10px] font-extrabold text-[#4D715B] uppercase tracking-wider mb-2 px-1">
+            Filtrar por estado
+          </h2>
+
+          <div className="bg-[#CDE0D1]/70 border border-[#BACFC0] rounded-2xl p-1 flex items-center gap-1 w-full">
+            {[
+              { key: 'all', label: 'Todos', showIcon: true },
+              { key: 'active', label: 'Abiertos', showIcon: false },
+              { key: 'closed', label: 'Llenos', showIcon: false },
+              { key: 'finished', label: 'Finalizados', showIcon: false },
+            ].map((f) => {
+              const isActive = statusFilter === f.key;
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => setStatusFilter(f.key as any)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-black transition-all duration-200 select-none whitespace-nowrap ${isActive
+                    ? 'bg-[#DCE7DE] text-[#054D27] shadow-xs border border-[#BACFC0]'
+                    : 'text-[#4D715B] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
+                    }`}
+                >
+                  {f.showIcon && (
+                    <LayoutGrid
+                      size={13}
+                      strokeWidth={2.5}
+                      className={isActive ? 'text-[#008744]' : 'text-[#4D715B]'}
+                    />
+                  )}
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
+      {/* Sección de Errores */}
       {error && (
-        <div className="p-4 mb-6 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center gap-2 text-sm">
-          <AlertCircle size={16} /> {error}
+        <div className="p-4 mb-6 bg-red-100 border border-red-200 text-red-800 rounded-2xl flex items-center gap-2.5 text-xs font-bold shadow-xs">
+          <AlertCircle size={18} className="shrink-0 text-red-600" />
+          <span>{error}</span>
         </div>
       )}
 
+
       {loading ? (
         <div className="flex justify-center py-20">
-          <Loader2 size={32} className="animate-spin text-primary" />
+          <Loader2 size={36} className="animate-spin text-[#008744]" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-20 bg-card border border-border rounded-3xl">
-          <Trophy size={48} className="mx-auto text-muted-foreground/40 mb-4" />
-          <h3 className="font-bold text-lg mb-2">No hay campeonatos {statusFilter !== 'all' ? `con estado "${STATUS_LABELS[statusFilter]?.label}"` : 'aún'}</h3>
-          <p className="text-muted-foreground text-sm">
-            {user ? '¡Sé el primero en crear un campeonato!' : 'Inicia sesión para crear uno.'}
+        <div className="text-center py-16 px-4 bg-[#DCE7DE]/50 border border-[#C8DACB] rounded-[2.5rem]">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#CDE0D1] flex items-center justify-center text-[#054D27]">
+            <Trophy size={32} />
+          </div>
+          <h3 className="font-black text-xl text-[#054D27] uppercase tracking-tight mb-1">
+            {statusFilter !== 'all'
+              ? `No hay campeonatos ${STATUS_LABELS[statusFilter]?.label || ''}`
+              : 'No hay campeonatos aún'}
+          </h3>
+          <p className="text-[#4D715B] text-sm font-medium max-w-sm mx-auto">
+            {user ? '¡Sé el primero en crear y publicar un campeonato!' : 'Inicia sesión para registrar tu torneo.'}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map(t => {
+          {filtered.map((t) => {
             const img = t.media_urls?.[0] || t.pitches?.media_urls?.[0] || t.pitches?.image_url;
-            const statusStyle = STATUS_LABELS[t.status] || STATUS_LABELS.active;
             const isOwner = user?.id === t.user_id;
             const hasPrizeValue = t.prize_value && t.prize_value > 0;
+
+            // ============================================================
+            // 1. LÓGICA DE COLORES DIRECTA Y ULTRA ESTRICTA POR ESTADO
+            // Usamos t.status directamente ('active', 'closed', 'finished')
+            // ============================================================
+
+            const status = t.status || 'active';
+
+            // Configuración POR DEFECTO: Abiertas / Activo (VERDE)
+            let statusClasses = {
+              bg: 'bg-[#E8F3EB] border-[#008744] shadow-sm',
+              text: 'text-[#054D27]',
+              dot: 'bg-[#008744] animate-pulse',
+              label: 'Inscripciones abiertas', // Texto visible
+            };
+
+            // Condición estricta para CUPO LLENO (ROJO/NARANJA FUERTE)
+            if (status === 'closed') {
+              statusClasses = {
+                bg: 'bg-[#FFF0F0] border-red-500 shadow-sm',
+                text: 'text-red-700',
+                dot: 'bg-red-500',
+                label: 'Cupos llenos', // Texto visible
+              };
+            }
+            // Condición estricta para FINALIZADO (GRIS/NEGRO)
+            else if (status === 'finished') {
+              statusClasses = {
+                bg: 'bg-white border-zinc-400 shadow-sm',
+                text: 'text-zinc-600',
+                dot: 'bg-zinc-500',
+                label: 'Finalizado', // Texto visible
+              };
+            }
+
+            // Usar siempre el label del statusClasses ya calculado
+            const visibleLabel = statusClasses.label;
 
             return (
               <article
                 key={t.id}
-                className="group relative bg-card border border-border rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 flex flex-col cursor-pointer"
                 onClick={() => setSelectedTournament(t)}
+                className="group relative bg-[#DCE7DE] border border-[#C8DACB] rounded-[2rem] overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 hover:-translate-y-1.5 flex flex-col cursor-pointer select-none"
               >
-                {t.created_by_owner && (
-                  <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 bg-black/25 backdrop-blur-[6px] text-white/85 text-[10px] font-black px-2.5 py-1 rounded-full border border-white/10 tracking-wider uppercase select-none">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400/70 animate-pulse" />
-
-                  </div>
-
-                )}
-
-                {isOwner && (
-                  <div className="absolute top-3 right-3 z-10 flex gap-1.5">
-                    <button
-                      onClick={e => { e.stopPropagation(); openEdit(t); }}
-                      className="p-2 bg-white/90 dark:bg-zinc-900/90 rounded-full hover:bg-primary hover:text-white transition-colors shadow-md"
-                    >
-                      <Edit3 size={13} />
-                    </button>
-                    <button
-                      onClick={e => { e.stopPropagation(); handleDelete(t.id); }}
-                      className="p-2 bg-white/90 dark:bg-zinc-900/90 rounded-full hover:bg-red-500 hover:text-white transition-colors shadow-md"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                )}
-
-                <div className="relative h-44 bg-gradient-to-br from-amber-500 via-orange-600 to-rose-600 overflow-hidden">
+                {/* Header con Imagen */}
+                <div className="relative aspect-[4/4] w-full bg-secondary overflow-hidden">
                   {img ? (
-                    <img src={img} alt={t.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <img
+                      src={img}
+                      alt={t.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                    />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Trophy size={56} className="text-white/30" />
+                    <div className="w-full h-full bg-gradient-to-br from-[#054D27] to-[#002D15] flex flex-col items-center justify-center gap-2 p-4 text-center">
+                      <Trophy size={48} className="text-[#00E664]/20" />
+                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#00E664]/40">
+                        Torneo de Fútbol
+                      </span>
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
 
-                  {(t.prize || hasPrizeValue) && (
-                    <div className="absolute bottom-3 left-3 right-3">
+                  {/* Sombra Degradada Inferior */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
-
+                  {/* Acciones del Propietario */}
+                  {isOwner && (
+                    <div className="absolute top-3 right-3 z-10 flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEdit(t);
+                        }}
+                        className="p-2 bg-[#DCE7DE]/90 backdrop-blur-md text-[#054D27] rounded-full hover:bg-[#008744] hover:text-white transition-all shadow-md"
+                        title="Editar torneo"
+                      >
+                        <Edit3 size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(t.id);
+                        }}
+                        className="p-2 bg-[#DCE7DE]/90 backdrop-blur-md text-red-600 rounded-full hover:bg-red-600 hover:text-white transition-all shadow-md"
+                        title="Eliminar torneo"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   )}
+
+                  {/* Título sobre la imagen */}
+                  <div className="absolute bottom-3 left-4 right-4 z-10">
+                    <h3 className="text-xl font-black text-white uppercase leading-tight drop-shadow-md truncate">
+                      {t.name}
+                    </h3>
+                  </div>
                 </div>
 
-                <div className="p-4 flex flex-col gap-2.5 flex-1">
-                  <div className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 backdrop-blur-sm text-white px-3.5 py-2 rounded-xl shadow-md border border-emerald-400/30 transition-all group-hover:scale-105">
-                    <Trophy size={13} className="text-emerald-100 flex-shrink-0 animate-pulse" />
-                    <span className="font-black text-xs tracking-wide uppercase truncate">
-                      {hasPrizeValue ? `Premio: $${Number(t.prize_value).toLocaleString('es-CO')}` : t.prize}
+                {/* Cuerpo de la tarjeta */}
+                <div className="p-4 flex flex-col gap-3 flex-1 text-[#0F3822]">
+
+                  {/* SECCIÓN SUPERIOR: Badge de Estado Dinámico + Fecha de inicio */}
+                  <div className="flex items-center justify-between gap-2">
+                    {/* Badge con clases dinámicas garantizadas */}
+                    <span
+                      className={`inline-flex items-center gap-1.5 border text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider ${statusClasses.bg} ${statusClasses.text}`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${statusClasses.dot}`} />
+                      {visibleLabel}
                     </span>
+
+                    {t.start_date && (
+                      <div className="flex items-center gap-1 text-[11px] font-extrabold text-[#4D715B]">
+                        <CalendarDays size={13} className="text-[#0B6637] shrink-0" />
+                        <span>
+                          Inicio:{' '}
+                          <strong className="text-[#054D27]">
+                            {new Date(t.start_date + 'T12:00:00').toLocaleDateString('es-CO', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })}
+                          </strong>
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${statusStyle.color}`}>
-                      {statusStyle.label}
-                    </span>
-                    <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${statusStyle.color}`}>
-                      <CalendarDays size={12} className="shrink-0" />
-                      <span>
-                        {new Date(t.start_date + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}
-                      </span>
-                    </span>
 
+                  {/* BLOQUE PREMIO MAYOR - SUAVE, ELEGANTE Y DE ALTO CONTRASTE */}
+                  <div className="bg-[#CDE0D1] border border-[#BACFC0] rounded-2xl p-3.5 flex items-center gap-3.5 shadow-xs">
+                    {/* Caja del Icono en Verde Oscuro Corporativo */}
+                    <div className="w-11 h-11 rounded-xl bg-[#054D27] text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Trophy size={22} className="text-[#DCE7DE]" />
+                    </div>
+
+                    {/* Contenido del Premio */}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-[#4D715B] leading-none mb-1">
+                        Premio Mayor
+                      </p>
+                      <p className="font-black text-xl text-[#054D27] tracking-tight leading-none truncate">
+                        {hasPrizeValue
+                          ? `$${Number(t.prize_value).toLocaleString('es-CO')} COP`
+                          : t.prize || 'Por definir'}
+                      </p>
+                      {t.prize && Number(t.prize_value || 0) > 0 && (
+                        <p className="text-[11px] font-bold text-[#1C412B] truncate mt-0.5">
+                          {t.prize}
+                        </p>
+                      )}
+
+                    </div>
                   </div>
 
-                  <h3 className="text-base font-extrabold text-foreground leading-tight">{t.name}</h3>
+                  {/* Grid de Inscripción y Sede */}
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {/* Bloque Inscripción */}
+                    <div className="bg-[#CDE0D1] border border-[#BACFC0] rounded-2xl p-3 flex flex-col justify-between">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Ticket size={13} className="text-[#0B6637] shrink-0" />
+                        <span className="text-[9px] font-extrabold uppercase tracking-wider text-[#4D715B]">
+                          Inscripción
+                        </span>
+                      </div>
+                      <p className="font-black text-xs sm:text-sm text-[#054D27] leading-tight">
+                        {t.entry_fee > 0
+                          ? `$${Number(t.entry_fee).toLocaleString('es-CO')}`
+                          : 'Gratuito'}
+                      </p>
+                    </div>
 
-                  {t.description && (
-                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">{t.description}</p>
-                  )}
-
-                  {(t.location || t.pitches) && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <MapPin size={12} className="text-primary flex-shrink-0" />
+                    {/* Bloque Sede / Cancha */}
+                    <div className="bg-[#CDE0D1] border border-[#BACFC0] rounded-2xl p-3 flex flex-col justify-between">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <MapPin size={13} className="text-[#0B6637] shrink-0" />
+                        <span className="text-[9px] font-extrabold uppercase tracking-wider text-[#4D715B]">
+                          Lugar
+                        </span>
+                      </div>
                       {t.pitch_id ? (
-                        <Link href={`/cancha/${t.pitch_id}`} onClick={(e) => e.stopPropagation()} className="truncate text-primary font-semibold hover:underline">
+                        <Link
+                          href={`/cancha/${t.pitch_id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-black text-xs text-[#054D27] hover:underline uppercase leading-tight line-clamp-2"
+                        >
                           {t.pitches?.name}
                         </Link>
                       ) : (
-                        <span className="truncate">{t.location}</span>
+                        <p className="font-black text-xs text-[#054D27] uppercase leading-tight line-clamp-2">
+                          {t.location || 'Por definir'}
+                        </p>
                       )}
                     </div>
+                  </div>
+
+                  {/* Descripción */}
+                  {t.description && (
+                    <p className="text-xs text-[#1C412B] font-medium line-clamp-2 leading-relaxed px-1">
+                      {t.description}
+                    </p>
                   )}
 
-                  <div className="flex items-center gap-2 pt-2 border-t border-border/60 mt-auto justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <Ticket size={14} className="text-primary flex-shrink-0" />
-                      <span className="font-extrabold text-sm text-foreground">
-                        {t.entry_fee > 0 ? `$${Number(t.entry_fee).toLocaleString()}` : 'Gratuito'}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-primary font-bold flex items-center gap-1">Ver más <ExternalLink size={10} /></span>
-                  </div>
+                  {/* Footer de Tarjeta */}
+                  {/* <div className="pt-2 border-t border-[#BACFC0] mt-auto flex items-center justify-end">
+                    <span className="inline-flex items-center gap-1 text-xs font-black text-[#008744] group-hover:translate-x-1 transition-transform">
+                      Ver Torneo <ChevronRight size={15} />
+                    </span>
+                  </div> */}
                 </div>
               </article>
             );
@@ -495,205 +646,305 @@ export default function TournamentsPage() {
         </div>
       )}
 
+
+
       {/* ──────────────── MODAL DETALLE CAMPEONATO ──────────────── */}
       {selectedTournament && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in">
+        <div
+          className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200"
+          onClick={() => setSelectedTournament(null)}
+        >
+          {/* Tarjeta Flotante Completa */}
           <div
-            className="bg-card w-full max-w-2xl max-h-[95vh] sm:max-h-[88vh] flex flex-col sm:rounded-3xl shadow-2xl border border-border overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200"
-            onClick={e => e.stopPropagation()}
+            className="bg-[#DCE7DE] w-full max-w-md max-h-[88vh] flex flex-col rounded-[2.5rem] shadow-2xl overflow-hidden border border-[#C8DACB] animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
           >
-            {/* Image Header */}
-            <div className="relative h-52 sm:h-64 flex-shrink-0 bg-gradient-to-br from-amber-500 via-orange-600 to-rose-600">
-              {(() => {
-                const img = selectedTournament.media_urls?.[0] || selectedTournament.pitches?.media_urls?.[0] || selectedTournament.pitches?.image_url;
-                return img ? <img src={img} alt={selectedTournament.name} className="w-full h-full object-cover" /> : null;
-              })()}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-
-              {/* Overlay content */}
-              {/* <div className="absolute bottom-0 left-0 right-0 p-5">
-                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${STATUS_LABELS[selectedTournament.status]?.color || ''}`}>
-                    {STATUS_LABELS[selectedTournament.status]?.icon} {STATUS_LABELS[selectedTournament.status]?.label}
-                  </span>
-                  {selectedTournament.created_by_owner && (
-                    <span className="inline-flex items-center gap-1.5 bg-emerald-950/45 backdrop-blur-md text-emerald-50 text-[10px] font-black px-2.5 py-1 rounded-full border border-emerald-400/20 shadow-sm uppercase tracking-wider">
-                      <Shield size={11} className="text-emerald-400 shrink-0" />
-                      Cancha Oficial
-                    </span>
-                  )}
-
-                </div>
-                <h2 className="text-2xl font-black text-white leading-tight">{selectedTournament.name}</h2>
-              </div> */}
-
-              <button
-                onClick={() => setSelectedTournament(null)}
-                className="absolute top-4 right-4 p-2 bg-black/40 hover:bg-black/60 text-white rounded-full transition-colors"
-              >
-                <X size={20} />
-              </button>
-
-              {user?.id === selectedTournament.user_id && (
-                <button
-                  onClick={() => openEdit(selectedTournament)}
-                  className="absolute top-4 right-14 p-2 bg-black/40 hover:bg-primary text-white rounded-full transition-colors"
-                >
-                  <Edit3 size={16} />
-                </button>
-              )}
-            </div>
-
-            {/* Body */}
-            <div className="overflow-y-auto flex-1 p-5 space-y-5">
-              {/* Prize */}
-              {(selectedTournament.prize || (selectedTournament.prize_value && selectedTournament.prize_value > 0)) && (
-                <div className="flex items-center gap-3 p-4 bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 dark:border-emerald-500/30 rounded-2xl shadow-xs">
-
-                  {/* Contenedor del Icono: Fondo verde translúcido con icono verde intenso */}
-                  <div className="w-10 h-10 bg-emerald-500/10 dark:bg-emerald-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Trophy size={20} className="text-emerald-600 dark:text-emerald-400" />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                      Premio Mayor
-                    </p>
-
-                    {/* Texto del Premio: Ajustado a verde esmeralda legible en modo claro y oscuro */}
-                    <p className="font-black text-sm sm:text-base text-emerald-700 dark:text-emerald-400 leading-tight">
-                      {selectedTournament.prize_value && selectedTournament.prize_value > 0
-                        ? `$${Number(selectedTournament.prize_value).toLocaleString('es-CO')} COP`
-                        : selectedTournament.prize}
-                    </p>
-
-                    {selectedTournament.prize && selectedTournament.prize_value && selectedTournament.prize_value > 0 && (
-                      <p className="text-xs text-muted-foreground mt-0.5 break-words">
-                        {selectedTournament.prize}
-                      </p>
-                    )}
-                  </div>
-
-                </div>
-              )}
-
-
-              {/* Descripción */}
-              {selectedTournament.description && (
-                <div>
-                  <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Descripción</h3>
-                  <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{selectedTournament.description}</p>
-                </div>
-              )}
-
-              {/* Dates grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="bg-secondary/50 rounded-xl p-3 border border-border">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <CalendarDays size={13} className="text-primary" />
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Inicio del Torneo</p>
-                  </div>
-                  <p className="font-bold text-sm capitalize">
-                    {new Date(selectedTournament.start_date + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}
-                  </p>
-                </div>
-
-                {selectedTournament.registration_end_date && (
-                  <div className="bg-amber-500/10 rounded-xl p-3 border border-amber-500/20">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Clock size={13} className="text-amber-500" />
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Fin Inscripciones</p>
-                    </div>
-                    <p className="font-bold text-sm capitalize">
-                      {new Date(selectedTournament.registration_end_date + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}
-                    </p>
-                  </div>
-                )}
-
-                {selectedTournament.final_date && (
-                  <div className="bg-primary/10 rounded-xl p-3 border border-primary/20">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Trophy size={13} className="text-primary" />
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Gran Final</p>
-                    </div>
-                    <p className="font-bold text-sm capitalize">
-                      {new Date(selectedTournament.final_date + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}
-                    </p>
-                  </div>
-                )}
+            {/* 1. Header Principal */}
+            <div className="p-6 pb-3 flex items-start justify-between bg-[#DCE7DE] shrink-0">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#4D715B] mb-0.5">
+                  Torneo
+                </p>
+                <h2 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase leading-tight tracking-tight">
+                  {selectedTournament.name}
+                </h2>
               </div>
 
-              {/* Sede y Entry Fee */}
-              <div className="grid grid-cols-2 gap-3 mt-4">
+              <div className="flex items-center gap-1 shrink-0 -mr-1 -mt-1">
+                {user?.id === selectedTournament.user_id && (
+                  <button
+                    type="button"
+                    onClick={() => openEdit(selectedTournament)}
+                    className="p-2 text-[#054D27] hover:bg-[#CDE0D1] rounded-full transition-colors"
+                  >
+                    <Edit3 size={18} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedTournament(null)}
+                  className="p-2 text-[#054D27] hover:bg-[#CDE0D1] rounded-full transition-colors"
+                >
+                  <X size={22} />
+                </button>
+              </div>
+            </div>
+
+            {/* 2. Cuerpo Desplazable */}
+            <div className="overflow-y-auto flex-1 px-5 pb-5 space-y-3 text-[#0F3822]">
+
+              {/* Imagen / Carrusel Embebido */}
+              {(() => {
+                const mediaUrls =
+                  selectedTournament.media_urls?.length > 0
+                    ? selectedTournament.media_urls
+                    : selectedTournament.pitches?.media_urls ||
+                    (selectedTournament.pitches?.image_url
+                      ? [selectedTournament.pitches.image_url]
+                      : []);
+
+                if (mediaUrls.length === 0) return null;
+                const currentImg = mediaUrls[currentImageIdx || 0];
+
+                return (
+                  <div className="relative w-full h-80 sm:h-96 md:h-[420px] rounded-3xl overflow-hidden bg-black/40 shrink-0 group select-none shadow-md border border-[#C5E1CB]">
+                    {/* Fondo difuminado para rellenar laterales en imágenes verticales */}
+                    <img
+                      src={currentImg}
+                      alt=""
+                      aria-hidden="true"
+                      className="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-50 pointer-events-none"
+                    />
+
+                    {/* Imagen Principal (Mantiene proporciones completas sin recortar) */}
+                    <img
+                      src={currentImg}
+                      alt={selectedTournament.name}
+                      onClick={() =>
+                        setLightboxImage?.({
+                          urls: mediaUrls,
+                          index: currentImageIdx || 0,
+                        })
+                      }
+                      className="relative z-10 w-full h-full object-contain cursor-pointer transition-transform duration-300 group-hover:scale-[1.02]"
+                    />
+
+                    {/* Controles del Carrusel */}
+                    {mediaUrls.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCurrentImageIdx((prev) =>
+                              prev === 0 ? mediaUrls.length - 1 : prev - 1
+                            );
+                          }}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-black/50 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-md transition-all shadow-md"
+                        >
+                          <ChevronLeft size={20} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCurrentImageIdx((prev) =>
+                              prev === mediaUrls.length - 1 ? 0 : prev + 1
+                            );
+                          }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-black/50 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-md transition-all shadow-md"
+                        >
+                          <ChevronRight size={20} />
+                        </button>
+
+                        <div className="absolute bottom-3 inset-x-0 z-20 flex items-center justify-center gap-1.5 pointer-events-none">
+                          {mediaUrls.map((_: any, i: number) => (
+                            <span
+                              key={i}
+                              className={`h-1.5 rounded-full transition-all duration-300 ${i === (currentImageIdx || 0)
+                                ? 'w-6 bg-white shadow-xs'
+                                : 'w-1.5 bg-white/50'
+                                }`}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Highlight Banner: Premio Mayor */}
+              {(selectedTournament.prize ||
+                (selectedTournament.prize_value && selectedTournament.prize_value > 0)) && (
+                  <div className="bg-[#CDE0D1] border border-[#BACFC0] rounded-2xl p-3.5 flex items-center gap-3.5 shadow-2xs">
+                    <div className="w-10 h-10 rounded-full bg-[#008744] text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Trophy size={20} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#4D715B]">
+                        Premio Mayor
+                      </p>
+                      <p className="font-black text-lg text-[#054D27] leading-tight">
+                        {selectedTournament.prize_value && selectedTournament.prize_value > 0
+                          ? `$${Number(selectedTournament.prize_value).toLocaleString('es-CO')} COP`
+                          : selectedTournament.prize}
+                      </p>
+                      {selectedTournament.prize && Number(selectedTournament.prize_value || 0) > 0 && (
+                        <p className="text-[11px] font-bold text-[#1C412B] truncate mt-0.5">
+                          {selectedTournament.prize}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+              {/* Grid de 2 Columnas: Sede & Inscripción */}
+              <div className="grid grid-cols-2 gap-3">
                 {(selectedTournament.location || selectedTournament.pitches) && (
-                  <div className="bg-emerald-50/40 rounded-xl p-3.5 border border-emerald-200/50 shadow-sm flex flex-col justify-center">
+                  <div className="bg-[#CDE0D1] border border-[#BACFC0] rounded-2xl p-3.5 flex flex-col justify-between">
                     <div className="flex items-center gap-1.5 mb-1.5">
-                      <MapPin size={13} className="text-emerald-600 shrink-0" />
-                      <p className="text-[10px] font-bold text-emerald-800/80 uppercase tracking-wider">Sede</p>
+                      <MapPin size={14} className="text-[#0B6637] shrink-0" />
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#4D715B]">
+                        Lugar
+                      </p>
                     </div>
                     {selectedTournament.pitches ? (
-                      /* CORRECCIÓN: Enlace directo al perfil de la cancha */
-                      <Link href={`/cancha/${selectedTournament.pitch_id}`} className="font-extrabold text-sm text-primary underline-offset-4 hover:underline leading-tight flex items-center gap-1">
-                        {selectedTournament.pitches.name} <ExternalLink size={12} />
+                      <Link
+                        href={`/cancha/${selectedTournament.pitch_id}`}
+                        title={selectedTournament.pitches.name}
+                        className="group font-black text-xs sm:text-sm text-[#054D27] hover:underline flex items-start gap-1 uppercase leading-snug break-words"
+                      >
+                        <span className="line-clamp-2 transition-colors group-hover:text-[#008744]">
+                          {selectedTournament.pitches.name}
+                        </span>
+                        <ExternalLink size={11} className="shrink-0 mt-0.5" />
                       </Link>
                     ) : (
-                      /* CORRECCIÓN: Quitamos 'truncate' para que la locación manual se muestre completa siempre */
-                      <p className="font-bold text-sm text-foreground dark:text-emerald-50 leading-tight">
+                      <p
+                        title={selectedTournament.location}
+                        className="font-black text-xs sm:text-sm text-[#054D27] uppercase leading-snug line-clamp-2 break-words"
+                      >
                         {selectedTournament.location}
                       </p>
                     )}
-
                   </div>
                 )}
 
-                <div className="bg-emerald-50/40 rounded-xl p-3.5 border border-emerald-200/50 shadow-sm flex flex-col justify-center">
-                  <div className="flex items-center gap-1.5 mb-1.5">
-                    <Ticket size={13} className="text-emerald-600 shrink-0" />
-                    <p className="text-[10px] font-bold text-emerald-800/80 uppercase tracking-wider">Inscripción</p>
+                {selectedTournament.entry_fee !== undefined && (
+                  <div className="bg-[#CDE0D1] border border-[#BACFC0] rounded-2xl p-3.5 flex flex-col justify-between">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Ticket size={14} className="text-[#0B6637] shrink-0" />
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#4D715B]">
+                        Inscripción
+                      </p>
+                    </div>
+                    <p className="font-black text-xs sm:text-sm text-[#054D27] leading-tight">
+                      {selectedTournament.entry_fee > 0
+                        ? `$${Number(selectedTournament.entry_fee).toLocaleString('es-CO')} COP`
+                        : 'Gratuito'}
+                    </p>
                   </div>
-                  <p className="font-black text-sm text-emerald-700 tracking-tight">
-                    {selectedTournament.entry_fee > 0
-                      ? `$${Number(selectedTournament.entry_fee).toLocaleString('es-CO')}`
-                      : 'Gratuito'}
-                  </p>
-                </div>
+                )}
               </div>
 
-
-              {/* Galería */}
-              {selectedTournament.media_urls?.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Galería</h3>
-                  <div className="grid grid-cols-3 gap-2">
-                    {selectedTournament.media_urls.map((url, i) => (
-                      <div
-                        key={i}
-                        onClick={() => setLightboxImage({ urls: selectedTournament.media_urls, index: i })}
-                        className="aspect-square rounded-xl overflow-hidden border border-border cursor-pointer relative group"
-                      >
-                        <img src={url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                          <Maximize2 size={18} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+              {/* Bloque de Fechas Reorganizadas */}
+              {(selectedTournament.start_date ||
+                selectedTournament.registration_end_date ||
+                selectedTournament.final_date) && (
+                  <div className="bg-[#CDE0D1] border border-[#BACFC0] rounded-2xl p-3.5 space-y-2.5">
+                    {selectedTournament.start_date && (
+                      <div className="flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-full bg-[#B8D3BD] flex items-center justify-center shrink-0">
+                          <CalendarDays size={15} className="text-[#0B6637]" />
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-extrabold uppercase tracking-wider text-[#4D715B]">
+                            Inicio del Torneo
+                          </p>
+                          <p className="font-black text-xs text-[#054D27] capitalize">
+                            {new Date(selectedTournament.start_date + 'T12:00:00').toLocaleDateString(
+                              'es-CO',
+                              { day: 'numeric', month: 'long', year: 'numeric' }
+                            )}
+                          </p>
                         </div>
                       </div>
-                    ))}
+                    )}
+
+                    {selectedTournament.registration_end_date && (
+                      <div className="flex items-center gap-3 pt-2 border-t border-[#BACFC0]/60">
+                        <div className="w-7 h-7 rounded-full bg-[#B8D3BD] flex items-center justify-center shrink-0">
+                          <CalendarDays size={15} className="text-[#0B6637]" />
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-extrabold uppercase tracking-wider text-[#4D715B]">
+                            Fecha Límite de Inscripción
+                          </p>
+                          <p className="font-black text-xs text-[#054D27] capitalize">
+                            {new Date(
+                              selectedTournament.registration_end_date + 'T12:00:00'
+                            ).toLocaleDateString('es-CO', {
+                              day: 'numeric',
+                              month: 'long',
+                              year: 'numeric',
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedTournament.final_date && (
+                      <div className="flex items-center gap-3 pt-2 border-t border-[#BACFC0]/60">
+                        <div className="w-7 h-7 rounded-full bg-[#B8D3BD] flex items-center justify-center shrink-0">
+                          <CalendarDays size={15} className="text-[#0B6637]" />
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-extrabold uppercase tracking-wider text-[#4D715B]">
+                            Fecha de Premiación
+                          </p>
+                          <p className="font-black text-xs text-[#054D27] capitalize">
+                            {new Date(selectedTournament.final_date + 'T12:00:00').toLocaleDateString(
+                              'es-CO',
+                              { day: 'numeric', month: 'long', year: 'numeric' }
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
+                )}
+
+              {/* Descripción */}
+              {selectedTournament.description && (
+                <div className="bg-[#CDE0D1] border border-[#BACFC0] rounded-2xl p-4">
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#4D715B] mb-1.5">
+                    Descripción
+                  </p>
+                  <p className="text-xs sm:text-sm text-[#1C412B] font-medium leading-relaxed whitespace-pre-wrap">
+                    {selectedTournament.description}
+                  </p>
                 </div>
               )}
             </div>
 
-            {/* Footer */}
-            <div className="p-4 border-t border-border flex gap-3 flex-shrink-0 bg-card">
+            {/* 3. Footer Botones */}
+            <div className="p-4 bg-[#DCE7DE] flex items-center gap-3 shrink-0 border-t border-[#BACFC0]">
               <button
+                type="button"
                 onClick={() => setSelectedTournament(null)}
-                className="flex-1 py-3 rounded-xl border border-border font-semibold text-sm hover:bg-secondary transition-colors"
+                className="flex-1 py-3 px-4 rounded-full bg-[#CDE0D1] text-[#054D27] font-extrabold text-sm hover:bg-[#BFD7C4] transition-colors flex items-center justify-center gap-2"
               >
+                <span className="w-5 h-5 rounded-full bg-[#2D312E] text-white flex items-center justify-center text-[10px] font-bold">
+                  N
+                </span>
                 Cerrar
               </button>
-              {selectedTournament.pitches && (
+
+              {selectedTournament.pitch_id && (
                 <Link
-                  href={`/?pitch=${selectedTournament.pitch_id}`}
-                  className="flex-1 py-3 rounded-xl bg-primary text-white font-bold text-sm text-center hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                  href={`/cancha/${selectedTournament.pitch_id}`}
+                  className="flex-1 py-3 px-4 rounded-full bg-[#008744] text-white font-extrabold text-sm hover:bg-[#007339] transition-colors flex items-center justify-center gap-2 shadow-xs"
                 >
                   <MapPin size={15} /> Ver Cancha
                 </Link>
@@ -927,7 +1178,18 @@ export default function TournamentsPage() {
                 </div>
 
                 {/* Entry fee + Prize value */}
+                {/* Función auxiliar para formatear los puntos de miles */}
+                {/* Puedes colocarla fuera de tu componente o dentro antes del return */}
+                {/* 
+  const formatThousands = (val: string | number) => {
+    const rawDigits = String(val).replace(/\D/g, '');
+    if (!rawDigits) return '';
+    return Number(rawDigits).toLocaleString('es-CO');
+  };
+*/}
+
                 <div className="grid grid-cols-2 gap-4">
+                  {/* Campo 1: Inscripción (COP) */}
                   <div>
                     <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
                       <Ticket size={12} className="inline mr-1" />Inscripción (COP)
@@ -935,15 +1197,21 @@ export default function TournamentsPage() {
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-bold">$</span>
                       <input
-                        type="number"
-                        min="0"
-                        value={form.entry_fee}
-                        onChange={e => setForm(f => ({ ...f, entry_fee: e.target.value }))}
+                        type="text"
+                        inputMode="numeric"
+                        value={form.entry_fee ? Number(String(form.entry_fee).replace(/\D/g, '')).toLocaleString('es-CO') : ''}
+                        onChange={e => {
+                          // Extrae únicamente los dígitos numéricos
+                          const rawValue = e.target.value.replace(/\D/g, '');
+                          setForm(f => ({ ...f, entry_fee: rawValue }));
+                        }}
                         placeholder="0 = Gratis"
                         className="w-full h-11 pl-7 pr-3 border border-border rounded-xl bg-background text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-colors placeholder:text-muted-foreground"
                       />
                     </div>
                   </div>
+
+                  {/* Campo 2: Premio (COP) */}
                   <div>
                     <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
                       Premio (COP)
@@ -951,10 +1219,14 @@ export default function TournamentsPage() {
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-bold">$</span>
                       <input
-                        type="number"
-                        min="0"
-                        value={form.prize_value || ''}
-                        onChange={e => setForm(f => ({ ...f, prize_value: e.target.value }))}
+                        type="text"
+                        inputMode="numeric"
+                        value={form.prize_value ? Number(String(form.prize_value).replace(/\D/g, '')).toLocaleString('es-CO') : ''}
+                        onChange={e => {
+                          // Extrae únicamente los dígitos numéricos
+                          const rawValue = e.target.value.replace(/\D/g, '');
+                          setForm(f => ({ ...f, prize_value: rawValue }));
+                        }}
                         placeholder="300.000"
                         className="w-full h-11 pl-7 pr-3 border border-border rounded-xl bg-background text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-colors placeholder:text-muted-foreground"
                       />

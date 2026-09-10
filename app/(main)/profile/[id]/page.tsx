@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -9,21 +10,9 @@ import * as htmlToImage from 'html-to-image';
 import download from 'downloadjs';
 
 const FOOT_LABELS: Record<string, string> = {
-  diestro: '🦶 Diestro',
-  zurdo: '🦶 Zurdo',
-  ambidiestro: '⚡ Ambidiestro',
-};
-
-const LEVEL_COLORS: Record<string, string> = {
-  amateur: '#3b82f6',
-  intermedio: '#10b981',
-  avanzado: '#f59e0b',
-};
-
-const LEVEL_LABELS: Record<string, string> = {
-  amateur: 'Recreativo',
-  intermedio: 'Intermedio',
-  avanzado: 'Avanzado',
+  diestro: ' Diestro',
+  zurdo: ' Zurdo',
+  ambidiestro: ' Ambidiestro',
 };
 
 export default function PublicProfilePage() {
@@ -133,11 +122,58 @@ export default function PublicProfilePage() {
     );
   }
 
-  const level = stats.bookings >= 20 ? 'Leyenda ⭐' : stats.bookings >= 10 ? 'Profesional' : stats.bookings >= 3 ? 'Amateur' : 'Novato';
-  const levelColor = stats.bookings >= 20 ? '#f59e0b' : stats.bookings >= 10 ? '#10b981' : stats.bookings >= 3 ? '#3b82f6' : '#6b7280';
-  const positionLabel = profile.position || 'Sin posición';
-  const skillLevel = profile.skill_level || '';
   const preferredFoot = profile.preferred_foot || '';
+  const matchesCount = stats?.bookings || 0;
+
+  // 🎨 LÓGICA DINÁMICA DE NIVELES Y COLORES DE LA TARJETA
+  const rank = (() => {
+    if (matchesCount >= 100) {
+      return {
+        title: 'DIAMANTE',
+        bg: 'linear-gradient(155deg, #090919 0%, #151638 45%, #050b1e 100%)',
+        accent: '#38bdf8', // Neón Diamante / Azul Neón
+        border: 'rgba(56, 189, 248, 0.5)',
+        glow: 'rgba(56, 189, 248, 0.4)',
+        badgeBg: 'linear-gradient(90deg, #38bdf8, #818cf8)',
+        cardBorder: '1px solid rgba(56, 189, 248, 0.6)',
+        watermark: '💎',
+      };
+    }
+    if (matchesCount >= 50) {
+      return {
+        title: 'DORADO',
+        bg: 'linear-gradient(155deg, #181300 0%, #3a2b00 45%, #1f1700 100%)',
+        accent: '#fbbf24', // Dorado Neón
+        border: 'rgba(251, 191, 36, 0.4)',
+        glow: 'rgba(251, 191, 36, 0.35)',
+        badgeBg: 'linear-gradient(90deg, #f59e0b, #d97706)',
+        cardBorder: '1px solid rgba(251, 191, 36, 0.5)',
+        watermark: '🏆',
+      };
+    }
+    if (matchesCount >= 10) {
+      return {
+        title: 'PLATEADO',
+        bg: 'linear-gradient(155deg, #12151c 0%, #222938 45%, #10141d 100%)',
+        accent: '#e2e8f0', // Plata Brillante
+        border: 'rgba(226, 232, 240, 0.4)',
+        glow: 'rgba(226, 232, 240, 0.25)',
+        badgeBg: 'linear-gradient(90deg, #94a3b8, #64748b)',
+        cardBorder: '1px solid rgba(226, 232, 240, 0.4)',
+        watermark: '⚡',
+      };
+    }
+    return {
+      title: 'INICIANTE',
+      bg: 'linear-gradient(155deg, #071a0e 0%, #12331c 45%, #0a1f12 100%)',
+      accent: '#22c55e', // Verde Esmeralda
+      border: 'rgba(34, 197, 94, 0.4)',
+      glow: 'rgba(34, 197, 94, 0.3)',
+      badgeBg: 'linear-gradient(90deg, #15803d, #166534)',
+      cardBorder: '1px solid rgba(34, 197, 94, 0.4)',
+      watermark: '⚽',
+    };
+  })();
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -152,7 +188,7 @@ export default function PublicProfilePage() {
         {isOwnProfile && (
           <div className="mb-5 bg-primary/10 border border-primary/20 rounded-2xl p-4 text-center">
             <h2 className="font-bold text-primary mb-1">Tu Tarjeta de Jugador</h2>
-            <p className="text-xs text-muted-foreground">Descárgala y compártela en Instagram o WhatsApp para invitar amigos.</p>
+            <p className="text-xs text-muted-foreground">Descárgala y compártela en Instagram o WhatsApp para presumir tu progreso.</p>
           </div>
         )}
 
@@ -160,93 +196,102 @@ export default function PublicProfilePage() {
         <div
           ref={cardRef}
           style={{
-            background: 'linear-gradient(160deg, #0a1a09 0%, #122010 40%, #0d1f0d 100%)',
-            borderRadius: 28,
+            background: rank.bg,
+            borderRadius: 32,
             overflow: 'hidden',
             fontFamily: "'system-ui', -apple-system, sans-serif",
             position: 'relative',
             width: '100%',
+            border: rank.cardBorder,
+            boxShadow: `0 20px 50px ${rank.glow}, inset 0 0 20px ${rank.border}`,
           }}
         >
-          {/* Glow de fondo */}
-          <div style={{ position: 'absolute', top: -80, right: -80, width: 280, height: 280, borderRadius: '50%', background: 'radial-gradient(circle, rgba(34,197,94,0.25) 0%, transparent 70%)', pointerEvents: 'none' }} />
-          <div style={{ position: 'absolute', bottom: -60, left: -60, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(34,197,94,0.15) 0%, transparent 70%)', pointerEvents: 'none' }} />
-          {/* Grid líneas de cancha */}
-          <div style={{ position: 'absolute', inset: 0, opacity: 0.03, backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 30px, #22c55e 30px, #22c55e 31px), repeating-linear-gradient(90deg, transparent, transparent 30px, #22c55e 30px, #22c55e 31px)', pointerEvents: 'none' }} />
+          {/* Glow de fondo dinámico */}
+          <div style={{ position: 'absolute', top: -90, right: -90, width: 300, height: 300, borderRadius: '50%', background: `radial-gradient(circle, ${rank.glow} 0%, transparent 70%)`, pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', bottom: -70, left: -70, width: 240, height: 240, borderRadius: '50%', background: `radial-gradient(circle, ${rank.glow} 0%, transparent 70%)`, pointerEvents: 'none' }} />
+
+          {/* Marca de agua de fondo */}
+          <div style={{ position: 'absolute', right: 15, top: '35%', fontSize: 140, opacity: 0.04, userSelect: 'none', pointerEvents: 'none' }}>
+            {rank.watermark}
+          </div>
 
           {/* ── Header ── */}
-          <div style={{ padding: '20px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 2 }}>
+          <div style={{ padding: '24px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 2 }}>
             <div>
-              <div style={{ fontSize: 9, fontWeight: 900, color: '#22c55e', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 2 }}>⚽ Canchas Pasto</div>
-              <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.4)', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Tarjeta de Jugador</div>
+              <div style={{ fontSize: 10, fontWeight: 900, color: rank.accent, letterSpacing: '0.25em', textTransform: 'uppercase' }}>
+                CANCHAS PASTO
+              </div>
+              <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.4)', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', marginTop: 2 }}>
+                Tarjeta Oficial
+              </div>
             </div>
-            <div style={{ background: levelColor, color: '#fff', padding: '4px 10px', borderRadius: 999, fontSize: 9, fontWeight: 900, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-              {level}
+
+            <div style={{ background: rank.badgeBg, color: '#ffffff', padding: '5px 14px', borderRadius: 999, fontSize: 10, fontWeight: 900, letterSpacing: '0.15em', textTransform: 'uppercase', boxShadow: `0 4px 12px ${rank.glow}`, border: '1px solid rgba(255,255,255,0.2)' }}>
+              {rank.title}
             </div>
           </div>
 
           {/* ── Avatar + Nombre ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 18, position: 'relative', zIndex: 2, padding: '0 24px' }}>
-            <div style={{ position: 'relative', width: 100, height: 100, borderRadius: '50%', border: '3px solid #22c55e', boxShadow: '0 0 30px rgba(34,197,94,0.4)', overflow: 'hidden', background: '#1a2e1a' }}>
-              {profile.avatar_url ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 20, position: 'relative', zIndex: 2, padding: '0 24px' }}>
+            <div style={{ position: 'relative', width: 96, height: 96, borderRadius: '50%', border: `3px solid ${rank.accent}`, boxShadow: `0 0 25px ${rank.glow}`, overflow: 'hidden', background: 'rgba(0,0,0,0.4)' }}>
+              {profile?.avatar_url ? (
                 <img src={profile.avatar_url} alt={profile.full_name} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 38, fontWeight: 900, color: '#22c55e', background: 'rgba(34,197,94,0.08)' }}>
-                  {profile.full_name?.substring(0, 1).toUpperCase() || '?'}
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, fontWeight: 900, color: rank.accent, background: 'rgba(255,255,255,0.05)' }}>
+                  {profile?.full_name?.substring(0, 1).toUpperCase() || '?'}
                 </div>
               )}
             </div>
 
-            <div style={{ textAlign: 'center', marginTop: 14 }}>
-              <h1 style={{ fontSize: 24, fontWeight: 900, color: '#ffffff', lineHeight: 1.1, margin: 0 }}>{profile.full_name || 'Jugador'}</h1>
-              <p style={{ fontSize: 11, color: '#22c55e', marginTop: 6, fontWeight: 700, letterSpacing: '0.05em' }}>
-                {positionLabel}{skillLevel && ` · ${LEVEL_LABELS[skillLevel] || skillLevel}`}
-              </p>
+            <div style={{ textAlign: 'center', marginTop: 12 }}>
+              <h1 style={{ fontSize: 22, fontWeight: 900, color: '#ffffff', lineHeight: 1.1, margin: 0, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                {profile?.full_name || 'Jugador'}
+              </h1>
             </div>
-          </div>
-
-          {/* ── Divisor ── */}
-          <div style={{ margin: '16px 24px', display: 'flex', gap: 6, alignItems: 'center' }}>
-            <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, transparent, rgba(34,197,94,0.4), transparent)' }} />
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} />
-            <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, transparent, rgba(34,197,94,0.4), transparent)' }} />
           </div>
 
           {/* ── PARTIDOS DESTACADOS (big number) ── */}
-          <div style={{ margin: '0 24px 16px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 20, padding: '20px 16px', textAlign: 'center', position: 'relative', zIndex: 2 }}>
-            <div style={{ fontSize: 9, fontWeight: 900, color: 'rgba(34,197,94,0.7)', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 4 }}>⚽ Partidos Jugados</div>
-            <div style={{ fontSize: 72, fontWeight: 900, color: '#ffffff', lineHeight: 1, letterSpacing: '-4px' }}>{stats.bookings}</div>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 6, fontWeight: 600 }}>reservas aprobadas</div>
+          <div style={{ margin: '20px 24px 16px', background: 'rgba(255, 255, 255, 0.04)', border: `1px solid ${rank.border}`, borderRadius: 24, padding: '18px 16px', textAlign: 'center', position: 'relative', zIndex: 2, backdropFilter: 'blur(10px)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}>
+            <div style={{ fontSize: 9, fontWeight: 900, color: rank.accent, letterSpacing: '0.25em', textTransform: 'uppercase', marginBottom: 2 }}>
+              ⚽ PARTIDOS JUGADOS
+            </div>
+            <div style={{ fontSize: 68, fontWeight: 900, color: '#ffffff', lineHeight: 1, letterSpacing: '-2px', textShadow: `0 0 20px ${rank.glow}` }}>
+              {matchesCount}
+            </div>
+            {/* <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', marginTop: 4, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              Partidos Jugados
+            </div> */}
           </div>
 
-          {/* ── Pierna hábil + Datos ── */}
-          <div style={{ margin: '0 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, position: 'relative', zIndex: 2 }}>
+          {/* ── Pierna hábil y Reseñas únicamente ── */}
+          <div style={{ margin: '0 24px', display: 'grid', gridTemplateColumns: preferredFoot ? '1fr 1fr' : '1fr', gap: 12, position: 'relative', zIndex: 2 }}>
             {preferredFoot && (
-              <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: '12px 14px' }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Pierna Hábil</div>
-                <div style={{ fontSize: 16, fontWeight: 900, color: '#22c55e' }}>{FOOT_LABELS[preferredFoot] || preferredFoot}</div>
+              <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 18, padding: '12px 14px', textAlign: 'center' }}>
+                <div style={{ fontSize: 8, fontWeight: 800, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>
+                  Pierna Hábil
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 900, color: '#ffffff', textTransform: 'uppercase' }}>
+                  {FOOT_LABELS?.[preferredFoot] || preferredFoot}
+                </div>
               </div>
             )}
-            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: '12px 14px' }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Retos</div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: '#f59e0b' }}>{stats.challenges}</div>
-            </div>
-            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: '12px 14px' }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Reseñas</div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: '#60a5fa' }}>{stats.reviews}</div>
-            </div>
-            {skillLevel && (
-              <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: '12px 14px' }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Nivel</div>
-                <div style={{ fontSize: 14, fontWeight: 900, color: LEVEL_COLORS[skillLevel] || '#fff' }}>{LEVEL_LABELS[skillLevel] || skillLevel}</div>
+
+            <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 18, padding: '12px 14px', textAlign: 'center' }}>
+              <div style={{ fontSize: 8, fontWeight: 800, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>
+                Reseñas
               </div>
-            )}
+              <div style={{ fontSize: 18, fontWeight: 900, color: rank.accent, lineHeight: 1 }}>
+                {stats?.reviews || 0}
+              </div>
+            </div>
           </div>
 
           {/* ── Footer ── */}
-          <div style={{ margin: '16px 24px 22px', padding: '10px 16px', background: 'rgba(255,255,255,0.04)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e' }} />
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase' }}>canchas-pasto.app</span>
+          <div style={{ margin: '20px 24px 24px', padding: '10px 16px', background: 'rgba(0,0,0,0.25)', borderRadius: 16, border: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: rank.accent, boxShadow: `0 0 8px ${rank.accent}` }} />
+            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', fontWeight: 800, letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+              canchaspasto.app
+            </span>
           </div>
         </div>
 
@@ -281,7 +326,7 @@ export default function PublicProfilePage() {
 
           <button
             onClick={async () => {
-              const text = `🏆 Mira mi tarjeta de jugador en Canchas Pasto!\n\n⚽ ${stats.bookings} partidos · 🎯 ${stats.challenges} retos\n\n${window.location.href}`;
+              const text = `🏆 ¡Mira mi tarjeta de jugador en Canchas Pasto!\n\n⚽ ${stats.bookings} partidos · 🎯 ${stats.challenges} retos\n\n${window.location.href}`;
               if (navigator.share) {
                 try { await navigator.share({ title: `${profile.full_name} - Canchas Pasto`, text, url: window.location.href }); } catch (e) { }
               } else {

@@ -35,25 +35,35 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                   onClick={() => setMobileOpen(false)}
                 />
                 {/* Panel lateral deslizante */}
-                <div className="fixed inset-y-0 left-0 z-[999] w-72 bg-card shadow-2xl flex flex-col p-6 lg:hidden overflow-y-auto">
-                  <div className="flex items-center justify-between mb-8">
-                    <Logo />
-                    <button
-                      onClick={() => setMobileOpen(false)}
-                      className="flex items-center justify-center w-9 h-9 rounded-full bg-secondary hover:bg-border transition-colors"
-                    >
-                      <X size={18} />
-                    </button>
+                <div className="fixed inset-y-0 left-0 z-[999] w-[280px] bg-card shadow-2xl flex flex-col lg:hidden overflow-hidden">
+                  {/* Header con gradiente verde */}
+                  <div className="relative bg-gradient-to-br from-[#054D27] via-[#007A3D] to-[#0a6634] px-5 pt-10 pb-6 shrink-0">
+                    {/* Círculos decorativos de fondo */}
+                    <div className="absolute -top-6 -right-6 w-28 h-28 rounded-full bg-white/5" />
+                    <div className="absolute -bottom-4 -left-4 w-20 h-20 rounded-full bg-white/5" />
+                    <div className="relative flex items-center justify-between">
+                      <Logo />
+                      <button
+                        onClick={() => setMobileOpen(false)}
+                        className="flex items-center justify-center w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 transition-colors text-white"
+                      >
+                        <X size={17} />
+                      </button>
+                    </div>
+                    <p className="relative text-white/60 text-xs mt-3 font-medium">Tu plataforma de canchas sintéticas</p>
                   </div>
 
-                  <MobileNavLinks onClose={() => setMobileOpen(false)} />
+                  {/* Nav links con scroll */}
+                  <div className="flex-1 overflow-y-auto px-3 py-4">
+                    <MobileNavLinks onClose={() => setMobileOpen(false)} />
+                  </div>
                 </div>
               </>
             )}
 
             <div className="main-area">
               <Header
-                onMenu={() => setMobileOpen(true)}
+                onMenu={() => setMobileOpen(prev => !prev)}
                 title=""
                 onLoginClick={() => setShowAuth(true)}
               />
@@ -89,58 +99,67 @@ function MobileNavLinks({ onClose }: { onClose: () => void }) {
   ];
 
   return (
-    <nav className="flex flex-col gap-1">
-      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-3 mb-2">Menú principal</p>
-      {items.map(({ label, Icon, path }) => (
-        <Link
-          key={path}
-          href={path}
-          onClick={onClose}
-          className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all ${
-            pathname === path
-              ? 'bg-primary/10 text-primary font-bold'
-              : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-          }`}
-        >
-          <Icon size={19} />
-          {label}
-        </Link>
-      ))}
+    <nav className="flex flex-col gap-0.5">
+      <p className="text-[9px] font-black text-muted-foreground/70 uppercase tracking-[0.15em] px-3 mb-2">Menú principal</p>
+      {items.map(({ label, Icon, path }) => {
+        const isActive = pathname === path;
+        return (
+          <Link
+            key={path}
+            href={path}
+            onClick={onClose}
+            className={`group flex items-center gap-3 px-3 py-2.5 rounded-2xl text-[13.5px] font-semibold transition-all duration-200 ${
+              isActive
+                ? 'bg-primary/12 text-primary font-bold shadow-sm'
+                : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+            }`}
+          >
+            <span className={`flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-200 shrink-0 ${
+              isActive
+                ? 'bg-primary text-white shadow-sm'
+                : 'bg-secondary/80 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
+            }`}>
+              <Icon size={16} />
+            </span>
+            {label}
+            {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
+          </Link>
+        );
+      })}
 
       {profile?.role === 'owner' && (
         <>
-          <div className="my-4 h-px bg-border" />
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-3 mb-2">Mi negocio</p>
-          <Link
-            href="/dashboard"
-            onClick={onClose}
-            className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all ${
-              pathname === '/dashboard' ? 'bg-primary/10 text-primary font-bold' : 'text-muted-foreground hover:bg-secondary'
-            }`}
-          >
-            <LayoutDashboard size={19} />
-            Panel de control
-          </Link>
-          <Link
-            href="/dashboard/bookings"
-            onClick={onClose}
-            className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all ${
-              pathname === '/dashboard/bookings' ? 'bg-primary/10 text-primary font-bold' : 'text-muted-foreground hover:bg-secondary'
-            }`}
-          >
-            <CalendarDays size={19} />
-            Gestión de reservas
-          </Link>
-          <Link
-            href="/dashboard/whatsapp"
-            onClick={onClose}
-            className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all ${
-              pathname === '/dashboard/whatsapp' ? 'bg-primary/10 text-primary font-bold' : 'text-muted-foreground hover:bg-secondary'
-            }`}
-          >
-            <Smartphone size={19} />
-            Conectar WhatsApp
-          </Link>
+          <div className="my-3 mx-3 h-px bg-border" />
+          <p className="text-[9px] font-black text-muted-foreground/70 uppercase tracking-[0.15em] px-3 mb-2">Mi negocio</p>
+          {[
+            { href: '/dashboard', Icon: LayoutDashboard, label: 'Panel de control' },
+            { href: '/dashboard/bookings', Icon: CalendarDays, label: 'Gestión de reservas' },
+            { href: '/dashboard/whatsapp', Icon: Smartphone, label: 'Conectar WhatsApp' },
+          ].map(({ href, Icon, label }) => {
+            const isActive = pathname === href;
+            return (
+              <Link
+                key={href}
+                href={href}
+                onClick={onClose}
+                className={`group flex items-center gap-3 px-3 py-2.5 rounded-2xl text-[13.5px] font-semibold transition-all duration-200 ${
+                  isActive
+                    ? 'bg-primary/12 text-primary font-bold'
+                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                }`}
+              >
+                <span className={`flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-200 shrink-0 ${
+                  isActive
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'bg-secondary/80 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
+                }`}>
+                  <Icon size={16} />
+                </span>
+                {label}
+                {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
+              </Link>
+            );
+          })}
         </>
       )}
     </nav>

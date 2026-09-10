@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   MapPin, Star, Layers, ShieldCheck, CreditCard,
   ChevronLeft, ChevronRight, Edit3, Eye, Sparkles, X, Share2, DollarSign, Heart
@@ -53,11 +54,63 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
 
   const { isFavorite: checkFav, toggleFavorite: doToggleFav } = useFavorites();
   const isFavorite = checkFav(pitch.id);
+
   const [loadingFavorite, setLoadingFavorite] = useState(false);
+  const [showFlyAnim, setShowFlyAnim] = useState(false);
+  const heartBtnRef = useRef<HTMLButtonElement>(null);
+  const [flyingHearts, setFlyingHearts] = useState<Array<{ id: number; startX: number; startY: number; targetX: number; targetY: number }>>([]);
 
   const toggleFavorite = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
+    if (!isFavorite) {
+      setShowFlyAnim(true);
+      setTimeout(() => setShowFlyAnim(false), 800);
+
+      const btn = heartBtnRef.current || (e.currentTarget as HTMLElement);
+      if (btn && typeof window !== 'undefined') {
+        const startRect = btn.getBoundingClientRect();
+        const startX = startRect.left + startRect.width / 2;
+        const startY = startRect.top + startRect.height / 2;
+
+        const sidebarEl = document.getElementById('nav-favorites-sidebar');
+        const mobileEl = document.getElementById('nav-favorites-mobile');
+
+        let targetEl: HTMLElement | null = null;
+        if (sidebarEl && sidebarEl.offsetParent !== null && sidebarEl.getBoundingClientRect().width > 0) {
+          targetEl = sidebarEl;
+        } else if (mobileEl && mobileEl.offsetParent !== null && mobileEl.getBoundingClientRect().width > 0) {
+          targetEl = mobileEl;
+        }
+
+        let targetX = startX - 220;
+        let targetY = Math.max(60, startY - 250);
+
+        if (targetEl) {
+          const tRect = targetEl.getBoundingClientRect();
+          targetX = tRect.left + tRect.width / 2;
+          targetY = tRect.top + tRect.height / 2;
+        }
+
+        const id = Date.now();
+        setFlyingHearts(prev => [...prev, { id, startX, startY, targetX, targetY }]);
+
+        setTimeout(() => {
+          if (targetEl) {
+            targetEl.classList.add('animate-bounce');
+            setTimeout(() => {
+              targetEl?.classList.remove('animate-bounce');
+            }, 600);
+          }
+        }, 650);
+
+        setTimeout(() => {
+          setFlyingHearts(prev => prev.filter(h => h.id !== id));
+        }, 900);
+      }
+    }
+
     setLoadingFavorite(true);
     try {
       await doToggleFav(pitch.id);
@@ -102,6 +155,7 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
       >
         {/* Botón corazón flotante — fuera del área clickable */}
         <button
+          ref={heartBtnRef}
           type="button"
           onClick={toggleFavorite}
           disabled={loadingFavorite}
@@ -113,6 +167,13 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
         >
           <Heart size={14} className={isFavorite ? 'fill-current' : ''} />
         </button>
+
+        {/* Flying Heart Animation */}
+        {showFlyAnim && (
+          <div className="absolute top-3 right-3 z-50 pointer-events-none origin-center animate-fly-heart">
+            <Heart size={28} className="text-green-500 fill-green-500 drop-shadow-xl" />
+          </div>
+        )}
 
         <div onClick={() => { if (onOpen) onOpen(pitch); else setShowDetailModal(true); }}>
           {/* BANNER / FOTO DESTACADA */}
@@ -235,48 +296,29 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
                     </span>
                   ))}
                 </div>
+
               </div>
             )}
           </div>
         </div>
 
-        {/* PIE DE TARJETA: PRECIO Y ACCIÓN */}
-        <div className="p-4 pt-3 border-t border-border/80 bg-secondary/20 flex items-center justify-between" onClick={() => { if (onOpen) onOpen(pitch); else setShowDetailModal(true); }}>
-          <div>
-            <span className="text-[10px] font-bold text-muted-foreground uppercase block">Precio por Hora </span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-base font-black text-foreground">
-                ${Number(pitch.price_per_hour).toLocaleString('es-CO')}
-              </span>
-              <span className="text-[10px] text-muted-foreground font-semibold">COP</span>
-            </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-[8px] text-muted-foreground font-semibold">El precio puede variar según la hora</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Link
-              href={`/cancha/${pitch.id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="px-3.5 py-2 bg-secondary text-foreground hover:bg-secondary/80 font-bold text-xs rounded-xl transition-colors shadow-sm flex items-center gap-1.5"
+        {/* PIE DE TARJETA: ACCIONES (SIN PRECIO) */}
+        <div
+          className="p-4 border-t border-border/80 bg-secondary/20"
+          onClick={() => { if (onOpen) onOpen(pitch); else setShowDetailModal(true); }}
+        >
+          {onBook && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onBook(pitch);
+              }}
+              className="w-full py-3 px-4 bg-[#008744] hover:bg-[#054D27] text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2 active:scale-[0.98]"
             >
-              Ver Perfil
-            </Link>
-
-            {onBook && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onBook(pitch);
-                }}
-                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors shadow-sm flex items-center gap-1.5"
-              >
-                Reservar
-              </button>
-            )}
-          </div>
+              Reservar
+            </button>
+          )}
         </div>
       </div>
 
@@ -423,12 +465,14 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
 
             {/* Pie del Modal */}
             <div className="p-4 border-t border-border bg-secondary/40 flex items-center justify-between">
-              <div>
+              {/* <div>
                 <span className="text-[10px] font-bold text-muted-foreground uppercase block">Precio por hora</span>
                 <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">
                   ${Number(displayPrice).toLocaleString('es-CO')} COP
                 </span>
-              </div>
+              </div> */}
+
+
 
               <div className="flex items-center gap-2">
                 {isAdmin && editUrl && (
@@ -444,6 +488,25 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
           </div>
         </div>
       )}
+
+      {typeof document !== 'undefined' && flyingHearts.map(h => createPortal(
+        <div
+          key={h.id}
+          className="fixed pointer-events-none z-[99999]"
+          style={{
+            left: `${h.startX}px`,
+            top: `${h.startY}px`,
+            transform: 'translate(-50%, -50%)',
+            ['--dx' as any]: `${h.targetX - h.startX}px`,
+            ['--dy' as any]: `${h.targetY - h.startY}px`,
+          }}
+        >
+          <div className="fly-to-nav-heart text-emerald-500">
+            <Heart size={28} className="fill-emerald-500 text-emerald-500 drop-shadow-[0_0_15px_rgba(16,185,129,0.9)]" />
+          </div>
+        </div>,
+        document.body
+      ))}
     </>
   );
 }

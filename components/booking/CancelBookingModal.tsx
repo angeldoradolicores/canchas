@@ -79,7 +79,7 @@ export function CancelBookingModal({
             </span>
           </div>
           <p className="text-xs text-muted-foreground">
-            📅 {activeBooking.selectedDate} · ⏰ {activeBooking.selectedTimes.join(', ')}
+            📅 {activeBooking.selectedDate} · 🕓 {activeBooking.selectedTimes.join(', ')}
           </p>
           <p className="text-[11px] text-muted-foreground/90 border-t border-border/40 pt-2 mt-2 leading-relaxed">
             Esta cancha está bloqueada exclusivamente para ti durante este tiempo. Si te vas sin confirmar, ¿qué deseas hacer?

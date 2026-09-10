@@ -90,11 +90,19 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
       if (diff <= 0) {
         // Expiró
         if (timerRef.current) clearInterval(timerRef.current);
-        clearActiveBooking();
         if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('active-booking-expired', {
+              detail: {
+                pitchId: activeBooking.pitch.id,
+                pitchName: activeBooking.pitch.name,
+              },
+            })
+          );
           sessionStorage.removeItem(STORAGE_KEY);
           localStorage.removeItem(STORAGE_KEY);
         }
+        clearActiveBooking();
       }
     };
 

@@ -3004,6 +3004,7 @@ td {
 
 /* ── Panel principal: Discover Grid en móvil ── */
 @media (max-width: 640px) {
+
   /* Tarjetas del panel principal en carrusel horizontal */
   .discovery-stack .discover-grid {
     display: flex;
@@ -3019,7 +3020,7 @@ td {
   }
 
   /* Cada tarjeta PitchCard dentro del carrusel */
-  .discovery-stack .discover-grid > div.discover-card {
+  .discovery-stack .discover-grid>div.discover-card {
     flex: 0 0 min(85vw, 320px);
     scroll-snap-align: start;
     min-width: 0;
@@ -3043,7 +3044,8 @@ td {
   .page-content.fade-in {
     padding-left: 12px;
     padding-right: 12px;
-    padding-bottom: 120px; /* espacio para barra nav + flotante */
+    padding-bottom: 120px;
+    /* espacio para barra nav + flotante */
   }
 
   /* ── PitchDetail: galería en móvil ── */
@@ -3053,7 +3055,7 @@ td {
     border-radius: 1rem;
   }
 
-  .detail-gallery > :not(:first-child) {
+  .detail-gallery> :not(:first-child) {
     display: none;
   }
 
@@ -3105,7 +3107,7 @@ td {
   }
 
   /* Paso 2 — formulario de pago */
-  .booking-step-2 .space-y-5 > * {
+  .booking-step-2 .space-y-5>* {
     margin-bottom: 14px;
   }
 
@@ -3138,7 +3140,7 @@ td {
 
 /* ── Extra pequeño: < 375px ── */
 @media (max-width: 374px) {
-  .discovery-stack .discover-grid > div.discover-card {
+  .discovery-stack .discover-grid>div.discover-card {
     flex: 0 0 92vw;
   }
 
@@ -3155,6 +3157,7 @@ td {
 
 /* ── Flotante: asegurar que no tape la barra nav ── */
 @media (max-width: 640px) {
+
   /* La barra nav inferior mide ~60px, el flotante va 8px encima */
   aside[aria-label="Reserva en curso"] {
     bottom: 72px !important;
@@ -3162,4 +3165,38 @@ td {
     right: 8px !important;
     max-width: none !important;
   }
+}@keyframes flyToFavorites {
+  0% { transform: scale(1) translateY(0); opacity: 1; }
+  30% { transform: scale(1.4) translateY(-10px); opacity: 1; }
+  100% { transform: scale(0.5) translate(100px, -200px); opacity: 0; }
 }
+.animate-fly-heart {
+  animation: flyToFavorites 0.8s cubic-bezier(0.2, 0, 0.2, 1) forwards;
+}
+
+@keyframes flyToNavAnimation {
+  0% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  20% {
+    transform: translate(calc(var(--dx, -100px) * 0.08), calc(var(--dy, -150px) * 0.08 - 25px)) scale(1.6) rotate(-12deg);
+    opacity: 1;
+  }
+  65% {
+    transform: translate(calc(var(--dx, -100px) * 0.7), calc(var(--dy, -150px) * 0.7)) scale(1.2) rotate(8deg);
+    opacity: 0.95;
+  }
+  90% {
+    transform: translate(calc(var(--dx, -100px) * 0.95), calc(var(--dy, -150px) * 0.95)) scale(0.6) rotate(0deg);
+    opacity: 0.7;
+  }
+  100% {
+    transform: translate(var(--dx, -100px), var(--dy, -150px)) scale(0.3) rotate(0deg);
+    opacity: 0;
+  }
+}
+.fly-to-nav-heart {
+  animation: flyToNavAnimation 0.8s cubic-bezier(0.25, 1, 0.4, 1) forwards;
+}
+

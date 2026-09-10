@@ -240,37 +240,96 @@ export async function POST(req: NextRequest) {
         const hourNum = parseInt(slot.split(':')[0], 10);
         const endHourNum = (hourNum + 1) % 24;
         const endSlot = endHourNum < 10 ? `0${endHourNum}:00` : `${endHourNum}:00`;
-
-        const startTimeIso = `${date}T${slot}:00-05:00`;
-        const endTimeIso = `${date}T${endSlot}:00-05:00`;
-
         return {
           pitch_id: pitchId,
-          user_id: ownerId, // El dueño es el que la registra
+          user_id: ownerId,
           customer_name: payload.customer_name || 'Reserva Interna',
           customer_phone: payload.customer_phone || '',
-          start_time: startTimeIso,
-          end_time: endTimeIso,
-          status: 'confirmed', // Confirmada directamente
-          payment_status: 'verified', // Consideramos que pagó o arregló con el dueño
+          start_time: `${date}T${slot}:00-05:00`,
+          end_time: `${date}T${endSlot}:00-05:00`,
+          status: 'confirmed',
+          payment_status: 'verified',
           source: 'owner_panel',
         };
       });
 
-      const { data: bookings, error } = await supabase
-        .from('bookings')
-        .insert(inserts)
-        .select();
+      const createdBookings: any[] = [];
 
-      if (error) {
-         if (error.code === '23505') {
-            return NextResponse.json({ error: 'Alguna hora ya está ocupada.' }, { status: 400 });
-         }
-         return NextResponse.json({ error: error.message }, { status: 500 });
+      for (const item of inserts) {
+        // 1. Buscar si existe alguna fila con ese pitch + start_time (cualquier status)
+        const { data: existing } = await supabase
+          .from('bookings')
+          .select('id, status')
+          .eq('pitch_id', pitchId)
+          .eq('start_time', item.start_time)
+          .maybeSingle();
+
+        if (existing) {
+          // Si está activa (confirmed/pending/draft vigente) → rechazar
+          if (['confirmed', 'pending'].includes(existing.status)) {
+            return NextResponse.json(
+              { error: `La hora ${item.start_time.substring(11, 16)} ya está ocupada.` },
+              { status: 400 }
+            );
+          }
+          if (existing.status === 'draft') {
+            // Verificar si el draft expiró
+            const { data: draftRow } = await supabase
+              .from('bookings')
+              .select('expires_at')
+              .eq('id', existing.id)
+              .single();
+            if (draftRow?.expires_at && new Date(draftRow.expires_at) > new Date()) {
+              return NextResponse.json(
+                { error: `La hora ${item.start_time.substring(11, 16)} está siendo reservada por otro usuario en este momento.` },
+                { status: 400 }
+              );
+            }
+          }
+
+          // Si está cancelled o draft expirado → ACTUALIZAR la fila existente (evita la constraint 23505)
+          const { data: updated, error: updateErr } = await supabase
+            .from('bookings')
+            .update({
+              user_id: item.user_id,
+              customer_name: item.customer_name,
+              customer_phone: item.customer_phone,
+              end_time: item.end_time,
+              status: 'confirmed',
+              payment_status: 'verified',
+              source: 'owner_panel',
+              reviewed_at: new Date().toISOString(),
+              reviewed_by: ownerId,
+            })
+            .eq('id', existing.id)
+            .select()
+            .single();
+
+          if (updateErr) {
+            return NextResponse.json({ error: updateErr.message }, { status: 500 });
+          }
+          if (updated) createdBookings.push(updated);
+        } else {
+          // No existe ninguna fila → INSERT normal
+          const { data: inserted, error: insertErr } = await supabase
+            .from('bookings')
+            .insert(item)
+            .select()
+            .single();
+
+          if (insertErr) {
+            if (insertErr.code === '23505') {
+              return NextResponse.json({ error: `La hora ${item.start_time.substring(11, 16)} ya está ocupada.` }, { status: 400 });
+            }
+            return NextResponse.json({ error: insertErr.message }, { status: 500 });
+          }
+          if (inserted) createdBookings.push(inserted);
+        }
       }
 
-      return NextResponse.json({ success: true, data: bookings });
+      return NextResponse.json({ success: true, data: createdBookings, booking_ids: createdBookings.map(b => b.id) });
     }
+
 
     // 6. ESTADÍSTICAS DEL DASHBOARD
     if (action === 'get_dashboard_stats') {

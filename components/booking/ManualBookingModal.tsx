@@ -80,7 +80,26 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
       setTakenSlots(taken);
       setLoadingSlots(false);
     };
+
     fetchTaken();
+
+    // Polling cada 2s para máxima precisión (evitar doble reserva)
+    const pollInterval = setInterval(fetchTaken, 2000);
+
+    // Realtime: actualización inmediata sin esperar el polling
+    const channel = supabase
+      .channel(`manual-modal:${selectedPitch.id}:${selectedDate}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings', filter: `pitch_id=eq.${selectedPitch.id}` },
+        () => { fetchTaken(); }
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(pollInterval);
+      supabase.removeChannel(channel);
+    };
   }, [selectedDate, selectedPitch]);
 
   const toggleTime = (slot: string) => {
@@ -119,9 +138,9 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
         const fileExt = file.name.split('.').pop();
         const fileName = `${Date.now()}_manual.${fileExt}`;
         const filePath = `${selectedPitch.id}/${fileName}`;
-        const { error: uploadError } = await supabase.storage.from('payment_proofs').upload(filePath, file);
+        const { error: uploadError } = await supabase.storage.from('payment-proofs').upload(filePath, file);
         if (!uploadError) {
-          const { data: { publicUrl } } = supabase.storage.from('payment_proofs').getPublicUrl(filePath);
+          const { data: { publicUrl } } = supabase.storage.from('payment-proofs').getPublicUrl(filePath);
           await supabase.from('bookings').update({ payment_proof_url: publicUrl }).in('id', data.booking_ids);
         }
       }

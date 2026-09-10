@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowRight, Clock3, Heart, MapPin, ShieldCheck, CalendarDays, CheckCircle, Loader2, Grid, X, ChevronLeft, ChevronRight, Trophy, CheckCircle2, Phone } from 'lucide-react';
+import { ArrowRight, Clock3, Heart, MapPin, ShieldCheck, CalendarDays, Calendar, CheckCircle, Loader2, Grid, X, ChevronLeft, ChevronRight, Trophy, CheckCircle2, Phone } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
@@ -119,9 +119,9 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
   }, [pitch.id]);
 
   // Función para obtener los slots ocupados (llamada por useEffect y por botón de reserva)
-  const fetchTakenSlots = useCallback(async () => {
+  const fetchTakenSlots = useCallback(async (silent = false) => {
     if (!selectedDate || !pitch.id) return;
-    setLoadingSlots(true);
+    if (!silent) setLoadingSlots(true);
     const dayStart = `${selectedDate}T00:00:00-05:00`;
     const dayEnd = `${selectedDate}T23:59:59-05:00`;
 
@@ -150,7 +150,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
       });
       setTakenSlots(taken);
     }
-    setLoadingSlots(false);
+    if (!silent) setLoadingSlots(false);
   }, [selectedDate, pitch.id, supabase]);
 
   // Cargar slots ocupados cuando cambia la fecha y escuchar en tiempo real
@@ -160,10 +160,10 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
       setSelectedTimes([]);
     }
 
-    fetchTakenSlots();
+    fetchTakenSlots(false);
 
-    // Polling continuo cada 3.5s para garantizar actualización de cronómetros sin depender solo de websockets
-    const pollInterval = setInterval(fetchTakenSlots, 3500);
+    // Polling continuo cada 3.5s silencioso sin parpadear la pantalla
+    const pollInterval = setInterval(() => fetchTakenSlots(true), 3500);
 
     const channel = supabase
       .channel(`public:bookings:pitch_id=eq.${pitch.id}`)
@@ -171,7 +171,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
         'postgres_changes',
         { event: '*', schema: 'public', table: 'bookings', filter: `pitch_id=eq.${pitch.id}` },
         () => {
-          fetchTakenSlots();
+          fetchTakenSlots(true);
         }
       )
       .subscribe();
@@ -303,10 +303,10 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
       <div className="detail-header flex justify-between items-start mb-6">
         <div>
           <p className="eyebrow accent-label text-xs font-bold text-primary uppercase">PERFIL DE LA CANCHA</p>
-          <h1 className="text-2xl sm:text-3xl font-black text-foreground">{pitch.name}</h1>
+          <h1 className="text-2xl sm:text-3xl font-black text-foreground">{pitch.name.toUpperCase()}</h1>
           <p className="lead flex items-center gap-2 text-sm text-muted-foreground mt-1">
             <span className="rating text-amber-500 font-bold flex items-center gap-1">
-              <span>★</span> {pitchAny.rating || '4.8'} ({reviews.length > 0 ? reviews.length : (pitchAny.reviews || 0)} reseñas)
+              <span>★</span> {pitchAny.rating || '4.9'} ({reviews.length > 0 ? reviews.length : (pitchAny.reviews || 0)} reseñas)
             </span>
           </p>
         </div>
@@ -435,7 +435,6 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
               {[
                 ['Tipo', pitch.type || 'Fútbol 5'],
                 ['Superficie', pitch.surface || 'Sintética'],
-                ['Precio desde', `$${basePrice.toLocaleString('es-CO')}/hr`],
               ].map(([k, v]) => (
                 <div
                   key={k}
@@ -452,65 +451,55 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
               ))}
             </div>
 
-            {/* CONTENEDOR DEL TELÉFONO */}
+            {/* CONTENEDOR DEL TELÉFONO CENTRADO */}
             {pitchAny.contact_phone && (
-              <div className="mt-4 flex flex-col xs:flex-row xs:items-center justify-between gap-3 p-3.5 bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/15 dark:border-emerald-500/20 rounded-2xl group relative">
+              <div className="mt-4 p-3.5 bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/15 dark:border-emerald-500/20 rounded-2xl group relative">
 
-                {/* Zona de enlace para LLAMAR directamente al tocar la caja */}
+                {/* Enlace para llamar */}
                 <a
                   href={`tel:${pitchAny.contact_phone.replace(/\s/g, '')}`}
-                  className="flex items-center gap-3 flex-1 min-w-0"
+                  className="flex items-center justify-center gap-3 w-full pb-1"
                 >
-                  {/* Icono de Teléfono */}
+                  {/* Ícono de Teléfono */}
                   <div className="w-10 h-10 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-500/20 transition-colors">
                     <Phone size={18} className="text-emerald-600 dark:text-emerald-400" />
                   </div>
 
-                  {/* Textos Informativos */}
-                  <div className="flex-1 min-w-0">
+                  {/* Texto centrado con respecto al bloque */}
+                  <div className="flex flex-col items-start">
                     <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400/80 uppercase tracking-wider">
                       Teléfono de contacto
                     </p>
-
-                    {/* CONTENEDOR HORIZONTAL: Alinea el número y el botón de copiar lado a lado */}
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      <p className="font-extrabold text-base text-foreground tracking-wider break-words leading-tight">
-                        {pitchAny.contact_phone}
-                      </p>
-
-                      {/* Botón interactivo de COPIAR puesto al lado del número */}
-                      <button
-                        type="button"
-                        onClick={(e) => handleCopy(e, pitchAny.contact_phone)}
-                        className={`flex items-center justify-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all border ${copied
-                          ? 'bg-emerald-600 text-white border-emerald-600'
-                          : 'bg-background hover:bg-muted text-muted-foreground border-border active:scale-95'
-                          }`}
-                        title="Copiar número"
-                      >
-                        {copied ? (
-                          <>
-                            <Check size={11} />
-                            <span>¡Copiado!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy size={11} />
-                            <span>Copiar</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
+                    <p className="font-extrabold text-base text-foreground tracking-wider leading-tight mt-0.5">
+                      {pitchAny.contact_phone}
+                    </p>
                   </div>
                 </a>
 
-                {/* Texto discreto indicador de "Llamar" a la derecha en pantallas medianas */}
-                <span className="hidden xs:inline text-xs font-bold text-emerald-600 dark:text-emerald-400 group-hover:underline pointer-events-none pr-1">
-                  Llamar
-                </span>
+                {/* Botón de copiar compacto en la esquina inferior derecha */}
+                <button
+                  type="button"
+                  onClick={(e) => handleCopy(e, pitchAny.contact_phone)}
+                  className={`absolute bottom-2.5 right-2.5 flex items-center gap-1 px-2 py-0.5 rounded-full text-[-5px] font-bold transition-all border ${copied
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-background hover:bg-muted text-muted-foreground border-border/60 shadow-xs active:scale-95'
+                    }`}
+                  title="Copiar número"
+                >
+                  {copied ? (
+                    <>
+                      <Check size={9} />
+                      <span>¡Copiado!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={9} />
+                      <span>Copiar</span>
+                    </>
+                  )}
+                </button>
 
               </div>
-
             )}
           </div>
 
@@ -568,7 +557,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
 
                       {/* Información del Torneo */}
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-extrabold text-base text-foreground truncate group-hover:text-emerald-700 transition-colors">
+                        <h4 className="font-extrabold capitalize text-base text-foreground truncate group-hover:text-emerald-700 transition-colors">
                           {t.name}
                         </h4>
                         <p className="text-xs font-medium text-muted-foreground mt-0.5 truncate">
@@ -674,7 +663,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
               </div>
 
               <div className="rounded-xl border border-border bg-background p-3 min-h-[140px] flex items-center justify-center relative">
-                {loadingSlots && (
+                {loadingSlots && takenSlots.size === 0 && (
                   <div className="absolute top-2 right-2 flex h-4 w-4 items-center justify-center">
                     <Loader2 size={12} className="animate-spin text-muted-foreground/50" />
                   </div>
@@ -829,13 +818,100 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
                   return;
                 }
 
-                const ok = await startLock(pitch, selectedDate, selectedTimes);
-                if (ok) {
-                  onBook(selectedTimes, selectedDate);
+                const formattedDate = selectedDate ? new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+                
+                const fmtSlotLocal = (slot: string) => {
+                  const [h] = slot.split(':');
+                  const d = new Date();
+                  d.setHours(parseInt(h, 10));
+                  return d.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }).toLowerCase();
+                };
+
+                let abonoPrice = 0;
+                if (pitchAny.custom_pricing?.booking_type === 'fixed') {
+                  abonoPrice = (pitchAny.custom_pricing.booking_fixed || 0) * selectedTimes.length;
                 } else {
-                  fetchTakenSlots();
-                  alert(lockError || 'Una de las horas seleccionadas está siendo reservada por otra persona en este momento.');
+                  abonoPrice = (totalPrice * Number(pitchAny.booking_percentage || 50)) / 100;
                 }
+
+                const messageNode = (
+                  <div className="flex flex-col gap-3 items-center text-center mt-2">
+                    <p className="text-sm text-muted-foreground">Estás a punto de iniciar una reserva en:</p>
+                    <p className="text-xl font-black uppercase text-primary bg-primary/10 px-5 py-2.5 rounded-xl border border-primary/20 tracking-wider w-full shadow-sm">
+                      {pitch.name}
+                    </p>
+                    <div className="bg-secondary/60 border border-border rounded-xl p-3.5 w-full space-y-2 mt-1">
+                      <p className="flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground font-bold flex items-center gap-1"><Calendar size={13} /> Fecha</span>
+                        <span className="font-bold text-foreground capitalize">{formattedDate}</span>
+                      </p>
+                      <div className="summary-line flex-col items-start gap-1.5">
+                        <span>Desglose de Horas</span>
+                        <div className="w-full space-y-1 mt-1">
+                          {[...selectedTimes].sort().map(t => {
+                            const slotPrice = Number(pitchAny.custom_pricing?.[t] || pitch.price_per_hour);
+                            return (
+                              <div key={t} className="flex justify-between text-xs bg-primary/5 px-2 py-1 rounded-md">
+                                <span className="font-bold text-primary">{fmtSlotLocal(t)}</span>
+                                <span className="font-semibold">${slotPrice.toLocaleString('es-CO')}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="border-t border-border/60 mt-2 pt-2 flex justify-between items-center">
+                        <span className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider">Total Estimado</span>
+                        <span className="font-black text-emerald-600 dark:text-emerald-400 text-base">${totalPrice.toLocaleString('es-CO')}</span>
+                      </div>
+                      <div className="flex flex-col justify-between items-center text-xs bg-amber-500/10 p-2 rounded-lg mt-1 border border-amber-500/20">
+                        <span className="text-amber-700 dark:text-amber-400 font-bold uppercase text-[10px] tracking-wider flex items-center gap-1">
+                          Abono Requerido
+                        </span>
+                        <span className="font-black text-amber-700 dark:text-amber-400 text-sm">
+                          ${abonoPrice.toLocaleString('es-CO')}
+                        </span>
+                        {pitchAny.custom_pricing?.booking_type === 'fixed' ? (
+                          <p className="text-[11px] text-muted-foreground text-center mt-2">
+                            Abono fijo de <strong>${Number(pitchAny.custom_pricing.booking_fixed || 0).toLocaleString('es-CO')}</strong> por hora para confirmar
+                          </p>
+                        ) : (pitchAny.booking_percentage || 50) ? (
+                          <p className="text-[11px] text-muted-foreground text-center mt-2">
+                            Abono del <strong>{pitchAny.booking_percentage || 50}%</strong> del valor total para confirmar
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                      La cancha se bloqueará por 5 minutos para que completes el pago de tu reserva de manera segura.
+                    </p>
+                  </div>
+                );
+
+                setAlertState({
+                  isOpen: true,
+                  type: 'info',
+                  title: 'Confirmar Reserva',
+                  message: messageNode,
+                  showCancel: true,
+                  confirmText: 'Bloquear y Continuar',
+                  cancelText: 'Cancelar',
+                  cancelButtonClassName: 'flex-1 h-12 rounded-xl font-bold flex items-center justify-center transition-all bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-500/10 dark:text-red-500 dark:hover:bg-red-500/20',
+                  onConfirm: async () => {
+                    setAlertState(prev => ({ ...prev, isOpen: false }));
+                    const ok = await startLock(pitch, selectedDate, selectedTimes);
+                    if (ok) {
+                      onBook(selectedTimes, selectedDate);
+                    } else {
+                      fetchTakenSlots();
+                      setAlertState({
+                        isOpen: true,
+                        type: 'error',
+                        title: 'Horario no disponible',
+                        message: lockError || 'Una de las horas seleccionadas está siendo reservada por otra persona en este momento. Por favor elige otro horario.',
+                      });
+                    }
+                  }
+                });
               }}
               disabled={selectedTimes.length === 0 || lockLoading}
             >
