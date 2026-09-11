@@ -12,7 +12,7 @@ import {
   UserCheck, Shield, CalendarDays, Clock3,
   Pencil, Trash2, MapPin, X, Flame, ChevronRight, ChevronDown,
   Clock3Icon,
-  CalendarIcon
+  CalendarIcon, UserPlus
 } from 'lucide-react';
 
 type Tab = 'retos' | 'buscar-jugador' | 'buscar-equipo';
@@ -38,19 +38,19 @@ export function CommunityView() {
       <CustomAlertModal alertState={alertState} onClose={closeAlert} />
 
       {/* Header */}
-      <div className="page-heading mb-6">
+      {/* <div className="page-heading mb-6">
         <div>
           <p className="eyebrow accent-label">COMUNIDAD</p>
           <h1>Juega con tu gente</h1>
           <p className="lead">Forma equipo, reta rivales o únete a una convocatoria cerca de ti.</p>
         </div>
-      </div>
+      </div> */}
 
       {/* Tabs Premium */}
       <div className="flex gap-2 mb-8 p-1.5 bg-secondary rounded-2xl border border-border w-fit">
         {[
-          { id: 'retos' as Tab, label: 'Retos', icon: Trophy },
-          { id: 'buscar-jugador' as Tab, label: 'Buscar Jugador', icon: UserCheck },
+          { id: 'retos' as Tab, label: 'Retos', icon: Swords },
+          { id: 'buscar-jugador' as Tab, label: 'Buscar Jugador', icon: UserPlus },
         ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -230,121 +230,146 @@ function RetosTab({ showAlert }: { showAlert: (type: AlertModalState['type'], ti
 
   return (
     <div className="max-w-4xl">
-      {/* Pitch Preview Modal */}
+      {/* Modal Preview */}
       {previewPitch && <PitchPreviewModal pitch={previewPitch} onClose={() => setPreviewPitch(null)} />}
-      <div className="p-5 bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-2xl mb-6">
-        <h3 className="font-bold text-base mb-1">⚽ Retos y Partidos</h3>
-        <p className="text-sm text-muted-foreground">
-          ¿Tu equipo está listo para jugar? Desafía a otros grupos, acuerda el nivel y organiza un partido competitivo.
-        </p>
-      </div>
-      {/* Fila 2: Botón Principal */}
-      <button
-        type="button"
-        onClick={() => {
-          if (!user) return showAlert('login_required', 'Iniciar Sesión', 'Debes iniciar sesión para crear un reto.');
-          setEditingChallenge(null);
-          setShowForm(!showForm);
-        }}
-        className="btn-primary text-xs h-10 py-2 px-4 flex items-center justify-center gap-2 w-full font-bold"
-      >
-        <Plus size={15} /> Crear reto
-      </button>
-      {/* Barra de Filtros */}
-      <div className="p-3.5 bg-card border border-border rounded-2xl mb-6 shadow-sm flex flex-col gap-3">
-        {/* Fila 1: Filtros organizados proporcionalmente */}
-        <div className="grid grid-cols-3 gap-2">
-          {/* Filtro Urgente */}
+
+      {/* ── Contenedor Principal de Controles (Header + Filtros de Retos) ── */}
+      <div className="bg-[#DCE7DE] border border-[#C8DACB] rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
+
+        {/* Encabezado: Título, Descripción y Botón de Acción */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-[#C8DACB]">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <Swords className="text-[#054D27]" size={26} strokeWidth={2.5} />
+              <h1 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
+                Retos y Partidos
+              </h1>
+            </div>
+            <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1 leading-relaxed">
+              ¿Tu equipo está listo para jugar? Desafía a otros grupos, acuerda el nivel y organiza un partido competitivo.
+            </p>
+          </div>
+
           <button
             type="button"
-            onClick={() => setFilterUrgent(!filterUrgent)}
-            className={`h-9 px-2 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1 border ${filterUrgent
-              ? 'bg-red-500 text-white border-red-500 shadow-sm'
-              : 'bg-secondary text-muted-foreground border-transparent'
-              }`}
+            onClick={() => {
+              if (!user) return showAlert('login_required', 'Iniciar Sesión', 'Debes iniciar sesión para crear un reto.');
+              setEditingChallenge(null);
+              setShowForm(!showForm);
+            }}
+            className="flex items-center justify-center gap-2 bg-[#008744] hover:bg-[#054D27] text-white font-black px-5 py-3 rounded-xl transition-colors shadow-md text-sm shrink-0"
           >
-            <Flame size={13} />
-            <span className="truncate">Urgente</span>
+            <Plus size={18} strokeWidth={3} /> Crear reto
           </button>
-
-          {/* Filtro Fecha (Dropdown) */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setOpenDropdown(openDropdown === 'date' ? null : ('date' as any))}
-              className="w-full h-9 px-2 border border-border rounded-xl bg-card text-[11px] font-semibold flex items-center justify-between outline-none"
-            >
-              <span className="truncate">
-                {filterDate === 'todas' ? 'Fechas' : filterDate === 'hoy' ? 'Hoy' : 'Filtrado'}
-              </span>
-              <ChevronDown size={13} className="text-muted-foreground shrink-0" />
-            </button>
-
-            {openDropdown === ('date' as any) && (
-              <div className="absolute top-10 left-0 w-44 p-2 bg-card border border-border rounded-xl shadow-xl z-50 flex flex-col gap-1">
-                {[
-                  { val: 'todas', label: 'Todas las fechas' },
-                  { val: 'hoy', label: 'Hoy' },
-                  { val: 'pasados_3', label: 'Últimos 3 días' },
-                  { val: 'pasados_7', label: 'Últimos 7 días' },
-                ].map((dt) => (
-                  <button
-                    key={dt.val}
-                    type="button"
-                    onClick={() => {
-                      setFilterDate(dt.val as any);
-                      setOpenDropdown(null);
-                    }}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold text-left ${filterDate === dt.val ? 'bg-primary text-white' : 'text-foreground hover:bg-primary/10'
-                      }`}
-                  >
-                    {dt.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Filtro Nivel (Dropdown) */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setOpenDropdown(openDropdown === 'level' ? null : 'level')}
-              className="w-full h-9 px-2 border border-border rounded-xl bg-card text-[11px] font-semibold flex items-center justify-between outline-none"
-            >
-              <span className="truncate">
-                {filterLevel === 'todos' ? 'Nivel' : filterLevel}
-              </span>
-              <ChevronDown size={13} className="text-muted-foreground shrink-0" />
-            </button>
-
-            {openDropdown === 'level' && (
-              <div className="absolute top-10 right-0 w-40 p-2 bg-card border border-border rounded-xl shadow-xl z-50 flex flex-col gap-1">
-                {[
-                  { val: 'todos', label: 'Todos los niveles' },
-                  { val: 'recreativo', label: 'Recreativo' },
-                  { val: 'competitivo', label: 'Competitivo' },
-                  { val: 'profesional', label: 'Profesional' },
-                ].map((lvl) => (
-                  <button
-                    key={lvl.val}
-                    type="button"
-                    onClick={() => {
-                      setFilterLevel(lvl.val);
-                      setOpenDropdown(null);
-                    }}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold text-left ${filterLevel === lvl.val ? 'bg-primary text-white' : 'text-foreground hover:bg-primary/10'
-                      }`}
-                  >
-                    {lvl.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
 
+        {/* Barra de Filtros Compacta */}
+        <div>
+          <h2 className="text-[10px] font-extrabold text-[#4D715B] uppercase tracking-wider mb-2 px-1">
+            Filtrar partidos
+          </h2>
 
+          <div className="grid grid-cols-3 gap-2">
+            {/* Filtro Urgente */}
+            <button
+              type="button"
+              onClick={() => setFilterUrgent(!filterUrgent)}
+              className={`h-10 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 select-none border ${filterUrgent
+                ? 'bg-red-600 text-white border-red-600 shadow-xs'
+                : 'bg-[#CDE0D1]/70 text-[#4D715B] border-[#BACFC0] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
+                }`}
+            >
+              <Flame size={14} className={filterUrgent ? 'text-white' : 'text-red-500'} strokeWidth={2.5} />
+              <span className="truncate">Urgente</span>
+            </button>
+
+            {/* Filtro Fecha (Dropdown) */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setOpenDropdown(openDropdown === 'date' ? null : ('date' as any))}
+                className={`w-full h-10 px-3 border rounded-xl text-xs font-black flex items-center justify-between outline-none transition-all ${filterDate !== 'todas'
+                  ? 'bg-[#DCE7DE] text-[#054D27] border-[#BACFC0] shadow-xs'
+                  : 'bg-[#CDE0D1]/70 text-[#4D715B] border-[#BACFC0] hover:text-[#054D27]'
+                  }`}
+              >
+                <span className="truncate">
+                  {filterDate === 'todas' ? 'Fechas' : filterDate === 'hoy' ? 'Hoy' : 'Filtrado'}
+                </span>
+                <ChevronDown size={14} strokeWidth={2.5} className="text-[#4D715B] shrink-0" />
+              </button>
+
+              {openDropdown === ('date' as any) && (
+                <div className="absolute top-11 left-0 w-44 p-1.5 bg-[#DCE7DE] border border-[#BACFC0] rounded-xl shadow-xl z-50 flex flex-col gap-1">
+                  {[
+                    { val: 'todas', label: 'Todas las fechas' },
+                    { val: 'hoy', label: 'Hoy' },
+                    { val: 'pasados_3', label: 'Últimos 3 días' },
+                    { val: 'pasados_7', label: 'Últimos 7 días' },
+                  ].map((dt) => (
+                    <button
+                      key={dt.val}
+                      type="button"
+                      onClick={() => {
+                        setFilterDate(dt.val as any);
+                        setOpenDropdown(null);
+                      }}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-colors ${filterDate === dt.val
+                        ? 'bg-[#008744] text-white'
+                        : 'text-[#054D27] hover:bg-[#CDE0D1]'
+                        }`}
+                    >
+                      {dt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Filtro Nivel (Dropdown) */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setOpenDropdown(openDropdown === 'level' ? null : 'level')}
+                className={`w-full h-10 px-3 border rounded-xl text-xs font-black flex items-center justify-between outline-none transition-all ${filterLevel !== 'todos'
+                  ? 'bg-[#DCE7DE] text-[#054D27] border-[#BACFC0] shadow-xs'
+                  : 'bg-[#CDE0D1]/70 text-[#4D715B] border-[#BACFC0] hover:text-[#054D27]'
+                  }`}
+              >
+                <span className="truncate">
+                  {filterLevel === 'todos' ? 'Nivel' : filterLevel}
+                </span>
+                <ChevronDown size={14} strokeWidth={2.5} className="text-[#4D715B] shrink-0" />
+              </button>
+
+              {openDropdown === 'level' && (
+                <div className="absolute top-11 right-0 w-40 p-1.5 bg-[#DCE7DE] border border-[#BACFC0] rounded-xl shadow-xl z-50 flex flex-col gap-1">
+                  {[
+                    { val: 'todos', label: 'Todos los niveles' },
+                    { val: 'recreativo', label: 'Recreativo' },
+                    { val: 'competitivo', label: 'Competitivo' },
+                    { val: 'profesional', label: 'Profesional' },
+                  ].map((lvl) => (
+                    <button
+                      key={lvl.val}
+                      type="button"
+                      onClick={() => {
+                        setFilterLevel(lvl.val);
+                        setOpenDropdown(null);
+                      }}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-colors ${filterLevel === lvl.val
+                        ? 'bg-[#008744] text-white'
+                        : 'text-[#054D27] hover:bg-[#CDE0D1]'
+                        }`}
+                    >
+                      {lvl.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Formulario Modal Crear / Editar Reto */}
@@ -594,149 +619,179 @@ function BuscarJugadorTab({ showAlert }: { showAlert: (type: AlertModalState['ty
 
   return (
     <div className="max-w-4xl">
+
       {/* Pitch Preview Modal */}
-      {previewPitch && <PitchPreviewModal pitch={previewPitch} onClose={() => setPreviewPitch(null)} />}
+      {previewPitch && (
+        <PitchPreviewModal
+          pitch={previewPitch}
+          onClose={() => setPreviewPitch(null)}
+        />
+      )}
 
-      <div className="p-5 bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-2xl mb-6">
-        <h3 className="font-bold text-base mb-1">🔍 Convocatorias de jugadores</h3>
-        <p className="text-sm text-muted-foreground">
-          ¿Tienes un partido reservado pero te falta gente? Publica aquí y encuentra los jugadores exactos que necesitas.
-        </p>
-      </div>
-      {/* Fila 2 (Móvil) / Derecha (Desktop): Botón de Acción Principal */}
-      <button
-        type="button"
-        onClick={() => {
-          if (!user)
-            return showAlert(
-              'login_required',
-              'Iniciar Sesión',
-              'Debes iniciar sesión para publicar una convocatoria.'
-            );
-          setEditingItem(null);
-          setShowForm(!showForm);
-        }}
-        className="btn-primary text-xs h-10 sm:h-9 py-2 px-4 flex items-center justify-center gap-2 w-full sm:w-auto font-bold shrink-0"
-      >
-        <Plus size={15} /> Necesito un jugador
-      </button>
+      {/* ── Contenedor Principal de Controles (Header + Filtros de Convocatorias) ── */}
+      <div className="bg-[#DCE7DE] border border-[#C8DACB] rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
 
-      <div className="p-3.5 bg-card border border-border rounded-2xl mb-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        {/* Fila 1: Filtros distribuidos equitativamente en 3 columnas en móvil */}
-        <div className="grid grid-cols-3 gap-2 w-full sm:w-auto sm:flex sm:items-center">
+        {/* Encabezado: Título, Descripción y Botón de Acción */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-[#C8DACB]">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <UserPlus className="text-[#054D27]" size={26} strokeWidth={2.5} />
+              <h1 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
+                Convocatorias
+              </h1>
+            </div>
+            <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1 leading-relaxed">
+              ¿Tienes un partido reservado pero te falta gente? Publica aquí y encuentra los jugadores exactos que necesitas.
+            </p>
+          </div>
 
-          {/* Filtro Urgente / Por Empezar */}
           <button
             type="button"
-            onClick={() => setFilterUrgent(!filterUrgent)}
-            className={`h-9 px-2 sm:px-3 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 border ${filterUrgent
-              ? 'bg-red-500 text-white border-red-500 shadow-sm'
-              : 'bg-secondary text-muted-foreground border-transparent hover:border-red-300'
-              }`}
+            onClick={() => {
+              if (!user) {
+                return showAlert(
+                  'login_required',
+                  'Iniciar Sesión',
+                  'Debes iniciar sesión para publicar una convocatoria.'
+                );
+              }
+              setEditingItem(null);
+              setShowForm(!showForm);
+            }}
+            className="flex items-center justify-center gap-2 bg-[#008744] hover:bg-[#054D27] text-white font-black px-5 py-3 rounded-xl transition-colors shadow-md text-sm shrink-0"
           >
-            <Flame size={14} className="shrink-0" />
-            <span className="truncate">Urgente</span>
+            <Plus size={18} strokeWidth={3} /> Necesito un jugador
           </button>
-
-          {/* Filtro Fecha (Dropdown) */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setOpenDropdown(openDropdown === 'date' ? null : ('date' as any))}
-              className="w-full sm:w-auto h-9 px-2 sm:px-3 border border-border rounded-xl bg-card text-[11px] sm:text-xs font-semibold flex items-center justify-between sm:justify-start gap-1.5 outline-none focus:border-primary hover:border-primary/40"
-            >
-              <span className="truncate">
-                {filterDate === 'todas'
-                  ? 'Fechas'
-                  : filterDate === 'hoy'
-                    ? 'Hoy'
-                    : filterDate === 'pasados_3'
-                      ? '3 días'
-                      : filterDate === 'pasados_7'
-                        ? '7 días'
-                        : 'Antiguo'}
-              </span>
-              <ChevronDown
-                size={14}
-                className={`transition-transform text-muted-foreground shrink-0 ${openDropdown === ('date' as any) ? 'rotate-180' : ''
-                  }`}
-              />
-            </button>
-
-            {openDropdown === ('date' as any) && (
-              <div className="absolute top-10 left-0 w-44 p-2 bg-card border border-border rounded-xl shadow-xl z-50 flex flex-col gap-1 animate-in fade-in slide-in-from-top-1">
-                {[
-                  { val: 'todas', label: 'Todas las fechas' },
-                  { val: 'hoy', label: 'Hoy' },
-                  { val: 'pasados_3', label: 'Últimos 3 días' },
-                  { val: 'pasados_7', label: 'Últimos 7 días' },
-                ].map((dt) => (
-                  <button
-                    key={dt.val}
-                    type="button"
-                    onClick={() => {
-                      setFilterDate(dt.val as any);
-                      setOpenDropdown(null);
-                    }}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-all ${filterDate === dt.val
-                      ? 'bg-primary text-white shadow-sm'
-                      : 'text-foreground hover:bg-primary/10 hover:text-primary'
-                      }`}
-                  >
-                    {dt.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Filtro Nivel (Dropdown) */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setOpenDropdown(openDropdown === 'level' ? null : 'level')}
-              className="w-full sm:w-auto h-9 px-2 sm:px-3 border border-border rounded-xl bg-card text-[11px] sm:text-xs font-semibold flex items-center justify-between sm:justify-start gap-1.5 outline-none focus:border-primary hover:border-primary/40"
-            >
-              <span className="truncate capitalize">
-                {filterLevel === 'todos' ? 'Nivel' : filterLevel}
-              </span>
-              <ChevronDown
-                size={14}
-                className={`transition-transform text-muted-foreground shrink-0 ${openDropdown === 'level' ? 'rotate-180' : ''
-                  }`}
-              />
-            </button>
-
-            {openDropdown === 'level' && (
-              <div className="absolute top-10 right-0 sm:right-auto sm:left-0 w-40 p-2 bg-card border border-border rounded-xl shadow-xl z-50 flex flex-col gap-1 animate-in fade-in slide-in-from-top-1">
-                {[
-                  { val: 'todos', label: 'Todos los niveles' },
-                  { val: 'recreativo', label: 'Recreativo' },
-                  { val: 'competitivo', label: 'Competitivo' },
-                  { val: 'profesional', label: 'Profesional' },
-                ].map((lvl) => (
-                  <button
-                    key={lvl.val}
-                    type="button"
-                    onClick={() => {
-                      setFilterLevel(lvl.val);
-                      setOpenDropdown(null);
-                    }}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-all ${filterLevel === lvl.val
-                      ? 'bg-primary text-white shadow-sm'
-                      : 'text-foreground hover:bg-primary/10 hover:text-primary'
-                      }`}
-                  >
-                    {lvl.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
 
+        {/* Barra de Filtros Compacta */}
+        <div>
+          <h2 className="text-[10px] font-extrabold text-[#4D715B] uppercase tracking-wider mb-2 px-1">
+            Filtrar convocatorias
+          </h2>
 
+          <div className="grid grid-cols-3 gap-2">
+            {/* Filtro Urgente */}
+            <button
+              type="button"
+              onClick={() => setFilterUrgent(!filterUrgent)}
+              className={`h-10 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 select-none border ${filterUrgent
+                ? 'bg-red-600 text-white border-red-600 shadow-xs'
+                : 'bg-[#CDE0D1]/70 text-[#4D715B] border-[#BACFC0] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
+                }`}
+            >
+              <Flame size={14} className={filterUrgent ? 'text-white' : 'text-red-500'} strokeWidth={2.5} />
+              <span className="truncate">Urgente</span>
+            </button>
+
+            {/* Filtro Fecha (Dropdown) */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setOpenDropdown(openDropdown === 'date' ? null : ('date' as any))}
+                className={`w-full h-10 px-3 border rounded-xl text-xs font-black flex items-center justify-between outline-none transition-all ${filterDate !== 'todas'
+                  ? 'bg-[#DCE7DE] text-[#054D27] border-[#BACFC0] shadow-xs'
+                  : 'bg-[#CDE0D1]/70 text-[#4D715B] border-[#BACFC0] hover:text-[#054D27]'
+                  }`}
+              >
+                <span className="truncate">
+                  {filterDate === 'todas'
+                    ? 'Fechas'
+                    : filterDate === 'hoy'
+                      ? 'Hoy'
+                      : filterDate === 'pasados_3'
+                        ? '3 días'
+                        : filterDate === 'pasados_7'
+                          ? '7 días'
+                          : 'Antiguo'}
+                </span>
+                <ChevronDown
+                  size={14}
+                  strokeWidth={2.5}
+                  className={`transition-transform text-[#4D715B] shrink-0 ${openDropdown === ('date' as any) ? 'rotate-180' : ''
+                    }`}
+                />
+              </button>
+
+              {openDropdown === ('date' as any) && (
+                <div className="absolute top-11 left-0 w-44 p-1.5 bg-[#DCE7DE] border border-[#BACFC0] rounded-xl shadow-xl z-50 flex flex-col gap-1 animate-in fade-in slide-in-from-top-1">
+                  {[
+                    { val: 'todas', label: 'Todas las fechas' },
+                    { val: 'hoy', label: 'Hoy' },
+                    { val: 'pasados_3', label: 'Últimos 3 días' },
+                    { val: 'pasados_7', label: 'Últimos 7 días' },
+                  ].map((dt) => (
+                    <button
+                      key={dt.val}
+                      type="button"
+                      onClick={() => {
+                        setFilterDate(dt.val as any);
+                        setOpenDropdown(null);
+                      }}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-colors ${filterDate === dt.val
+                        ? 'bg-[#008744] text-white'
+                        : 'text-[#054D27] hover:bg-[#CDE0D1]'
+                        }`}
+                    >
+                      {dt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Filtro Nivel (Dropdown) */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setOpenDropdown(openDropdown === 'level' ? null : 'level')}
+                className={`w-full h-10 px-3 border rounded-xl text-xs font-black flex items-center justify-between outline-none transition-all ${filterLevel !== 'todos'
+                  ? 'bg-[#DCE7DE] text-[#054D27] border-[#BACFC0] shadow-xs'
+                  : 'bg-[#CDE0D1]/70 text-[#4D715B] border-[#BACFC0] hover:text-[#054D27]'
+                  }`}
+              >
+                <span className="truncate capitalize">
+                  {filterLevel === 'todos' ? 'Nivel' : filterLevel}
+                </span>
+                <ChevronDown
+                  size={14}
+                  strokeWidth={2.5}
+                  className={`transition-transform text-[#4D715B] shrink-0 ${openDropdown === 'level' ? 'rotate-180' : ''
+                    }`}
+                />
+              </button>
+
+              {openDropdown === 'level' && (
+                <div className="absolute top-11 right-0 sm:right-auto sm:left-0 w-40 p-1.5 bg-[#DCE7DE] border border-[#BACFC0] rounded-xl shadow-xl z-50 flex flex-col gap-1 animate-in fade-in slide-in-from-top-1">
+                  {[
+                    { val: 'todos', label: 'Todos los niveles' },
+                    { val: 'recreativo', label: 'Recreativo' },
+                    { val: 'competitivo', label: 'Competitivo' },
+                    { val: 'profesional', label: 'Profesional' },
+                  ].map((lvl) => (
+                    <button
+                      key={lvl.val}
+                      type="button"
+                      onClick={() => {
+                        setFilterLevel(lvl.val);
+                        setOpenDropdown(null);
+                      }}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-colors ${filterLevel === lvl.val
+                        ? 'bg-[#008744] text-white'
+                        : 'text-[#054D27] hover:bg-[#CDE0D1]'
+                        }`}
+                    >
+                      {lvl.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
+
+
       {(showForm || editingItem) && (
         <ChallengeFormModal
           key={editingItem?.id || 'new-convocatoria'}

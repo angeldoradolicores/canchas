@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth-context';
-import { Loader2, CalendarDays, MapPin, X, Share2, Ticket, Clock, CheckCircle, XCircle, AlertCircle, LayoutGrid, ChevronDown } from 'lucide-react';
+import { Loader2, CalendarDays, MapPin, X, Share2, Ticket, Clock, CheckCircle, XCircle, AlertCircle, LayoutGrid, ChevronDown, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { toPng } from 'html-to-image';
 
@@ -172,7 +172,7 @@ export default function UserReservationsPage() {
         statusHeader = '❌ Cancelado por el dueño';
       }
 
-      const text = `${statusHeader}\n\n📍 Cancha: ${b.pitches?.name?.toUpperCase() || ''}\n📅 Fecha: ${new Date(b.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}\n⏰ Hora: ${new Date(b.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}\n\nVer cancha y ubicación: ${pitchUrl}\n\n¡Allá nos vemos!`;
+      const text = `${statusHeader}\n\n📍 ${b.pitches?.name?.toUpperCase() || ''}\n📅 Fecha: ${new Date(b.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}\n⏰ Hora: ${new Date(b.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}\n\nVer cancha y ubicación: ${pitchUrl}\n\n¡Allá nos vemos!`;
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: 'Ticket de Reserva', text });
@@ -377,89 +377,103 @@ export default function UserReservationsPage() {
         </div>
       )}
 
-      <div className="page-heading mb-6">
-        <div>
-          <p className="eyebrow accent-label">MI ACTIVIDAD</p>
-          <h1>Mis Reservas</h1>
-          {filteredBookings.length > 0 && (
-            <p className="text-sm text-muted-foreground mt-1">
-              {filteredBookings.length} reserva{filteredBookings.length !== 1 ? 's' : ''} · {confirmed.length} aprobada{confirmed.length !== 1 ? 's' : ''}
+      {/* ── Contenedor Principal (Header + Filtros de Mis Reservas) ── */}
+      <div className="bg-[#DCE7DE] border border-[#C8DACB] rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
+
+        {/* Encabezado: Título y Contador / Badge Resumen */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-[#C8DACB]">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <CalendarDays className="text-[#054D27]" size={26} strokeWidth={2.5} />
+              <h1 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
+                Mis Reservas
+              </h1>
+            </div>
+            <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1 leading-relaxed">
+              Gestiona y revisa el estado de tus partidos agendados, comprobantes y solicitudes.
             </p>
-          )}
-        </div>
-      </div>
-
-      <div className="mb-6 flex flex-col gap-3">
-        {/* Barra de Filtros por Estado: diseño idéntico al de Torneos */}
-        <div>
-          <h2 className="text-[10px] font-extrabold text-[#4D715B] uppercase tracking-wider mb-2 px-1">
-            Filtrar por estado
-          </h2>
-
-          <div className="bg-[#CDE0D1]/70 border border-[#BACFC0] rounded-2xl p-1 flex items-center gap-1 w-full overflow-x-auto scrollbar-hide">
-            {[
-              { id: 'todas', label: 'Todas', showIcon: true },
-              { id: 'confirmed', label: 'Aprobadas', showIcon: false },
-              { id: 'pending', label: 'Revisión', showIcon: false },
-              { id: 'cancelled', label: 'Canceladas', showIcon: false },
-            ].map(f => {
-              const isActive = statusFilter === f.id;
-              return (
-                <button
-                  key={f.id}
-                  onClick={() => setStatusFilter(f.id as any)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-black transition-all duration-200 select-none whitespace-nowrap ${isActive
-                    ? 'bg-[#DCE7DE] text-[#054D27] shadow-xs border border-[#BACFC0]'
-                    : 'text-[#4D715B] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
-                    }`}
-                >
-                  {f.showIcon && (
-                    <LayoutGrid
-                      size={13}
-                      strokeWidth={2.5}
-                      className={isActive ? 'text-[#008744]' : 'text-[#4D715B]'}
-                    />
-                  )}
-                  <span>{f.label}</span>
-                </button>
-              );
-            })}
           </div>
+
+          {/* Badge Resumen de Reservas */}
+          {/* {filteredBookings.length > 0 && (
+            <div className="flex items-center gap-2 bg-[#CDE0D1]/70 border border-[#BACFC0] px-4 py-2.5 rounded-xl shrink-0 self-start sm:self-auto">
+              <span className="text-xs sm:text-sm font-black text-[#054D27]">
+                {filteredBookings.length} {filteredBookings.length === 1 ? 'reserva' : 'reservas'} · {confirmed.length} {confirmed.length === 1 ? 'aprobada' : 'aprobadas'}
+              </span>
+            </div>
+          )} */}
         </div>
 
-        {/* 2. Selector de Fecha con la paleta y estética de la app */}
-        <div className="flex items-center justify-between sm:justify-end gap-2 pt-1 px-1">
-          <span className="text-[10px] font-black uppercase tracking-wider text-[#4D715B] flex items-center gap-1">
-            <CalendarDays size={13} className="text-[#008744]" /> Fecha:
-          </span>
+        {/* Controles y Filtros */}
+        <div className="flex flex-col gap-4">
+          {/* Filtro por Estado */}
+          <div>
+            <h2 className="text-[10px] font-extrabold text-[#4D715B] uppercase tracking-wider mb-2 px-1">
+              Filtrar por estado
+            </h2>
 
-          <div className="relative inline-block min-w-[170px]">
-            <select
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value as any)}
-              className="w-full appearance-none cursor-pointer outline-none text-xs font-bold rounded-xl pl-3 pr-8 py-2 transition-all shadow-xs border bg-[#DCE7DE] text-[#054D27] border-[#BACFC0] hover:bg-[#CDE0D1] focus:ring-2 focus:ring-[#008744]/20"
-            >
-              <option value="todas" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">
-                Cualquier fecha
-              </option>
-              <option value="hoy" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">
-                Hoy
-              </option>
-              <option value="pasados_3" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">
-                Últimos 3 días
-              </option>
-              <option value="pasados_7" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">
-                Últimos 7 días
-              </option>
-            </select>
-
-            <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none text-[#054D27]">
-              <ChevronDown size={14} strokeWidth={2.5} />
+            <div className="bg-[#CDE0D1]/70 border border-[#BACFC0] rounded-2xl p-1 flex items-center gap-1 w-full overflow-x-auto scrollbar-hide">
+              {[
+                { id: 'todas', label: 'Todas', showIcon: true },
+                { id: 'confirmed', label: 'Aprobadas', showIcon: false },
+                { id: 'pending', label: 'Revisión', showIcon: false },
+                { id: 'cancelled', label: 'Canceladas', showIcon: false },
+              ].map(f => {
+                const isActive = statusFilter === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => setStatusFilter(f.id as any)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-black transition-all duration-200 select-none whitespace-nowrap ${isActive
+                      ? 'bg-[#DCE7DE] text-[#054D27] shadow-xs border border-[#BACFC0]'
+                      : 'text-[#4D715B] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
+                      }`}
+                  >
+                    {f.showIcon && (
+                      <LayoutGrid
+                        size={13}
+                        strokeWidth={2.5}
+                        className={isActive ? 'text-[#008744]' : 'text-[#4D715B]'}
+                      />
+                    )}
+                    <span>{f.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
       </div>
+      {/* Selector de Fecha Estilizado */}
+      <div className="flex items-center justify-between sm:justify-end gap-2 pt-1 px-1">
+        <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#4D715B] flex items-center gap-1">
+        </span>
 
+        <div className="relative inline-block min-w-[170px]">
+          <select
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value as any)}
+            className="w-full appearance-none cursor-pointer outline-none text-xs font-black rounded-xl pl-3 pr-8 py-2 transition-all shadow-xs border bg-[#CDE0D1]/70 text-[#054D27] border-[#BACFC0] hover:bg-[#CDE0D1] focus:ring-2 focus:ring-[#008744]/20"
+          >
+            <option value="todas" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">
+              Cualquier fecha
+            </option>
+            <option value="hoy" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">
+              Hoy
+            </option>
+            <option value="pasados_3" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">
+              Últimos 3 días
+            </option>
+            <option value="pasados_7" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">
+              Últimos 7 días
+            </option>
+          </select>
+
+          <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none text-[#054D27]">
+            <ChevronDown size={14} strokeWidth={2.5} />
+          </div>
+        </div>
+      </div>
 
 
       {bookings.length === 0 ? (

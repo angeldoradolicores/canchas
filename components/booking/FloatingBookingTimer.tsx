@@ -67,13 +67,74 @@ export function FloatingBookingTimer() {
               reservando
             </span>
           </div>
-          <p className="font-bold text-xs truncate leading-tight">
+          <p className="font-bold text-xs leading-tight uppercase min-w-0 break-words line-clamp-2">
             {activeBooking.pitch.name.toUpperCase()}
           </p>
-          <p className="text-[10px] text-muted-foreground truncate leading-tight">
-            {activeBooking.selectedDate} · {activeBooking.selectedTimes.slice(0, 2).join(', ')}
-            {activeBooking.selectedTimes.length > 2 ? ` +${activeBooking.selectedTimes.length - 2}` : ''}
-          </p>
+          {(() => {
+            const booking = activeBooking as any;
+
+            // 1. Formateador de Fecha sin año
+            const formatDate = (dateVal: any): string => {
+              if (!dateVal) return '';
+
+              let dateObj: Date;
+
+              if (dateVal instanceof Date) {
+                dateObj = dateVal;
+              } else if (typeof dateVal === 'string' && dateVal.includes('-')) {
+                const cleanDate = dateVal.split('T')[0];
+                const parts = cleanDate.split('-');
+                dateObj = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+              } else {
+                dateObj = new Date(dateVal);
+              }
+
+              if (isNaN(dateObj.getTime())) return String(dateVal);
+
+              const formatted = dateObj.toLocaleDateString('es-CO', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+              });
+
+              // Remueve ", 2026" o " de 2026" dejando solo el día y mes
+              return formatted.replace(/(,\s\d{4}|\sde\s\d{4})/, '');
+            };
+
+            // 2. Formateador de Horas: Convertir a 7am / 7pm
+            const formatTime = (timeVal: any): string => {
+              if (!timeVal && timeVal !== 0) return '';
+              const str = String(timeVal).trim();
+              if (/am|pm/i.test(str)) return str;
+
+              const hourNum = parseInt(str, 10);
+              if (isNaN(hourNum)) return str;
+
+              const period = hourNum >= 12 ? 'pm' : 'am';
+              const formattedHour = hourNum % 12 === 0 ? 12 : hourNum % 12;
+              return `${formattedHour}${period}`;
+            };
+
+            const rawDate = booking?.selectedDate || booking?.date || booking?.start_time;
+            const rawTimes = booking?.selectedTimes || booking?.time || booking?.slot || [];
+
+            const formattedDate = formatDate(rawDate);
+            const timesArray = Array.isArray(rawTimes) ? rawTimes : [rawTimes];
+
+            const visibleTimes = timesArray
+              .slice(0, 2)
+              .map((t: any) => formatTime(t))
+              .join(', ');
+
+            const extraCount = timesArray.length > 2 ? ` +${timesArray.length - 2}` : '';
+
+            return (
+              <p className="text-[10px] text-muted-foreground truncate leading-tight capitalize">
+                {formattedDate} · {visibleTimes}{extraCount}
+              </p>
+            );
+          })()}
         </div>
 
         {/* Botones — nunca se encogen */}

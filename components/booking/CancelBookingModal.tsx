@@ -78,9 +78,66 @@ export function CancelBookingModal({
               <Clock3 size={13} /> {timeFormatted}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground">
-            📅 {activeBooking.selectedDate} · 🕓 {activeBooking.selectedTimes.join(', ')}
-          </p>
+          {(() => {
+            const booking = activeBooking as any;
+
+            // 1. Formateador de Fecha ajustado
+            const formatDate = (dateVal: any): string => {
+              if (!dateVal) return '';
+
+              let dateObj: Date;
+
+              if (dateVal instanceof Date) {
+                dateObj = dateVal;
+              } else if (typeof dateVal === 'string' && dateVal.includes('-')) {
+                const cleanDate = dateVal.split('T')[0];
+                const parts = cleanDate.split('-');
+                dateObj = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+              } else {
+                dateObj = new Date(dateVal);
+              }
+
+              if (isNaN(dateObj.getTime())) return String(dateVal);
+
+              const formatted = dateObj.toLocaleDateString('es-CO', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+              });
+
+              // Reemplaza " de 2026" por " del 2026" de forma precisa
+              return formatted.replace(/\sde\s(\d{4})/, ' del $1');
+            };
+
+            // 2. Formateador de Horas
+            const formatTime = (timeVal: any): string => {
+              if (!timeVal && timeVal !== 0) return '';
+              const str = String(timeVal).trim();
+              if (/am|pm/i.test(str)) return str;
+
+              const hourNum = parseInt(str, 10);
+              if (isNaN(hourNum)) return str;
+
+              const period = hourNum >= 12 ? 'pm' : 'am';
+              const formattedHour = hourNum % 12 === 0 ? 12 : hourNum % 12;
+              return `${formattedHour}${period}`;
+            };
+
+            const rawDate = booking?.selectedDate || booking?.date || booking?.start_time;
+            const rawTimes = booking?.selectedTimes || booking?.time || booking?.slot;
+
+            const formattedDate = formatDate(rawDate);
+            const formattedTimes = Array.isArray(rawTimes)
+              ? rawTimes.map((t: any) => formatTime(t)).join(', ')
+              : formatTime(rawTimes);
+
+            return (
+              <p className="text-xs text-muted-foreground capitalize">
+                📅 {formattedDate} · 🕓 {formattedTimes}
+              </p>
+            );
+          })()}
           <p className="text-[11px] text-muted-foreground/90 border-t border-border/40 pt-2 mt-2 leading-relaxed">
             Esta cancha está bloqueada exclusivamente para ti durante este tiempo. Si te vas sin confirmar, ¿qué deseas hacer?
           </p>

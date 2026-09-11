@@ -229,6 +229,12 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
   };
   // ... dentro de tu componente principal:
   const [copied, setCopied] = useState(false);
+  function fmtSlot(slot: string) {
+    const h = parseInt(slot.split(':')[0]);
+    const ampm = h < 12 ? 'am' : 'pm';
+    const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    return `${h12}:00 ${ampm}`;
+  }
 
   const handleCopy = async (e: React.MouseEvent, text: string) => {
     e.preventDefault(); // Evita que dispare el enlace de llamada
@@ -773,7 +779,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
                 <p className="text-xs font-bold text-foreground">Desglose de selección:</p>
                 {selectedTimes.map(slot => (
                   <div key={slot} className="flex justify-between text-xs text-muted-foreground">
-                    <span>{slot} hs</span>
+                    <span>{fmtSlot(slot)} </span>
                     <span className="font-semibold text-foreground">${getSlotPrice(slot).toLocaleString('es-CO')}</span>
                   </div>
                 ))}
@@ -951,13 +957,13 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
 
             </button>
 
-            <div className="pt-3 border-t border-border flex justify-between items-center text-xs">
+            {/* <div className="pt-3 border-t border-border flex justify-between items-center text-xs">
               <span className="text-muted-foreground font-medium">Total Estimado</span>
               <span className="font-extrabold text-primary text-base">
                 <span className="text-primary">${totalPrice.toLocaleString('es-CO')}</span>
 
               </span>
-            </div>
+            </div> */}
 
             {pitchAny.custom_pricing?.booking_type === 'fixed' ? (
               <p className="text-[11px] text-muted-foreground text-center mt-2">

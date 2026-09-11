@@ -771,8 +771,17 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                 disabled={loading}
                 onClick={handleLockBooking}
               >
-                {loading ? <Loader2 size={16} className="animate-spin mx-auto" /> : `Continuar al pago → ${selectedTimes.length > 0 ? `(${selectedTimes.length}h - $${totalPrice.toLocaleString()})` : ''}`}
+                {loading ? <Loader2 size={16} className="animate-spin mx-auto" /> : `Reservar ${selectedTimes.length > 0 ? `(${selectedTimes.length}h) ` : ''}`}
               </button>
+              {/* {pitch.custom_pricing?.booking_type === 'fixed' ? (
+                <p className="text-[11px] text-muted-foreground text-center mt-2">
+                  Abono fijo de <strong>${Number(pitch.custom_pricing.booking_fix || 0).toLocaleString('es-CO')}</strong> por hora para confirmar
+                </p>
+              ) : pitch.custom_pricing?.booking_type === 'percentage' ? (
+                <p className="text-[11px] text-muted-foreground text-center mt-2">
+                  Abono del <strong>{pitch.custom_pricing.booking_percentage}%</strong> del valor total para confirmar
+                </p>
+              ) : null} */}
             </div>
           )}
 

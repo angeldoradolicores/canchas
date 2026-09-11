@@ -62,12 +62,29 @@ export default function FavoritesPage() {
 
   return (
     <section className="page-content fade-in">
-      <div className="mb-8">
-        <p className="eyebrow accent-label text-xs font-bold text-primary uppercase">MIS CANCHAS</p>
-        <h1 className="text-2xl sm:text-3xl font-black text-foreground mt-1">Favoritos</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {pitches.length} cancha{pitches.length !== 1 ? 's' : ''} guardada{pitches.length !== 1 ? 's' : ''}
-        </p>
+      {/* ── Contenedor Principal (Favoritos) ── */}
+      <div className="bg-[#DCE7DE] border border-[#C8DACB] rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2.5">
+              {/* Corazón sin relleno (solo borde) */}
+              <Heart className="text-[#054D27]" size={26} strokeWidth={2.5} />
+              <h1 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
+                Favoritos
+              </h1>
+            </div>
+            <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1 leading-relaxed">
+              Tus sedes habituales organizadas en un solo lugar para armar el partido sin rodeos.
+            </p>
+          </div>
+
+          {/* Badge indicador de canchas guardadas */}
+          <div className="flex items-center gap-2 bg-[#CDE0D1]/70 border border-[#BACFC0] px-4 py-2.5 rounded-xl shrink-0 self-start sm:self-auto">
+            <span className="text-xs sm:text-sm font-black text-[#054D27]">
+              {pitches.length} {pitches.length === 1 ? 'cancha guardada' : 'canchas guardadas'}
+            </span>
+          </div>
+        </div>
       </div>
 
       {loading ? (
