@@ -1269,7 +1269,7 @@ function ChallengeFormModal({
             {showSuggestions && pitchSuggestions.length > 0 && (
               <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-card border border-border rounded-xl shadow-xl overflow-hidden">
                 <div className="px-3 py-1.5 text-[11px] font-bold text-muted-foreground bg-secondary">
-                  🏟️ Canchas registradas en el sistema (click para vincular)
+                  🏟️ Canchas registradas en el sistema
                 </div>
                 {pitchSuggestions.map((p: any) => (
                   <button
@@ -1283,8 +1283,8 @@ function ChallengeFormModal({
                     }}
                     className="w-full px-4 py-2.5 text-left text-sm hover:bg-primary/10 flex items-center justify-between transition-colors border-b border-border/40"
                   >
-                    <span className="font-semibold text-foreground">🏟️ {p.name}</span>
-                    <span className="text-xs text-muted-foreground">{p.type} </span>
+                    <span className="font-semibold text-foreground">🏟️ {p.name.toUpperCase()}</span>
+                    <span className="text-xs text-muted-foreground">{p.type.toUpperCase()} </span>
                   </button>
                 ))}
               </div>

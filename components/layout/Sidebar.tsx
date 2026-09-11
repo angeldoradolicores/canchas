@@ -12,6 +12,8 @@ import {
   Smartphone,
   Trophy,
   Users,
+  Swords,
+  GraduationCap
 } from 'lucide-react';
 import { Logo } from './Logo';
 import Link from 'next/link';
@@ -26,9 +28,9 @@ export function Sidebar() {
     ['Explorar Canchas', Search, '/'],
     ['Mis reservas', CalendarDays, '/reservations'],
     ['Favoritos', Heart, '/favorites'],
-    ['Retos y Jugadores', Trophy, '/community'],
-    ['Campeonatos', ShieldCheck, '/tournaments'],
-    ['Escuelas de fútbol', ShieldCheck, '/schools'],
+    ['Retos y Jugadores', Swords, '/community'],
+    ['Campeonatos', Trophy, '/tournaments'],
+    ['Escuelas de fútbol', GraduationCap, '/schools'],
     ['Mi perfil', Users, '/profile'],
   ] as const;
 
@@ -37,7 +39,7 @@ export function Sidebar() {
       <Link href="/">
         <Logo />
       </Link>
-      
+
       <div className="mt-12 flex flex-1 flex-col gap-2 sidebar-links">
         <p className="eyebrow px-3">Menú principal</p>
         {items.map(([label, Icon, path]) => (
@@ -52,7 +54,7 @@ export function Sidebar() {
             <span>{label}</span>
           </Link>
         ))}
-        
+
         {profile?.role === 'owner' && (
           <>
             <div className="my-7 h-px bg-border" />
@@ -82,7 +84,7 @@ export function Sidebar() {
             </Link>
           </>
         )}
-        
+
         {profile?.role === 'superadmin' && (
           <>
             <div className="my-7 h-px bg-border" />
@@ -97,7 +99,7 @@ export function Sidebar() {
           </>
         )}
       </div>
-      
+
       <div className="flex flex-col gap-2">
         <button className="nav-item">
           <CircleHelp size={19} />
@@ -107,7 +109,7 @@ export function Sidebar() {
           <Settings size={19} />
           <span>Configuración</span>
         </Link>
-        
+
         {user ? (
           <div className="profile">
             <div className="avatar">

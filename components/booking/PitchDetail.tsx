@@ -807,8 +807,15 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
                     title: 'Reserva en proceso',
                     message: 'Tienes una reserva pendiente de pago o confirmación.\n\nPara iniciar una nueva reserva, primero debes completar o cancelar la actual.',
                     showCancel: true,
+
+                    // Botón Izquierdo: Ir a la reserva (Principal)
                     confirmText: 'Ir a mi reserva',
+                    confirmButtonClassName: 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl flex-1 shadow-sm transition-colors text-center text-sm cursor-pointer',
+
+                    // Botón Derecho: Cerrar (Rojo)
                     cancelText: 'Cerrar',
+                    cancelButtonClassName: 'bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2.5 rounded-xl flex-1 shadow-sm transition-colors text-center text-sm cursor-pointer',
+
                     onConfirm: () => {
                       if (typeof window !== 'undefined') {
                         window.dispatchEvent(new CustomEvent('resume-active-booking', { detail: activeBooking }));
@@ -819,7 +826,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
                 }
 
                 const formattedDate = selectedDate ? new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
-                
+
                 const fmtSlotLocal = (slot: string) => {
                   const [h] = slot.split(':');
                   const d = new Date();

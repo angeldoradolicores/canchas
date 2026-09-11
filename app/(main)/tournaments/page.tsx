@@ -310,9 +310,13 @@ export default function TournamentsPage() {
       title: '¿Eliminar campeonato?',
       message: 'Esta acción es irreversible. Se eliminará el campeonato y todos sus datos.',
       showCancel: true,
+
+      // Botón Izquierdo: Acción de eliminar en rojo
       confirmText: 'Sí, eliminar',
+      confirmButtonClassName: 'bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2.5 rounded-xl flex-1 shadow-sm transition-colors text-center text-sm cursor-pointer',
+
+      // Botón Derecho: Acción de cancelar en estilo secundario
       cancelText: 'Cancelar',
-      confirmButtonClassName: 'btn-primary bg-secondary text-foreground hover:bg-border flex-1',
       cancelButtonClassName: 'btn-primary bg-red-600 hover:bg-red-700 text-white flex-1 shadow-sm',
       onConfirm: async () => {
         const { data: { session } } = await supabase.auth.getSession();
@@ -454,13 +458,12 @@ export default function TournamentsPage() {
                 label: 'Cupos llenos', // Texto visible
               };
             }
-            // Condición estricta para FINALIZADO (GRIS/NEGRO)
             else if (status === 'finished') {
               statusClasses = {
-                bg: 'bg-white border-zinc-400 shadow-sm',
-                text: 'text-zinc-600',
-                dot: 'bg-zinc-500',
-                label: 'Finalizado', // Texto visible
+                bg: 'bg-indigo-50/80 border-indigo-200 dark:bg-indigo-950/30 dark:border-indigo-800/50',
+                text: 'text-indigo-700 dark:text-indigo-300',
+                dot: 'bg-indigo-500',
+                label: 'Finalizado',
               };
             }
 
@@ -1124,7 +1127,7 @@ export default function TournamentsPage() {
                         setPitchQuery(e.target.value);
                         if (!e.target.value) setForm(f => ({ ...f, pitch_id: '', pitch_name: '' }));
                       }}
-                      placeholder="Buscar cancha registrada..."
+                      placeholder="Buscar cancha registrada"
                       className="w-full h-11 pl-9 pr-3 border border-border rounded-xl bg-background text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-colors placeholder:text-muted-foreground"
                     />
                   </div>
@@ -1148,8 +1151,8 @@ export default function TournamentsPage() {
                             )}
                           </div>
                           <div>
-                            <p className="font-bold text-sm">{p.name}</p>
-                            <p className="text-xs text-muted-foreground">{p.companies?.name || ''} · {p.type}</p>
+                            <p className="font-bold text-sm">{p.name.toUpperCase()}</p>
+                            <p className="text-xs text-muted-foreground"> {p.type}</p>
                           </div>
                         </button>
                       ))}

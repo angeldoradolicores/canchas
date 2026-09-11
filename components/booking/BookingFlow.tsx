@@ -476,16 +476,27 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         <div className="success-icon"><Check size={32} /></div>
         <p className="eyebrow accent-label">RESERVA SOLICITADA</p>
         <h1>¡Comprobante enviado!</h1>
-        <p>Tu solicitud para <strong>{pitch.name}</strong> ha sido enviada. El dueño validará tu abono y te confirmará pronto.</p>
+        <p>Tu solicitud para <strong>{pitch.name.toUpperCase()}</strong> ha sido enviada. El dueño validará tu abono y te confirmará pronto.</p>
         <div className="confirmation-card">
-          <div className={`mini-pitch ${(pitch as any).tone || 'field-emerald'}`} />
-          <div className="flex-1 min-w-0">
-            <strong className="block text-sm truncate">{pitch.name}</strong>
+          <div
+            className="w-12 h-12 rounded-lg flex-shrink-0 overflow-hidden bg-muted"
+          >
+            {((pitch as any).media_urls?.[0] || (pitch as any).image_url) ? (
+              <img
+                src={(pitch as any).media_urls?.[0] || (pitch as any).image_url}
+                alt={pitch.name.toUpperCase()}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className={`w-full h-full ${(pitch as any).tone || 'field-emerald'}`} />
+            )}
+          </div>          <div className="flex-1 min-w-0">
+            <strong className="block text-sm truncate">{pitch.name.toUpperCase()}</strong>
             <span className="text-xs text-muted-foreground">{formattedDate}</span>
             <div className="flex flex-wrap gap-1 mt-1">
               {sortedTimes.map(t => (
                 <span key={t} className="text-[10px] bg-primary/10 text-primary font-bold px-1.5 py-0.5 rounded-full">
-                  {fmtSlot(t)} (${getSlotPrice(t).toLocaleString()})
+                  {fmtSlot(t)} (${getSlotPrice(t).toLocaleString('es-co')})
                 </span>
               ))}
             </div>
@@ -495,9 +506,9 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         <button
           type="button"
           className="btn-primary"
-          onClick={() => router.push(`/cancha/${pitch.id || (pitch as any).pitch_id}`)}
+          onClick={() => router.push(`/reservations`)}
         >
-          Volver al perfil de la cancha
+          Ir a mis reservas
         </button>      </div>
     );
   }

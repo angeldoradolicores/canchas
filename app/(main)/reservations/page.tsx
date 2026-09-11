@@ -155,12 +155,25 @@ export default function UserReservationsPage() {
   const handleShareWhatsApp = async (b: any) => {
     if (!ticketRef.current) return;
     setIsSharing(true);
+
     try {
       const dataUrl = await toPng(ticketRef.current, { pixelRatio: 2 });
       const blob = await (await fetch(dataUrl)).blob();
       const file = new File([blob], 'ticket-reserva.png', { type: 'image/png' });
       const pitchUrl = `${window.location.origin}/cancha/${b.pitch_id}`;
-      const text = `⚽ ¡Partido confirmado!\n\n📍 Cancha: ${b.pitches?.name?.toUpperCase() || ''}\n🗓 Fecha: ${new Date(b.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}\n⏰ Hora: ${new Date(b.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}\n\n🔗 Ver cancha y ubicación: ${pitchUrl}\n\n¡Allá nos vemos!`;
+
+      // Lógica dinámica para el encabezado según el estado de la reserva
+      let statusHeader = '⚽ ¡Reserva de partido!';
+      if (b.status === 'confirmed') {
+        statusHeader = '⚽ ¡Partido confirmado!';
+      } else if (b.status === 'pending') {
+        statusHeader = '⏳ Partido en revisión por el dueño de la cancha';
+      } else if (b.status === 'cancelled') {
+        statusHeader = '❌ Cancelado por el dueño';
+      }
+
+      const text = `${statusHeader}\n\n📍 Cancha: ${b.pitches?.name?.toUpperCase() || ''}\n📅 Fecha: ${new Date(b.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}\n⏰ Hora: ${new Date(b.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}\n\nVer cancha y ubicación: ${pitchUrl}\n\n¡Allá nos vemos!`;
+
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: 'Ticket de Reserva', text });
       } else {
@@ -168,7 +181,7 @@ export default function UserReservationsPage() {
         a.href = dataUrl;
         a.download = 'ticket-reserva.png';
         a.click();
-        const waUrl = `https://wa.me/?text=${encodeURIComponent(text + '\n\n(La imagen del ticket se descargó en tu dispositivo)')} `;
+        const waUrl = `https://wa.me/?text=${encodeURIComponent(text + '\n\n(La imagen del ticket se descargó en tu dispositivo)')}`;
         window.open(waUrl, '_blank');
       }
     } catch (error) {
@@ -387,7 +400,7 @@ export default function UserReservationsPage() {
             {[
               { id: 'todas', label: 'Todas', showIcon: true },
               { id: 'confirmed', label: 'Aprobadas', showIcon: false },
-              { id: 'pending', label: 'En revisión', showIcon: false },
+              { id: 'pending', label: 'Revisión', showIcon: false },
               { id: 'cancelled', label: 'Canceladas', showIcon: false },
             ].map(f => {
               const isActive = statusFilter === f.id;
@@ -395,11 +408,10 @@ export default function UserReservationsPage() {
                 <button
                   key={f.id}
                   onClick={() => setStatusFilter(f.id as any)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-black transition-all duration-200 select-none whitespace-nowrap ${
-                    isActive
-                      ? 'bg-[#DCE7DE] text-[#054D27] shadow-xs border border-[#BACFC0]'
-                      : 'text-[#4D715B] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
-                  }`}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-black transition-all duration-200 select-none whitespace-nowrap ${isActive
+                    ? 'bg-[#DCE7DE] text-[#054D27] shadow-xs border border-[#BACFC0]'
+                    : 'text-[#4D715B] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
+                    }`}
                 >
                   {f.showIcon && (
                     <LayoutGrid
@@ -507,7 +519,7 @@ export default function UserReservationsPage() {
                   <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: '0.1em' }}>HAYCANCHA</span>
                 </div>
                 {/* Imagen de la cancha en el ticket */}
-                {(selectedTicket.pitches?.media_urls?.[0] || selectedTicket.pitches?.image_url) && (
+                {/* {(selectedTicket.pitches?.media_urls?.[0] || selectedTicket.pitches?.image_url) && (
                   <div style={{ marginBottom: 16, borderRadius: 12, overflow: 'hidden', height: 160 }}>
                     <img
                       src={selectedTicket.pitches.media_urls?.[0] || selectedTicket.pitches.image_url}
@@ -515,9 +527,9 @@ export default function UserReservationsPage() {
                       style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.85 }}
                     />
                   </div>
-                )}
+                )} */}
                 <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', opacity: 0.8, marginBottom: 4 }}>TICKET DE RESERVA</p>
-                <h2 style={{ fontSize: 26, fontWeight: 900, lineHeight: 1.1, marginBottom: 8 }}>{selectedTicket.pitches.name}</h2>
+                <h2 style={{ fontSize: 26, fontWeight: 900, lineHeight: 1.1, marginBottom: 8 }}>{selectedTicket.pitches.name.toUpperCase()}</h2>
                 <p style={{ fontSize: 13, fontWeight: 600, opacity: 0.9, marginBottom: 16 }}>⚽ {selectedTicket.pitches.type || 'Fútbol'}</p>
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.2)', borderRadius: 999, padding: '4px 12px' }}>
                   <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />
@@ -544,7 +556,7 @@ export default function UserReservationsPage() {
                   <div>
                     <p style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.1em', marginBottom: 4 }}>ESTADO</p>
                     <p style={{ fontWeight: 700, color: selectedTicket.status === 'confirmed' ? '#34D399' : selectedTicket.status === 'pending' ? '#FBBF24' : '#F87171' }}>
-                      {selectedTicket.status === 'pending' ? 'Revisión...' : selectedTicket.status === 'confirmed' ? 'Confirmada ✓' : 'Cancelada'}
+                      {selectedTicket.status === 'pending' ? 'REVISIÓN' : selectedTicket.status === 'confirmed' ? 'CONFIRMADA ✓' : 'CANCELADA'}
                     </p>
                   </div>
                   <div>
@@ -561,12 +573,12 @@ export default function UserReservationsPage() {
                   </div>
                 </div>
 
-                <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                {/* <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                   <span style={{ fontSize: 10, color: '#6B7280' }}>🔗</span>
                   <span style={{ fontSize: 10, color: '#1DB954', fontWeight: 600, letterSpacing: '0.02em' }}>
                     {typeof window !== 'undefined' ? window.location.hostname : 'haycancha.app'}/cancha/{selectedTicket.pitch_id?.split('-')[0] || '...'}
                   </span>
-                </div>
+                </div> */}
               </div>
             </div>
 
