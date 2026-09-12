@@ -130,10 +130,10 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
       className={`topbar relative flex items-center justify-between px-4 py-3 bg-background border-b border-border transition-all ${isAnyMenuOpen ? 'z-[9999]' : 'z-10'
         }`}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex lg:hidden items-center gap-3">
         <button
           onClick={onMenu}
-          className="icon-button lg:hidden p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+          className="icon-button p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
           aria-label="Abrir/Cerrar menú"
         >
           <Menu size={22} />

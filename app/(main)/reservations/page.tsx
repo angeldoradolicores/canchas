@@ -269,19 +269,19 @@ export default function UserReservationsPage() {
     const groups: Record<string, any> = {};
 
     filteredBookings.forEach((b: any) => {
-      const dateStr = b.start_time.split('T')[0]; 
+      const dateStr = b.start_time.split('T')[0];
       const key = `${b.pitch_id}-${dateStr}-${b.status}`;
 
       if (!groups[key]) {
         groups[key] = {
-           ...b,
-           bookings: [],
-           total_price: 0,
-           deposit_amount: 0,
-           start_time: b.start_time
+          ...b,
+          bookings: [],
+          total_price: 0,
+          deposit_amount: 0,
+          start_time: b.start_time
         };
       }
-      
+
       groups[key].bookings.push(b);
       if (new Date(b.start_time) < new Date(groups[key].start_time)) {
         groups[key].start_time = b.start_time;
@@ -292,7 +292,7 @@ export default function UserReservationsPage() {
         const customPricing = b.pitches.custom_pricing || {};
         const isFixed = customPricing.booking_type === 'fixed';
         const pct = customPricing.booking_percentage || b.pitches.booking_percentage || 50;
-        const hoursCount = 1; 
+        const hoursCount = 1;
         if (isFixed) {
           dAmount = Number(customPricing.booking_fixed || 0) * hoursCount;
         } else {
@@ -500,8 +500,8 @@ export default function UserReservationsPage() {
                       type="button"
                       onClick={() => setStatusFilter(f.id as any)}
                       className={`flex-1 py-2 px-1 sm:px-2 rounded-xl text-[11px] sm:text-xs font-black transition-all duration-200 select-none flex items-center justify-center gap-1 leading-tight text-center ${isActive
-                          ? 'bg-[#DCE7DE] text-[#054D27] shadow-xs border border-[#BACFC0]'
-                          : 'text-[#4D715B] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
+                        ? 'bg-[#DCE7DE] text-[#054D27] shadow-xs border border-[#BACFC0]'
+                        : 'text-[#4D715B] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
                         }`}
                     >
                       {f.showIcon && (
@@ -598,32 +598,55 @@ export default function UserReservationsPage() {
             >
               {/* Header */}
               <div style={{
-                padding: '24px 24px 48px',
+                padding: '24px 24px 36px',
                 background: selectedTicket.status === 'confirmed' ? '#1DB954' : selectedTicket.status === 'pending' ? '#F59E0B' : '#EF4444',
-                color: '#ffffff',
+                color: selectedTicket.status === 'pending' ? '#000000' : '#ffffff',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                textAlign: 'center'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24, opacity: 0.9 }}>
-                  <div style={{ width: 24, height: 24, background: '#fff', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ color: '#1DB954', fontWeight: 900, fontSize: 11 }}>H</span>
-                  </div>
-                  <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: '0.1em' }}>HAYCANCHA</span>
+                {/* Logo Grande Vectorial Adaptativo */}
+                <div style={{
+                  marginBottom: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 6,
+                  color: selectedTicket.status === 'pending' ? '#000000' : '#ffffff'
+                }}>
+                  {/* Ícono de la Ubicación con Cancha */}
+                  <svg width="68" height="68" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+
+                  {/* Nombre de la Marca Grande */}
+                  <span style={{
+                    fontWeight: 900,
+                    fontSize: 20,
+                    letterSpacing: '0.18em',
+                    lineHeight: 1,
+                    marginTop: -4
+                  }}>
+                    CANCHEROS
+                  </span>
+                  <span style={{
+                    fontSize: 8,
+                    fontWeight: 800,
+                    letterSpacing: '0.25em',
+                    opacity: 0.8
+                  }}>
+                  </span>
                 </div>
-                {/* Imagen de la cancha en el ticket */}
-                {/* {(selectedTicket.pitches?.media_urls?.[0] || selectedTicket.pitches?.image_url) && (
-                  <div style={{ marginBottom: 16, borderRadius: 12, overflow: 'hidden', height: 160 }}>
-                    <img
-                      src={selectedTicket.pitches.media_urls?.[0] || selectedTicket.pitches.image_url}
-                      alt={selectedTicket.pitches?.name?.toUpperCase() || 'Cancha'}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.85 }}
-                    />
-                  </div>
-                )} */}
-                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', opacity: 0.8, marginBottom: 4 }}>TICKET DE RESERVA</p>
+
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', opacity: 0.85, marginTop: 12, marginBottom: 4 }}>TICKET DE RESERVA</p>
                 <h2 style={{ fontSize: 26, fontWeight: 900, lineHeight: 1.1, marginBottom: 8 }}>{selectedTicket.pitches.name.toUpperCase()}</h2>
-                <p style={{ fontSize: 13, fontWeight: 600, opacity: 0.9, marginBottom: 16 }}>⚽ {selectedTicket.pitches.type || 'Fútbol'}</p>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.2)', borderRadius: 999, padding: '4px 12px' }}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />
-                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em' }}>
+                <p style={{ fontSize: 13, fontWeight: 600, opacity: 0.9, marginBottom: 16 }}>⚽ {selectedTicket.pitches.type || 'Fútbol 11'}</p>
+
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: selectedTicket.status === 'pending' ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.2)', borderRadius: 999, padding: '4px 14px' }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: selectedTicket.status === 'pending' ? '#000' : '#fff' }} />
+                  <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em' }}>
                     {selectedTicket.status === 'pending' ? 'PENDIENTE' : selectedTicket.status === 'confirmed' ? 'CONFIRMADA' : 'RECHAZADA'}
                   </span>
                 </div>
@@ -656,19 +679,53 @@ export default function UserReservationsPage() {
                     </p>
                   </div>
                   <div>
-                    <p style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.1em', marginBottom: 4 }}>HORARIOS</p>
-                    <p style={{ fontWeight: 700, color: '#fff', fontSize: 13 }}>
-                      {selectedTicket.bookings ? selectedTicket.bookings.map((xb: any) => new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })).join(', ') : new Date(selectedTicket.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                    <p style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.1em', marginBottom: 6 }}>
+                      HORARIOS
                     </p>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(2, 1fr)',
+                      gap: '6px 8px'
+                    }}>
+                      {selectedTicket.bookings && selectedTicket.bookings.length > 0 ? (
+                        selectedTicket.bookings.map((xb: any, index: number) => (
+                          <span
+                            key={index}
+                            style={{
+                              background: 'rgba(255, 255, 255, 0.08)',
+                              color: '#fff',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: '3px 6px',
+                              borderRadius: 6,
+                              border: '1px solid rgba(255, 255, 255, 0.12)',
+                              textAlign: 'center',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        ))
+                      ) : (
+                        <span
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.08)',
+                            color: '#fff',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            padding: '3px 6px',
+                            borderRadius: 6,
+                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                            textAlign: 'center',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {new Date(selectedTicket.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                {/* <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 10, color: '#6B7280' }}>🔗</span>
-                  <span style={{ fontSize: 10, color: '#1DB954', fontWeight: 600, letterSpacing: '0.02em' }}>
-                    {typeof window !== 'undefined' ? window.location.hostname : 'haycancha.app'}/cancha/{selectedTicket.pitch_id?.split('-')[0] || '...'}
-                  </span>
-                </div> */}
               </div>
             </div>
 

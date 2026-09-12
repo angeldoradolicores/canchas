@@ -25,7 +25,6 @@ function OwnerLayoutInner({ children }: { children: React.ReactNode }) {
     ['Mis Canchas', Map, '/dashboard/pitches'],
     ['Reservas', CalendarDays, '/dashboard/bookings'],
     ['Conectar WhatsApp', Smartphone, '/dashboard/whatsapp'],
-    ['Escuelas y Torneos', ShieldCheck, '/dashboard/academy'],
   ] as const;
 
   const handleLogout = async () => {
@@ -106,7 +105,7 @@ function OwnerLayoutInner({ children }: { children: React.ReactNode }) {
             );
           })}
         </div>
-        
+
         <div className="flex flex-col gap-2 border-t border-border pt-4">
           <div className="px-3 mb-2">
             <p className="truncate text-sm font-semibold">{profile?.full_name || 'Dueño'}</p>
@@ -128,12 +127,12 @@ function OwnerLayoutInner({ children }: { children: React.ReactNode }) {
             <h1 className="text-lg font-bold">Panel del Dueño</h1>
           </div>
           <div className="flex items-center gap-4">
-             <Link href="/" className="text-sm text-primary font-semibold hover:underline">
-               Ver vista de jugador
-             </Link>
+            <Link href="/" className="text-sm text-primary font-semibold hover:underline">
+              Ver vista de jugador
+            </Link>
           </div>
         </header>
-        
+
         <div className="p-6 max-w-7xl mx-auto">
           {children}
         </div>

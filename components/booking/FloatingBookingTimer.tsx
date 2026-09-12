@@ -130,7 +130,7 @@ export function FloatingBookingTimer() {
             const extraCount = timesArray.length > 2 ? ` +${timesArray.length - 2}` : '';
 
             return (
-              <p className="text-[10px] text-muted-foreground truncate leading-tight capitalize">
+              <p className="text-[10px] text-muted-foreground  leading-tight capitalize">
                 {formattedDate} · {visibleTimes}{extraCount}
               </p>
             );

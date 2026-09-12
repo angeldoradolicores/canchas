@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Search, CalendarDays, Trophy, Users, LayoutDashboard, ShieldCheck, Smartphone, Heart } from 'lucide-react';
+import { X, Search, CalendarDays, Trophy, Users, LayoutDashboard, ShieldCheck, Smartphone, Heart, Swords, GraduationCap } from 'lucide-react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { MobileNav } from '@/components/layout/MobileNav';
@@ -50,7 +50,6 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                         <X size={17} />
                       </button>
                     </div>
-                    <p className="relative text-white/60 text-xs mt-3 font-medium">Tu plataforma de canchas sintéticas</p>
                   </div>
 
                   {/* Nav links con scroll */}
@@ -67,7 +66,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 title=""
                 onLoginClick={() => setShowAuth(true)}
               />
-              
+
               {children}
             </div>
 
@@ -92,9 +91,9 @@ function MobileNavLinks({ onClose }: { onClose: () => void }) {
     { label: 'Explorar Canchas', Icon: Search, path: '/' },
     { label: 'Mis reservas', Icon: CalendarDays, path: '/reservations' },
     { label: 'Favoritos', Icon: Heart, path: '/favorites' },
-    { label: 'Retos y Jugadores', Icon: Trophy, path: '/community' },
-    { label: 'Campeonatos', Icon: ShieldCheck, path: '/tournaments' },
-    { label: 'Escuelas de fútbol', Icon: ShieldCheck, path: '/schools' },
+    { label: 'Retos y Jugadores', Icon: Swords, path: '/community' },
+    { label: 'Campeonatos', Icon: Trophy, path: '/tournaments' },
+    { label: 'Escuelas de fútbol', Icon: GraduationCap, path: '/schools' },
     { label: 'Mi perfil', Icon: Users, path: '/profile' },
   ];
 
@@ -108,17 +107,15 @@ function MobileNavLinks({ onClose }: { onClose: () => void }) {
             key={path}
             href={path}
             onClick={onClose}
-            className={`group flex items-center gap-3 px-3 py-2.5 rounded-2xl text-[13.5px] font-semibold transition-all duration-200 ${
-              isActive
+            className={`group flex items-center gap-3 px-3 py-2.5 rounded-2xl text-[13.5px] font-semibold transition-all duration-200 ${isActive
                 ? 'bg-primary/12 text-primary font-bold shadow-sm'
                 : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-            }`}
+              }`}
           >
-            <span className={`flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-200 shrink-0 ${
-              isActive
+            <span className={`flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-200 shrink-0 ${isActive
                 ? 'bg-primary text-white shadow-sm'
                 : 'bg-secondary/80 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
-            }`}>
+              }`}>
               <Icon size={16} />
             </span>
             {label}
@@ -142,17 +139,15 @@ function MobileNavLinks({ onClose }: { onClose: () => void }) {
                 key={href}
                 href={href}
                 onClick={onClose}
-                className={`group flex items-center gap-3 px-3 py-2.5 rounded-2xl text-[13.5px] font-semibold transition-all duration-200 ${
-                  isActive
+                className={`group flex items-center gap-3 px-3 py-2.5 rounded-2xl text-[13.5px] font-semibold transition-all duration-200 ${isActive
                     ? 'bg-primary/12 text-primary font-bold'
                     : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                }`}
+                  }`}
               >
-                <span className={`flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-200 shrink-0 ${
-                  isActive
+                <span className={`flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-200 shrink-0 ${isActive
                     ? 'bg-primary text-white shadow-sm'
                     : 'bg-secondary/80 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
-                }`}>
+                  }`}>
                   <Icon size={16} />
                 </span>
                 {label}

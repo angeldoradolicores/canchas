@@ -100,7 +100,7 @@ export function OwnerDashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
-  const [filter, setFilter] = useState<DateFilter>('total');
+  const [filter, setFilter] = useState<DateFilter>('hoy');
 
   // ⚠️ Esperar a que el contexto de auth termine de cargar antes de pedir stats
   useEffect(() => {
@@ -191,7 +191,6 @@ export function OwnerDashboard() {
         <div className="min-w-0">
           <p className="text-[10px] font-bold text-primary tracking-widest uppercase mb-0.5">PANEL DE NEGOCIO</p>
           <h1 className="text-xl sm:text-2xl font-black text-foreground capitalize truncate">Hola, {profile?.full_name?.split(' ')[0]} 👋</h1>
-          <p className="text-xs text-muted-foreground truncate">Resumen de <strong className="text-foreground">{stats?.company?.name || 'tu complejo'}</strong></p>
         </div>
         <button onClick={fetchStats} className="self-start sm:self-auto bg-secondary border border-border hover:bg-secondary/80 text-foreground px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0">
           <Activity size={13} className="text-primary" /> Actualizar
@@ -206,8 +205,8 @@ export function OwnerDashboard() {
               key={f.key}
               onClick={() => setFilter(f.key)}
               className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap shrink-0 border cursor-pointer ${filter === f.key
-                  ? 'bg-primary text-white border-primary shadow-xs'
-                  : 'bg-card border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
+                ? 'bg-primary text-white border-primary shadow-xs'
+                : 'bg-card border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
                 }`}
             >
               {f.label}
@@ -229,7 +228,7 @@ export function OwnerDashboard() {
 
       {/* Grid Stat Cards Fila 2 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
-        <StatCard icon={<Wallet size={18} className="text-sky-600" />} title="Total en abonos" value={fmt(totalDeposit)} sub="Depósitos recibidos" accent="bg-sky-500" />
+        {/* <StatCard icon={<Wallet size={18} className="text-sky-600" />} title="Total en abonos" value={fmt(totalDeposit)} sub="Depósitos recibidos" accent="bg-sky-500" /> */}
         <StatCard icon={<TrendingUp size={18} className="text-teal-600" />} title="Promedio por reserva" value={fmt(avgIncome)} sub="Reservas confirmadas" accent="bg-teal-500" />
         <StatCard icon={<Star size={18} className="text-orange-500" />} title="Tasa de confirmación" value={`${confirmRate}%`} sub="Del total solicitudes" accent="bg-orange-400" />
         <StatCard icon={<Clock size={18} className="text-rose-500" />} title="Hora más popular" value={topHour ? topHour[0] : '—'} sub={topHour ? `${topHour[1]} reservas` : 'Sin datos'} accent="bg-rose-400" />
@@ -261,9 +260,22 @@ export function OwnerDashboard() {
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${row.status === 'confirmed' ? 'bg-emerald-500/10 text-emerald-600' : row.status === 'pending' ? 'bg-amber-500/10 text-amber-600' : 'bg-rose-500/10 text-rose-500'}`}>
                     {row.status === 'confirmed' ? <CheckCircle2 size={15} /> : row.status === 'pending' ? <Clock size={15} /> : <XCircle size={15} />}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-xs sm:text-sm text-foreground truncate capitalize">{row.customer_name || 'Cliente'}</div>
-                    <div className="text-[11px] text-muted-foreground truncate">{row.pitches?.name?.toUpperCase() || '—'} · {fmtDate(row.start_time)}</div>
+                  <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
+                    {/* Línea 1: Nombre del cliente completo */}
+                    <div className="font-bold text-xs sm:text-sm text-foreground capitalize leading-snug break-words">
+                      {row.customer_name || 'Cliente'}
+                    </div>
+
+                    {/* Línea 2: Cancha, Fecha y Hora completas */}
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] leading-tight">
+                      <span className="font-semibold text-foreground/90 uppercase">
+                        {row.pitches?.name || '—'}
+                      </span>
+                      <span className="text-muted-foreground/50">•</span>
+                      <span className="text-muted-foreground font-medium">
+                        {fmtDate(row.start_time)}
+                      </span>
+                    </div>
                   </div>
                   <div className="text-right shrink-0">
                     <div className="font-extrabold text-xs sm:text-sm text-foreground">{fmt(getBookingIncome(row))}</div>
@@ -339,7 +351,7 @@ export function OwnerDashboard() {
                 return (
                   <div key={p.id} className="space-y-1">
                     <div className="flex justify-between text-xs font-semibold">
-                      <span className="flex items-center gap-1 truncate max-w-[140px]">{i === 0 && <Zap size={11} className="text-amber-500 shrink-0" />}{p.name}</span>
+                      <span className="flex items-center gap-1 truncate max-w-[140px]">{i === 0 && <Zap size={11} className="text-amber-500 shrink-0" />}{p.name.toUpperCase()}</span>
                       <span className="text-foreground font-extrabold shrink-0">{fmt(p.income)}</span>
                     </div>
                     <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
@@ -368,7 +380,7 @@ export function OwnerDashboard() {
                   <div className="flex justify-between text-xs font-semibold">
                     <span className="flex items-center gap-1.5 truncate max-w-[140px]">
                       <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 ${i === 0 ? 'bg-amber-400 text-white' : i === 1 ? 'bg-zinc-300 text-zinc-700' : i === 2 ? 'bg-orange-300 text-white' : 'bg-secondary text-muted-foreground'}`}>{i + 1}</span>
-                      <span className="truncate">{p.name}</span>
+                      <span className="truncate">{p.name.toUpperCase()}</span>
                     </span>
                     <span className="text-muted-foreground shrink-0">{p.count} res.</span>
                   </div>
@@ -420,7 +432,7 @@ export function OwnerDashboard() {
       </div>
 
       {/* Accesos rápidos */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 pt-2">
+      {/* <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 pt-2">
         {[
           { label: 'Ver reservas', href: '/dashboard/bookings', icon: <CalendarDays size={16} /> },
           { label: 'Mis canchas', href: '/dashboard/pitches', icon: <Grid2X2 size={16} /> },
@@ -433,7 +445,7 @@ export function OwnerDashboard() {
             <ArrowRight size={12} className="ml-auto text-muted-foreground shrink-0 opacity-40 group-hover:opacity-100 transition-opacity" />
           </Link>
         ))}
-      </div>
+      </div> */}
     </section>
   );
 }

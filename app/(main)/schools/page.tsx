@@ -5,7 +5,11 @@ import Link from 'next/link';
 import {
   MapPin, Phone, ArrowLeft, Loader2, Users, Plus, X,
   ImageIcon, ChevronLeft, ChevronRight, Maximize2, Edit3,
-  ExternalLink, Globe, Sparkles
+  ExternalLink, Globe, Sparkles, GraduationCap, MessageCircle,
+  PhoneCallIcon,
+  Smartphone,
+  SmartphoneNfcIcon,
+  PhoneCall
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/client';
@@ -107,12 +111,12 @@ function ImageCarousel({
       </div>
 
       {/* Badge Contador de fotos */}
-      {images.length > 1 && (
+      {/* {images.length > 1 && (
         <div className="absolute top-2.5 left-2.5 bg-black/60 text-white text-[10px] font-black px-2.5 py-1 rounded-xl backdrop-blur-md flex items-center gap-1 shadow-md">
           <ImageIcon size={12} />
           <span>{activeIdx + 1} / {images.length}</span>
         </div>
-      )}
+      )} */}
 
       {/* Botones de Navegación */}
       {images.length > 1 && (
@@ -145,9 +149,8 @@ function ImageCarousel({
             {images.map((_, i) => (
               <span
                 key={i}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
-                  i === activeIdx ? 'w-5 bg-white shadow-sm' : 'w-1.5 bg-white/60'
-                }`}
+                className={`h-1.5 rounded-full transition-all duration-300 ${i === activeIdx ? 'w-5 bg-white shadow-sm' : 'w-1.5 bg-white/60'
+                  }`}
               />
             ))}
           </div>
@@ -361,25 +364,37 @@ export default function SchoolsPage() {
   return (
     <div className="pb-28 pt-4 px-3 sm:px-6 max-w-7xl mx-auto min-h-screen">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-6">
-        <div>
-          <Link href="/" className="inline-flex items-center text-xs font-bold text-muted-foreground hover:text-primary mb-2">
-            <ArrowLeft size={14} className="mr-1" /> Volver al explorador
-          </Link>
-          <h1 className="text-2xl sm:text-4xl font-black text-foreground uppercase tracking-tight flex items-center gap-2">
-            Escuelas de Fútbol <Sparkles size={22} className="text-[#007a3e]" />
-          </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-1">
-            Conoce los mejores centros de formación y entrenamiento deportivo en Pasto
-          </p>
-        </div>
-
-        <button
-          onClick={handleOpenCreate}
-          className="bg-[#007a3e] hover:bg-[#006332] text-white font-black py-3 px-5 rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md uppercase tracking-wider cursor-pointer transition active:scale-95"
+      <div className="bg-[#DCE7DE] border border-[#C8DACB] rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
+        <Link
+          href="/"
+          className="inline-flex items-center text-xs font-bold text-muted-foreground hover:text-primary mb-3 transition-colors"
         >
-          <Plus size={16} /> Registrar Escuela
-        </button>
+          <ArrowLeft size={14} className="mr-1" /> Volver al explorador
+        </Link>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <GraduationCap className="text-[#007a3e]" size={26} strokeWidth={2.5} />
+              <h1 className="text-2xl sm:text-3xl font-black text-foreground uppercase tracking-tight">
+                Escuelas de Fútbol
+              </h1>
+            </div>
+            <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-1 leading-relaxed">
+              Conoce los mejores centros de formación y entrenamiento.
+              <span className="block sm:inline sm:ml-1 font-bold text-[#007a3e]">
+                Las escuelas con ⭐  son administradas por  los complejos verificados.
+              </span>
+            </p>
+          </div>
+
+          <button
+            onClick={handleOpenCreate}
+            className="w-full sm:w-auto bg-[#007a3e] hover:bg-[#006332] text-white font-black py-3 px-5 rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md uppercase tracking-wider cursor-pointer transition active:scale-95 shrink-0"
+          >
+            <Plus size={16} /> Registrar Escuela
+          </button>
+        </div>
       </div>
 
       {/* Listado de Tarjetas */}
@@ -410,7 +425,7 @@ export default function SchoolsPage() {
             const allImgs = Array.isArray(school.images) && school.images.length > 0
               ? school.images
               : (school.logo_url ? [school.logo_url] : []);
-            
+
             const registeredPitchId = school.pitch_id || school.pitches?.id;
             const locationText = school.pitches?.name || school.custom_location;
             const isOwner = user?.id && school.user_id === user.id;
@@ -456,9 +471,9 @@ export default function SchoolsPage() {
                         <div className="flex-1 min-w-0">
                           <span className="text-[10px] font-black uppercase text-[#1b5e39] tracking-wider flex items-center justify-between">
                             <span>Sede Oficial:</span>
-                            <span className="text-[9px] bg-[#007a3e]/20 text-[#007a3e] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5">
+                            {/* <span className="text-[9px] bg-[#007a3e]/20 text-[#007a3e] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5">
                               Ver Cancha ↗
-                            </span>
+                            </span> */}
                           </span>
                           <span className="text-xs font-black uppercase text-[#0f3822] break-words leading-snug block underline decoration-[#007a3e]/40 group-hover/link:text-[#007a3e]">
                             {locationText}
@@ -627,7 +642,7 @@ export default function SchoolsPage() {
                     </div>
 
                     {/* Fila de Miniaturas si hay más de 1 imagen */}
-                    {allImgs.length > 1 && (
+                    {/* {allImgs.length > 1 && (
                       <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                         {allImgs.map((img, i) => (
                           <button
@@ -640,7 +655,7 @@ export default function SchoolsPage() {
                           </button>
                         ))}
                       </div>
-                    )}
+                    )} */}
                   </div>
                 );
               })()}
@@ -726,8 +741,8 @@ export default function SchoolsPage() {
                   rel="noreferrer"
                   className="w-full bg-[#007a3e] hover:bg-[#006332] text-white font-black py-3.5 rounded-2xl flex items-center justify-center gap-2 text-sm uppercase tracking-wider shadow-md transition cursor-pointer"
                 >
-                  <Phone size={16} /> Contactar por WhatsApp ({selected.contact_phone})
-                </a>
+                  <MessageCircle className="text-white" size={16} />
+                  <span>WhatsApp</span>                </a>
               )}
             </div>
           </div>

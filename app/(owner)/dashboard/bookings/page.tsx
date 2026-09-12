@@ -154,12 +154,12 @@ export default function BookingsPage() {
     const dateStr = startTime.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' });
     const tPrice = booking.total_price || booking.pitches?.price_per_hour || 80000;
     let dAmount = booking.deposit_amount || 0;
-    
+
     if (dAmount === 0 && booking.pitches) {
       const customPricing = booking.pitches.custom_pricing || {};
       const isFixed = customPricing.booking_type === 'fixed';
       const pct = customPricing.booking_percentage || booking.pitches.booking_percentage || 50;
-      
+
       // Calculate how many hours this booking is (assuming 1 hour for now since most are 1 slot)
       // Since booking.start_time and booking.end_time define the length:
       const start = new Date(booking.start_time);
@@ -172,7 +172,7 @@ export default function BookingsPage() {
         dAmount = (tPrice * Number(pct)) / 100;
       }
     }
-    
+
     setCancelConfirm({
       id: booking.id,
       name: booking.customer_name || 'Anónimo',
@@ -264,7 +264,7 @@ export default function BookingsPage() {
     filteredBookings.forEach(b => {
       const dateStr = getLocalDateString(b.start_time);
       const key = `${b.pitch_id}-${b.customer_name || 'Anon'}-${dateStr}-${b.status}`;
-      
+
       if (!groups[key]) {
         groups[key] = {
           key,
@@ -281,13 +281,13 @@ export default function BookingsPage() {
           deposit_amount: 0,
         };
       }
-      
+
       groups[key].bookings.push(b);
       // update start_time to earliest
       if (new Date(b.start_time) < new Date(groups[key].start_time)) {
         groups[key].start_time = b.start_time;
       }
-      
+
       const tPrice = b.total_price || b.pitches?.price_per_hour || 80000;
       let dAmount = b.deposit_amount || 0;
       if (dAmount === 0 && b.pitches) {
@@ -369,12 +369,12 @@ export default function BookingsPage() {
                 {calView === 'week'
                   ? 'Últimos 7 días'
                   : calView === 'biweek'
-                  ? 'Últimos 15 días'
-                  : calView === 'month'
-                  ? 'Mes completo'
-                  : selectedDate
-                  ? formatSelectedDateText(selectedDate)
-                  : 'Seleccionar'}
+                    ? 'Últimos 15 días'
+                    : calView === 'month'
+                      ? 'Mes completo'
+                      : selectedDate
+                        ? formatSelectedDateText(selectedDate)
+                        : 'Seleccionar'}
               </strong>
             </span>
           </button>
@@ -421,9 +421,9 @@ export default function BookingsPage() {
         {/* Botones de Rango (Día, Semana, 15 Días, Mes) */}
         <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
           {[
-            { key: 'day', label: 'Día', icon: '' },
+            { key: 'day', label: 'Hoy', icon: '' },
             { key: 'week', label: 'Semana', icon: '' },
-            { key: 'biweek', label: '15 Días', icon: '' },
+            { key: 'biweek', label: 'Quincena', icon: '' },
             { key: 'month', label: 'Mes', icon: '' },
           ].map(v => (
             <button
@@ -520,107 +520,175 @@ export default function BookingsPage() {
                   pending: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
                   cancelled: 'bg-red-100 text-red-600 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
                 };
-                
+
                 const tPrice = group.total_price;
                 const dAmount = group.deposit_amount;
+                const statusBorderColor = group.status === 'confirmed' ? 'border-t-green-500' : group.status === 'pending' ? 'border-t-purple-500' : 'border-t-red-400';
 
                 return (
-                  <div key={group.key} className="bg-card rounded-2xl border border-border shadow-sm p-4 flex flex-col gap-3">
+                  <div key={group.key} className={`bg-card rounded-2xl border border-border border-t-4 ${statusBorderColor} sm:border-t-border shadow-sm p-3.5 sm:p-4 flex flex-col gap-3`}>
+
+                    {/* Header Superior Móvil: Estado y Badges */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-border/50 sm:pb-0 sm:border-b-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border ${statusColors[group.status as keyof typeof statusColors] || statusColors.cancelled}`}>
+                          {group.status === 'pending' ? <><Clock size={12} /> Pendiente</> : group.status === 'confirmed' ? <><CheckCircle size={12} /> Confirmadas ({group.bookings.length})</> : <><XCircle size={12} /> Canceladas ({group.bookings.length})</>}
+                        </span>
+
+                        {isManual && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-lg">
+                            <Wrench size={10} /> Manual
+                          </span>
+                        )}
+                      </div>
+
+                      {group.payment_proof_url && (
+                        <button
+                          onClick={() => setProofUrl(group.payment_proof_url)}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-primary border border-primary/30 bg-primary/10 hover:bg-primary/20 px-2.5 py-1 rounded-lg transition-colors ml-auto sm:ml-0"
+                        >
+                          <FileText size={12} /> Comprobante
+                        </button>
+                      )}
+                    </div>
+
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                      {/* Indicador de estado (izquierda en desktop) */}
+                      {/* Indicador visual lateral (solo Desktop) */}
                       <div className={`w-1.5 hidden sm:block self-stretch rounded-full flex-shrink-0 ${group.status === 'confirmed' ? 'bg-green-500' : group.status === 'pending' ? 'bg-purple-500' : 'bg-red-400'}`} />
 
-                      {/* Info principal */}
-                      <div className="flex-1 min-w-0 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
-                        <div className="col-span-2 sm:col-span-1">
+                      {/* Grid de Información Principal */}
+                      <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+
+                        {/* Cliente */}
+                        <div className="col-span-2 sm:col-span-1 min-w-0">
                           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Cliente</p>
-                          <p className="font-bold text-sm text-foreground capitalize">{group.customer_name || 'Anónimo'}</p>
-                          {group.customer_phone && <p className="text-[11px] text-muted-foreground">{group.customer_phone}</p>}
+                          <p className="font-bold text-sm text-foreground capitalize break-words leading-tight">{group.customer_name || 'Anónimo'}</p>
+                          {group.customer_phone && <p className="text-xs text-muted-foreground mt-0.5">{group.customer_phone}</p>}
                         </div>
-                        <div>
+
+                        {/* Cancha */}
+                        <div className="min-w-0">
                           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Cancha</p>
-                          <p className="font-semibold text-sm">{group.pitches?.name.toUpperCase() || '—'}</p>
+                          <p className="font-bold text-xs sm:text-sm text-foreground break-words leading-tight">{group.pitches?.name?.toUpperCase() || '—'}</p>
                         </div>
-                        <div>
+
+                        {/* Fecha y Duración */}
+                        <div className="min-w-0">
                           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Fecha</p>
-                          <p className="font-bold text-sm capitalize text-foreground">
+                          <p className="font-bold text-xs sm:text-sm text-foreground capitalize leading-tight">
                             {startTime.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
                           </p>
-                          <p className="text-xs text-primary font-bold">
+                          <p className="text-[11px] text-primary font-bold mt-0.5">
                             {group.bookings.length} {group.bookings.length === 1 ? 'Hora' : 'Horas'}
                           </p>
                         </div>
-                        <div>
+
+                        {/* Precio y Abono */}
+                        <div className="min-w-0">
                           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Pago</p>
-                          <p className="font-bold text-sm text-foreground">${tPrice.toLocaleString('es-CO')}</p>
+                          <p className="font-bold text-xs sm:text-sm text-foreground leading-tight">${tPrice.toLocaleString('es-CO')}</p>
                           {dAmount > 0 && (
-                            <p className="text-[11px] text-primary font-bold">Abono: ${dAmount.toLocaleString('es-CO')}</p>
+                            <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">Abono: ${dAmount.toLocaleString('es-CO')}</p>
                           )}
                         </div>
                       </div>
 
-                      {/* Badges y acciones */}
-                      <div className="flex flex-col items-end gap-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {isManual && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-md">
-                              <Wrench size={10} /> Manual
-                            </span>
+                      {/* Acciones Grupales (Confirmar / Rechazar Todas) */}
+                      {((group.status === 'pending' || group.status === 'confirmed') && group.bookings.length > 1) && (
+                        <div className="flex sm:flex-col gap-2 pt-2 sm:pt-0 border-t border-border/40 sm:border-t-0 justify-end">
+                          {group.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => group.bookings.forEach((b: any) => updateStatus(b.id, 'confirmed'))}
+                                className="flex-1 sm:flex-initial text-xs px-3 py-2 font-bold bg-green-500 hover:bg-green-600 text-white rounded-xl transition-colors shadow-sm text-center"
+                              >
+                                Confirmar Todas
+                              </button>
+                              <button
+                                onClick={() => group.bookings.forEach((b: any) => handleCancelRequest(b))}
+                                className="flex-1 sm:flex-initial text-xs px-3 py-2 font-bold bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 rounded-xl transition-colors text-center"
+                              >
+                                Rechazar Todas
+                              </button>
+                            </>
                           )}
-                          {group.payment_proof_url && (
-                            <button onClick={() => setProofUrl(group.payment_proof_url)} className="inline-flex items-center gap-1 text-[10px] font-bold text-primary border border-primary/20 bg-primary/5 hover:bg-primary/15 px-2 py-0.5 rounded-md transition-colors">
-                              <FileText size={10} /> Comprobante
+                          {group.status === 'confirmed' && (
+                            <button
+                              onClick={() => group.bookings.forEach((b: any) => handleCancelRequest(b))}
+                              className="w-full sm:w-auto text-xs px-3 py-2 font-bold bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 rounded-xl transition-colors text-center"
+                            >
+                              Cancelar Todas
                             </button>
                           )}
-                          <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border ${statusColors[group.status as keyof typeof statusColors] || statusColors.cancelled}`}>
-                            {group.status === 'pending' ? <><Clock size={10} /> Pendiente</> : group.status === 'confirmed' ? <><CheckCircle size={10} /> Confirmadas ({group.bookings.length})</> : <><XCircle size={10} /> Canceladas ({group.bookings.length})</>}
-                          </span>
                         </div>
-                        
-                        {/* Acciones en bloque */}
-                        {group.status === 'pending' && group.bookings.length > 1 && (
-                          <div className="flex gap-2">
-                            <button onClick={() => group.bookings.forEach((b: any) => updateStatus(b.id, 'confirmed'))} className="text-xs px-2 py-1 font-bold bg-green-100 text-green-700 hover:bg-green-200 rounded-lg transition-colors">Confirmar Todas</button>
-                            <button onClick={() => group.bookings.forEach((b: any) => handleCancelRequest(b))} className="text-xs px-2 py-1 font-bold bg-red-100 text-red-600 hover:bg-red-200 rounded-lg transition-colors">Rechazar Todas</button>
-                          </div>
-                        )}
-                        {group.status === 'confirmed' && group.bookings.length > 1 && (
-                          <button onClick={() => group.bookings.forEach((b: any) => handleCancelRequest(b))} className="text-xs px-2 py-1 font-bold bg-red-100 text-red-600 hover:bg-red-200 rounded-lg transition-colors">Cancelar Todas</button>
-                        )}
+                      )}
+                    </div>
+
+                    {/* Bloque de Horas Individuales */}
+                    {/* Bloque de Horas Individuales estilo Timeline */}
+                    <div className="bg-secondary/30 rounded-xl p-3 border border-border/50 mt-1 flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
+                          Desglose de Horas ({group.bookings.length})
+                        </span>
+                        <span className="text-[10px] font-bold text-muted-foreground">
+                          Presiona para gestionar individualmente
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        {group.bookings.map((b: any, idx: number) => {
+                          const bTime = new Date(b.start_time);
+                          return (
+                            <div
+                              key={b.id}
+                              className="flex items-center justify-between gap-3 bg-background border border-border/70 px-3 py-2 rounded-xl shadow-2xs hover:border-primary/40 transition-colors"
+                            >
+                              {/* Indicador de Hora y Número */}
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary font-bold text-[10px]">
+                                  {idx + 1}
+                                </span>
+                                <span className="text-xs font-bold text-foreground tracking-tight">
+                                  {bTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
+                                </span>
+                              </div>
+
+                              {/* Acciones por Hora con Botones Táctiles Grandes */}
+                              {group.status === 'pending' && (
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    onClick={() => updateStatus(b.id, 'confirmed')}
+                                    className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500 hover:text-white rounded-lg transition-all"
+                                  >
+                                    <CheckCircle size={13} />
+                                    <span className="hidden min-[380px]:inline">Aprobar</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleCancelRequest(b)}
+                                    className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500 hover:text-white rounded-lg transition-all"
+                                  >
+                                    <XCircle size={13} />
+                                    <span className="hidden min-[380px]:inline">Rechazar</span>
+                                  </button>
+                                </div>
+                              )}
+
+                              {group.status === 'confirmed' && (
+                                <button
+                                  onClick={() => handleCancelRequest(b)}
+                                  className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                                >
+                                  <XCircle size={13} />
+                                  <span>Cancelar hora</span>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
 
-                    {/* Lista de horas individuales */}
-                    <div className="bg-secondary/40 rounded-xl p-3 flex gap-2 flex-wrap items-center mt-1 border border-border/50">
-                      <span className="text-xs font-bold text-muted-foreground mr-2">Horas:</span>
-                      {group.bookings.map((b: any) => {
-                        const bTime = new Date(b.start_time);
-                        return (
-                          <div key={b.id} className="flex items-center gap-1.5 bg-background border border-border px-2 py-1 rounded-lg shadow-sm">
-                            <span className="text-xs font-bold text-foreground">
-                              {bTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
-                            </span>
-                            {group.status === 'pending' && (
-                              <div className="flex gap-0.5 ml-2 border-l border-border pl-1.5">
-                                <button onClick={() => updateStatus(b.id, 'confirmed')} className="p-1 text-green-600 hover:bg-green-100 rounded-md" title="Confirmar esta hora">
-                                  <CheckCircle size={12} />
-                                </button>
-                                <button onClick={() => handleCancelRequest(b)} className="p-1 text-red-600 hover:bg-red-100 rounded-md" title="Rechazar esta hora">
-                                  <XCircle size={12} />
-                                </button>
-                              </div>
-                            )}
-                            {group.status === 'confirmed' && (
-                              <div className="flex gap-0.5 ml-2 border-l border-border pl-1.5">
-                                <button onClick={() => handleCancelRequest(b)} className="p-1 text-red-600 hover:bg-red-100 rounded-md" title="Cancelar esta hora">
-                                  <XCircle size={12} />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
                   </div>
                 );
               })}

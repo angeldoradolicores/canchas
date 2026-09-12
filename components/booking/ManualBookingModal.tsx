@@ -189,10 +189,9 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
                 <button
                   key={p.id}
                   onClick={() => setSelectedPitch(p)}
-                  className={`p-3 rounded-xl border text-left text-sm font-semibold transition-all ${selectedPitch?.id === p.id ? 'bg-primary/10 border-primary text-primary shadow-sm' : 'bg-card border-border hover:border-primary/40 text-muted-foreground'
-                    }`}
+                  className={`p-3 rounded-xl border text-left text-sm font-semibold transition-all ${selectedPitch?.id === p.id ? 'bg-primary/10 border-primary text-primary shadow-sm' : 'bg-card border-border hover:border-primary/40 text-muted-foreground'}.`}
                 >
-                  {p.name}
+                  {p.name.toUpperCase()}
                 </button>
               ))}
             </div>
@@ -209,10 +208,10 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
                     key={d.dateStr}
                     onClick={() => { setSelectedDate(d.dateStr); setSelectedTimes([]); }}
                     className={`flex-shrink-0 snap-start min-w-[65px] p-2.5 rounded-xl border text-center transition-all ${isSel
-                        ? 'bg-primary text-white border-primary shadow-md ring-2 ring-primary/30'
-                        : d.isToday
-                          ? 'bg-primary/10 border-primary/40 text-primary hover:bg-primary/20'
-                          : 'bg-card hover:bg-primary/10 border-border text-foreground hover:border-primary/40'
+                      ? 'bg-primary text-white border-primary shadow-md ring-2 ring-primary/30'
+                      : d.isToday
+                        ? 'bg-primary/10 border-primary/40 text-primary hover:bg-primary/20'
+                        : 'bg-card hover:bg-primary/10 border-border text-foreground hover:border-primary/40'
                       }`}
                   >
                     <span className="text-[10px] uppercase font-bold tracking-wide block">{d.dayName}</span>
@@ -227,7 +226,9 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
           {/* Horas */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1.5"><Clock3 size={12} /> Hora(s) Disponibles</label>
+              <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1.5">
+                <Clock3 size={12} /> Hora(s) Disponibles
+              </label>
               <button
                 type="button"
                 onClick={() => {
@@ -247,23 +248,31 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
               </button>
             </div>
 
+            {/* Pestañas: Mañana / Tarde / Noche */}
             <div className="flex bg-secondary/50 p-1 rounded-xl border border-border gap-1 mb-3">
               {TIME_CATEGORIES.map(cat => (
                 <button
                   key={cat.key}
+                  type="button"
                   onClick={() => setActiveCategory(cat.key)}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${activeCategory === cat.key ? 'bg-card text-primary shadow-sm border border-border/60' : 'text-muted-foreground hover:text-foreground'}`}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${activeCategory === cat.key
+                    ? 'bg-card text-primary shadow-sm border border-border/60'
+                    : 'text-muted-foreground hover:text-foreground'
+                    }`}
                 >
                   <span>{cat.icon}</span> <span>{cat.label}</span>
                 </button>
               ))}
             </div>
 
+            {/* Contenedor de Horas en Grid 3x3 */}
             <div className="rounded-xl border border-border bg-card p-3 shadow-inner min-h-[140px]">
               {loadingSlots ? (
-                <div className="flex justify-center py-8"><Loader2 size={24} className="animate-spin text-primary" /></div>
+                <div className="flex justify-center py-8">
+                  <Loader2 size={24} className="animate-spin text-primary" />
+                </div>
               ) : (
-                <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                <div className="grid grid-cols-3 gap-2.5">
                   {currentCatSlots.map(slot => {
                     const slotData = takenSlots.get(slot);
                     const isTaken = !!slotData;
@@ -277,13 +286,16 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
                     return (
                       <button
                         key={slot}
+                        type="button"
                         disabled={isTaken}
                         onClick={() => toggleTime(slot)}
-                        className={`p-2 rounded-xl border text-center transition-all select-none font-bold relative ${isTaken
-                            ? isDraft ? 'bg-orange-50 text-orange-400 border-orange-200 cursor-not-allowed overflow-hidden' : 'bg-red-50 text-red-300 border-red-200 cursor-not-allowed overflow-hidden'
-                            : isSel
-                              ? 'bg-primary text-white border-primary shadow-md ring-2 ring-primary/30 scale-105'
-                              : 'bg-card hover:bg-primary/10 border-border text-foreground hover:border-primary/40'
+                        className={`p-2.5 rounded-xl border flex flex-col items-center justify-center transition-all select-none font-bold relative min-h-[52px] ${isTaken
+                          ? isDraft
+                            ? 'bg-orange-50 text-orange-400 border-orange-200 cursor-not-allowed overflow-hidden'
+                            : 'bg-red-50 text-red-300 border-red-200 cursor-not-allowed overflow-hidden'
+                          : isSel
+                            ? 'bg-primary text-white border-primary shadow-md ring-2 ring-primary/30 scale-102'
+                            : 'bg-card hover:bg-primary/10 border-border text-foreground hover:border-primary/40'
                           }`}
                       >
                         {isTaken ? (
@@ -300,13 +312,13 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
                             )}
                           </div>
                         ) : (
-                          <>
-                            <span className="text-sm block leading-tight">{h12}:00</span>
-                            <span className="text-[9px] uppercase opacity-70">{ampm}</span>
+                          <div className="flex items-baseline gap-1 whitespace-nowrap">
+                            <span className="text-sm font-extrabold leading-none">{h12}:00</span>
+                            <span className="text-[10px] uppercase opacity-75 font-semibold">{ampm}</span>
                             {hasCustomPrice && !isSel && (
-                              <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-orange-400 rounded-full" title="Precio especial"></span>
+                              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-orange-400 rounded-full" title="Precio especial" />
                             )}
-                          </>
+                          </div>
                         )}
                       </button>
                     );
@@ -324,8 +336,17 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-muted-foreground uppercase">Teléfono (Opcional)</label>
-                <input type="tel" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="w-full p-2.5 bg-card border border-border rounded-xl outline-none focus:border-primary text-sm" placeholder="Ej: 300 123 4567" />
-              </div>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={customerPhone}
+                  onChange={e => {
+                    const onlyNums = e.target.value.replace(/[^\d]/g, '');
+                    setCustomerPhone(onlyNums);
+                  }}
+                  className="w-full p-2.5 bg-card border border-border rounded-xl outline-none focus:border-primary text-sm"
+                  placeholder="Ej: 3001234567"
+                />              </div>
             </div>
 
             {/* Comprobante Opcional */}
