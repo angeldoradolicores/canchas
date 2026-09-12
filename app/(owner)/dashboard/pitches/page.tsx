@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { PitchCard, PitchData } from '@/components/ui/PitchCard';
 
 export default function PitchesPage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [pitches, setPitches] = useState<PitchData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -16,9 +16,13 @@ export default function PitchesPage() {
 
     const fetchPitches = async () => {
       try {
+        const token = session?.access_token;
         const res = await fetch('/api/admin-actions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({
             action: 'get_pitches',
             payload: { owner_id: user?.id },
@@ -36,7 +40,7 @@ export default function PitchesPage() {
     };
 
     fetchPitches();
-  }, [user]);
+  }, [user, session]);
 
   if (loading) {
     return (

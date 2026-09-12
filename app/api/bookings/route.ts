@@ -249,13 +249,8 @@ export async function POST(req: NextRequest) {
       } = parseResult.data;
 
       const effectiveUserId = verifiedUserId || parseResult.data.user_id || null;
-
       let validPitchId = pitch_id;
-      const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(pitch_id);
-      if (!isUuid) {
-        const { data: realPitches } = await supabase.from('pitches').select('id').limit(1);
-        if (realPitches && realPitches.length > 0) validPitchId = realPitches[0].id;
-      }
+
 
       let paymentProofUrl: string | null = null;
 

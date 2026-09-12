@@ -199,10 +199,19 @@ export default function BookingsPage() {
     const [y, m, d] = startDate.split('-').map(Number);
     const baseDate = new Date(y, m - 1, d);
 
-    for (let i = 0; i < count; i++) {
-      const nextDate = new Date(baseDate);
-      nextDate.setDate(baseDate.getDate() + i);
-      result.push(getLocalDateString(nextDate));
+    if (view === 'week' || view === 'biweek') {
+      // Últimos 7 o 15 días, terminando en la fecha base (usualmente hoy)
+      for (let i = count - 1; i >= 0; i--) {
+        const nextDate = new Date(baseDate);
+        nextDate.setDate(baseDate.getDate() - i);
+        result.push(getLocalDateString(nextDate));
+      }
+    } else {
+      for (let i = 0; i < count; i++) {
+        const nextDate = new Date(baseDate);
+        nextDate.setDate(baseDate.getDate() + i);
+        result.push(getLocalDateString(nextDate));
+      }
     }
     return result;
   }, []);
