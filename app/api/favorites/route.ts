@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
+import { getAuthenticatedUser } from '@/lib/auth-guard';
 
 function getAdminSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -8,9 +10,20 @@ function getAdminSupabase() {
 }
 
 export async function GET(req: NextRequest) {
+  const rateLimit = checkRateLimit(req, {
+    limit: 60,
+    windowSeconds: 60,
+    keyPrefix: 'api:favorites:get',
+  });
+  if (!rateLimit.success) return createRateLimitErrorResponse(rateLimit);
+
   try {
+    const authedUser = await getAuthenticatedUser(req);
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('user_id');
+    const requestedUserId = searchParams.get('user_id');
+
+    // Usar el usuario autenticado si existe, o el solicitado si no hay sesión
+    const userId = authedUser?.id || requestedUserId;
     if (!userId) {
       return NextResponse.json({ favorites: [] });
     }
@@ -35,31 +48,43 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json().catch(() => ({}));
-    const { pitch_id, user_id, action } = body;
+  const rateLimit = checkRateLimit(req, {
+    limit: 40,
+    windowSeconds: 60,
+    keyPrefix: 'api:favorites:post',
+  });
+  if (!rateLimit.success) return createRateLimitErrorResponse(rateLimit);
 
-    if (!pitch_id) {
+  try {
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Cuerpo de petición inválido' }, { status: 400 });
+    }
+
+    const { pitch_id, action } = body;
+    if (!pitch_id || typeof pitch_id !== 'string') {
       return NextResponse.json({ error: 'Falta pitch_id' }, { status: 400 });
     }
 
-    const supabase = getAdminSupabase();
+    // Resolver usuario auténtico desde la sesión
+    const authedUser = await getAuthenticatedUser(req);
+    const effectiveUserId = authedUser?.id || (typeof body.user_id === 'string' ? body.user_id : null);
 
-    // Si no hay user_id, no podemos guardar en la base de datos pero el cliente puede usar localStorage
-    if (!user_id) {
+    if (!effectiveUserId) {
       return NextResponse.json({
         success: true,
-        isFavorite: action === 'add' ? true : false,
+        isFavorite: action === 'add',
         message: 'Guardado localmente',
       });
     }
 
-    // Verificar si ya existe en pitch_favorites
+    const supabase = getAdminSupabase();
+
     const { data: existing, error: checkError } = await supabase
       .from('pitch_favorites')
       .select('id')
       .eq('pitch_id', pitch_id)
-      .eq('user_id', user_id)
+      .eq('user_id', effectiveUserId)
       .maybeSingle();
 
     if (checkError && checkError.code !== 'PGRST116') {
@@ -69,34 +94,29 @@ export async function POST(req: NextRequest) {
     const isCurrentlyFav = !!existing;
 
     if (action === 'remove' || (action === 'toggle' && isCurrentlyFav) || (!action && isCurrentlyFav)) {
-      // Eliminar de favoritos
       const { error: delError } = await supabase
         .from('pitch_favorites')
         .delete()
         .eq('pitch_id', pitch_id)
-        .eq('user_id', user_id);
+        .eq('user_id', effectiveUserId);
 
       if (delError) {
-        console.error('[Favorites delete error]', delError);
         return NextResponse.json({ error: delError.message }, { status: 500 });
       }
 
       return NextResponse.json({ success: true, isFavorite: false });
     } else {
-      // Agregar a favoritos
       const { error: insError } = await supabase
         .from('pitch_favorites')
-        .upsert({ pitch_id, user_id }, { onConflict: 'pitch_id,user_id' });
+        .upsert({ pitch_id, user_id: effectiveUserId }, { onConflict: 'pitch_id,user_id' });
 
       if (insError) {
-        console.error('[Favorites insert error]', insError);
         return NextResponse.json({ error: insError.message }, { status: 500 });
       }
 
       return NextResponse.json({ success: true, isFavorite: true });
     }
   } catch (err: any) {
-    console.error('[Favorites POST error]', err);
     return NextResponse.json({ error: err.message || 'Error del servidor' }, { status: 500 });
   }
 }

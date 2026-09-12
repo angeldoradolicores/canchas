@@ -317,10 +317,20 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   }, [step, secondsLeft, triggerExpiredAlert]);
 
   const toggleTime = (slot: string) => {
-    setSelectedTimes(prev =>
-      prev.includes(slot) ? prev.filter(s => s !== slot) : [...prev, slot].sort()
-    );
+    if (selectedTimes.includes(slot)) {
+      setSelectedTimes(prev => prev.filter(s => s !== slot));
+    } else if (selectedTimes.length >= 4) {
+      setAlertState({
+        isOpen: true,
+        type: 'warning',
+        title: '⏰ Límite de horas alcanzado',
+        message: 'Solo puedes reservar un máximo de 4 horas por transacción. Si necesitas más tiempo, crea una nueva reserva.',
+      });
+    } else {
+      setSelectedTimes(prev => [...prev, slot].sort());
+    }
   };
+
 
   const handleLockBooking = async () => {
     if (selectedTimes.length === 0 || !selectedDate) {
@@ -451,6 +461,8 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
             selected_times: selectedTimes,
             file_name: file.name,
             file_base64: fileBase64,
+            total_price: totalPrice,
+            deposit_amount: abonoPrice,
           },
         }),
       });
@@ -513,7 +525,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     );
   }
 
-  const allowedTimeSlots = (pitch as any).custom_pricing?.time_slots || DEFAULT_TIME_SLOTS;
+  const allowedTimeSlots: string[] = Array.from(new Set<string>((pitch as any).custom_pricing?.time_slots || DEFAULT_TIME_SLOTS));
   const currentCatSlots = allowedTimeSlots.filter((slot: string) => {
     const h = parseInt(slot.split(':')[0]);
     if (activeCategory === 'manana') return h >= 0 && h < 12;
@@ -728,7 +740,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
 
                         return (
                           <button
-                            key={slot}
+                            key={`${activeCategory}-${slot}`}
                             disabled={isTaken}
                             type="button"
                             onClick={() => toggleTime(slot)}

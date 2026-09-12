@@ -456,6 +456,27 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
     setSearchResults(available);
     setInProgressResults(inProgress);
 
+    // Auto-remove selected hours that are now taken (slot being reserved)
+    // if (!silent) {
+    //   const takenSlots = new Set<string>();
+    //   (bookings || []).forEach((b: any) => {
+    //     let bHour: string;
+    //     try {
+    //       const d = new Date(b.start_time);
+    //       const localH = (d.getUTCHours() - 5 + 24) % 24;
+    //       bHour = `${String(localH).padStart(2, '0')}:00`;
+    //     } catch {
+    //       bHour = b.start_time?.substring(11, 16) || '';
+    //     }
+    //     if (b.status === 'confirmed' || b.status === 'pending') {
+    //       takenSlots.add(bHour);
+    //     } else if (b.status === 'draft' && b.expires_at && new Date(b.expires_at) > now) {
+    //       takenSlots.add(bHour);
+    //     }
+    //   });
+    //   setSelectedHours(prev => prev.filter(h => !takenSlots.has(h)));
+    // }
+
     if (!silent) {
       setSearching(false);
       if (available.length === 0 && inProgress.length === 0) {
@@ -477,8 +498,9 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
   }, [handleSearch]);
 
   // Sincronización en TIEMPO REAL sin recargar la página
+  const hasResults = searchResults !== null;
   useEffect(() => {
-    if (searchResults === null || !selectedDate || selectedHours.length === 0) return;
+    if (!hasResults || !selectedDate || selectedHours.length === 0) return;
 
     // Canal en tiempo real para escuchar cambios de reservas
     const channel = supabase
@@ -487,21 +509,23 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'bookings' },
         () => {
-          handleSearch(true);
+          handleSearchRef.current(true);
         }
       )
       .subscribe();
 
-    // Verificación continua cada 3.5 segundos para reflejar expiración de borradores
+    // Verificación continua cada 5 segundos para reflejar expiración de borradores
     const interval = setInterval(() => {
-      handleSearch(true);
-    }, 3500);
+      handleSearchRef.current(true);
+    }, 2000);
 
     return () => {
       supabase.removeChannel(channel);
       clearInterval(interval);
     };
-  }, [searchResults, selectedDate, selectedHours, handleSearch, supabase]);
+    // searchResults is intentionally excluded from deps to avoid remounting on every update
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasResults, selectedDate, selectedHours, supabase]);
 
   const formattedSelectedDate = selectedDate
     ? new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -785,10 +809,20 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                               key={slot}
                               type="button"
                               onClick={() => {
-                                setSelectedHours(prev =>
-                                  prev.includes(slot) ? prev.filter(x => x !== slot) : [...prev, slot]
-                                );
-                                setSearchResults(null);
+                                if (selectedHours.includes(slot)) {
+                                  setSelectedHours(prev => prev.filter(x => x !== slot));
+                                  setSearchResults(null);
+                                } else if (selectedHours.length >= 4) {
+                                  setAlertState({
+                                    isOpen: true,
+                                    type: 'warning',
+                                    title: '⏰ Límite de horas alcanzado',
+                                    message: 'Solo puedes reservar un máximo de 4 horas por transacción. Si necesitas más tiempo, crea una nueva reserva.',
+                                  });
+                                } else {
+                                  setSelectedHours(prev => [...prev, slot]);
+                                  setSearchResults(null);
+                                }
                               }}
                               className={`p-2.5 rounded-xl border text-center transition-all select-none ${isSel
                                 ? 'bg-primary text-white border-primary shadow-md ring-2 ring-primary/30'

@@ -106,19 +106,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Si es dueño, asegurar que tenga empresa creada (silenciosamente)
         if (finalProfile.role === 'owner') {
-          fetch('/api/admin-actions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'ensure_company',
-              payload: {
-                owner_id: authUser.id,
-                company_name: finalProfile.full_name
-                  ? `Complejo ${finalProfile.full_name}`
-                  : 'Mi Complejo Deportivo',
+          // Obtener sesión actual para incluir el token JWT
+          supabase.auth.getSession().then(({ data: sessData }) => {
+            const token = sessData?.session?.access_token;
+            fetch('/api/admin-actions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
               },
-            }),
-          }).catch(e => console.warn('No se pudo crear empresa automáticamente:', e));
+              body: JSON.stringify({
+                action: 'ensure_company',
+                payload: {
+                  company_name: finalProfile.full_name
+                    ? `Complejo ${finalProfile.full_name}`
+                    : 'Mi Complejo Deportivo',
+                },
+              }),
+            }).catch(e => console.warn('No se pudo crear empresa automáticamente:', e));
+          });
         }
       }
     } catch (e) {

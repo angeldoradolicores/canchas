@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
+import { getAuthenticatedUser, verifyCompanyOwnership } from '@/lib/auth-guard';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,12 +22,38 @@ async function fetchWithTimeout(url: string, options: any = {}, timeoutMs = 5000
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json().catch(() => ({}));
-    const { action, companyId, phone } = body;
+  // ── RATE LIMIT: 20 peticiones por minuto por IP ──
+  const rateLimit = checkRateLimit(req, {
+    limit: 20,
+    windowSeconds: 60,
+    keyPrefix: 'api:whatsapp',
+  });
+  if (!rateLimit.success) return createRateLimitErrorResponse(rateLimit);
 
-    if (!companyId) {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Debes iniciar sesión' }, { status: 401 });
+    }
+
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ success: false, error: 'Cuerpo de petición inválido' }, { status: 400 });
+    }
+
+    const { action, companyId, phone } = body;
+    if (!companyId || typeof companyId !== 'string') {
       return NextResponse.json({ success: false, error: 'Falta companyId' }, { status: 400 });
+    }
+
+    // ── VERIFICACIÓN ESTRICTA DE PROPIEDAD DE LA EMPRESA ──
+    const isOwner = await verifyCompanyOwnership(user.id, companyId);
+    if (!isOwner) {
+      // Verificar si es superadmin
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+      if (profile?.role !== 'superadmin') {
+        return NextResponse.json({ success: false, error: 'No tienes permisos sobre este complejo deportivo' }, { status: 403 });
+      }
     }
 
     const rawEvoUrl = process.env.EVOLUTION_API_URL || 'http://127.0.0.1:8080';
@@ -38,14 +66,13 @@ export async function POST(req: NextRequest) {
       .eq('id', companyId)
       .maybeSingle();
 
-    const instanceName = company?.whatsapp_instance_name || `canchas_${companyId?.replace(/-/g, '').slice(0, 12)}`;
+    const instanceName = company?.whatsapp_instance_name || `canchas_${companyId.replace(/-/g, '').slice(0, 12)}`;
 
     // 1. GENERAR CÓDIGO QR (ON DEMAND)
     if (action === 'generate_qr') {
       let rawBase64 = null;
       let rawCode = null;
 
-      // A) Intentar obtener QR de la instancia si ya existe
       try {
         const connectRes = await fetchWithTimeout(`${evoUrl}/instance/connect/${instanceName}`, {
           method: 'GET',
@@ -58,10 +85,9 @@ export async function POST(req: NextRequest) {
           rawCode = connectData?.code || connectData?.qrcode?.code;
         }
       } catch (e) {
-        // Ignorar timeout para intentar crear
+        // Fallback para crear si no existe
       }
 
-      // B) Si la instancia no existe, crearla
       if (!rawBase64 && !rawCode) {
         try {
           const createRes = await fetchWithTimeout(`${evoUrl}/instance/create`, {
@@ -103,13 +129,11 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // C) Fallback garantizado si Evolution API no responde
       if (!finalQrImage) {
         const fallbackData = encodeURIComponent(`2@EvolutionAPI-MultiTenant:${instanceName}:${Date.now()}`);
         finalQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${fallbackData}&color=15803d`;
       }
 
-      // Sincronizar en DB
       await supabase
         .from('companies')
         .update({
@@ -154,7 +178,7 @@ export async function POST(req: NextRequest) {
           }
         }
       } catch (err) {
-        // Ignorar error de red silenciado
+        // Ignorar
       }
 
       return NextResponse.json({
@@ -166,7 +190,7 @@ export async function POST(req: NextRequest) {
 
     // 3. CONFIRMAR / VINCULAR MANUALMENTE
     if (action === 'confirm_connect') {
-      const connectedPhone = phone || company?.owner_phone || '3001234567';
+      const connectedPhone = (typeof phone === 'string' && phone.slice(0, 25)) || company?.owner_phone || '3001234567';
       await supabase
         .from('companies')
         .update({
@@ -212,8 +236,9 @@ export async function POST(req: NextRequest) {
 
     // 5. PROBAR ENVÍO DE MENSAJE
     if (action === 'send_test') {
-      const targetPhone = phone || '3001234567';
-      const formattedPhone = targetPhone.startsWith('57') ? targetPhone : `57${targetPhone.replace(/\D/g, '')}`;
+      const rawPhone = (typeof phone === 'string' && phone) || '3001234567';
+      const cleanDigits = rawPhone.replace(/\D/g, '').slice(0, 15);
+      const formattedPhone = cleanDigits.startsWith('57') ? cleanDigits : `57${cleanDigits}`;
 
       try {
         const sendRes = await fetchWithTimeout(`${evoUrl}/message/sendText/${instanceName}`, {
@@ -241,7 +266,6 @@ export async function POST(req: NextRequest) {
         console.warn('No se pudo enviar mensaje por Evolution API:', e);
       }
 
-      // Si es un test simular éxito
       return NextResponse.json({ success: true, message: 'Simulación de envío completada' });
     }
 

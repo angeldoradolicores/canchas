@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
+import { getAuthenticatedUser, verifyPitchOwnership } from '@/lib/auth-guard';
+import {
+  AdminCreatePitchSchema,
+  AdminUpdatePitchSchema,
+  AdminDeletePitchSchema,
+  AdminManualBookingSchema,
+} from '@/lib/validations/api-schemas';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -8,38 +16,63 @@ function getSupabase() {
 }
 
 export async function POST(req: NextRequest) {
+  // ── 1. RATE LIMITING: 40 peticiones por minuto ──
+  const rateLimit = checkRateLimit(req, {
+    limit: 40,
+    windowSeconds: 60,
+    keyPrefix: 'api:admin-actions',
+  });
+
+  if (!rateLimit.success) {
+    return createRateLimitErrorResponse(rateLimit);
+  }
+
   try {
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Cuerpo de petición inválido' }, { status: 400 });
+    }
+
     const { action, payload } = body;
     const supabase = getSupabase();
 
-    // Extraer ownerId del payload o del token de autorización
-    let ownerId = payload?.owner_id;
+    // ── 2. AUTENTICACIÓN ESTRICTA DESDE TOKEN / SESIÓN ──
+    // Se extrae el usuario autenticado de forma segura. El payload.owner_id se descarta
+    // para evitar que usuarios no autorizados manipulen recursos ajenos (IDOR).
+    const authedUser = await getAuthenticatedUser(req);
+    let ownerId: string | null = authedUser?.id || null;
+
+    // Si getAuthenticatedUser no lo detectó por cookies, verificar cabecera Authorization directamente
     if (!ownerId) {
       const authHeader = req.headers.get('authorization') || req.headers.get('Authorization');
       if (authHeader) {
-        const token = authHeader.replace('Bearer ', '');
-        const { data: userData } = await supabase.auth.getUser(token);
-        if (userData?.user?.id) {
-          ownerId = userData.user.id;
+        const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+        if (token) {
+          const { data: userData } = await supabase.auth.getUser(token);
+          if (userData?.user?.id) {
+            ownerId = userData.user.id;
+          }
         }
       }
     }
 
-    // 1. OBTENER / GARANTIZAR EMPRESA PARA EL OWNER
+    // ── 3. ACCIÓN: ENSURE_COMPANY ──
     if (action === 'ensure_company') {
       if (!ownerId) {
-        return NextResponse.json({ error: 'Falta owner_id' }, { status: 400 });
+        return NextResponse.json({ error: 'Sesión no autorizada' }, { status: 401 });
       }
 
-      let { data: company } = await supabase
+      // Buscar empresas existentes del dueño
+      const { data: existingCompanies } = await supabase
         .from('companies')
         .select('*')
         .eq('owner_id', ownerId)
-        .maybeSingle();
+        .order('created_at', { ascending: true })
+        .limit(1);
 
+      let company = existingCompanies?.[0] ?? null;
       if (!company) {
-        const companyName = payload?.company_name || 'Mi Complejo Deportivo';
+        const companyName = (typeof payload?.company_name === 'string' && payload.company_name.slice(0, 100)) || 'Mi Complejo Deportivo';
         const { data: newComp, error } = await supabase
           .from('companies')
           .insert({
@@ -62,43 +95,56 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, data: company });
     }
 
-    // 2. OBTENER CANCHAS ÚNICAMENTE DEL OWNER
+    // ── 4. ACCIÓN: GET_PITCHES ──
     if (action === 'get_pitches') {
       if (!ownerId) {
         return NextResponse.json({ success: true, data: [] });
       }
 
-      const { data: company } = await supabase
+      const { data: companies } = await supabase
         .from('companies')
         .select('id')
-        .eq('owner_id', ownerId)
-        .maybeSingle();
+        .eq('owner_id', ownerId);
 
-      if (!company) {
+      if (!companies || companies.length === 0) {
         return NextResponse.json({ success: true, data: [] });
       }
+
+      const companyIds = companies.map(c => c.id);
 
       const { data: pitches, error } = await supabase
         .from('pitches')
         .select('*')
-        .eq('company_id', company.id)
+        .in('company_id', companyIds)
         .order('created_at', { ascending: false });
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ success: true, data: pitches || [] });
     }
 
-    // 3. CREAR CANCHA VINCULADA A LA EMPRESA DEL OWNER
+    // ── 5. ACCIÓN: CREATE_PITCH ──
     if (action === 'create_pitch') {
       if (!ownerId) {
-        return NextResponse.json({ error: 'Sesión no detectada. Por favor recarga la página e inicia sesión nuevamente.' }, { status: 401 });
+        return NextResponse.json({ error: 'No autorizado. Inicia sesión como dueño.' }, { status: 401 });
       }
+
+      const validation = AdminCreatePitchSchema.safeParse(payload || {});
+      if (!validation.success) {
+        return NextResponse.json(
+          { error: validation.error.issues[0]?.message || 'Datos de cancha inválidos', details: validation.error.flatten() },
+          { status: 400 }
+        );
+      }
+
+      const data = validation.data;
 
       // Obtener o crear la empresa de este owner
       let { data: company } = await supabase
         .from('companies')
         .select('id')
         .eq('owner_id', ownerId)
+        .order('created_at', { ascending: true })
+        .limit(1)
         .maybeSingle();
 
       if (!company) {
@@ -106,7 +152,7 @@ export async function POST(req: NextRequest) {
           .from('companies')
           .insert({
             owner_id: ownerId,
-            name: payload?.company_name || 'Mi Complejo Deportivo',
+            name: 'Mi Complejo Deportivo',
             address: 'Pasto, Nariño',
             zone: 'Norte',
             whatsapp_status: 'disconnected',
@@ -120,34 +166,32 @@ export async function POST(req: NextRequest) {
 
       const amenitiesString = Array.isArray(payload.amenities)
         ? payload.amenities.join(' · ')
-        : (payload.amenities || '');
+        : (typeof payload.amenities === 'string' ? payload.amenities : '');
 
-      const imageUrl = (Array.isArray(payload.images) && payload.images[0])
-        ? payload.images[0]
-        : (payload.image_url || 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800&auto=format&fit=crop');
+      const imageUrl = data.image_url ||
+        (Array.isArray(data.media_urls) && data.media_urls[0]) ||
+        'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800&auto=format&fit=crop';
 
       const { data: pitch, error } = await supabase
         .from('pitches')
         .insert({
           company_id: company.id,
-          name: payload.name,
-          description: payload.description || null,
-          type: payload.type || 'Fútbol 5',
-          supported_types: payload.supported_types || [payload.type || 'Fútbol 5'],
-          surface: payload.surface || 'Sintética',
-          tone: payload.tone || 'field-emerald',
-          price_per_hour: parseFloat(payload.price) || 80000,
-          booking_percentage: payload.booking_percentage || 50,
+          name: data.name,
+          description: typeof payload.description === 'string' ? payload.description.slice(0, 2000) : null,
+          type: data.type,
+          supported_types: Array.isArray(payload.supported_types) ? payload.supported_types : [data.type],
+          surface: typeof payload.surface === 'string' ? payload.surface : 'Sintética',
+          tone: typeof payload.tone === 'string' ? payload.tone : 'field-emerald',
+          price_per_hour: data.price_per_hour,
+          booking_percentage: Number(payload.booking_percentage) || 50,
           custom_pricing: payload.custom_pricing || {},
-          payment_methods: payload.payment_methods || [],
-          amenities: Array.isArray(payload.amenities)
-            ? payload.amenities.join(' · ')
-            : (payload.amenities || ''),
-          contact_phone: payload.contact_phone || null,
-          image_url: payload.image_url || (Array.isArray(payload.media_urls) && payload.media_urls[0]) || 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800&auto=format&fit=crop',
-          media_urls: payload.media_urls || [],
-          lat: payload.lat || null,
-          lng: payload.lng || null,
+          payment_methods: Array.isArray(payload.payment_methods) ? payload.payment_methods : [],
+          amenities: amenitiesString,
+          contact_phone: typeof payload.contact_phone === 'string' ? payload.contact_phone.slice(0, 25) : null,
+          image_url: imageUrl,
+          media_urls: data.media_urls,
+          lat: typeof payload.lat === 'number' ? payload.lat : null,
+          lng: typeof payload.lng === 'number' ? payload.lng : null,
         })
         .select()
         .single();
@@ -156,56 +200,56 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, data: pitch });
     }
 
-    // 3.5. ACTUALIZAR CANCHA
+    // ── 6. ACCIÓN: UPDATE_PITCH ──
     if (action === 'update_pitch') {
-      const pitchId = payload?.pitch_id;
-      if (!pitchId || !ownerId) {
-        return NextResponse.json({ error: 'Falta pitch_id u owner_id' }, { status: 400 });
+      if (!ownerId) {
+        return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
       }
 
-      // Validar que el pitch pertenece al owner
-      const { data: pitchCheck } = await supabase
-        .from('pitches')
-        .select('company_id, companies!inner(owner_id)')
-        .eq('id', pitchId)
-        .eq('companies.owner_id', ownerId)
-        .single();
-        
-      if (!pitchCheck) {
+      const validation = AdminUpdatePitchSchema.safeParse(payload || {});
+      if (!validation.success) {
+        return NextResponse.json({ error: 'Parámetros de actualización inválidos' }, { status: 400 });
+      }
+
+      const { pitch_id } = validation.data;
+
+      // Verificar que la cancha pertenece a una empresa del dueño
+      const isOwner = await verifyPitchOwnership(ownerId, pitch_id);
+      if (!isOwner) {
         return NextResponse.json({ error: 'No tienes permiso para editar esta cancha' }, { status: 403 });
       }
 
       const amenitiesString = Array.isArray(payload.amenities)
         ? payload.amenities.join(' · ')
-        : (payload.amenities || '');
+        : (typeof payload.amenities === 'string' ? payload.amenities : '');
 
-      const imageUrl = (Array.isArray(payload.media_urls) && payload.media_urls[0])
-        ? payload.media_urls[0]
-        : (payload.image_url || 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800&auto=format&fit=crop');
+      const imageUrl = (Array.isArray(payload.media_urls) && payload.media_urls[0]) ||
+        payload.image_url ||
+        'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800&auto=format&fit=crop';
+
+      const updateFields: any = {
+        name: payload.name,
+        description: payload.description ?? null,
+        type: payload.type || 'Fútbol 5',
+        supported_types: payload.supported_types || [payload.type || 'Fútbol 5'],
+        surface: payload.surface || 'Sintética',
+        tone: payload.tone || 'field-emerald',
+        price_per_hour: parseFloat(payload.price) || 80000,
+        booking_percentage: payload.booking_percentage || 50,
+        custom_pricing: payload.custom_pricing || {},
+        payment_methods: payload.payment_methods || [],
+        amenities: amenitiesString,
+        contact_phone: payload.contact_phone || null,
+        image_url: imageUrl,
+        media_urls: payload.media_urls || [],
+        lat: payload.lat || null,
+        lng: payload.lng || null,
+      };
 
       const { data: pitch, error } = await supabase
         .from('pitches')
-        .update({
-          name: payload.name,
-          description: payload.description ?? null,
-          type: payload.type || 'Fútbol 5',
-          supported_types: payload.supported_types || [payload.type || 'Fútbol 5'],
-          surface: payload.surface || 'Sintética',
-          tone: payload.tone || 'field-emerald',
-          price_per_hour: parseFloat(payload.price) || 80000,
-          booking_percentage: payload.booking_percentage || 50,
-          custom_pricing: payload.custom_pricing || {},
-          payment_methods: payload.payment_methods || [],
-          amenities: Array.isArray(payload.amenities)
-            ? payload.amenities.join(' · ')
-            : (payload.amenities || ''),
-          contact_phone: payload.contact_phone || null,
-          image_url: (Array.isArray(payload.media_urls) && payload.media_urls[0]) || payload.image_url || 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800&auto=format&fit=crop',
-          media_urls: payload.media_urls || [],
-          lat: payload.lat || null,
-          lng: payload.lng || null,
-        })
-        .eq('id', pitchId)
+        .update(updateFields)
+        .eq('id', pitch_id)
         .select()
         .single();
 
@@ -213,40 +257,76 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, data: pitch });
     }
 
-    // 4. ELIMINAR CANCHA
+    // ── 7. ACCIÓN: DELETE_PITCH ──
     if (action === 'delete_pitch') {
-      const pitchId = payload?.pitch_id;
-      if (!pitchId) return NextResponse.json({ error: 'Falta pitch_id' }, { status: 400 });
+      if (!ownerId) {
+        return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+      }
+
+      const validation = AdminDeletePitchSchema.safeParse(payload || {});
+      if (!validation.success) {
+        return NextResponse.json({ error: 'ID de cancha inválido' }, { status: 400 });
+      }
+
+      const { pitch_id } = validation.data;
+
+      // Verificar propiedad
+      const isOwner = await verifyPitchOwnership(ownerId, pitch_id);
+      if (!isOwner) {
+        return NextResponse.json({ error: 'No tienes permiso para eliminar esta cancha' }, { status: 403 });
+      }
 
       const { error } = await supabase
         .from('pitches')
         .delete()
-        .eq('id', pitchId);
+        .eq('id', pitch_id);
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ success: true });
     }
 
+    // ── 8. ACCIÓN: CREATE_MANUAL_BOOKING ──
     if (action === 'create_manual_booking') {
-      const pitchId = payload?.pitch_id;
-      const selectedTimes = payload?.selected_times || [];
-      const date = payload?.date;
-
-      if (!pitchId || !date || selectedTimes.length === 0) {
-         return NextResponse.json({ error: 'Selecciona una cancha, fecha y hora' }, { status: 400 });
+      if (!ownerId) {
+        return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
       }
 
-      const inserts = selectedTimes.map((slot: string) => {
+      const validation = AdminManualBookingSchema.safeParse({
+        pitch_id: payload?.pitch_id,
+        selected_date: payload?.date,
+        selected_times: payload?.selected_times,
+        customer_name: payload?.customer_name,
+        customer_phone: payload?.customer_phone,
+        total_price: payload?.total_price,
+        deposit_amount: payload?.deposit_amount,
+      });
+
+      if (!validation.success) {
+        return NextResponse.json(
+          { error: validation.error.issues[0]?.message || 'Datos de reserva manual inválidos' },
+          { status: 400 }
+        );
+      }
+
+      const { pitch_id, selected_date, selected_times, customer_name, customer_phone } = validation.data;
+
+      // Verificar que la cancha le pertenece al dueño
+      const isOwner = await verifyPitchOwnership(ownerId, pitch_id);
+      if (!isOwner) {
+        return NextResponse.json({ error: 'No tienes permisos para agendar en esta cancha' }, { status: 403 });
+      }
+
+      const inserts = selected_times.map((slot: string) => {
         const hourNum = parseInt(slot.split(':')[0], 10);
         const endHourNum = (hourNum + 1) % 24;
         const endSlot = endHourNum < 10 ? `0${endHourNum}:00` : `${endHourNum}:00`;
         return {
-          pitch_id: pitchId,
+          pitch_id,
           user_id: ownerId,
-          customer_name: payload.customer_name || 'Reserva Interna',
-          customer_phone: payload.customer_phone || '',
-          start_time: `${date}T${slot}:00-05:00`,
-          end_time: `${date}T${endSlot}:00-05:00`,
+          customer_name: customer_name || 'Reserva Interna',
+          customer_phone: customer_phone || '',
+          start_time: `${selected_date}T${slot}:00-05:00`,
+          end_time: `${selected_date}T${endSlot}:00-05:00`,
           status: 'confirmed',
           payment_status: 'verified',
           source: 'owner_panel',
@@ -256,29 +336,28 @@ export async function POST(req: NextRequest) {
       const createdBookings: any[] = [];
 
       for (const item of inserts) {
-        // 1. Buscar si existe alguna fila con ese pitch + start_time (cualquier status)
         const { data: existing } = await supabase
           .from('bookings')
           .select('id, status')
-          .eq('pitch_id', pitchId)
+          .eq('pitch_id', pitch_id)
           .eq('start_time', item.start_time)
           .maybeSingle();
 
         if (existing) {
-          // Si está activa (confirmed/pending/draft vigente) → rechazar
           if (['confirmed', 'pending'].includes(existing.status)) {
             return NextResponse.json(
               { error: `La hora ${item.start_time.substring(11, 16)} ya está ocupada.` },
               { status: 400 }
             );
           }
+
           if (existing.status === 'draft') {
-            // Verificar si el draft expiró
             const { data: draftRow } = await supabase
               .from('bookings')
               .select('expires_at')
               .eq('id', existing.id)
               .single();
+
             if (draftRow?.expires_at && new Date(draftRow.expires_at) > new Date()) {
               return NextResponse.json(
                 { error: `La hora ${item.start_time.substring(11, 16)} está siendo reservada por otro usuario en este momento.` },
@@ -287,7 +366,7 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          // Si está cancelled o draft expirado → ACTUALIZAR la fila existente (evita la constraint 23505)
+          // Reutilizar registro cancelado o expirado
           const { data: updated, error: updateErr } = await supabase
             .from('bookings')
             .update({
@@ -310,7 +389,6 @@ export async function POST(req: NextRequest) {
           }
           if (updated) createdBookings.push(updated);
         } else {
-          // No existe ninguna fila → INSERT normal
           const { data: inserted, error: insertErr } = await supabase
             .from('bookings')
             .insert(item)
@@ -330,27 +408,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, data: createdBookings, booking_ids: createdBookings.map(b => b.id) });
     }
 
-
-    // 6. ESTADÍSTICAS DEL DASHBOARD
+    // ── 9. ACCIÓN: GET_DASHBOARD_STATS ──
     if (action === 'get_dashboard_stats') {
       if (!ownerId) {
         return NextResponse.json({ success: true, data: null });
       }
 
-      const { data: company } = await supabase
+      const { data: allCompanies } = await supabase
         .from('companies')
-        .select('*')
-        .eq('owner_id', ownerId)
-        .maybeSingle();
+        .select('id')
+        .eq('owner_id', ownerId);
 
-      if (!company) {
+      if (!allCompanies || allCompanies.length === 0) {
         return NextResponse.json({ success: true, data: null });
       }
+
+      const companyIds = allCompanies.map(c => c.id);
 
       const { data: pitches } = await supabase
         .from('pitches')
         .select('*')
-        .eq('company_id', company.id);
+        .in('company_id', companyIds);
 
       const pitchIds = (pitches || []).map(p => p.id);
 
@@ -358,28 +436,35 @@ export async function POST(req: NextRequest) {
       if (pitchIds.length > 0) {
         const { data: bookingsData } = await supabase
           .from('bookings')
-          .select('*, pitches(name)')
+          .select('*, pitches(name, price_per_hour)')
           .in('pitch_id', pitchIds)
-          .order('created_at', { ascending: false })
-          .limit(10);
+          .order('created_at', { ascending: false });
 
         bookings = bookingsData || [];
       }
 
+      const { data: primaryCompany } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('owner_id', ownerId)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .single();
+
       return NextResponse.json({
         success: true,
         data: {
-          company,
+          company: primaryCompany,
           pitchesCount: pitches?.length || 0,
           pitches: pitches || [],
           recentBookings: bookings,
-          totalIncome: bookings.length * 80000,
         }
       });
     }
 
-    return NextResponse.json({ success: true, data: [] });
+    return NextResponse.json({ error: 'Acción no válida' }, { status: 400 });
   } catch (err: any) {
+    console.error('Error en admin-actions:', err);
     return NextResponse.json({ error: err.message || 'Error de servidor' }, { status: 500 });
   }
 }

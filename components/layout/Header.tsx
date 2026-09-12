@@ -12,7 +12,6 @@ interface HeaderProps {
   onLoginClick: () => void;
 }
 
-
 export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
   const { user, profile, signOut } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
@@ -38,7 +37,6 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
     if (!user) return;
     fetchNotifications();
 
-    // 1. Escuchar notificaciones dirigidas al usuario en TIEMPO REAL
     const notifChannel = supabase
       .channel(`realtime:notifications:${user.id}`)
       .on(
@@ -59,7 +57,6 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
       )
       .subscribe();
 
-    // 2. Escuchar cambios de estado en reservas del usuario en TIEMPO REAL
     const bookingsChannel = supabase
       .channel(`realtime:bookings:${user.id}`)
       .on(
@@ -128,13 +125,10 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
     );
   };
 
-
-
   return (
     <header
-      className={`topbar relative flex items-center justify-between px-4 py-3 bg-background border-b border-border transition-all ${
-        isAnyMenuOpen ? 'z-[9999]' : 'z-10'
-      }`}
+      className={`topbar relative flex items-center justify-between px-4 py-3 bg-background border-b border-border transition-all ${isAnyMenuOpen ? 'z-[9999]' : 'z-10'
+        }`}
     >
       <div className="flex items-center gap-3">
         <button
@@ -226,7 +220,7 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
               )}
             </button>
 
-            {/* Dropdown Notificaciones al frente */}
+            {/* Dropdown Notificaciones */}
             {showNotifications && (
               <div className="absolute right-0 top-full mt-2 w-80 sm:w-88 bg-card border border-border rounded-2xl shadow-2xl p-3 z-[9999] opacity-100">
                 <div className="flex items-center justify-between pb-2 mb-2 border-b border-border">

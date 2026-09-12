@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
+import { getAuthenticatedUser } from '@/lib/auth-guard';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -7,16 +9,15 @@ function getSupabase() {
   return createClient(url, key);
 }
 
-async function getUserId(req: NextRequest, supabase: ReturnType<typeof getSupabase>): Promise<string | null> {
-  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization');
-  if (!authHeader) return null;
-  const token = authHeader.replace('Bearer ', '');
-  const { data } = await supabase.auth.getUser(token);
-  return data?.user?.id || null;
-}
-
-// GET — List all tournaments (with pitch info joined)
+// GET — Listar torneos (público con rate limiting)
 export async function GET(req: NextRequest) {
+  const rateLimit = checkRateLimit(req, {
+    limit: 60,
+    windowSeconds: 60,
+    keyPrefix: 'api:tournaments:get',
+  });
+  if (!rateLimit.success) return createRateLimitErrorResponse(rateLimit);
+
   try {
     const supabase = getSupabase();
     const { searchParams } = new URL(req.url);
@@ -53,24 +54,55 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const rateLimit = checkRateLimit(req, {
+    limit: 25,
+    windowSeconds: 60,
+    keyPrefix: 'api:tournaments:post',
+  });
+  if (!rateLimit.success) return createRateLimitErrorResponse(rateLimit);
+
   try {
     const supabase = getSupabase();
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Cuerpo de petición inválido' }, { status: 400 });
+    }
+
     const { action, payload } = body;
-    const userId = payload?.user_id || (await getUserId(req, supabase));
 
-    // CREATE
+    // ── AUTENTICACIÓN ESTRICTA: EL PAYLOAD.USER_ID SE IGNORA ──
+    const authedUser = await getAuthenticatedUser(req);
+    let userId = authedUser?.id || null;
+
+    if (!userId) {
+      const authHeader = req.headers.get('authorization') || req.headers.get('Authorization');
+      if (authHeader) {
+        const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+        if (token) {
+          const { data } = await supabase.auth.getUser(token);
+          userId = data?.user?.id || null;
+        }
+      }
+    }
+
+    if (!userId) {
+      return NextResponse.json({ error: 'Debes iniciar sesión para realizar esta acción' }, { status: 401 });
+    }
+
+    // ── CREAR TORNEO ──
     if (action === 'create_tournament') {
-      if (!userId) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+      if (!payload?.name || typeof payload.name !== 'string' || payload.name.trim().length < 3) {
+        return NextResponse.json({ error: 'El nombre del torneo debe tener al menos 3 caracteres' }, { status: 400 });
+      }
 
-      // Check if pitch is from owner (created_by_owner flag)
       let createdByOwner = false;
       if (payload.pitch_id) {
         const { data: pitch } = await supabase
           .from('pitches')
           .select('id, companies(owner_id)')
           .eq('id', payload.pitch_id)
-          .single();
+          .maybeSingle();
+
         if ((pitch as any)?.companies?.owner_id === userId) {
           createdByOwner = true;
         }
@@ -81,16 +113,16 @@ export async function POST(req: NextRequest) {
         .insert({
           user_id: userId,
           pitch_id: payload.pitch_id || null,
-          name: payload.name,
-          description: payload.description || null,
-          start_date: payload.start_date,
+          name: payload.name.trim().slice(0, 120),
+          description: typeof payload.description === 'string' ? payload.description.slice(0, 2000) : null,
+          start_date: payload.start_date || null,
           registration_end_date: payload.registration_end_date || null,
           final_date: payload.final_date || null,
-          location: payload.location || null,
+          location: typeof payload.location === 'string' ? payload.location.slice(0, 200) : null,
           entry_fee: parseFloat(payload.entry_fee) || 0,
-          prize: payload.prize || null,
+          prize: typeof payload.prize === 'string' ? payload.prize.slice(0, 500) : null,
           prize_value: payload.prize_value ? parseFloat(payload.prize_value) : null,
-          media_urls: payload.media_urls || [],
+          media_urls: Array.isArray(payload.media_urls) ? payload.media_urls.slice(0, 10) : [],
           created_by_owner: createdByOwner,
           status: 'active',
         })
@@ -101,37 +133,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, data });
     }
 
-    // UPDATE
+    // ── ACTUALIZAR TORNEO ──
     if (action === 'update_tournament') {
-      if (!userId) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-      const { tournament_id, ...rest } = payload;
+      const { tournament_id, ...rest } = payload || {};
+      if (!tournament_id) {
+        return NextResponse.json({ error: 'Falta tournament_id' }, { status: 400 });
+      }
 
-      // Verify ownership
+      // Verificar propiedad estricta
       const { data: existing } = await supabase
         .from('tournaments')
         .select('user_id')
         .eq('id', tournament_id)
-        .single();
+        .maybeSingle();
 
-      if ((existing as any)?.user_id !== userId) {
-        return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+      if (!existing || (existing as any).user_id !== userId) {
+        return NextResponse.json({ error: 'No tienes permiso para modificar este torneo' }, { status: 403 });
       }
 
       const { data, error } = await supabase
         .from('tournaments')
         .update({
-          name: rest.name,
-          description: rest.description || null,
-          start_date: rest.start_date,
-          registration_end_date: rest.registration_end_date || null,
-          final_date: rest.final_date || null,
-          location: rest.location || null,
-          entry_fee: parseFloat(rest.entry_fee) || 0,
-          prize: rest.prize || null,
-          prize_value: rest.prize_value ? parseFloat(rest.prize_value) : null,
-          media_urls: rest.media_urls || [],
-          pitch_id: rest.pitch_id || null,
-          status: rest.status || 'active',
+          name: typeof rest.name === 'string' ? rest.name.trim().slice(0, 120) : undefined,
+          description: typeof rest.description === 'string' ? rest.description.slice(0, 2000) : undefined,
+          start_date: rest.start_date || undefined,
+          registration_end_date: rest.registration_end_date || undefined,
+          final_date: rest.final_date || undefined,
+          location: typeof rest.location === 'string' ? rest.location.slice(0, 200) : undefined,
+          entry_fee: rest.entry_fee !== undefined ? parseFloat(rest.entry_fee) : undefined,
+          prize: typeof rest.prize === 'string' ? rest.prize.slice(0, 500) : undefined,
+          prize_value: rest.prize_value !== undefined ? parseFloat(rest.prize_value) : undefined,
+          media_urls: Array.isArray(rest.media_urls) ? rest.media_urls.slice(0, 10) : undefined,
+          pitch_id: rest.pitch_id !== undefined ? rest.pitch_id : undefined,
+          status: rest.status || undefined,
         })
         .eq('id', tournament_id)
         .select()
@@ -141,20 +175,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, data });
     }
 
-    // DELETE
+    // ── ELIMINAR TORNEO ──
     if (action === 'delete_tournament') {
-      if (!userId) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-      const { tournament_id } = payload;
+      const { tournament_id } = payload || {};
+      if (!tournament_id) {
+        return NextResponse.json({ error: 'Falta tournament_id' }, { status: 400 });
+      }
 
-      // Verify ownership
       const { data: existing } = await supabase
         .from('tournaments')
         .select('user_id')
         .eq('id', tournament_id)
-        .single();
+        .maybeSingle();
 
-      if ((existing as any)?.user_id !== userId) {
-        return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+      if (!existing || (existing as any).user_id !== userId) {
+        return NextResponse.json({ error: 'No tienes permiso para eliminar este torneo' }, { status: 403 });
       }
 
       const { error } = await supabase.from('tournaments').delete().eq('id', tournament_id);

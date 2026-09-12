@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth-context';
 import { Loader2, CalendarDays, MapPin, X, Share2, Ticket, Clock, CheckCircle, XCircle, AlertCircle, LayoutGrid, ChevronDown, Sparkles } from 'lucide-react';
@@ -236,9 +236,54 @@ export default function UserReservationsPage() {
     return b.status === statusFilter;
   });
 
-  const confirmed = filteredBookings.filter(b => b.status === 'confirmed');
-  const pending = filteredBookings.filter(b => b.status === 'pending');
-  const cancelled = filteredBookings.filter(b => b.status === 'cancelled');
+  const groupedMyBookings = (() => {
+    const groups: Record<string, any> = {};
+
+    filteredBookings.forEach((b: any) => {
+      const dateStr = b.start_time.split('T')[0]; 
+      const key = `${b.pitch_id}-${dateStr}-${b.status}`;
+
+      if (!groups[key]) {
+        groups[key] = {
+           ...b,
+           bookings: [],
+           total_price: 0,
+           deposit_amount: 0,
+           start_time: b.start_time
+        };
+      }
+      
+      groups[key].bookings.push(b);
+      if (new Date(b.start_time) < new Date(groups[key].start_time)) {
+        groups[key].start_time = b.start_time;
+      }
+      const tPrice = b.total_price || b.pitches?.price_per_hour || 80000;
+      let dAmount = b.deposit_amount || 0;
+      if (dAmount === 0 && b.pitches) {
+        const customPricing = b.pitches.custom_pricing || {};
+        const isFixed = customPricing.booking_type === 'fixed';
+        const pct = customPricing.booking_percentage || b.pitches.booking_percentage || 50;
+        const hoursCount = 1; 
+        if (isFixed) {
+          dAmount = Number(customPricing.booking_fixed || 0) * hoursCount;
+        } else {
+          dAmount = (tPrice * Number(pct)) / 100;
+        }
+      }
+      groups[key].total_price += tPrice;
+      groups[key].deposit_amount += dAmount;
+    });
+
+    Object.values(groups).forEach(g => {
+      g.bookings.sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    });
+
+    return Object.values(groups).sort((a: any, b: any) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
+  })();
+
+  const confirmed = groupedMyBookings.filter((b: any) => b.status === 'confirmed');
+  const pending = groupedMyBookings.filter((b: any) => b.status === 'pending');
+  const cancelled = groupedMyBookings.filter((b: any) => b.status === 'cancelled');
 
   const BookingCard = ({ b }: { b: any }) => {
     const status = statusConfig[b.status] || statusConfig.pending;
@@ -306,7 +351,7 @@ export default function UserReservationsPage() {
                 <div className="flex items-center gap-1 text-[11px] sm:text-xs text-muted-foreground">
                   <Clock size={12} className="text-primary flex-shrink-0" />
                   <span className="font-bold text-primary whitespace-nowrap">
-                    {date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                    {b.bookings ? b.bookings.map((xb: any) => new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })).join(', ') : date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
               </div>
@@ -390,8 +435,7 @@ export default function UserReservationsPage() {
               </h1>
             </div>
             <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1 leading-relaxed">
-              Gestiona y revisa el estado de tus partidos agendados, comprobantes y solicitudes.
-            </p>
+              Verifica el estado de tus reservas, comparte el ticket con los detalles de fecha, hora y dirección, y envíaselo a tus compañeros.            </p>
           </div>
 
           {/* Badge Resumen de Reservas */}
@@ -412,34 +456,37 @@ export default function UserReservationsPage() {
               Filtrar por estado
             </h2>
 
-            <div className="bg-[#CDE0D1]/70 border border-[#BACFC0] rounded-2xl p-1 flex items-center gap-1 w-full overflow-x-auto scrollbar-hide">
-              {[
-                { id: 'todas', label: 'Todas', showIcon: true },
-                { id: 'confirmed', label: 'Aprobadas', showIcon: false },
-                { id: 'pending', label: 'Revisión', showIcon: false },
-                { id: 'cancelled', label: 'Canceladas', showIcon: false },
-              ].map(f => {
-                const isActive = statusFilter === f.id;
-                return (
-                  <button
-                    key={f.id}
-                    onClick={() => setStatusFilter(f.id as any)}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-black transition-all duration-200 select-none whitespace-nowrap ${isActive
-                      ? 'bg-[#DCE7DE] text-[#054D27] shadow-xs border border-[#BACFC0]'
-                      : 'text-[#4D715B] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
-                      }`}
-                  >
-                    {f.showIcon && (
-                      <LayoutGrid
-                        size={13}
-                        strokeWidth={2.5}
-                        className={isActive ? 'text-[#008744]' : 'text-[#4D715B]'}
-                      />
-                    )}
-                    <span>{f.label}</span>
-                  </button>
-                );
-              })}
+            <div className="bg-[#CDE0D1]/70 border border-[#BACFC0] rounded-2xl p-1 mb-6">
+              <div className="flex items-center w-full">
+                {[
+                  { id: 'todas', label: 'Todas', showIcon: true },
+                  { id: 'confirmed', label: 'Aprobadas', showIcon: false },
+                  { id: 'pending', label: 'Revisión', showIcon: false },
+                  { id: 'cancelled', label: 'Canceladas', showIcon: false },
+                ].map((f) => {
+                  const isActive = statusFilter === f.id;
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setStatusFilter(f.id as any)}
+                      className={`flex-1 py-2 px-1 sm:px-2 rounded-xl text-[11px] sm:text-xs font-black transition-all duration-200 select-none flex items-center justify-center gap-1 leading-tight text-center ${isActive
+                          ? 'bg-[#DCE7DE] text-[#054D27] shadow-xs border border-[#BACFC0]'
+                          : 'text-[#4D715B] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
+                        }`}
+                    >
+                      {f.showIcon && (
+                        <LayoutGrid
+                          size={13}
+                          strokeWidth={2.5}
+                          className={`shrink-0 ${isActive ? 'text-[#008744]' : 'text-[#4D715B]'}`}
+                        />
+                      )}
+                      <span>{f.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -580,9 +627,9 @@ export default function UserReservationsPage() {
                     </p>
                   </div>
                   <div>
-                    <p style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.1em', marginBottom: 4 }}>HORARIO</p>
+                    <p style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.1em', marginBottom: 4 }}>HORARIOS</p>
                     <p style={{ fontWeight: 700, color: '#fff', fontSize: 13 }}>
-                      {new Date(selectedTicket.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                      {selectedTicket.bookings ? selectedTicket.bookings.map((xb: any) => new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })).join(', ') : new Date(selectedTicket.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 </div>

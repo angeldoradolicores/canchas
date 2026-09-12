@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarDays, Heart, Search, Trophy, User, Swords } from 'lucide-react';
+import { CalendarDays, Heart, Search, Trophy, Users, Swords, GraduationCap } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -12,7 +12,9 @@ export function MobileNav() {
     ['Reservas', CalendarDays, '/reservations'],
     ['Favoritos', Heart, '/favorites'],
     ['Retos', Swords, '/community'],
-    ['Perfil', User, '/profile'],
+    ['Torneos', Trophy, '/tournaments'],
+    ['Escuelas', GraduationCap, '/schools'],
+    ['Perfil', Users, '/profile'],
   ] as const;
 
   return (

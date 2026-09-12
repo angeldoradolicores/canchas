@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowRight, Clock3, Heart, MapPin, ShieldCheck, CalendarDays, Calendar, CheckCircle, Loader2, Grid, X, ChevronLeft, ChevronRight, Trophy, CheckCircle2, Phone } from 'lucide-react';
+import { ArrowRight, Clock3, Heart, MapPin, ShieldCheck, CalendarDays, Calendar, CheckCircle, Loader2, Grid, X, ChevronLeft, ChevronRight, Trophy, CheckCircle2, Phone, Users } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
@@ -58,6 +58,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
   const [showGalleryModal, setShowGalleryModal] = useState(false);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [tournaments, setTournaments] = useState<any[]>([]);
+  const [schools, setSchools] = useState<any[]>([]);
 
   const [alertState, setAlertState] = useState<AlertModalState>({
     isOpen: false,
@@ -116,6 +117,15 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
         }
       })
       .catch(err => console.error("Error fetching tournaments", err));
+
+    fetch(`/api/schools?pitch_id=${pitch.id}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setSchools(data.data || []);
+        }
+      })
+      .catch(err => console.error("Error fetching schools", err));
   }, [pitch.id]);
 
   // Función para obtener los slots ocupados (llamada por useEffect y por botón de reserva)
@@ -437,16 +447,15 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
             </h2>
 
             {/* GRID DE DETALLES: Cambiado a 1 columna en celulares muy mini para que nada se corte, y 3 en PC */}
-            <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 w-full">
               {[
                 ['Tipo', pitch.type || 'Fútbol 5'],
                 ['Superficie', pitch.surface || 'Sintética'],
               ].map(([k, v]) => (
                 <div
                   key={k}
-                  className="p-3.5 bg-emerald-500/5 dark:bg-emerald-500/10 rounded-xl border border-emerald-500/10 dark:border-emerald-500/20 shadow-xs flex flex-col items-center justify-center text-center transition-all hover:scale-[1.02] duration-200"
+                  className="p-3.5 bg-emerald-500/5 dark:bg-emerald-500/10 rounded-xl border border-emerald-500/10 dark:border-emerald-500/20 shadow-xs flex flex-col items-center justify-center text-center transition-all hover:scale-[1.02] duration-200 w-full"
                 >
-                  {/* Agregado el título del detalle para dar contexto (Tipo, Superficie, etc.) */}
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
                     {k}
                   </p>
@@ -588,6 +597,37 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
 
           )}
 
+          {schools.length > 0 && (
+            <div className="bg-card px-6 py-6 md:px-8 md:py-8 rounded-2xl border border-border shadow-sm mt-6">
+              <h2 className="text-xl font-bold mb-5 flex items-center gap-2 text-foreground">
+                <Users size={22} className="text-primary" /> Escuelas de formación
+              </h2>
+              <div className="grid gap-3.5 sm:grid-cols-2">
+                {schools.map(s => (
+                  <Link href="/schools" key={s.id} className="block group">
+                    <div className="flex items-center gap-4 p-4 bg-secondary/30 rounded-xl border border-border/60 hover:border-primary/50 hover:bg-secondary/60 shadow-sm transition-all duration-200">
+                      <div className="w-14 h-14 rounded-xl bg-card border border-border/80 flex items-center justify-center text-muted-foreground flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform overflow-hidden">
+                        {s.logo_url ? (
+                          <img src={s.logo_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <Users size={24} />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-extrabold capitalize text-base text-foreground truncate group-hover:text-primary transition-colors">
+                          {s.name}
+                        </h4>
+                        <p className="text-xs font-medium text-muted-foreground mt-0.5 truncate">
+                          {s.categories || 'Formación deportiva'}
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
         </div>
 
         {/* Módulo lateral de Disponibilidad y Reserva */}
@@ -675,7 +715,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
                   </div>
                 )}
                 {(() => {
-                  const allowedTimeSlots = (pitchAny.custom_pricing?.time_slots as string[]) || DEFAULT_TIME_SLOTS;
+                  const allowedTimeSlots: string[] = Array.from(new Set<string>((pitchAny.custom_pricing?.time_slots as string[]) || DEFAULT_TIME_SLOTS));
 
                   const currentCatSlots = allowedTimeSlots.filter(slot => {
                     const h = parseInt(slot.split(':')[0]);
@@ -726,13 +766,22 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
 
                         return (
                           <button
-                            key={slot}
+                            key={`${activeTimeCategory}-${slot}`}
                             disabled={isTaken}
                             type="button"
                             onClick={() => {
-                              setSelectedTimes(prev =>
-                                prev.includes(slot) ? prev.filter(s => s !== slot) : [...prev, slot].sort()
-                              );
+                              if (selectedTimes.includes(slot)) {
+                                setSelectedTimes(prev => prev.filter(s => s !== slot));
+                              } else if (selectedTimes.length >= 4) {
+                                setAlertState({
+                                  isOpen: true,
+                                  type: 'warning',
+                                  title: '⏰ Límite de horas alcanzado',
+                                  message: 'Solo puedes reservar un máximo de 4 horas por transacción. Si necesitas más tiempo, crea una nueva reserva.',
+                                });
+                              } else {
+                                setSelectedTimes(prev => [...prev, slot].sort());
+                              }
                             }}
                             className={`p-2 rounded-xl border text-center transition-all select-none font-bold text-xs relative overflow-hidden ${btnClass}`}
                           >

@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import {
   ArrowLeft, Loader2, Plus, ShieldAlert, Eye, X, MapPin,
   Video, Image as ImageIcon, Trash2, Check, DollarSign,
-  ChevronLeft, ChevronRight, CreditCard, ArrowUp, ArrowDown, Copy, CheckCheck, GripVertical, Layers, Palette, Upload, Star
+  ChevronLeft, ChevronRight, CreditCard, ArrowUp, ArrowDown, Copy, CheckCheck, GripVertical, Layers, Palette, Upload, Star, Clock, ChevronDown
 } from 'lucide-react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -60,7 +60,7 @@ const getYoutubeId = (url: string) => {
 // Preview card with image slider
 function PreviewCard({ data }: { data: any }) {
   const [imgIdx, setImgIdx] = useState(0);
-  const images = data.mediaUrls.filter((u: string) => !u.includes('youtube') && !u.includes('youtu.be') && !u.includes('vimeo'));
+  const images = (data?.mediaUrls || []).filter((u: string) => !u.includes('youtube') && !u.includes('youtu.be') && !u.includes('vimeo'));
   const firstImage = images[imgIdx] || null;
 
   return (
@@ -283,7 +283,37 @@ export default function NewPitchPage() {
     }
 
   };
+  //combo box seleccion hora
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Lista de horas desde las 4:00 AM hasta las 12:00 AM (00:00)
+  const allHours = [
+    '06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00',
+    '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00',
+    '22:00', '23:00'
+  ];
+
+  // Filtrar únicamente las horas que no han sido agregadas a la grilla
+  const availableHours = allHours.filter((timeStr) => !timeSlots.includes(timeStr));
+
+  // Cerrar el menú al hacer clic fuera de él
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const formatHourLabel = (timeStr: string) => {
+    const hNum = parseInt(timeStr.split(':')[0], 10);
+    const h12 = hNum === 0 ? 12 : hNum > 12 ? hNum - 12 : hNum;
+    const ampm = timeStr === '00:00' ? 'AM (Medianoche)' : hNum < 12 ? 'AM' : 'PM';
+    return `${h12}:00 ${ampm}`;
+  };
   // Reordenar Métodos de Pago
   const movePaymentMethod = (index: number, direction: 'up' | 'down') => {
     const newMethods = [...paymentMethods];
@@ -339,7 +369,11 @@ export default function NewPitchPage() {
 
   const handleSubmit = async () => {
     if (!name.trim()) return setErrorMsg('El nombre de la cancha es obligatorio.');
+    if (!contactPhone.trim() || contactPhone.trim().length < 10) return setErrorMsg('El teléfono de la cancha es obligatorio y debe tener al menos 10 dígitos.');
     if (!user?.id) return setErrorMsg('Sesión no detectada. Recarga la página.');
+    if (paymentMethods.length === 0) return setErrorMsg('Debes agregar al menos un método de pago.');
+    if (!lat || !lng) return setErrorMsg('Debes agregar la ubicación de la cancha.');
+    if (mediaItems.length === 0) return setErrorMsg('Debes agregar al menos una imagen o video.');
 
     setLoading(true);
     setErrorMsg('');
@@ -412,41 +446,61 @@ export default function NewPitchPage() {
   };
   return (
     <div className="max-w-3xl mx-auto pb-24 p-4">
-      <div className="flex items-center gap-4 mb-6">
-        <Link href="/dashboard/pitches" className="p-2 rounded-xl border border-border hover:bg-secondary transition-colors">
-          <ArrowLeft size={18} />
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-xl font-bold">Registrar Nueva Cancha</h1>
-          <p className="text-xs text-muted-foreground">Completa los pasos para publicar tu cancha.</p>
+      {/* ─── Encabezado Principal ─── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+        {/* Botón Volver + Título */}
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard/pitches"
+            className="p-2.5 rounded-2xl border border-border bg-card hover:bg-secondary text-foreground transition-all shadow-xs shrink-0"
+            title="Volver a canchas"
+          >
+            <ArrowLeft size={18} />
+          </Link>
+          <div>
+            <p className="eyebrow accent-label">NUEVA CANCHA</p>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Registrar Cancha</h1>
+            <p className="lead text-xs sm:text-sm">Completa la información para publicar tu espacio.</p>
+          </div>
         </div>
+
+        {/* Botón Vista Previa con texto visible */}
         <button
           onClick={() => setShowPreview(true)}
-          className="flex items-center gap-2 px-4 py-2 border border-primary/40 text-primary text-sm font-bold rounded-xl hover:bg-primary/10 transition-all"
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer active:scale-95 self-start sm:self-auto"
         >
-          <Eye size={16} /> Vista Previa
+          <Eye size={15} />
+          <span>Vista Previa</span>
         </button>
       </div>
 
+      {/* Alerta de Error */}
       {errorMsg && (
-        <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2 mb-5">
-          <ShieldAlert size={16} /><span>{errorMsg}</span>
+        <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs font-medium rounded-xl flex items-center gap-2 mb-5">
+          <ShieldAlert size={16} className="shrink-0" />
+          <span>{errorMsg}</span>
         </div>
       )}
 
-      {/* Navigation tabs */}
-      <div className="flex bg-secondary/60 p-1 rounded-2xl border border-border gap-1 mb-6 overflow-x-auto">
-        {sections.map(s => (
-          <button
-            key={s.key}
-            onClick={() => setActiveSection(s.key)}
-            className={`flex-1 min-w-[72px] py-2.5 px-3 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center justify-center ${activeSection === s.key
-              ? 'bg-card text-primary shadow-sm border border-border/60'
-              : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            {s.label}
-          </button>
-        ))}
+      {/* ─── Navegación Horizontal Única Fija ─── */}
+      <div className="bg-secondary/40 p-1 rounded-2xl border border-border mb-6">
+        <div className="flex items-center w-full">
+          {sections.map((s) => {
+            const isActive = activeSection === s.key;
+            return (
+              <button
+                key={s.key}
+                onClick={() => setActiveSection(s.key)}
+                className={`flex-1 py-2 px-1 sm:px-3 rounded-xl text-[11px] sm:text-xs font-bold transition-all text-center leading-tight ${isActive
+                  ? 'bg-card text-emerald-600 shadow-xs border border-border/80 font-black'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-card/30'
+                  }`}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* ─── SECCIÓN 1: INFORMACIÓN BÁSICA ─── */}
@@ -459,7 +513,7 @@ export default function NewPitchPage() {
               <label className="text-xs font-bold text-muted-foreground uppercase">Nombre de la Cancha *</label>
               <input
                 type="text"
-                placeholder="Ej: Cancha Sintética Premium"
+                placeholder="Ej: Cancha Sintética "
                 value={name}
                 onChange={e => setName(e.target.value)}
                 className="w-full px-4 py-3 text-sm border border-border rounded-xl bg-background outline-none focus:border-primary transition-colors"
@@ -478,15 +532,25 @@ export default function NewPitchPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-muted-foreground uppercase">Teléfono de la cancha (opcional)</label>
+              <label className="text-xs font-bold text-muted-foreground uppercase flex items-center justify-between">
+                <span>Teléfono de la cancha</span>
+                <span className="text-[10px] text-emerald-600 font-extrabold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                  Obligatorio *
+                </span>
+              </label>
               <input
                 type="tel"
-                placeholder="Ej: 300 123 4567"
+                required
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="Ej: 3001234567"
                 value={contactPhone}
-                onChange={e => setContactPhone(e.target.value)}
-                className="w-full px-4 py-3 text-sm border border-border rounded-xl bg-background outline-none focus:border-primary transition-colors"
+                onChange={e => setContactPhone(e.target.value.replace(/\D/g, ''))}
+                className="w-full px-4 py-3 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium"
               />
-              <p className="text-[11px] text-muted-foreground">Número de contacto directo. Si se deja en blanco se usará el de la empresa.</p>
+              <p className="text-[11px] text-muted-foreground">
+                Número de contacto directo (solo números) para atender las reservas de esta cancha.
+              </p>
             </div>
 
             {/* Modalidades */}
@@ -772,61 +836,145 @@ export default function NewPitchPage() {
               )}
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
+              {/* Encabezado y Selector Filtrado */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <label className="text-xs font-bold text-foreground uppercase">Horarios y Precios Especiales</label>
-                  <p className="text-[11px] text-muted-foreground mt-1">Puedes agregar o eliminar horas de operación.</p>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">
+                    Horarios y Precios Especiales
+                  </label>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Agrega horas específicas o asigna tarifas personalizadas.
+                  </p>
                 </div>
-                <div className="flex gap-2">
-                  <input
-                    type="time"
-                    value={newTimeInput}
-                    onChange={e => setNewTimeInput(e.target.value)}
-                    className="px-2 py-1.5 text-xs border border-border rounded-xl bg-background outline-none focus:border-primary"
-                  />
+
+                <div className="flex items-center gap-2">
+                  {/* Desplegable Propio / Custom UI */}
+                  <div className="relative min-w-[200px]" ref={dropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsOpen(!isOpen)}
+                      className="w-full px-3.5 py-2 text-xs font-bold border border-border rounded-xl bg-card hover:bg-secondary/50 text-foreground flex items-center justify-between gap-2 transition-all shadow-xs cursor-pointer focus:border-emerald-600 active:scale-98"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <Clock size={14} className="text-emerald-600 shrink-0" />
+                        <span className={newTimeInput ? 'text-foreground font-black' : 'text-muted-foreground font-medium'}>
+                          {newTimeInput ? formatHourLabel(newTimeInput) : 'Seleccionar hora'}
+                        </span>
+                      </div>
+                      <ChevronDown size={15} className={`text-muted-foreground transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {/* Menú Flotante con scroll suave y estilos del sistema */}
+                    {isOpen && (
+                      <div className="absolute right-0 top-full mt-1.5 w-full bg-card border border-border rounded-xl shadow-lg z-50 max-h-52 overflow-y-auto p-1.5 space-y-1 backdrop-blur-md animate-in fade-in zoom-in-95 duration-150">
+                        {availableHours.length === 0 ? (
+                          <div className="px-3 py-2 text-center text-[11px] text-muted-foreground font-medium">
+                            Todas las horas han sido agregadas.
+                          </div>
+                        ) : (
+                          availableHours.map((timeStr) => {
+                            const isSelected = newTimeInput === timeStr;
+                            return (
+                              <button
+                                key={timeStr}
+                                type="button"
+                                onClick={() => {
+                                  setNewTimeInput(timeStr);
+                                  setIsOpen(false);
+                                }}
+                                className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-between transition-colors ${isSelected
+                                  ? 'bg-emerald-600 text-white font-black'
+                                  : 'hover:bg-emerald-500/10 hover:text-emerald-600 text-foreground'
+                                  }`}
+                              >
+                                <span>{formatHourLabel(timeStr)}</span>
+                                <span className={`text-[10px] font-semibold opacity-60 ${isSelected ? 'text-white' : 'text-muted-foreground'}`}>
+                                  {timeStr}
+                                </span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Botón Agregar */}
                   <button
                     type="button"
-                    onClick={addTimeSlot}
+                    onClick={() => {
+                      if (newTimeInput) {
+                        addTimeSlot();
+                        setNewTimeInput('');
+                      }
+                    }}
                     disabled={!newTimeInput}
-                    className="bg-primary text-white p-1.5 rounded-xl disabled:opacity-50"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-xs active:scale-95"
                   >
                     <Plus size={16} />
+                    <span>Agregar</span>
                   </button>
                 </div>
               </div>
+
+              {/* Grilla de Horarios Agregados */}
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                {timeSlots.map(slot => {
+                {timeSlots.map((slot) => {
                   const val = customPricing[slot] || '';
                   const isCustom = !!customPricing[slot];
-                  const hNum = parseInt(slot.split(':')[0]);
+                  const hNum = parseInt(slot.split(':')[0], 10);
                   const h12 = hNum === 0 ? 12 : hNum > 12 ? hNum - 12 : hNum;
                   const ampm = hNum < 12 ? 'am' : 'pm';
-                  return (
-                    <div key={slot} className={`p-2 rounded-xl border text-center transition-all ${isCustom ? 'bg-orange-50 border-orange-300' : 'bg-secondary/50 border-border'}`}>
-                      <div className="flex justify-center items-end gap-0.5 mb-1.5">
-                        {isCustom && <span className="w-1.5 h-1.5 bg-orange-400 rounded-full mb-1 mr-0.5" />}
-                        <span className={`font-bold text-xs ${isCustom ? 'text-orange-700' : 'text-foreground'}`}>{h12}:00</span>
-                        <span className="text-[8px] uppercase font-bold opacity-60 mb-0.5">{ampm}</span>
-                      </div>
-                      <div className="relative flex-1">
-                        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground">$</span>
-                        <input type="text"
-                          placeholder={price ? new Intl.NumberFormat('es-CO').format(Number(price)) : ''}
-                          value={val ? new Intl.NumberFormat('es-CO').format(Number(val)) : ''}
-                          onChange={e => handleCustomPriceChange(slot, e.target.value.replace(/\D/g, ''))}
-                          className={`w-full pl-3.5 pr-1 py-1 text-[10px] font-semibold border rounded outline-none transition-colors ${isCustom ? 'border-orange-300 bg-white text-orange-700' : 'border-transparent bg-background focus:border-border'}`} />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeTimeSlot(slot)}
-                        className="ml-1 text-muted-foreground hover:text-red-500 transition-colors p-1"
-                        title="Eliminar hora"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
 
+                  return (
+                    <div
+                      key={slot}
+                      className={`p-2 rounded-xl border transition-all ${isCustom
+                        ? 'bg-amber-500/10 border-amber-500/30 dark:bg-amber-950/20'
+                        : 'bg-secondary/40 border-border hover:border-border/80'
+                        }`}
+                    >
+                      {/* Cabecera del ítem de hora */}
+                      <div className="flex justify-between items-center mb-1.5">
+                        <div className="flex items-end gap-0.5">
+                          {isCustom && <span className="w-1.5 h-1.5 bg-amber-500 rounded-full mb-1 mr-0.5" />}
+                          <span
+                            className={`font-black text-xs ${isCustom ? 'text-amber-600 dark:text-amber-400' : 'text-foreground'
+                              }`}
+                          >
+                            {h12}:00
+                          </span>
+                          <span className="text-[9px] uppercase font-bold opacity-60 mb-0.5">{ampm}</span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => removeTimeSlot(slot)}
+                          className="text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors p-1 rounded-lg"
+                          title="Eliminar hora"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+
+                      {/* Campo de precio especial */}
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground font-bold">
+                          $
+                        </span>
+                        <input
+                          type="text"
+                          placeholder={price ? new Intl.NumberFormat('es-CO').format(Number(price)) : 'Precio'}
+                          value={val ? new Intl.NumberFormat('es-CO').format(Number(val)) : ''}
+                          onChange={(e) => handleCustomPriceChange(slot, e.target.value.replace(/\D/g, ''))}
+                          className={`w-full pl-4 pr-1.5 py-1 text-[11px] font-bold border rounded-lg outline-none transition-colors ${isCustom
+                            ? 'border-amber-500/40 bg-card text-amber-600 dark:text-amber-400 focus:border-amber-500'
+                            : 'border-border/60 bg-background focus:border-emerald-600'
+                            }`}
+                        />
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -939,57 +1087,68 @@ export default function NewPitchPage() {
 
       {/* ─── SECCIÓN 4: UBICACIÓN ─── */}
       {/* ─── SECCIÓN 4: UBICACIÓN Y MAPA ─── */}
-      {
-        activeSection === 'location' && (
-          <div className="space-y-6 animate-in fade-in">
-            <div className="bg-card border border-border rounded-2xl p-6 space-y-5">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <h2 className="font-bold text-base">Ubicación en el Mapa</h2>
-                <button
-                  type="button"
-                  onClick={getCurrentLocation}
-                  className="text-xs font-bold text-primary flex items-center gap-1 hover:underline"
-                >
-                  <MapPin size={12} /> Usar GPS Actual
-                </button>
-              </div>
-
-              <p className="text-xs text-muted-foreground">
-                Haz clic o arrastra el marcador en el mapa para fijar la ubicación exacta de tu cancha.
-              </p>
-
-              <div className="h-64 rounded-xl overflow-hidden border border-border">
-                <LocationPicker
-                  lat={lat || 1.2136}
-                  lng={lng || -77.2811}
-                  onChange={handleLocationChange}
-                />
-              </div>
-
-              {lat && lng && (
-                <div className="p-3 bg-secondary/50 rounded-xl text-xs space-y-1">
-                  <p className="font-bold">Coordenadas Seleccionadas:</p>
-                  <p className="text-muted-foreground font-mono">Lat: {lat.toFixed(6)}, Lng: {lng.toFixed(6)}</p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              <button onClick={() => setActiveSection('media')} className="flex-1 py-3 border border-border rounded-xl font-bold hover:bg-secondary">
-                ← Atrás
-              </button>
+      {activeSection === 'location' && (
+        <div className="space-y-4 sm:space-y-6 animate-in fade-in">
+          <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-xs">
+            {/* Cabecera de Ubicación */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-border pb-3">
+              <h2 className="font-bold text-base text-foreground">Ubicación en el Mapa</h2>
               <button
-                onClick={handleSubmit}
-                disabled={loading}
-                className="flex-1 btn-primary py-3 flex items-center justify-center gap-2"
+                type="button"
+                onClick={getCurrentLocation}
+                className="self-start sm:self-auto text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-xl border border-emerald-500/20 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
               >
-                {loading && <Loader2 size={16} className="animate-spin" />}
-                Publicar Cancha
+                <MapPin size={14} className="shrink-0" />
+                <span>Usar mi GPS Actual</span>
               </button>
             </div>
+
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Haz clic o arrastra el marcador en el mapa para fijar la ubicación exacta de tu cancha.
+            </p>
+
+            {/* Contenedor del Mapa Adaptable */}
+            <div className="h-56 sm:h-72 w-full rounded-xl overflow-hidden border border-border shadow-inner relative z-0">
+              <LocationPicker
+                lat={lat || 1.2136}
+                lng={lng || -77.2811}
+                onChange={handleLocationChange}
+              />
+            </div>
+
+            {/* Badge de Coordenadas */}
+            {lat && lng && (
+              <div className="p-3 bg-secondary/50 border border-border/80 rounded-xl text-xs space-y-1">
+                <p className="font-bold text-foreground">Coordenadas Seleccionadas:</p>
+                <p className="text-muted-foreground font-mono text-[11px] sm:text-xs">
+                  Lat: <span className="text-foreground font-semibold">{lat.toFixed(6)}</span>, Lng:{' '}
+                  <span className="text-foreground font-semibold">{lng.toFixed(6)}</span>
+                </p>
+              </div>
+            )}
           </div>
-        )
-      }
+
+          {/* Botones de Navegación de Paso */}
+          <div className="flex items-center gap-2.5 pt-1">
+            <button
+              type="button"
+              onClick={() => setActiveSection('media')}
+              className="flex-1 py-3 px-4 border border-border rounded-xl text-xs sm:text-sm font-bold bg-card hover:bg-secondary text-foreground transition-all shadow-xs active:scale-98"
+            >
+              ← Atrás
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={loading}
+              className="flex-[2] py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed active:scale-98"
+            >
+              {loading && <Loader2 size={16} className="animate-spin shrink-0" />}
+              <span>{loading ? 'Publicando...' : 'Publicar Cancha'}</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ─── MODAL DE VISTA PREVIA ─── */}
       {/* MODAL DE VISTA PREVIA */}

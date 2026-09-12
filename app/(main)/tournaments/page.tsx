@@ -351,7 +351,7 @@ export default function TournamentsPage() {
               </h1>
             </div>
             <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1">
-              Explora, regístrate y participa en los torneos y campeonatos organizados por centros deportivos y la comunidad de jugadores.            </p>
+              Explora y participa en los torneos y campeonatos organizados por centros deportivos y la comunidad de jugadores.            </p>
           </div>
 
           <button

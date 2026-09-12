@@ -82,6 +82,14 @@ export function Sidebar() {
               <Smartphone size={19} />
               <span>Conectar WhatsApp</span>
             </Link>
+
+            <Link
+              href="/dashboard/schools"
+              className={`nav-item ${pathname === '/dashboard/schools' ? 'active' : ''}`}
+            >
+              <GraduationCap size={19} />
+              <span>Escuelas</span>
+            </Link>
           </>
         )}
 

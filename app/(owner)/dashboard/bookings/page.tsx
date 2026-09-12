@@ -90,7 +90,7 @@ export default function BookingsPage() {
 
         const { data: bookingsData } = await supabase
           .from('bookings')
-          .select(`*, pitches!inner (name, company_id)`)
+          .select(`*, pitches!inner (name, company_id, price_per_hour, custom_pricing, booking_percentage)`)
           .eq('pitches.company_id', company.id)
           .neq('status', 'draft')
           .order('start_time', { ascending: false });
@@ -104,7 +104,7 @@ export default function BookingsPage() {
     }
   }, [user, supabase]);
 
-  const [cancelConfirm, setCancelConfirm] = useState<{ id: string; name: string; time: string } | null>(null);
+  const [cancelConfirm, setCancelConfirm] = useState<{ id: string; name: string; time: string; total_price?: number; deposit_amount?: number } | null>(null);
   const [cancelling, setCancelling] = useState(false);
 
   const updateStatus = async (id: string, newStatus: 'confirmed' | 'cancelled') => {
@@ -152,10 +152,33 @@ export default function BookingsPage() {
     const startTime = new Date(booking.start_time);
     const timeStr = startTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
     const dateStr = startTime.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' });
+    const tPrice = booking.total_price || booking.pitches?.price_per_hour || 80000;
+    let dAmount = booking.deposit_amount || 0;
+    
+    if (dAmount === 0 && booking.pitches) {
+      const customPricing = booking.pitches.custom_pricing || {};
+      const isFixed = customPricing.booking_type === 'fixed';
+      const pct = customPricing.booking_percentage || booking.pitches.booking_percentage || 50;
+      
+      // Calculate how many hours this booking is (assuming 1 hour for now since most are 1 slot)
+      // Since booking.start_time and booking.end_time define the length:
+      const start = new Date(booking.start_time);
+      const end = booking.end_time ? new Date(booking.end_time) : new Date(start.getTime() + 60 * 60 * 1000);
+      const hoursCount = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60)));
+
+      if (isFixed) {
+        dAmount = Number(customPricing.booking_fixed || 0) * hoursCount;
+      } else {
+        dAmount = (tPrice * Number(pct)) / 100;
+      }
+    }
+    
     setCancelConfirm({
       id: booking.id,
       name: booking.customer_name || 'Anónimo',
       time: `${dateStr} · ${timeStr}`,
+      total_price: tPrice,
+      deposit_amount: dAmount
     });
   };
 
@@ -223,6 +246,63 @@ export default function BookingsPage() {
       return matchStatus && matchDate && matchQuery;
     });
   }, [bookings, filterStatus, listDateFilter, selectedDate, calView, searchQuery, getDaysRange]);
+
+  const groupedBookings = useMemo(() => {
+    const groups: Record<string, any> = {};
+
+    filteredBookings.forEach(b => {
+      const dateStr = getLocalDateString(b.start_time);
+      const key = `${b.pitch_id}-${b.customer_name || 'Anon'}-${dateStr}-${b.status}`;
+      
+      if (!groups[key]) {
+        groups[key] = {
+          key,
+          id: b.id, // main id for key mapping
+          status: b.status,
+          customer_name: b.customer_name,
+          customer_phone: b.customer_phone,
+          pitches: b.pitches,
+          start_time: b.start_time,
+          source: b.source,
+          payment_proof_url: b.payment_proof_url,
+          bookings: [],
+          total_price: 0,
+          deposit_amount: 0,
+        };
+      }
+      
+      groups[key].bookings.push(b);
+      // update start_time to earliest
+      if (new Date(b.start_time) < new Date(groups[key].start_time)) {
+        groups[key].start_time = b.start_time;
+      }
+      
+      const tPrice = b.total_price || b.pitches?.price_per_hour || 80000;
+      let dAmount = b.deposit_amount || 0;
+      if (dAmount === 0 && b.pitches) {
+        const customPricing = b.pitches.custom_pricing || {};
+        const isFixed = customPricing.booking_type === 'fixed';
+        const pct = customPricing.booking_percentage || b.pitches.booking_percentage || 50;
+        const start = new Date(b.start_time);
+        const end = b.end_time ? new Date(b.end_time) : new Date(start.getTime() + 60 * 60 * 1000);
+        const hoursCount = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60)));
+        if (isFixed) {
+          dAmount = Number(customPricing.booking_fixed || 0) * hoursCount;
+        } else {
+          dAmount = (tPrice * Number(pct)) / 100;
+        }
+      }
+      groups[key].total_price += tPrice;
+      groups[key].deposit_amount += dAmount;
+    });
+
+    // Sort items by start_time so they render in order
+    Object.values(groups).forEach(g => {
+      g.bookings.sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    });
+
+    return Object.values(groups).sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
+  }, [filteredBookings]);
 
   const formatSelectedDateText = (dateStr: string) => {
     if (!dateStr) return '';
@@ -363,6 +443,7 @@ export default function BookingsPage() {
                 { key: 'confirmed', label: 'Confirmadas', color: 'bg-emerald-500' },
                 { key: 'manual', label: 'Manuales', color: 'bg-purple-500' },
                 { key: 'cancelled', label: 'Canceladas', color: 'bg-rose-500' },
+
               ].map((st) => {
                 const isActive = filterStatus === st.key;
                 const rangeDates = getDaysRange(selectedDate, calView);
@@ -401,77 +482,120 @@ export default function BookingsPage() {
           </div>
 
           {/* Cards de Reservas — responsivo sin tabla */}
-          {filteredBookings.length === 0 ? (
+          {groupedBookings.length === 0 ? (
             <div className="bg-card rounded-2xl border border-border text-center py-16 p-4">
               <p className="text-sm text-muted-foreground">No se encontraron reservas con los filtros seleccionados.</p>
             </div>
           ) : (
             <div className="grid gap-3">
-              {filteredBookings.map(b => {
-                const startTime = new Date(b.start_time);
-                const isManual = b.source === 'owner_panel';
+              {groupedBookings.map((group: any) => {
+                const startTime = new Date(group.start_time);
+                const isManual = group.source === 'owner_panel';
                 const statusColors = {
                   confirmed: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800',
                   pending: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
                   cancelled: 'bg-red-100 text-red-600 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
                 };
-                return (
-                  <div key={b.id} className="bg-card rounded-2xl border border-border shadow-sm p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                    {/* Indicador de estado (izquierda en desktop) */}
-                    <div className={`w-1.5 hidden sm:block self-stretch rounded-full flex-shrink-0 ${b.status === 'confirmed' ? 'bg-green-500' : b.status === 'pending' ? 'bg-amber-500' : 'bg-red-400'}`} />
+                
+                const tPrice = group.total_price;
+                const dAmount = group.deposit_amount;
 
-                    {/* Info principal */}
-                    <div className="flex-1 min-w-0 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2">
-                      <div className="col-span-2 sm:col-span-1">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Cliente</p>
-                        <p className="font-bold text-sm text-foreground capitalize">{b.customer_name || 'Anónimo'}</p>
-                        {b.customer_phone && <p className="text-[11px] text-muted-foreground">{b.customer_phone}</p>}
+                return (
+                  <div key={group.key} className="bg-card rounded-2xl border border-border shadow-sm p-4 flex flex-col gap-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                      {/* Indicador de estado (izquierda en desktop) */}
+                      <div className={`w-1.5 hidden sm:block self-stretch rounded-full flex-shrink-0 ${group.status === 'confirmed' ? 'bg-green-500' : group.status === 'pending' ? 'bg-purple-500' : 'bg-red-400'}`} />
+
+                      {/* Info principal */}
+                      <div className="flex-1 min-w-0 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
+                        <div className="col-span-2 sm:col-span-1">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Cliente</p>
+                          <p className="font-bold text-sm text-foreground capitalize">{group.customer_name || 'Anónimo'}</p>
+                          {group.customer_phone && <p className="text-[11px] text-muted-foreground">{group.customer_phone}</p>}
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Cancha</p>
+                          <p className="font-semibold text-sm">{group.pitches?.name.toUpperCase() || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Fecha</p>
+                          <p className="font-bold text-sm capitalize text-foreground">
+                            {startTime.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
+                          </p>
+                          <p className="text-xs text-primary font-bold">
+                            {group.bookings.length} {group.bookings.length === 1 ? 'Hora' : 'Horas'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Pago</p>
+                          <p className="font-bold text-sm text-foreground">${tPrice.toLocaleString('es-CO')}</p>
+                          {dAmount > 0 && (
+                            <p className="text-[11px] text-primary font-bold">Abono: ${dAmount.toLocaleString('es-CO')}</p>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Cancha</p>
-                        <p className="font-semibold text-sm">{b.pitches?.name.toUpperCase() || '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Fecha y Hora</p>
-                        <p className="font-bold text-sm capitalize text-foreground">
-                          {startTime.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
-                        </p>
-                        <p className="text-xs text-primary font-bold">
-                          {startTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
-                        </p>
+
+                      {/* Badges y acciones */}
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {isManual && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-md">
+                              <Wrench size={10} /> Manual
+                            </span>
+                          )}
+                          {group.payment_proof_url && (
+                            <button onClick={() => setProofUrl(group.payment_proof_url)} className="inline-flex items-center gap-1 text-[10px] font-bold text-primary border border-primary/20 bg-primary/5 hover:bg-primary/15 px-2 py-0.5 rounded-md transition-colors">
+                              <FileText size={10} /> Comprobante
+                            </button>
+                          )}
+                          <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border ${statusColors[group.status as keyof typeof statusColors] || statusColors.cancelled}`}>
+                            {group.status === 'pending' ? <><Clock size={10} /> Pendiente</> : group.status === 'confirmed' ? <><CheckCircle size={10} /> Confirmadas ({group.bookings.length})</> : <><XCircle size={10} /> Canceladas ({group.bookings.length})</>}
+                          </span>
+                        </div>
+                        
+                        {/* Acciones en bloque */}
+                        {group.status === 'pending' && group.bookings.length > 1 && (
+                          <div className="flex gap-2">
+                            <button onClick={() => group.bookings.forEach((b: any) => updateStatus(b.id, 'confirmed'))} className="text-xs px-2 py-1 font-bold bg-green-100 text-green-700 hover:bg-green-200 rounded-lg transition-colors">Confirmar Todas</button>
+                            <button onClick={() => group.bookings.forEach((b: any) => handleCancelRequest(b))} className="text-xs px-2 py-1 font-bold bg-red-100 text-red-600 hover:bg-red-200 rounded-lg transition-colors">Rechazar Todas</button>
+                          </div>
+                        )}
+                        {group.status === 'confirmed' && group.bookings.length > 1 && (
+                          <button onClick={() => group.bookings.forEach((b: any) => handleCancelRequest(b))} className="text-xs px-2 py-1 font-bold bg-red-100 text-red-600 hover:bg-red-200 rounded-lg transition-colors">Cancelar Todas</button>
+                        )}
                       </div>
                     </div>
 
-                    {/* Badges y acciones */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {isManual && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-md">
-                          <Wrench size={10} /> Manual
-                        </span>
-                      )}
-                      {b.payment_proof_url && (
-                        <button onClick={() => setProofUrl(b.payment_proof_url)} className="inline-flex items-center gap-1 text-[10px] font-bold text-primary border border-primary/20 bg-primary/5 hover:bg-primary/15 px-2 py-0.5 rounded-md transition-colors">
-                          <FileText size={10} /> Comprobante
-                        </button>
-                      )}
-                      <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border ${statusColors[b.status as keyof typeof statusColors] || statusColors.cancelled}`}>
-                        {b.status === 'pending' ? <><Clock size={10} /> Pendiente</> : b.status === 'confirmed' ? <><CheckCircle size={10} /> Confirmada</> : <><XCircle size={10} /> Cancelada</>}
-                      </span>
-                      {b.status === 'pending' && (
-                        <div className="flex gap-1">
-                          <button onClick={() => updateStatus(b.id, 'confirmed')} className="p-2 bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/40 dark:text-green-300 rounded-xl transition-colors" title="Confirmar">
-                            <CheckCircle size={16} />
-                          </button>
-                          <button onClick={() => handleCancelRequest(b)} className="p-2 bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 rounded-xl transition-colors" title="Rechazar">
-                            <XCircle size={16} />
-                          </button>
-                        </div>
-                      )}
-                      {b.status === 'confirmed' && (
-                        <button onClick={() => handleCancelRequest(b)} className="p-2 bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 rounded-xl transition-colors" title="Cancelar reserva">
-                          <XCircle size={16} />
-                        </button>
-                      )}
+                    {/* Lista de horas individuales */}
+                    <div className="bg-secondary/40 rounded-xl p-3 flex gap-2 flex-wrap items-center mt-1 border border-border/50">
+                      <span className="text-xs font-bold text-muted-foreground mr-2">Horas:</span>
+                      {group.bookings.map((b: any) => {
+                        const bTime = new Date(b.start_time);
+                        return (
+                          <div key={b.id} className="flex items-center gap-1.5 bg-background border border-border px-2 py-1 rounded-lg shadow-sm">
+                            <span className="text-xs font-bold text-foreground">
+                              {bTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
+                            </span>
+                            {group.status === 'pending' && (
+                              <div className="flex gap-0.5 ml-2 border-l border-border pl-1.5">
+                                <button onClick={() => updateStatus(b.id, 'confirmed')} className="p-1 text-green-600 hover:bg-green-100 rounded-md" title="Confirmar esta hora">
+                                  <CheckCircle size={12} />
+                                </button>
+                                <button onClick={() => handleCancelRequest(b)} className="p-1 text-red-600 hover:bg-red-100 rounded-md" title="Rechazar esta hora">
+                                  <XCircle size={12} />
+                                </button>
+                              </div>
+                            )}
+                            {group.status === 'confirmed' && (
+                              <div className="flex gap-0.5 ml-2 border-l border-border pl-1.5">
+                                <button onClick={() => handleCancelRequest(b)} className="p-1 text-red-600 hover:bg-red-100 rounded-md" title="Cancelar esta hora">
+                                  <XCircle size={12} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -576,6 +700,18 @@ export default function BookingsPage() {
                 <span className="text-muted-foreground font-semibold">Fecha y Hora:</span>
                 <span className="font-bold text-primary">{cancelConfirm.time}</span>
               </div>
+              {cancelConfirm.total_price !== undefined && (
+                <div className="flex justify-between items-center text-xs pt-1">
+                  <span className="text-muted-foreground font-semibold">Precio Total:</span>
+                  <span className="font-bold text-foreground">${cancelConfirm.total_price.toLocaleString('es-CO')}</span>
+                </div>
+              )}
+              {cancelConfirm.deposit_amount !== undefined && cancelConfirm.deposit_amount > 0 && (
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-muted-foreground font-semibold">Abono:</span>
+                  <span className="font-bold text-primary">${cancelConfirm.deposit_amount.toLocaleString('es-CO')}</span>
+                </div>
+              )}
               <p className="text-[11px] text-muted-foreground/90 pt-2 border-t border-border/50 leading-relaxed">
                 Esta acción cancelará la reserva en el calendario y permitirá que el espacio vuelva a estar disponible para nuevos partidos o reservas manuales.
               </p>
@@ -734,7 +870,7 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, onCancel, onCancelRe
         <h3 className="font-bold text-sm flex items-center gap-2">
           <div className="w-2 h-4 bg-primary rounded-full" /> {pitch.name}
         </h3>
-      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
           {loading && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
           <button
             onClick={fetchSlots}
