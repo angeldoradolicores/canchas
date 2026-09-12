@@ -106,7 +106,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   const today = useToday();
   const normalizeTime = (t: string) => t ? t.substring(0, 5) : '';
 
-  const [step, setStep] = useState(preselectedTimes.length > 0 ? 2 : 1);
+  const [step, setStep] = useState(1);
   const [selectedDate, setSelectedDate] = useState(preselectedDate || today || '');
   const [selectedTimes, setSelectedTimes] = useState<string[]>(
     preselectedTimes.map(normalizeTime)
@@ -155,12 +155,21 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     };
   }, [setIsFloating]);
 
-  // Si entra con horas preseleccionadas y no hay bloqueo activo, bloquear automáticamente
+  // Si entra con horas preseleccionadas Y ya existe un lock activo válido para esta cancha,
+  // pasar directamente al paso 2 (el lock se hizo previamente con éxito).
   useEffect(() => {
-    if (preselectedTimes.length > 0 && selectedDate && (!activeBooking || activeBooking.pitch.id !== pitch.id)) {
-      startLock(pitch, selectedDate, preselectedTimes.map(normalizeTime));
+    if (
+      preselectedTimes.length > 0 &&
+      activeBooking &&
+      activeBooking.pitch.id === pitch.id &&
+      activeBooking.selectedDate === (preselectedDate || today) &&
+      Math.max(0, Math.floor((new Date(activeBooking.expiresAt).getTime() - Date.now()) / 1000)) > 0
+    ) {
+      setStep(2);
     }
-  }, [pitch.id, selectedDate, preselectedTimes]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Si NO hay lock activo y vienen horas preseleccionadas, quedarse en paso 1 con las horas
+    // ya marcadas para que el usuario confirme y dispare el lock con el botón "Reservar".
+  }, [pitch.id]); // solo al montar
 
   const isExpiredAlertRef = useRef(false);
   const hadActiveLockRef = useRef(false);
@@ -171,6 +180,32 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
       hadActiveLockRef.current = true;
     }
   }, [activeBooking, pitch.id]);
+
+  // Auto-deseleccionar horas que mientras el usuario las tiene marcadas pasan a ser
+  // bloqueadas por otra persona (draft activo, pendiente o confirmada).
+  // Se dispara cada vez que takenSlots se actualiza (polling cada 3.5s o realtime).
+  // useEffect(() => {
+  //   if (takenSlots.size === 0) return;
+  //   const now = new Date();
+  //   setSelectedTimes(prev => {
+  //     const cleaned = prev.filter(slot => {
+  //       const slotData = takenSlots.get(slot);
+  //       if (!slotData) return true; // sigue disponible, mantener
+  //       // Expirado → ya no está realmente tomado, mantener selección
+  //       if (
+  //         slotData.status === 'draft' &&
+  //         slotData.expires_at &&
+  //         new Date(slotData.expires_at) <= now
+  //       ) {
+  //         return true;
+  //       }
+  //       // Activo (draft vigente, pendiente o confirmado) → deseleccionar
+  //       return false;
+  //     });
+  //     // Solo actualizar estado si algo cambió (evitar renders innecesarios)
+  //     return cleaned.length === prev.length ? prev : cleaned;
+  //   });
+  // }, [takenSlots]);
 
   useEffect(() => {
     if (!selectedDate || !pitch.id) return;

@@ -65,31 +65,53 @@ export default function PublicProfilePage() {
     loadData();
   }, [id]);
 
-  // Convertir avatar a base64 Data URL para que html-to-image nunca pierda la foto por CORS
-  useEffect(() => {
-    if (!profile?.avatar_url) {
-      setAvatarDataUrl(null);
-      return;
-    }
+  const convertToDataUrl = async (imgUrl: string): Promise<string | null> => {
+    if (!imgUrl) return null;
+    if (imgUrl.startsWith('data:')) return imgUrl;
 
-    let isMounted = true;
-    const convertToDataUrl = async (imgUrl: string) => {
+    const loadViaCanvas = (src: string): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const size = 256;
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              const minDim = Math.min(img.width, img.height);
+              const sx = (img.width - minDim) / 2;
+              const sy = (img.height - minDim) / 2;
+              ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
+              resolve(canvas.toDataURL('image/jpeg', 0.92));
+              return;
+            }
+          } catch (e) {
+            reject(e);
+            return;
+          }
+          reject(new Error('Canvas context null'));
+        };
+        img.onerror = reject;
+        img.src = src;
+      });
+    };
+
+    try {
+      // 1. Intento directo via canvas con crop
+      return await loadViaCanvas(imgUrl);
+    } catch {
       try {
-        // 1. Intento directo
-        const res = await fetch(imgUrl);
-        if (!res.ok) throw new Error('Direct fetch failed');
-        const blob = await res.blob();
-        return new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(blob);
-        });
+        // 2. Intento via proxy
+        const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(imgUrl)}`;
+        return await loadViaCanvas(proxyUrl);
       } catch {
         try {
-          // 2. Intento mediante proxy con CORS
+          // 3. Fallback FileReader directo desde proxy
           const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(imgUrl)}`;
           const res = await fetch(proxyUrl);
-          if (!res.ok) throw new Error('Proxy fetch failed');
           const blob = await res.blob();
           return new Promise<string>((resolve) => {
             const reader = new FileReader();
@@ -101,14 +123,37 @@ export default function PublicProfilePage() {
           return null;
         }
       }
-    };
+    }
+  };
 
+  // Convertir avatar a base64 Data URL para que html-to-image nunca pierda la foto por CORS
+  useEffect(() => {
+    if (!profile?.avatar_url) {
+      setAvatarDataUrl(null);
+      return;
+    }
+
+    let isMounted = true;
     convertToDataUrl(profile.avatar_url).then((uri) => {
       if (isMounted && uri) setAvatarDataUrl(uri);
     });
 
     return () => { isMounted = false; };
   }, [profile?.avatar_url]);
+
+  const ensureAvatarLoaded = async () => {
+    if (avatarDataUrl) return avatarDataUrl;
+    if (profile?.avatar_url) {
+      const uri = await convertToDataUrl(profile.avatar_url);
+      if (uri) {
+        setAvatarDataUrl(uri);
+        // Esperar 120ms para que React actualice el DOM
+        await new Promise((r) => setTimeout(r, 120));
+        return uri;
+      }
+    }
+    return null;
+  };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -137,6 +182,7 @@ export default function PublicProfilePage() {
     if (!cardRef.current) return;
     setDownloading(true);
     try {
+      await ensureAvatarLoaded();
       const dataUrl = await htmlToImage.toPng(cardRef.current, {
         quality: 1,
         pixelRatio: 3,
@@ -156,6 +202,7 @@ export default function PublicProfilePage() {
     if (!cardRef.current) return;
     setSharingWhatsApp(true);
     try {
+      await ensureAvatarLoaded();
       const dataUrl = await htmlToImage.toPng(cardRef.current, {
         quality: 1,
         pixelRatio: 3,
@@ -166,15 +213,12 @@ export default function PublicProfilePage() {
       const fileName = `tarjeta-${profile?.full_name?.replace(/\s+/g, '-') || 'jugador'}.png`;
       const file = new File([blob], fileName, { type: 'image/png' });
 
-      const text = `🏆 ¡Mira mi tarjeta de jugador en Canchas Pasto!\n\n⚽ ${stats.bookings} partidos jugados · 🎯 ${stats.challenges} retos\n⭐ Rango: ${rank.title}\n\nConoce mi perfil: ${window.location.href}`;
-
-      // Compartir nativamente con archivo en móviles compatibles
+      // Compartir nativamente con archivo en móviles compatibles (Android/iOS)
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({
             files: [file],
             title: `Tarjeta de Jugador - ${profile?.full_name || 'Jugador'}`,
-            text,
           });
           return;
         } catch (shareErr: any) {
@@ -182,9 +226,21 @@ export default function PublicProfilePage() {
         }
       }
 
+      // En escritorio o navegadores sin soporte directo de archivo:
+      try {
+        if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob }),
+          ]);
+        }
+      } catch (clipErr) {
+        console.warn('Clipboard image write skipped', clipErr);
+      }
+
       // Fallback: descargar imagen y abrir WhatsApp
       download(dataUrl, fileName);
-      const waText = encodeURIComponent(`${text}\n\n(La imagen de tu tarjeta se descargó en tu dispositivo para que puedas adjuntarla)`);
+      const text = `🏆 ¡Mira mi tarjeta de jugador en Canchas Pasto!\n\n⚽ ${stats.bookings} partidos jugados · 🎯 ${stats.challenges} retos\n⭐ Rango: ${rank.title}\n\nConoce mi perfil: ${window.location.href}`;
+      const waText = encodeURIComponent(`${text}\n\n(Tu tarjeta con foto se descargó y se copió al portapapeles. ¡Pégala aquí con Ctrl+V o adjúntala!)`);
       const waUrl = `https://api.whatsapp.com/send?text=${waText}`;
       window.open(waUrl, '_blank');
     } catch (err) {
@@ -326,7 +382,11 @@ export default function PublicProfilePage() {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 20, position: 'relative', zIndex: 2, padding: '0 24px' }}>
             <div style={{ position: 'relative', width: 96, height: 96, borderRadius: '50%', border: `3px solid ${rank.accent}`, boxShadow: `0 0 25px ${rank.glow}`, overflow: 'hidden', background: 'rgba(0,0,0,0.4)' }}>
               {profile?.avatar_url ? (
-                <img src={avatarDataUrl || profile.avatar_url} alt={profile.full_name} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img
+                  src={avatarDataUrl || profile.avatar_url}
+                  alt={profile.full_name || 'Jugador'}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
               ) : (
                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, fontWeight: 900, color: rank.accent, background: 'rgba(255,255,255,0.05)' }}>
                   {profile?.full_name?.substring(0, 1).toUpperCase() || '?'}

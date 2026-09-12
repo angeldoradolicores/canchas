@@ -15,6 +15,7 @@ export default function UserReservationsPage() {
   const [authChecked, setAuthChecked] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
   const [isSharing, setIsSharing] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [notification, setNotification] = useState<{ show: boolean; title: string; message: string; status: string } | null>(null);
   const ticketRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
@@ -151,8 +152,6 @@ export default function UserReservationsPage() {
       </div>
     );
   }
-
-  const [isDownloading, setIsDownloading] = useState(false);
 
   const handleDownloadTicket = async (b: any) => {
     if (!ticketRef.current) return;

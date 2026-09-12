@@ -111,12 +111,14 @@ export async function POST(req: NextRequest) {
       const lockedBookingIds: string[] = [];
 
       for (const item of inserts) {
-        const { data: existing } = await supabase
+        const { data: existingRows } = await supabase
           .from('bookings')
           .select('id, user_id, status, expires_at')
           .eq('pitch_id', pitch_id)
           .eq('start_time', item.start_time)
-          .maybeSingle();
+          .order('created_at', { ascending: false });
+
+        const existing = existingRows?.[0] || null;
 
         if (existing) {
           if (existing.status === 'confirmed' || existing.status === 'pending') {
@@ -125,9 +127,9 @@ export async function POST(req: NextRequest) {
 
           if (existing.status === 'draft') {
             const isExpired = !existing.expires_at || new Date(existing.expires_at) < now;
-            const isSameUser = effectiveUserId && existing.user_id === effectiveUserId;
 
             if (isExpired) {
+              // El bloqueo anterior expiró — podemos reutilizar el registro
               const { data: updated, error: upErr } = await supabase
                 .from('bookings')
                 .update({
@@ -151,19 +153,12 @@ export async function POST(req: NextRequest) {
               } else {
                 await supabase.from('bookings').delete().eq('id', existing.id);
               }
-            } else if (isSameUser) {
-              const { data: updated } = await supabase
-                .from('bookings')
-                .update({ expires_at: expiresAt })
-                .eq('id', existing.id)
-                .select()
-                .single();
-              if (updated) lockedBookingIds.push(updated.id);
-              continue;
             } else {
-              const secsLeft = Math.max(0, Math.floor((new Date(existing.expires_at).getTime() - now.getTime()) / 1000));
+              // Bloqueo activo — CUALQUIER persona (incluso el mismo usuario en otro dispositivo)
+              // recibe el error. El primero que bloqueó tiene la hora.
+              const secsLeft = Math.max(0, Math.floor((new Date(existing.expires_at!).getTime() - now.getTime()) / 1000));
               return NextResponse.json({
-                error: 'Alguien más está reservando esta hora en este momento.',
+                error: 'Esta hora ya está siendo reservada. Solo el primero en bloquearla puede continuar.',
                 secondsLeft: secsLeft,
                 expires_at: existing.expires_at,
               }, { status: 400 });
@@ -205,8 +200,79 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (insErr) {
+          // INSERT falló — lo más probable es una race condition (23505 unique constraint)
+          if (insErr.code === '23505' || insErr.message?.includes('unique')) {
+            // Re-fetch atómico: ver quién ganó la carrera
+            const { data: conflictRow } = await supabase
+              .from('bookings')
+              .select('id, user_id, status, expires_at')
+              .eq('pitch_id', pitch_id)
+              .eq('start_time', item.start_time)
+              .maybeSingle();
+
+            if (conflictRow) {
+              const conflictExpired =
+                !conflictRow.expires_at || new Date(conflictRow.expires_at) <= now;
+
+              // Caso 1: Ya confirmada o pendiente — no se puede tomar
+              if (
+                conflictRow.status === 'confirmed' ||
+                conflictRow.status === 'pending'
+              ) {
+                return NextResponse.json(
+                  { error: 'Esta hora ya ha sido reservada.' },
+                  { status: 400 }
+                );
+              }
+
+              // Caso 2: Draft activo — CUALQUIER intento posterior (mismo o diferente usuario) bloqueado
+              if (conflictRow.status === 'draft' && !conflictExpired) {
+                const secsLeft = Math.max(
+                  0,
+                  Math.floor(
+                    (new Date(conflictRow.expires_at!).getTime() - now.getTime()) / 1000
+                  )
+                );
+                return NextResponse.json(
+                  {
+                    error:
+                      'Esta hora ya está siendo reservada. Solo el primero en bloquearla puede continuar.',
+                    secondsLeft: secsLeft,
+                    expires_at: conflictRow.expires_at,
+                  },
+                  { status: 400 }
+                );
+              }
+
+              // Caso 3: Expirado o mismo usuario → podemos tomar el slot
+              const { data: taken, error: takeErr } = await supabase
+                .from('bookings')
+                .update({
+                  user_id: effectiveUserId,
+                  customer_name: null,
+                  customer_phone: null,
+                  status: 'draft',
+                  payment_status: null,
+                  payment_proof_url: null,
+                  source: null,
+                  expires_at: expiresAt,
+                  end_time: item.end_time,
+                })
+                .eq('id', conflictRow.id)
+                .select()
+                .maybeSingle();
+
+              if (taken && !takeErr) {
+                lockedBookingIds.push(taken.id);
+                continue;
+              }
+            }
+          }
           console.error('[lock_booking insert error]', insErr);
-          return NextResponse.json({ error: 'No se pudo bloquear la hora: ' + insErr.message }, { status: 500 });
+          return NextResponse.json(
+            { error: 'No se pudo bloquear la hora: ' + insErr.message },
+            { status: 500 }
+          );
         }
         if (inserted) lockedBookingIds.push(inserted.id);
       }
@@ -303,8 +369,6 @@ export async function POST(req: NextRequest) {
         payment_status: 'submitted',
         payment_proof_url: paymentProofUrl,
         expires_at: newExpiresAt,
-        ...(total_price !== undefined && total_price !== null ? { total_price: Number(total_price) / sortedTimes.length } : {}),
-        ...(deposit_amount !== undefined && deposit_amount !== null ? { deposit_amount: Number(deposit_amount) / sortedTimes.length } : {}),
       };
       if (effectiveUserId) baseUpdatePayload.user_id = effectiveUserId;
 
