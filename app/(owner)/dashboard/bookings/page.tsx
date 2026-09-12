@@ -192,26 +192,28 @@ export default function BookingsPage() {
 
   // Genera el rango de fechas continuas "YYYY-MM-DD" sin errores de zona horaria
   const getDaysRange = useCallback((startDate: string, view: CalendarView): string[] => {
-    if (!startDate || view === 'month') return [];
+    if (view === 'month') return [];
     const count = view === 'day' ? 1 : view === 'week' ? 7 : 15;
     const result: string[] = [];
 
+    if (view === 'week' || view === 'biweek') {
+      // Últimos 7 o 15 días, contando exactamente desde hoy hacia atrás
+      const today = new Date();
+      for (let i = count - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        result.push(getLocalDateString(d));
+      }
+      return result;
+    }
+
+    if (!startDate) return [];
     const [y, m, d] = startDate.split('-').map(Number);
     const baseDate = new Date(y, m - 1, d);
-
-    if (view === 'week' || view === 'biweek') {
-      // Últimos 7 o 15 días, terminando en la fecha base (usualmente hoy)
-      for (let i = count - 1; i >= 0; i--) {
-        const nextDate = new Date(baseDate);
-        nextDate.setDate(baseDate.getDate() - i);
-        result.push(getLocalDateString(nextDate));
-      }
-    } else {
-      for (let i = 0; i < count; i++) {
-        const nextDate = new Date(baseDate);
-        nextDate.setDate(baseDate.getDate() + i);
-        result.push(getLocalDateString(nextDate));
-      }
+    for (let i = 0; i < count; i++) {
+      const nextDate = new Date(baseDate);
+      nextDate.setDate(baseDate.getDate() + i);
+      result.push(getLocalDateString(nextDate));
     }
     return result;
   }, []);
@@ -361,7 +363,20 @@ export default function BookingsPage() {
             className="flex items-center gap-2 px-3 py-2 bg-secondary/80 hover:bg-secondary border border-border rounded-xl text-xs font-bold transition-all"
           >
             <CalendarIcon size={16} className="text-primary" />
-            <span>Fecha: <strong className="text-foreground capitalize">{selectedDate ? formatSelectedDateText(selectedDate) : 'Seleccionar'}</strong></span>
+            <span>
+              Fecha:{' '}
+              <strong className="text-foreground capitalize">
+                {calView === 'week'
+                  ? 'Últimos 7 días'
+                  : calView === 'biweek'
+                  ? 'Últimos 15 días'
+                  : calView === 'month'
+                  ? 'Mes completo'
+                  : selectedDate
+                  ? formatSelectedDateText(selectedDate)
+                  : 'Seleccionar'}
+              </strong>
+            </span>
           </button>
 
           {isCalendarOpen && (

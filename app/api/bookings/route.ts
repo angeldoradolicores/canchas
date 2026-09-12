@@ -242,6 +242,7 @@ export async function POST(req: NextRequest) {
         customer_phone,
         selected_date,
         selected_times,
+        booking_ids,
         file_name,
         file_base64,
         total_price,
@@ -293,44 +294,116 @@ export async function POST(req: NextRequest) {
 
       const sortedTimes = [...selected_times].sort();
       const newExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+      const hasBookingIds = Array.isArray(booking_ids) && booking_ids.length > 0;
+
+      const baseUpdatePayload: any = {
+        customer_name: customer_name.trim(),
+        customer_phone: customer_phone || '',
+        status: 'pending',
+        payment_status: 'submitted',
+        payment_proof_url: paymentProofUrl,
+        expires_at: newExpiresAt,
+        ...(total_price !== undefined && total_price !== null ? { total_price: Number(total_price) / sortedTimes.length } : {}),
+        ...(deposit_amount !== undefined && deposit_amount !== null ? { deposit_amount: Number(deposit_amount) / sortedTimes.length } : {}),
+      };
+      if (effectiveUserId) baseUpdatePayload.user_id = effectiveUserId;
 
       const updatedBookings = [];
-      for (const slot of sortedTimes) {
-        const startTimeIso = `${selected_date}T${slot}:00-05:00`;
 
-        const updatePayload: any = {
-          customer_name: customer_name.trim(),
-          customer_phone: customer_phone || '',
-          status: 'pending',
-          payment_status: 'submitted',
-          payment_proof_url: paymentProofUrl,
-          expires_at: newExpiresAt,
-          ...(total_price !== undefined && total_price !== null ? { total_price: Number(total_price) / sortedTimes.length } : {}),
-          ...(deposit_amount !== undefined && deposit_amount !== null ? { deposit_amount: Number(deposit_amount) / sortedTimes.length } : {}),
-        };
-        if (effectiveUserId) updatePayload.user_id = effectiveUserId;
-
-        let query = supabase
+      if (hasBookingIds) {
+        // Estrategia 1: Actualizar directamente por IDs del lock si existen
+        const { data: bulkData, error: bulkError } = await supabase
           .from('bookings')
-          .update(updatePayload)
-          .eq('pitch_id', validPitchId)
-          .eq('start_time', startTimeIso)
-          .eq('status', 'draft');
+          .update(baseUpdatePayload)
+          .in('id', booking_ids!)
+          .select();
 
-        if (effectiveUserId) {
-          query = query.or(`user_id.eq.${effectiveUserId},user_id.is.null`);
+        if (bulkError) {
+          console.error('[create_booking] Error en update por IDs:', bulkError);
+        } else if (bulkData && bulkData.length > 0) {
+          updatedBookings.push(...bulkData);
         }
+      }
 
-        const { data, error } = await query.select().maybeSingle();
+      // Estrategia 2: Para cualquier slot restante no cubierto por los IDs
+      if (updatedBookings.length < sortedTimes.length) {
+        const alreadyUpdatedSlots = new Set(
+          updatedBookings.map((b: any) => {
+            try {
+              const d = new Date(b.start_time);
+              const localH = (d.getUTCHours() - 5 + 24) % 24;
+              return `${String(localH).padStart(2, '0')}:00`;
+            } catch { return ''; }
+          })
+        );
 
-        if (error || !data) {
-          console.error('Error actualizando draft a pending:', error);
-          return NextResponse.json(
-            { error: 'La reserva temporal expiró o no se encontró. Por favor selecciona las horas nuevamente.' },
-            { status: 400 }
-          );
+        const remainingSlots = sortedTimes.filter(s => !alreadyUpdatedSlots.has(s));
+
+        for (const slot of remainingSlots) {
+          const hourNum = parseInt(slot.split(':')[0], 10);
+          const endHourNum = (hourNum + 1) % 24;
+          const endSlot = endHourNum < 10 ? `0${endHourNum}:00` : `${endHourNum}:00`;
+          const startTimeIso = `${selected_date}T${slot}:00-05:00`;
+          const endTimeIso = `${selected_date}T${endSlot}:00-05:00`;
+
+          // Verificar si existe algún registro para esta hora
+          const { data: existing } = await supabase
+            .from('bookings')
+            .select('id, user_id, status, expires_at')
+            .eq('pitch_id', validPitchId)
+            .eq('start_time', startTimeIso)
+            .maybeSingle();
+
+          if (existing) {
+            // Si ya está confirmada por alguien o pendiente por otro usuario
+            if (existing.status === 'confirmed' || (existing.status === 'pending' && effectiveUserId && existing.user_id && existing.user_id !== effectiveUserId)) {
+              return NextResponse.json(
+                { error: `La hora ${slot} ya ha sido reservada por otra persona.` },
+                { status: 400 }
+              );
+            }
+
+            // Actualizar el registro existente (borrador, cancelado o del mismo usuario)
+            const { data: updated, error: updateErr } = await supabase
+              .from('bookings')
+              .update(baseUpdatePayload)
+              .eq('id', existing.id)
+              .select()
+              .single();
+
+            if (updateErr || !updated) {
+              console.error(`Error actualizando booking id ${existing.id}:`, updateErr);
+              return NextResponse.json(
+                { error: `Error al procesar la reserva para la hora ${slot}` },
+                { status: 500 }
+              );
+            }
+            updatedBookings.push(updated);
+          } else {
+            // No existe ningún registro (o el borrador fue limpiado): insertar directamente como pendiente
+            const newBookingData = {
+              pitch_id: validPitchId,
+              start_time: startTimeIso,
+              end_time: endTimeIso,
+              ...baseUpdatePayload,
+            };
+
+            const { data: inserted, error: insertErr } = await supabase
+              .from('bookings')
+              .insert(newBookingData)
+              .select()
+              .single();
+
+            if (insertErr || !inserted) {
+              console.error(`Error insertando booking para slot ${slot}:`, insertErr);
+              return NextResponse.json(
+                { error: `Error al crear la reserva para la hora ${slot}` },
+                { status: 500 }
+              );
+            }
+            updatedBookings.push(inserted);
+          }
         }
-        updatedBookings.push(data);
       }
 
       return NextResponse.json({ success: true, data: updatedBookings });

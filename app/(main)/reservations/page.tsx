@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth-context';
-import { Loader2, CalendarDays, MapPin, X, Share2, Ticket, Clock, CheckCircle, XCircle, AlertCircle, LayoutGrid, ChevronDown, Sparkles } from 'lucide-react';
+import { Loader2, CalendarDays, MapPin, X, Share2, Ticket, Clock, CheckCircle, XCircle, AlertCircle, LayoutGrid, ChevronDown, Sparkles, Download } from 'lucide-react';
 import Link from 'next/link';
 import { toPng } from 'html-to-image';
 
@@ -152,14 +152,36 @@ export default function UserReservationsPage() {
     );
   }
 
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const handleDownloadTicket = async (b: any) => {
+    if (!ticketRef.current) return;
+    setIsDownloading(true);
+    try {
+      const dataUrl = await toPng(ticketRef.current, { pixelRatio: 2, cacheBust: true });
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      const cleanName = b.pitches?.name?.replace(/\s+/g, '-') || 'reserva';
+      a.download = `ticket-${cleanName}.png`;
+      a.click();
+    } catch (error) {
+      console.error('Error downloading ticket', error);
+      alert('Hubo un error al descargar el ticket. Intenta nuevamente.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const handleShareWhatsApp = async (b: any) => {
     if (!ticketRef.current) return;
     setIsSharing(true);
 
     try {
-      const dataUrl = await toPng(ticketRef.current, { pixelRatio: 2 });
+      const dataUrl = await toPng(ticketRef.current, { pixelRatio: 2, cacheBust: true });
       const blob = await (await fetch(dataUrl)).blob();
-      const file = new File([blob], 'ticket-reserva.png', { type: 'image/png' });
+      const cleanName = b.pitches?.name?.replace(/\s+/g, '-') || 'reserva';
+      const fileName = `ticket-${cleanName}.png`;
+      const file = new File([blob], fileName, { type: 'image/png' });
       const pitchUrl = `${window.location.origin}/cancha/${b.pitch_id}`;
 
       // Lógica dinámica para el encabezado según el estado de la reserva
@@ -175,17 +197,25 @@ export default function UserReservationsPage() {
       const text = `${statusHeader}\n\n📍 ${b.pitches?.name?.toUpperCase() || ''}\n📅 Fecha: ${new Date(b.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}\n⏰ Hora: ${new Date(b.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}\n\nVer cancha y ubicación: ${pitchUrl}\n\n¡Allá nos vemos!`;
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'Ticket de Reserva', text });
-      } else {
-        const a = document.createElement('a');
-        a.href = dataUrl;
-        a.download = 'ticket-reserva.png';
-        a.click();
-        const waUrl = `https://wa.me/?text=${encodeURIComponent(text + '\n\n(La imagen del ticket se descargó en tu dispositivo)')}`;
-        window.open(waUrl, '_blank');
+        try {
+          await navigator.share({ files: [file], title: 'Ticket de Reserva', text });
+          return;
+        } catch (shareErr: any) {
+          if (shareErr.name === 'AbortError') return;
+        }
       }
+
+      // Fallback para navegadores sin Web Share de archivos: descargar imagen y abrir WhatsApp
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = fileName;
+      a.click();
+
+      const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text + '\n\n(La imagen del ticket se descargó en tu dispositivo para que puedas adjuntarla)')}`;
+      window.open(waUrl, '_blank');
     } catch (error) {
       console.error('Error generating image', error);
+      alert('Hubo un error al preparar el ticket. Puedes descargarlo directamente.');
     } finally {
       setIsSharing(false);
     }
@@ -643,14 +673,25 @@ export default function UserReservationsPage() {
               </div>
             </div>
 
-            <button
-              onClick={() => handleShareWhatsApp(selectedTicket)}
-              disabled={isSharing}
-              className="w-full py-4 bg-[#1DB954] hover:bg-[#1DB954]/90 disabled:bg-[#1DB954]/60 text-white font-black rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg"
-            >
-              {isSharing ? <Loader2 size={18} className="animate-spin" /> : <Share2 size={18} />}
-              {isSharing ? 'Generando ticket...' : 'Compartir por WhatsApp'}
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => handleDownloadTicket(selectedTicket)}
+                disabled={isSharing || isDownloading}
+                className="py-3.5 bg-secondary hover:bg-secondary/80 text-foreground font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-xs border border-border disabled:opacity-50"
+              >
+                {isDownloading ? <Loader2 size={16} className="animate-spin text-primary" /> : <Download size={16} />}
+                {isDownloading ? 'Descargando...' : 'Descargar'}
+              </button>
+
+              <button
+                onClick={() => handleShareWhatsApp(selectedTicket)}
+                disabled={isSharing || isDownloading}
+                className="py-3.5 bg-[#25D366] hover:bg-[#20bd5a] disabled:opacity-50 text-white font-black rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg text-xs"
+              >
+                {isSharing ? <Loader2 size={16} className="animate-spin" /> : <Share2 size={16} />}
+                {isSharing ? 'Preparando...' : 'WhatsApp'}
+              </button>
+            </div>
           </div>
         </div>
       )}

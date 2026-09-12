@@ -97,14 +97,15 @@ export async function POST(req: NextRequest) {
 
     // ── 4. ACCIÓN: GET_PITCHES ──
     if (action === 'get_pitches') {
-      if (!ownerId) {
+      const targetOwnerId = ownerId || (typeof payload?.owner_id === 'string' ? payload.owner_id : null);
+      if (!targetOwnerId) {
         return NextResponse.json({ success: true, data: [] });
       }
 
       const { data: companies } = await supabase
         .from('companies')
         .select('id')
-        .eq('owner_id', ownerId);
+        .eq('owner_id', targetOwnerId);
 
       if (!companies || companies.length === 0) {
         return NextResponse.json({ success: true, data: [] });

@@ -40,6 +40,7 @@ export const BookingCreateSchema = z.object({
     .array(z.string().regex(/^\d{2}:\d{2}$/, 'Formato de hora debe ser HH:mm'))
     .min(1, 'Debes seleccionar al menos una hora')
     .max(8, 'No puedes reservar más de 8 horas consecutivas'),
+  booking_ids: z.array(z.string()).optional().nullable(),
   file_name: z.string().max(255).optional().nullable(),
   file_base64: z
     .string()

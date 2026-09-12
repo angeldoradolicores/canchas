@@ -455,6 +455,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
           payload: {
             pitch_id: pitch.id,
             user_id: user.id,
+            booking_ids: activeBooking?.bookingIds || [],
             customer_name: profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Jugador',
             customer_phone: (profile as any)?.phone || user.user_metadata?.phone || '',
             selected_date: selectedDate,

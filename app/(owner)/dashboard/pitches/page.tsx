@@ -7,14 +7,20 @@ import Link from 'next/link';
 import { PitchCard, PitchData } from '@/components/ui/PitchCard';
 
 export default function PitchesPage() {
-  const { user, session } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
   const [pitches, setPitches] = useState<PitchData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
   useEffect(() => {
-    if (!user) return;
+    if (authLoading) return;
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
 
     const fetchPitches = async () => {
+      setLoading(true);
       try {
         const token = session?.access_token;
         const res = await fetch('/api/admin-actions', {
@@ -25,7 +31,7 @@ export default function PitchesPage() {
           },
           body: JSON.stringify({
             action: 'get_pitches',
-            payload: { owner_id: user?.id },
+            payload: { owner_id: user.id },
           }),
         });
         const data = await res.json();
@@ -40,7 +46,7 @@ export default function PitchesPage() {
     };
 
     fetchPitches();
-  }, [user, session]);
+  }, [user?.id, session?.access_token, authLoading]);
 
   if (loading) {
     return (

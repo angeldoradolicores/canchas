@@ -25,8 +25,10 @@ export default function PublicProfilePage() {
 
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [sharingWhatsApp, setSharingWhatsApp] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [profile, setProfile] = useState<any>(null);
+  const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
   const [stats, setStats] = useState({ bookings: 0, challenges: 0, reviews: 0 });
 
   const isOwnProfile = user?.id === id;
@@ -63,6 +65,51 @@ export default function PublicProfilePage() {
     loadData();
   }, [id]);
 
+  // Convertir avatar a base64 Data URL para que html-to-image nunca pierda la foto por CORS
+  useEffect(() => {
+    if (!profile?.avatar_url) {
+      setAvatarDataUrl(null);
+      return;
+    }
+
+    let isMounted = true;
+    const convertToDataUrl = async (imgUrl: string) => {
+      try {
+        // 1. Intento directo
+        const res = await fetch(imgUrl);
+        if (!res.ok) throw new Error('Direct fetch failed');
+        const blob = await res.blob();
+        return new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+      } catch {
+        try {
+          // 2. Intento mediante proxy con CORS
+          const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(imgUrl)}`;
+          const res = await fetch(proxyUrl);
+          if (!res.ok) throw new Error('Proxy fetch failed');
+          const blob = await res.blob();
+          return new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+        } catch (e) {
+          console.warn('[Avatar conversion failed]', e);
+          return null;
+        }
+      }
+    };
+
+    convertToDataUrl(profile.avatar_url).then((uri) => {
+      if (isMounted && uri) setAvatarDataUrl(uri);
+    });
+
+    return () => { isMounted = false; };
+  }, [profile?.avatar_url]);
+
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
@@ -94,13 +141,57 @@ export default function PublicProfilePage() {
         quality: 1,
         pixelRatio: 3,
         backgroundColor: '#0a1a09',
+        cacheBust: true,
       });
-      download(dataUrl, `tarjeta-${profile?.full_name?.replace(/ /g, '-') || 'jugador'}.png`);
+      download(dataUrl, `tarjeta-${profile?.full_name?.replace(/\s+/g, '-') || 'jugador'}.png`);
     } catch (err) {
       console.error('Error generando la imagen', err);
       alert('Hubo un error al generar la imagen. Intenta de nuevo.');
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const handleShareWhatsApp = async () => {
+    if (!cardRef.current) return;
+    setSharingWhatsApp(true);
+    try {
+      const dataUrl = await htmlToImage.toPng(cardRef.current, {
+        quality: 1,
+        pixelRatio: 3,
+        backgroundColor: '#0a1a09',
+        cacheBust: true,
+      });
+      const blob = await (await fetch(dataUrl)).blob();
+      const fileName = `tarjeta-${profile?.full_name?.replace(/\s+/g, '-') || 'jugador'}.png`;
+      const file = new File([blob], fileName, { type: 'image/png' });
+
+      const text = `🏆 ¡Mira mi tarjeta de jugador en Canchas Pasto!\n\n⚽ ${stats.bookings} partidos jugados · 🎯 ${stats.challenges} retos\n⭐ Rango: ${rank.title}\n\nConoce mi perfil: ${window.location.href}`;
+
+      // Compartir nativamente con archivo en móviles compatibles
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: `Tarjeta de Jugador - ${profile?.full_name || 'Jugador'}`,
+            text,
+          });
+          return;
+        } catch (shareErr: any) {
+          if (shareErr.name === 'AbortError') return;
+        }
+      }
+
+      // Fallback: descargar imagen y abrir WhatsApp
+      download(dataUrl, fileName);
+      const waText = encodeURIComponent(`${text}\n\n(La imagen de tu tarjeta se descargó en tu dispositivo para que puedas adjuntarla)`);
+      const waUrl = `https://api.whatsapp.com/send?text=${waText}`;
+      window.open(waUrl, '_blank');
+    } catch (err) {
+      console.error('Error compartiendo en WhatsApp', err);
+      alert('Hubo un error al generar la tarjeta para WhatsApp. Puedes usar el botón Descargar.');
+    } finally {
+      setSharingWhatsApp(false);
     }
   };
 
@@ -235,7 +326,7 @@ export default function PublicProfilePage() {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 20, position: 'relative', zIndex: 2, padding: '0 24px' }}>
             <div style={{ position: 'relative', width: 96, height: 96, borderRadius: '50%', border: `3px solid ${rank.accent}`, boxShadow: `0 0 25px ${rank.glow}`, overflow: 'hidden', background: 'rgba(0,0,0,0.4)' }}>
               {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt={profile.full_name} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={avatarDataUrl || profile.avatar_url} alt={profile.full_name} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, fontWeight: 900, color: rank.accent, background: 'rgba(255,255,255,0.05)' }}>
                   {profile?.full_name?.substring(0, 1).toUpperCase() || '?'}
@@ -317,27 +408,20 @@ export default function PublicProfilePage() {
         <div className="grid grid-cols-2 gap-3 mt-4">
           <button
             onClick={handleDownload}
-            disabled={downloading}
-            className="flex flex-col items-center justify-center gap-2 py-5 bg-secondary text-foreground hover:bg-border rounded-2xl transition-all font-bold text-sm border border-border disabled:opacity-50"
+            disabled={downloading || sharingWhatsApp}
+            className="flex flex-col items-center justify-center gap-2 py-4 bg-secondary text-foreground hover:bg-border rounded-2xl transition-all font-bold text-sm border border-border disabled:opacity-50 shadow-xs"
           >
-            {downloading ? <Loader2 size={24} className="animate-spin" /> : <Download size={24} />}
-            Descargar
+            {downloading ? <Loader2 size={22} className="animate-spin text-primary" /> : <Download size={22} />}
+            {downloading ? 'Generando...' : 'Descargar'}
           </button>
 
           <button
-            onClick={async () => {
-              const text = `🏆 ¡Mira mi tarjeta de jugador en Canchas Pasto!\n\n⚽ ${stats.bookings} partidos · 🎯 ${stats.challenges} retos\n\n${window.location.href}`;
-              if (navigator.share) {
-                try { await navigator.share({ title: `${profile.full_name} - Canchas Pasto`, text, url: window.location.href }); } catch (e) { }
-              } else {
-                navigator.clipboard.writeText(text);
-                alert('¡Texto copiado al portapapeles!');
-              }
-            }}
-            className="flex flex-col items-center justify-center gap-2 py-5 bg-primary text-white hover:bg-primary/90 rounded-2xl transition-all font-bold text-sm shadow-md shadow-primary/20"
+            onClick={handleShareWhatsApp}
+            disabled={downloading || sharingWhatsApp}
+            className="flex flex-col items-center justify-center gap-2 py-4 bg-[#25D366] hover:bg-[#20bd5a] text-white rounded-2xl transition-all font-bold text-sm shadow-md shadow-emerald-600/20 disabled:opacity-50"
           >
-            <Share2 size={24} />
-            Compartir
+            {sharingWhatsApp ? <Loader2 size={22} className="animate-spin" /> : <Share2 size={22} />}
+            {sharingWhatsApp ? 'Preparando...' : 'WhatsApp'}
           </button>
         </div>
 
