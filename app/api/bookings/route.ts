@@ -7,6 +7,7 @@ import {
   BookingLockSchema,
   BookingCreateSchema,
 } from '@/lib/validations/api-schemas';
+import { notifyBookingSubmitted } from '@/lib/whatsapp-notifications';
 
 function getAdminSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -468,6 +469,13 @@ export async function POST(req: NextRequest) {
             updatedBookings.push(inserted);
           }
         }
+      }
+
+      if (updatedBookings.length > 0) {
+        // Disparar notificaciones por WhatsApp de forma asíncrona (no bloqueante)
+        notifyBookingSubmitted(updatedBookings[0].id).catch(err => {
+          console.error('[WhatsApp Notification] Error en notificación:', err);
+        });
       }
 
       return NextResponse.json({ success: true, data: updatedBookings });

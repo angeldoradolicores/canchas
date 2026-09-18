@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface HeaderProps {
   onMenu: () => void;
@@ -20,7 +21,7 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
   const [bellShaking, setBellShaking] = useState(false);
   const supabase = createClient();
   const isAnyMenuOpen = showNotifications || showDropdown;
-
+  const router = useRouter();
   const fetchNotifications = async () => {
     if (!user) return;
     const { data } = await supabase
@@ -355,7 +356,7 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
             )}
           </div>
         ) : (
-          <button className="btn-primary btn-sm" onClick={onLoginClick}>
+          <button className="btn-primary btn-sm" onClick={() => router.push('/login')}>
             Ingresar
           </button>
         )}

@@ -125,9 +125,15 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
         customer_phone: customerPhone
       };
 
+      const { data: sessData } = await supabase.auth.getSession();
+      const token = sessData?.session?.access_token;
+
       const res = await fetch('/api/admin-actions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ action: 'create_manual_booking', payload }),
       });
       const data = await res.json();

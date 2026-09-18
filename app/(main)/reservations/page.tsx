@@ -193,7 +193,15 @@ export default function UserReservationsPage() {
         statusHeader = '❌ Cancelado por el dueño';
       }
 
-      const text = `${statusHeader}\n\n📍 ${b.pitches?.name?.toUpperCase() || ''}\n📅 Fecha: ${new Date(b.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}\n⏰ Hora: ${new Date(b.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}\n\nVer cancha y ubicación: ${pitchUrl}\n\n¡Allá nos vemos!`;
+      const pitchTitle = (b.displayPitchName || b.pitches?.name || '').toUpperCase();
+      const hoursList = b.bookings && b.bookings.length > 0
+        ? b.bookings.map((xb: any) => {
+            const t = new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+            return b.displayPitchName?.includes('+') && xb.pitches?.name ? `${xb.pitches.name} (${t})` : t;
+          }).join(', ')
+        : new Date(b.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+
+      const text = `${statusHeader}\n\n📍 ${pitchTitle}\n📅 Fecha: ${new Date(b.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}\n⏰ Horarios: ${hoursList}\n\nVer cancha y ubicación: ${pitchUrl}\n\n¡Allá nos vemos!`;
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
@@ -266,26 +274,36 @@ export default function UserReservationsPage() {
   });
 
   const groupedMyBookings = (() => {
-    const groups: Record<string, any> = {};
+    const groups: any[] = [];
 
-    filteredBookings.forEach((b: any) => {
-      const dateStr = b.start_time.split('T')[0];
-      const key = `${b.pitch_id}-${dateStr}-${b.status}`;
+    // Ordenar reservas cronológicamente para agrupar las hechas en el mismo momento
+    const sorted = [...filteredBookings].sort(
+      (a: any, b: any) => new Date(b.created_at || b.start_time).getTime() - new Date(a.created_at || a.start_time).getTime()
+    );
 
-      if (!groups[key]) {
-        groups[key] = {
-          ...b,
-          bookings: [],
-          total_price: 0,
-          deposit_amount: 0,
-          start_time: b.start_time
-        };
-      }
+    sorted.forEach((b: any) => {
+      const bTime = new Date(b.created_at || b.start_time).getTime();
+      const bProof = b.payment_proof_url?.trim() || null;
 
-      groups[key].bookings.push(b);
-      if (new Date(b.start_time) < new Date(groups[key].start_time)) {
-        groups[key].start_time = b.start_time;
-      }
+      // Buscar si ya existe un grupo con el que fue reservada EN EL MISMO MOMENTO
+      const existingGroup = groups.find((g: any) => {
+        if (g.status !== b.status) return false;
+
+        // 1. Mismo comprobante de pago subido en el checkout
+        if (bProof && g.payment_proof_url && bProof === g.payment_proof_url) {
+          return true;
+        }
+
+        // 2. Si no hay comprobante o difiere, verificar si se crearon en el mismo instante (margen de 3 minutos)
+        const gTime = new Date(g.created_at || g.start_time).getTime();
+        const diffMs = Math.abs(bTime - gTime);
+        if (diffMs <= 3 * 60 * 1000) {
+          return true;
+        }
+
+        return false;
+      });
+
       const tPrice = b.total_price || b.pitches?.price_per_hour || 80000;
       let dAmount = b.deposit_amount || 0;
       if (dAmount === 0 && b.pitches) {
@@ -299,15 +317,32 @@ export default function UserReservationsPage() {
           dAmount = (tPrice * Number(pct)) / 100;
         }
       }
-      groups[key].total_price += tPrice;
-      groups[key].deposit_amount += dAmount;
+
+      if (existingGroup) {
+        existingGroup.bookings.push(b);
+        existingGroup.total_price += tPrice;
+        existingGroup.deposit_amount += dAmount;
+        if (new Date(b.start_time) < new Date(existingGroup.start_time)) {
+          existingGroup.start_time = b.start_time;
+        }
+      } else {
+        groups.push({
+          ...b,
+          bookings: [b],
+          total_price: tPrice,
+          deposit_amount: dAmount,
+        });
+      }
     });
 
-    Object.values(groups).forEach(g => {
+    // Ordenar horas dentro de cada grupo y consolidar nombres de canchas
+    groups.forEach(g => {
       g.bookings.sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+      const pitchNames = Array.from(new Set(g.bookings.map((xb: any) => xb.pitches?.name).filter(Boolean)));
+      g.displayPitchName = pitchNames.join(' + ') || g.pitches?.name;
     });
 
-    return Object.values(groups).sort((a: any, b: any) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
+    return groups.sort((a: any, b: any) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
   })();
 
   const confirmed = groupedMyBookings.filter((b: any) => b.status === 'confirmed');
@@ -352,7 +387,7 @@ export default function UserReservationsPage() {
               <div className="flex flex-wrap items-start justify-between gap-2 mb-1.5">
                 {/* CORRECCIÓN: Quitamos 'truncate' para que el nombre se lea completo en varias líneas si es largo */}
                 <h3 className="font-bold text-sm sm:text-base leading-tight text-foreground flex-1 min-w-[120px]">
-                  {b.pitches?.name?.toUpperCase()}
+                  {(b.displayPitchName || b.pitches?.name)?.toUpperCase()}
                 </h3>
 
 
@@ -380,7 +415,12 @@ export default function UserReservationsPage() {
                 <div className="flex items-center gap-1 text-[11px] sm:text-xs text-muted-foreground">
                   <Clock size={12} className="text-primary flex-shrink-0" />
                   <span className="font-bold text-primary whitespace-nowrap">
-                    {b.bookings ? b.bookings.map((xb: any) => new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })).join(', ') : date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                    {b.bookings ? b.bookings.map((xb: any) => {
+                      const timeStr = new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+                      return b.displayPitchName?.includes('+') && xb.pitches?.name
+                        ? `${xb.pitches.name} (${timeStr})`
+                        : timeStr;
+                    }).join(', ') : date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
               </div>
@@ -641,8 +681,10 @@ export default function UserReservationsPage() {
                 </div>
 
                 <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', opacity: 0.85, marginTop: 12, marginBottom: 4 }}>TICKET DE RESERVA</p>
-                <h2 style={{ fontSize: 26, fontWeight: 900, lineHeight: 1.1, marginBottom: 8 }}>{selectedTicket.pitches.name.toUpperCase()}</h2>
-                <p style={{ fontSize: 13, fontWeight: 600, opacity: 0.9, marginBottom: 16 }}>⚽ {selectedTicket.pitches.type || 'Fútbol 11'}</p>
+                <h2 style={{ fontSize: 26, fontWeight: 900, lineHeight: 1.1, marginBottom: 8 }}>
+                  {(selectedTicket.displayPitchName || selectedTicket.pitches?.name || 'CANCHA').toUpperCase()}
+                </h2>
+                <p style={{ fontSize: 13, fontWeight: 600, opacity: 0.9, marginBottom: 16 }}>⚽ {selectedTicket.pitches?.type || 'Fútbol 11'}</p>
 
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: selectedTicket.status === 'pending' ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.2)', borderRadius: 999, padding: '4px 14px' }}>
                   <div style={{ width: 6, height: 6, borderRadius: '50%', background: selectedTicket.status === 'pending' ? '#000' : '#fff' }} />
@@ -688,24 +730,30 @@ export default function UserReservationsPage() {
                       gap: '6px 8px'
                     }}>
                       {selectedTicket.bookings && selectedTicket.bookings.length > 0 ? (
-                        selectedTicket.bookings.map((xb: any, index: number) => (
-                          <span
-                            key={index}
-                            style={{
-                              background: 'rgba(255, 255, 255, 0.08)',
-                              color: '#fff',
-                              fontSize: 11,
-                              fontWeight: 700,
-                              padding: '3px 6px',
-                              borderRadius: 6,
-                              border: '1px solid rgba(255, 255, 255, 0.12)',
-                              textAlign: 'center',
-                              whiteSpace: 'nowrap'
-                            }}
-                          >
-                            {new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        ))
+                        selectedTicket.bookings.map((xb: any, index: number) => {
+                          const timeStr = new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+                          const label = selectedTicket.displayPitchName?.includes('+') && xb.pitches?.name
+                            ? `${xb.pitches.name}: ${timeStr}`
+                            : timeStr;
+                          return (
+                            <span
+                              key={index}
+                              style={{
+                                background: 'rgba(255, 255, 255, 0.08)',
+                                color: '#fff',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                padding: '3px 6px',
+                                borderRadius: 6,
+                                border: '1px solid rgba(255, 255, 255, 0.12)',
+                                textAlign: 'center',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              {label}
+                            </span>
+                          );
+                        })
                       ) : (
                         <span
                           style={{

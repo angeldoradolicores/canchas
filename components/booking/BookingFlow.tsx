@@ -100,13 +100,14 @@ interface BookingFlowProps {
   onFinish?: () => void;
   preselectedTimes?: string[];
   preselectedDate?: string;
+  initialStep?: number;
 }
 
-export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], preselectedDate = '' }: BookingFlowProps) {
+export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], preselectedDate = '', initialStep }: BookingFlowProps) {
   const today = useToday();
   const normalizeTime = (t: string) => t ? t.substring(0, 5) : '';
 
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(initialStep || 1);
   const [selectedDate, setSelectedDate] = useState(preselectedDate || today || '');
   const [selectedTimes, setSelectedTimes] = useState<string[]>(
     preselectedTimes.map(normalizeTime)
@@ -167,9 +168,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     ) {
       setStep(2);
     }
-    // Si NO hay lock activo y vienen horas preseleccionadas, quedarse en paso 1 con las horas
-    // ya marcadas para que el usuario confirme y dispare el lock con el botón "Reservar".
-  }, [pitch.id]); // solo al montar
+  }, [pitch.id, activeBooking, preselectedTimes, preselectedDate, today]);
 
   const isExpiredAlertRef = useRef(false);
   const hadActiveLockRef = useRef(false);

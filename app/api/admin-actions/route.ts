@@ -277,6 +277,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'No tienes permiso para eliminar esta cancha' }, { status: 403 });
       }
 
+      // Limpiar favoritos asociados para evitar conflictos de claves foráneas
+      try {
+        await supabase.from('favorites').delete().eq('pitch_id', pitch_id);
+      } catch (e) {
+        console.warn('Advertencia al limpiar favoritos asociados:', e);
+      }
+
       const { error } = await supabase
         .from('pitches')
         .delete()

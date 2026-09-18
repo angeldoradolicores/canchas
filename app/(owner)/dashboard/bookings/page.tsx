@@ -59,6 +59,24 @@ export default function BookingsPage() {
   }, [today]);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const q = params.get('search');
+      const st = params.get('status');
+      if (q) {
+        setSearchQuery(q);
+        setListDateFilter('all');
+        setViewMode('list');
+      }
+      if (st) {
+        setFilterStatus(st);
+        setListDateFilter('all');
+        setViewMode('list');
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (user) fetchBookingsAndPitches();
   }, [user]);
 
@@ -143,6 +161,13 @@ export default function BookingsPage() {
           console.error('[Notification insert error]', notifErr);
         }
       }
+
+      // Notificar al cliente vía WhatsApp con su ticket o aviso
+      fetch('/api/bookings/notify-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: id, status: newStatus }),
+      }).catch(err => console.error('[WhatsApp Status Notification error]', err));
     } else {
       alert('Error: ' + error.message);
     }

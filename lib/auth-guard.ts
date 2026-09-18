@@ -3,52 +3,104 @@ import { createClient, User } from '@supabase/supabase-js';
 
 function getAdminSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    '';
   return createClient(url, key);
 }
 
 /**
- * Obtiene de forma segura el usuario autenticado a partir del encabezado Authorization (Bearer token)
- * o de las cookies de sesión. NUNCA confía en IDs enviados en el body payload.
+ * Extrae el access token JWT de un valor de cookie de sesión de Supabase SSR.
+ * Soporta los formatos que emite @supabase/ssr:
+ *  - "base64-<base64(JSON)>"  → decodifica y parsea el JSON interno
+ *  - JSON array  "[access_token, refresh_token, ...]"
+ *  - JSON object "{access_token: ..., ...}"
+ *  - plain JWT string
  */
-export async function getAuthenticatedUser(req: NextRequest): Promise<User | null> {
+function extractAccessToken(raw: string): string | null {
+  let str = raw.trim();
+
+  // @supabase/ssr v0.12+ serializa la sesión como base64
+  if (str.startsWith('base64-')) {
+    try {
+      str = Buffer.from(str.slice(7), 'base64').toString('utf-8');
+    } catch {
+      return null;
+    }
+  }
+
+  if (str.startsWith('[')) {
+    try {
+      const arr = JSON.parse(str);
+      return Array.isArray(arr) ? (arr[0] ?? null) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if (str.startsWith('{')) {
+    try {
+      const obj = JSON.parse(str);
+      return obj?.access_token ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  // JWT plano (tres segmentos separados por puntos)
+  if (str.split('.').length === 3) return str;
+
+  return null;
+}
+
+/**
+ * Obtiene de forma segura el usuario autenticado a partir del encabezado
+ * Authorization (Bearer token) o de las cookies de sesión de Supabase SSR.
+ * NUNCA confía en IDs enviados en el body del payload.
+ */
+export async function getAuthenticatedUser(
+  req: NextRequest,
+): Promise<User | null> {
   const supabase = getAdminSupabase();
 
-  // 1. Verificar encabezado Authorization: Bearer <token>
-  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization');
+  // ── 1. Encabezado Authorization: Bearer <token> ────────────────────────────
+  const authHeader =
+    req.headers.get('authorization') ?? req.headers.get('Authorization');
   if (authHeader) {
     const token = authHeader.replace(/^Bearer\s+/i, '').trim();
     if (token) {
       const { data, error } = await supabase.auth.getUser(token);
-      if (!error && data?.user) {
-        return data.user;
-      }
+      if (!error && data?.user) return data.user;
     }
   }
 
-  // 2. Fallback: buscar token de sesión en cookies de Supabase
-  const sbAccessTokenCookie = req.cookies.get('sb-access-token')?.value ||
-    req.cookies.get(`sb-${process.env.NEXT_PUBLIC_SUPABASE_URL?.split('//')[1]?.split('.')[0]}-auth-token`)?.value;
+  // ── 2. Cookies de sesión de Supabase SSR ──────────────────────────────────
+  const supabaseRef =
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.split('//')[1]?.split('.')[0] ?? '';
+  const cookieBaseName = `sb-${supabaseRef}-auth-token`;
 
-  if (sbAccessTokenCookie) {
-    try {
-      let rawToken = sbAccessTokenCookie;
-      // Si la cookie es un JSON serializado (Supabase SSR v0.12+)
-      if (rawToken.startsWith('[')) {
-        const parsed = JSON.parse(rawToken);
-        rawToken = parsed[0] || '';
-      } else if (rawToken.startsWith('{')) {
-        const parsed = JSON.parse(rawToken);
-        rawToken = parsed.access_token || '';
-      }
-      if (rawToken) {
-        const { data, error } = await supabase.auth.getUser(rawToken);
-        if (!error && data?.user) {
-          return data.user;
-        }
-      }
-    } catch {
-      // Ignorar error al parsear cookies
+  // 2a. Cookie simple (nombre exacto o nombre alternativo)
+  let rawCookie =
+    req.cookies.get('sb-access-token')?.value ??
+    req.cookies.get(cookieBaseName)?.value;
+
+  // 2b. Cookies chunked (.0, .1, …) que genera @supabase/ssr para JWT grandes
+  if (!rawCookie) {
+    let assembled = '';
+    for (let i = 0; ; i++) {
+      const chunk = req.cookies.get(`${cookieBaseName}.${i}`)?.value;
+      if (!chunk) break;
+      assembled += chunk;
+    }
+    if (assembled) rawCookie = assembled;
+  }
+
+  if (rawCookie) {
+    const token = extractAccessToken(rawCookie);
+    if (token) {
+      const { data, error } = await supabase.auth.getUser(token);
+      if (!error && data?.user) return data.user;
     }
   }
 
@@ -58,7 +110,10 @@ export async function getAuthenticatedUser(req: NextRequest): Promise<User | nul
 /**
  * Verifica si un usuario es propietario legítimo de una empresa (complejo deportivo).
  */
-export async function verifyCompanyOwnership(userId: string, companyId: string): Promise<boolean> {
+export async function verifyCompanyOwnership(
+  userId: string,
+  companyId: string,
+): Promise<boolean> {
   if (!userId || !companyId) return false;
   const supabase = getAdminSupabase();
 
@@ -76,7 +131,10 @@ export async function verifyCompanyOwnership(userId: string, companyId: string):
  * Verifica si un usuario es propietario de la cancha especificada
  * (a través de la empresa a la que pertenece la cancha).
  */
-export async function verifyPitchOwnership(userId: string, pitchId: string): Promise<boolean> {
+export async function verifyPitchOwnership(
+  userId: string,
+  pitchId: string,
+): Promise<boolean> {
   if (!userId || !pitchId) return false;
   const supabase = getAdminSupabase();
 

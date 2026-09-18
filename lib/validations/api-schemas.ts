@@ -71,19 +71,44 @@ export const AdminCreatePitchSchema = z.object({
   company_id: z.string().optional(),
   name: z.string().min(2, 'El nombre de la cancha debe tener al menos 2 caracteres').max(100),
   type: z.string().max(50).optional().default('Fútbol 5'),
-  price_per_hour: z.coerce.number().positive('El precio por hora debe ser mayor a 0').max(10000000),
-  duration_minutes: z.coerce.number().int().positive().default(60),
+  price_per_hour: z.preprocess(
+    (val) => {
+      if (val === undefined || val === null || val === '') return undefined;
+      const num = Number(val);
+      return isNaN(num) ? undefined : num;
+    },
+    z.number().positive('El precio por hora debe ser mayor a 0').max(10000000)
+  ).optional(),
+  price: z.preprocess(
+    (val) => {
+      if (val === undefined || val === null || val === '') return undefined;
+      const num = Number(val);
+      return isNaN(num) ? undefined : num;
+    },
+    z.number().positive('El precio debe ser mayor a 0').max(10000000)
+  ).optional(),
+  duration_minutes: z.preprocess(
+    (val) => {
+      if (val === undefined || val === null || val === '') return 60;
+      const num = Number(val);
+      return isNaN(num) ? 60 : num;
+    },
+    z.number().int().positive().default(60)
+  ),
   is_active: z.boolean().default(true),
   features: z.array(z.string().max(50)).max(20).optional().default([]),
   image_url: z.string().max(1000).optional().nullable(),
   media_urls: z.array(z.string().max(1000)).max(10).optional().default([]),
   opening_time: z.string().regex(/^\d{2}:\d{2}$/, 'Formato HH:mm').optional().default('08:00'),
   closing_time: z.string().regex(/^\d{2}:\d{2}$/, 'Formato HH:mm').optional().default('23:00'),
-});
+}).transform((data) => ({
+  ...data,
+  price_per_hour: data.price_per_hour ?? data.price ?? 80000,
+}));
 
 export const AdminUpdatePitchSchema = z.object({
   pitch_id: z.string().min(1, 'ID de cancha requerido'),
-  updateData: z.record(z.string(), z.any()),
+  updateData: z.record(z.string(), z.any()).optional(),
 });
 
 export const AdminDeletePitchSchema = z.object({

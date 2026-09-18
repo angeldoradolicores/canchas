@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confirma tu cuenta en Canchas Pasto</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #06120e;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #e2e8f0;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrapper {
+      width: 100%;
+      table-layout: fixed;
+      background-color: #06120e;
+      padding: 40px 16px;
+    }
+    .main {
+      background: linear-gradient(180deg, #0d1e17 0%, #081611 100%);
+      margin: 0 auto;
+      max-width: 540px;
+      border: 1px solid #1c3629;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 30px rgba(22, 163, 74, 0.15);
+    }
+    .header {
+      background: linear-gradient(135deg, #15803d 0%, #16a34a 50%, #22c55e 100%);
+      padding: 32px 24px;
+      text-align: center;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+    }
+    .header h1 {
+      margin: 0;
+      color: #ffffff;
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+    }
+    .content {
+      padding: 36px 32px;
+      text-align: center;
+    }
+    .greeting {
+      font-size: 20px;
+      font-weight: 700;
+      color: #ffffff;
+      margin: 0 0 12px 0;
+    }
+    .description {
+      font-size: 15px;
+      line-height: 1.6;
+      color: #94a3b8;
+      margin: 0 0 28px 0;
+    }
+    .btn-container {
+      margin: 32px 0;
+    }
+    .btn-confirm {
+      display: inline-block;
+      background: #16a34a;
+      background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+      color: #ffffff !important;
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 800;
+      padding: 16px 36px;
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(22, 163, 74, 0.4);
+      letter-spacing: 0.3px;
+    }
+    .info-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid #1c3629;
+      border-radius: 12px;
+      padding: 16px 20px;
+      text-align: left;
+      margin: 28px 0 0 0;
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.5;
+    }
+    .footer {
+      border-top: 1px solid #1c3629;
+      padding: 24px;
+      text-align: center;
+      font-size: 12px;
+      color: #475569;
+    }
+    .footer a {
+      color: #22c55e;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <table class="main" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td class="header">
+          <div class="badge">⚽ Canchas Sintéticas Pasto</div>
+          <h1>¡Bienvenido a la Jugada!</h1>
+        </td>
+      </tr>
+      <tr>
+        <td class="content">
+          <h2 class="greeting">Confirma tu correo para empezar</h2>
+          <p class="description">
+            Gracias por registrarte en <strong>Canchas Pasto</strong>. Ya estás a un solo paso de encontrar, reservar y disfrutar de las mejores canchas sintéticas de la ciudad.
+          </p>
+
+          <div class="btn-container">
+            <a href="{{ .ConfirmationURL }}" class="btn-confirm" target="_blank">
+              ⚡ Confirmar mi Cuenta
+            </a>
+          </div>
+
+          <div class="info-card">
+            <strong style="color: #cbd5e1; display: block; margin-bottom: 4px;">¿No creaste esta cuenta?</strong>
+            Si tú no solicitaste este registro, puedes ignorar este mensaje con total tranquilidad. El enlace expirará automáticamente.
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td class="footer">
+          <p style="margin: 0 0 8px 0;">© 2026 Canchas Pasto · San Juan de Pasto, Nariño, Colombia</p>
+          <p style="margin: 0;">Plataforma de reservas de canchas y gestión deportiva.</p>
+        </td>
+      </tr>
+    </table>
+  </div>
+</body>
+</html>

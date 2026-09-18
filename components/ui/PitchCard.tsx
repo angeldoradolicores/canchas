@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/client';
 import { useFavorites } from '@/lib/favorites-context';
+import { useRouter } from 'next/navigation';
 
 export interface PaymentMethod {
   type: string;
@@ -51,7 +52,7 @@ interface PitchCardProps {
 export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: PitchCardProps) {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
-
+  const router = useRouter();
   const { isFavorite: checkFav, toggleFavorite: doToggleFav } = useFavorites();
   const isFavorite = checkFav(pitch.id);
 
@@ -465,12 +466,18 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
 
             {/* Pie del Modal */}
             <div className="p-4 border-t border-border bg-secondary/40 flex items-center justify-between">
-              {/* <div>
-                <span className="text-[10px] font-bold text-muted-foreground uppercase block">Precio por hora</span>
+              <div>
                 <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">
-                  ${Number(displayPrice).toLocaleString('es-CO')} COP
+                  <button
+                    onClick={() => {
+                      router.push(`/cancha/${pitch.id}`);
+                    }}
+                    className="px-5 py-2.5 bg-primary text-white font-bold text-xs rounded-xl hover:bg-primary/90 transition-colors flex items-center gap-2 shadow-sm"
+                  >
+                    Ver Cancha
+                  </button>
                 </span>
-              </div> */}
+              </div>
 
 
 

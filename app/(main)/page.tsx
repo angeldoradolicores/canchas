@@ -86,7 +86,7 @@ export default function ExplorePage() {
       ) : (
         <ExploreView
           onBook={(pitch, times, date) => {
-            if (activeBooking) {
+            if (activeBooking && activeBooking.pitch.id !== pitch.id) {
               setAlertState({
                 isOpen: true,
                 type: 'warning',

@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 export default function WhatsAppConnectionPage() {
-  const { user, profile } = useAuth();
+  const { user, profile, session } = useAuth();
 
   const [company, setCompany] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -41,9 +41,13 @@ export default function WhatsAppConnectionPage() {
         return;
       }
       try {
+        const token = session?.access_token;
         const res = await fetch('/api/admin-actions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({
             action: 'ensure_company',
             payload: {
@@ -127,7 +131,10 @@ export default function WhatsAppConnectionPage() {
       if (!activeCompany && user?.id) {
         const compRes = await fetch('/api/admin-actions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
+          },
           body: JSON.stringify({
             action: 'ensure_company',
             payload: {

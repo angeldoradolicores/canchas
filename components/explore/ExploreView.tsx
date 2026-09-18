@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useToday, BOOKING_HOURS } from '@/lib/use-today';
-import { CalendarDays, Grid2X2, ListFilter, Loader2, Search, Clock3, ChevronRight, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { CalendarDays, Grid2X2, ListFilter, Loader2, Search, Clock3, ChevronRight, ChevronDown, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { pitches as mockPitches } from '@/lib/mock-data';
 import { DiscoverRail } from './DiscoverRail';
@@ -11,6 +11,7 @@ import { CustomMonthCalendar } from './CustomMonthCalendar';
 import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
 import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
+import { useActiveBooking } from '@/lib/active-booking-context';
 import { Calendar, Clock } from "lucide-react";
 const DEFAULT_TIME_SLOTS = [
   '06:00', '07:00', '08:00', '09:00', '10:00', '11:00',
@@ -87,6 +88,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
   };
 
   const [alertState, setAlertState] = useState<AlertModalState>({ isOpen: false, type: 'info', title: '', message: '' });
+  const { startLock, lockError, activeBooking } = useActiveBooking();
   const handleSearchRef = useRef<(silent?: boolean) => void>(() => { });
 
   const handleBook = useCallback((pitch: Pitch, preselectedTime?: string | string[], preselectedDate?: string) => {
@@ -109,98 +111,107 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
         return sum + Number(customPricing[h] || basePrice);
       }, 0);
 
-      const formattedDate = new Date(preselectedDate + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
+      const formattedDate = new Date(preselectedDate + 'T12:00:00').toLocaleDateString('es-CO', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long'
+      });
 
-      // let abonoPrice = 0;
-      // const isFixed = customPricing && customPricing.booking_fixed;
-      // if (isFixed) {
-      //   abonoPrice = (customPricing.booking_fixed || 0) * hoursCount;
-      // } else {
-      //   abonoPrice = (total * Number((pitch as any).booking_percentage || 50)) / 100;
-      // }
-      // const abonoText = isFixed
-      //   ? `(Fijo: $${(customPricing.booking_fixed || 0).toLocaleString('es-CO')}/h)`
-      //   : `(${Number((pitch as any).booking_percentage || 50)}%)`;
+      // 1. Cálculo de tarifas de abono
       let abonoPrice = 0;
-      // 1. Validamos si el tipo de abono es explícitamente 'fixed'
       const isFixed = customPricing?.booking_type === 'fixed';
+      const activePercentage = Number(customPricing?.booking_percentage || (pitch as any).booking_percentage || 50);
 
       if (isFixed) {
-        // Multiplica la tarifa fija por la cantidad de horas seleccionadas
         abonoPrice = Number(customPricing.booking_fixed || 0) * hoursCount;
       } else {
-        // Si no es fijo, usa el porcentaje asignado o falla de vuelta a 50% por defecto
-        const percentage = Number(customPricing?.booking_percentage || (pitch as any).booking_percentage || 50);
-        abonoPrice = (total * percentage) / 100;
+        abonoPrice = (total * activePercentage) / 100;
       }
 
-      // 2. Construimos el texto dinámico usando exactamente tu misma lógica de renderizado
-      const abonoText = isFixed
-        ? `(Fijo: $${Number(customPricing.booking_fixed || 0).toLocaleString('es-CO')}/h)`
-        : `(${Number(customPricing?.booking_percentage || (pitch as any).booking_percentage || 50)}%)`;
-
-
+      // 2. Estructura visual rediseñada para el modal
       const messageNode = (
-        <div className="flex flex-col gap-3 items-center text-center mt-2">
-          <p className="text-sm text-muted-foreground">Estás a punto de iniciar una reserva en:</p>
-          <p className="text-xl font-black uppercase text-primary bg-primary/10 px-5 py-2.5 rounded-xl border border-primary/20 tracking-wider w-full shadow-sm">
-            {pitch.name}
+        <div className="flex flex-col gap-3.5 items-center text-center mt-1">
+          <p className="text-xs text-muted-foreground font-medium">
+            Estás a punto de iniciar tu reserva en:
           </p>
-          <div className="bg-secondary/60 border border-border rounded-xl p-3.5 w-full space-y-2 mt-1">
-            <p className="flex justify-between items-center text-xs">
-              <span className="text-muted-foreground font-bold flex items-center gap-1"><Calendar size={13} /> Fecha</span>
+
+          {/* Nombre de la cancha destacado */}
+          <div className="w-full py-2.5 px-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-center gap-2">
+            <ShieldCheck size={18} className="text-emerald-500 shrink-0" />
+            <span className="text-base font-black uppercase text-foreground tracking-wider truncate">
+              {pitch.name}
+            </span>
+          </div>
+
+          {/* Contenedor principal de detalles */}
+          <div className="w-full bg-secondary/40 border border-border/70 rounded-2xl p-4 space-y-3 shadow-xs">
+            {/* Fecha seleccionada */}
+            <div className="flex justify-between items-center text-xs pb-2 border-b border-border/50">
+              <span className="text-muted-foreground font-semibold flex items-center gap-1.5">
+                <Calendar size={14} className="text-emerald-500" /> Fecha
+              </span>
               <span className="font-bold text-foreground capitalize">{formattedDate}</span>
-            </p>
-            <div className="summary-line flex-col items-start gap-1.5">
-              <span>Desglose de Horas</span>
+            </div>
+
+            {/* Desglose de horas */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                <span className="flex items-center gap-1.5">
+                  <Clock size={13} className="text-emerald-500" /> Horas seleccionadas ({hoursCount}h)
+                </span>
+              </div>
               {preselectedTime.length === 0 ? (
-                <strong className="text-muted-foreground">-</strong>
+                <p className="text-xs text-muted-foreground italic">-</p>
               ) : (
-                <div className="w-full space-y-1 mt-1">
-                  {[...preselectedTime].sort().map(t => {
+                <div className="w-full space-y-1 max-h-36 overflow-y-auto pr-0.5 custom-scrollbar">
+                  {[...preselectedTime].sort().map((t) => {
                     const slotPrice = Number(customPricing[t] || basePrice);
                     return (
-                      <div key={t} className="flex justify-between text-xs bg-primary/5 px-2 py-1 rounded-md">
-                        <span className="font-bold text-primary">{fmtSlot(t)}</span>
-                        <span className="font-semibold">${slotPrice.toLocaleString('es-CO')}</span>
+                      <div
+                        key={t}
+                        className="flex justify-between items-center text-xs bg-background/60 border border-border/40 px-3 py-1.5 rounded-xl shadow-2xs"
+                      >
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">{fmtSlot(t)}</span>
+                        <span className="font-extrabold text-foreground">${slotPrice.toLocaleString('es-CO')}</span>
                       </div>
                     );
                   })}
                 </div>
               )}
             </div>
-            {/* <p className="flex justify-between items-center text-xs">
-              <span className="text-muted-foreground font-bold flex items-center gap-1"><Clock size={13} /> Horas</span>
-              <span className="font-bold text-foreground">{preselectedTime.join(', ')} ({hoursCount}h)</span>
-            </p> */}
-            <div className="border-t border-border/60 mt-2 pt-2 flex justify-between items-center">
-              <span className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider">Total Estimado</span>
-              <span className="font-black text-emerald-600 dark:text-emerald-400 text-base">${total.toLocaleString('es-CO')}</span>
+
+            {/* Resumen Financiero */}
+            <div className="pt-2 border-t border-border/60 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total Estimado</span>
+                <span className="font-black text-foreground text-base">${total.toLocaleString('es-CO')}</span>
+              </div>
+
+              {/* Tarjeta de Abono Requerido */}
+              <div className="flex flex-col items-center bg-amber-500/10 border border-amber-500/30 p-3 rounded-2xl space-y-1">
+                <span className="text-amber-600 dark:text-amber-400 font-extrabold uppercase text-[10px] tracking-wider flex items-center gap-1">
+                  Abono Requerido
+                </span>
+
+                <span className="font-black text-amber-600 dark:text-amber-400 text-lg">
+                  ${abonoPrice.toLocaleString('es-CO')}
+                </span>
+
+                {isFixed ? (
+                  <p className="text-[11px] text-muted-foreground text-center pt-0.5">
+                    Abono fijo de <strong>${Number(customPricing.booking_fixed || 0).toLocaleString('es-CO')}</strong> por hora para confirmar
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground text-center pt-0.5">
+                    Abono del <strong>{activePercentage}%</strong> del valor total para confirmar
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="flex flex-col justify-between items-center text-xs bg-amber-500/10 p-2 rounded-lg mt-1 border border-amber-500/20">
-              <span className="text-amber-700 dark:text-amber-400 font-bold uppercase text-[10px] tracking-wider flex items-center gap-1">
-                Abono Requerido
-              </span>
-
-              <span className="font-black text-amber-700 dark:text-amber-400 text-sm">
-                ${abonoPrice.toLocaleString('es-CO')}
-              </span>
-
-              {customPricing?.booking_type === 'fixed' ? (
-                <p className="text-[11px] text-muted-foreground text-center mt-2">
-                  Abono fijo de <strong>${Number(customPricing.booking_fixed || 0).toLocaleString('es-CO')}</strong> por hora para confirmar
-                </p>
-              ) : (customPricing?.booking_percentage || (pitch as any).booking_percentage) ? ( // 👈 Cambiado aquí
-                <p className="text-[11px] text-muted-foreground text-center mt-2">
-                  Abono del <strong>{customPricing?.booking_percentage || (pitch as any).booking_percentage || 50}%</strong> del valor total para confirmar
-                </p>
-              ) : null}
-
-            </div>
-
           </div>
-          <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
-            La cancha se bloqueará por 5 minutos para que completes el pago de tu reserva de manera segura.
+
+          <p className="text-[11px] text-muted-foreground leading-relaxed px-1">
+            La cancha se bloqueará por <strong>5 minutos</strong> para que completes el pago de tu reserva de manera segura.
           </p>
         </div>
       );
@@ -213,11 +224,10 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
         showCancel: true,
         confirmText: 'Bloquear y Continuar',
         cancelText: 'Cancelar',
-        cancelButtonClassName: 'flex-1 h-12 rounded-xl font-bold flex items-center justify-center transition-all bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-500/10 dark:text-red-500 dark:hover:bg-red-500/20',
+        cancelButtonClassName: 'flex-1 h-12 rounded-xl font-bold flex items-center justify-center transition-all bg-destructive/10 text-destructive hover:bg-destructive/20 active:scale-95',
         onConfirm: async () => {
-          setAlertState(prev => ({ ...prev, isOpen: false }));
+          setAlertState((prev) => ({ ...prev, isOpen: false }));
 
-          // Verificación de conflicto en tiempo real antes de iniciar la reserva
           if (preselectedDate && Array.isArray(preselectedTime) && preselectedTime.length > 0) {
             const dayStartISO = `${preselectedDate}T00:00:00-05:00`;
             const dayEndISO = `${preselectedDate}T23:59:59-05:00`;
@@ -258,16 +268,28 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
               handleSearchRef.current(true);
               return;
             }
+
+            const ok = await startLock(pitch, preselectedDate, preselectedTime);
+            if (!ok) {
+              handleSearchRef.current(true);
+              setAlertState({
+                isOpen: true,
+                type: 'error',
+                title: 'Horario no disponible',
+                message: lockError || 'Una de las horas seleccionadas está siendo reservada por otra persona en este momento. Por favor elige otro horario.',
+              });
+              return;
+            }
           }
 
           onBook(pitch, preselectedTime, preselectedDate);
-        }
+        },
       });
       return;
     }
 
     onBook(pitch, preselectedTime, preselectedDate);
-  }, [user, onBook, supabase]);
+  }, [user, onBook, supabase, startLock, lockError]);
 
   const showAlert = (type: 'success' | 'error' | 'warning' | 'info', title: string, message: string) => {
     setAlertState({ isOpen: true, type, title, message });

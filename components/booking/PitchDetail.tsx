@@ -602,10 +602,10 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
               <h2 className="text-xl font-bold mb-5 flex items-center gap-2 text-foreground">
                 <Users size={22} className="text-primary" /> Escuelas de formación
               </h2>
-              <div className="grid gap-3.5 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3.5 w-full">
                 {schools.map(s => (
-                  <Link href="/schools" key={s.id} className="block group">
-                    <div className="flex items-center gap-4 p-4 bg-secondary/30 rounded-xl border border-border/60 hover:border-primary/50 hover:bg-secondary/60 shadow-sm transition-all duration-200">
+                  <Link href="/schools" key={s.id} className="block group w-full">
+                    <div className="flex items-center gap-4 p-4 bg-secondary/30 rounded-xl border border-border/60 hover:border-primary/50 hover:bg-secondary/60 shadow-sm transition-all duration-200 w-full">
                       <div className="w-14 h-14 rounded-xl bg-card border border-border/80 flex items-center justify-center text-muted-foreground flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform overflow-hidden">
                         {s.logo_url ? (
                           <img src={s.logo_url} alt="" className="w-full h-full object-cover" />

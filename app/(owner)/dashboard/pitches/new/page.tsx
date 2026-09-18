@@ -128,7 +128,7 @@ function PreviewCard({ data }: { data: any }) {
 
 export default function NewPitchPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const supabase = createClient();
 
   // Basic fields
@@ -137,9 +137,9 @@ export default function NewPitchPage() {
   const [types, setTypes] = useState<string[]>(['Fútbol 5']);
   const [surface, setSurface] = useState('Sintética');
   const [tone, setTone] = useState('field-emerald');
-  const [address, setAddress] = useState('');
-  const [lat, setLat] = useState<number | null>(null);
-  const [lng, setLng] = useState<number | null>(null);
+  const [address, setAddress] = useState('Pasto, Nariño');
+  const [lat, setLat] = useState<number | null>(1.2136);
+  const [lng, setLng] = useState<number | null>(-77.2811);
   const [grassColor, setGrassColor] = useState('');
   const [customSurface, setCustomSurface] = useState('');
   const [contactPhone, setContactPhone] = useState('');
@@ -372,22 +372,29 @@ export default function NewPitchPage() {
     if (!contactPhone.trim() || contactPhone.trim().length < 10) return setErrorMsg('El teléfono de la cancha es obligatorio y debe tener al menos 10 dígitos.');
     if (!user?.id) return setErrorMsg('Sesión no detectada. Recarga la página.');
     if (paymentMethods.length === 0) return setErrorMsg('Debes agregar al menos un método de pago.');
-    if (!lat || !lng) return setErrorMsg('Debes agregar la ubicación de la cancha.');
-    if (mediaItems.length === 0) return setErrorMsg('Debes agregar al menos una imagen o video.');
 
     setLoading(true);
     setErrorMsg('');
 
     try {
+      const defaultImageUrl = 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800&auto=format&fit=crop';
       // Ordenar items para que el principal quede de primero
       const mainItem = mediaItems.find(m => m.isMain) || mediaItems[0];
       const otherItems = mediaItems.filter(m => m !== mainItem);
       const orderedMediaItems = mainItem ? [mainItem, ...otherItems] : [];
-      const mediaUrls = orderedMediaItems.map(m => m.url);
+      const mediaUrls = orderedMediaItems.length > 0 ? orderedMediaItems.map(m => m.url) : [defaultImageUrl];
 
+      const finalLat = lat ?? 1.2136;
+      const finalLng = lng ?? -77.2811;
+      const parsedPrice = Number(price) > 0 ? Number(price) : 80000;
+
+      const token = session?.access_token;
       const res = await fetch('/api/admin-actions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           action: 'create_pitch',
           payload: {
@@ -400,16 +407,18 @@ export default function NewPitchPage() {
             grass_color: grassColor,
             custom_surface: customSurface,
             tone,
-            price,
+            price: parsedPrice,
+            price_per_hour: parsedPrice,
+            duration_minutes: 60,
             booking_percentage: bookingType === 'percentage' ? bookingPct : 0,
-            custom_pricing: { ...customPricing, booking_type: bookingType, booking_fixed: Number(bookingFixedAmount) },
+            custom_pricing: { ...customPricing, booking_type: bookingType, booking_fixed: Number(bookingFixedAmount) || 40000 },
             amenities: amenityChips.join(' · '),
             contact_phone: contactPhone,
             payment_methods: paymentMethods,
-            image_url: mediaUrls[0] || null,
+            image_url: mediaUrls[0] || defaultImageUrl,
             media_urls: mediaUrls,
-            lat,
-            lng,
+            lat: finalLat,
+            lng: finalLng,
           },
         }),
       });
@@ -423,7 +432,6 @@ export default function NewPitchPage() {
     } finally {
       setLoading(false);
     }
-
   };
 
   const previewData = {
@@ -464,14 +472,27 @@ export default function NewPitchPage() {
           </div>
         </div>
 
-        {/* Botón Vista Previa con texto visible */}
-        <button
-          onClick={() => setShowPreview(true)}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer active:scale-95 self-start sm:self-auto"
-        >
-          <Eye size={15} />
-          <span>Vista Previa</span>
-        </button>
+        {/* Acciones principales en cabecera */}
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setShowPreview(true)}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-secondary hover:bg-secondary/80 text-foreground border border-border text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer active:scale-95"
+          >
+            <Eye size={15} />
+            <span className="hidden sm:inline">Vista Previa</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold rounded-xl transition-all shadow-md shadow-emerald-600/20 cursor-pointer active:scale-95 disabled:opacity-50"
+          >
+            {loading ? <Loader2 size={15} className="animate-spin shrink-0" /> : <Plus size={15} className="shrink-0" />}
+            <span>{loading ? 'Creando...' : 'Crear Cancha'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Alerta de Error */}
@@ -764,9 +785,20 @@ export default function NewPitchPage() {
             </div>
           </div>
 
-          <button onClick={() => setActiveSection('pricing')} className="w-full btn-primary py-3">
-            Continuar → Precios
-          </button>
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={loading}
+              className="flex-1 py-3 px-4 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-98 disabled:opacity-50"
+            >
+              {loading && <Loader2 size={15} className="animate-spin shrink-0" />}
+              <span>{loading ? 'Creando...' : 'Crear Cancha Ya'}</span>
+            </button>
+            <button onClick={() => setActiveSection('pricing')} className="flex-1 btn-primary py-3">
+              Continuar → Precios
+            </button>
+          </div>
         </div>
       )}
 
@@ -981,8 +1013,17 @@ export default function NewPitchPage() {
             </div>
           </div>
 
-          <div className="flex gap-3">
-            <button onClick={() => setActiveSection('basic')} className="flex-1 btn-primary bg-secondary text-foreground hover:bg-border py-3">← Atrás</button>
+          <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+            <button onClick={() => setActiveSection('basic')} className="btn-primary bg-secondary text-foreground hover:bg-border py-3 px-4">← Atrás</button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={loading}
+              className="flex-1 py-3 px-4 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-98 disabled:opacity-50"
+            >
+              {loading && <Loader2 size={14} className="animate-spin shrink-0" />}
+              <span>{loading ? 'Creando...' : 'Crear Cancha'}</span>
+            </button>
             <button onClick={() => setActiveSection('media')} className="flex-1 btn-primary py-3">Continuar → Fotos</button>
           </div>
         </div>
@@ -1077,8 +1118,17 @@ export default function NewPitchPage() {
               )}
             </div>
 
-            <div className="flex gap-3">
-              <button onClick={() => setActiveSection('pricing')} className="flex-1 btn-primary bg-secondary text-foreground hover:bg-border py-3">← Atrás</button>
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+              <button onClick={() => setActiveSection('pricing')} className="btn-primary bg-secondary text-foreground hover:bg-border py-3 px-4">← Atrás</button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={loading}
+                className="flex-1 py-3 px-4 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-98 disabled:opacity-50"
+              >
+                {loading && <Loader2 size={14} className="animate-spin shrink-0" />}
+                <span>{loading ? 'Creando...' : 'Crear Cancha'}</span>
+              </button>
               <button onClick={() => setActiveSection('location')} className="flex-1 btn-primary py-3">Continuar → Ubicación Mapa</button>
             </div>
           </div>
@@ -1108,7 +1158,7 @@ export default function NewPitchPage() {
             </p>
 
             {/* Contenedor del Mapa Adaptable */}
-            <div className="h-56 sm:h-72 w-full rounded-xl overflow-hidden border border-border shadow-inner relative z-0">
+            <div className="w-full">
               <LocationPicker
                 lat={lat || 1.2136}
                 lng={lng || -77.2811}
@@ -1144,7 +1194,7 @@ export default function NewPitchPage() {
               className="flex-[2] py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed active:scale-98"
             >
               {loading && <Loader2 size={16} className="animate-spin shrink-0" />}
-              <span>{loading ? 'Publicando...' : 'Publicar Cancha'}</span>
+              <span>{loading ? 'Creando...' : 'Crear Cancha'}</span>
             </button>
           </div>
         </div>

@@ -128,7 +128,7 @@ function PreviewCard({ data }: { data: any }) {
 
 export default function EditPitchPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const supabase = createClient();
   const unwrappedParams = use(params);
   const pitchId = unwrappedParams.id;
@@ -180,6 +180,9 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
   const [errorMsg, setErrorMsg] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [activeSection, setActiveSection] = useState<'basic' | 'pricing' | 'media' | 'location'>('basic');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -410,22 +413,29 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
     if (!contactPhone.trim() || contactPhone.trim().length < 10) return setErrorMsg('El teléfono de la cancha es obligatorio y debe tener al menos 10 dígitos.');
     if (!user?.id) return setErrorMsg('Sesión no detectada. Recarga la página.');
     if (paymentMethods.length === 0) return setErrorMsg('Debes agregar al menos un método de pago.');
-    if (!lat || !lng) return setErrorMsg('Debes agregar la ubicación de la cancha.');
-    if (mediaItems.length === 0) return setErrorMsg('Debes agregar al menos una imagen o video.');
 
     setLoading(true);
     setErrorMsg('');
 
     try {
+      const defaultImageUrl = 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800&auto=format&fit=crop';
       // Ordenar items para que el principal quede de primero
       const mainItem = mediaItems.find(m => m.isMain) || mediaItems[0];
       const otherItems = mediaItems.filter(m => m !== mainItem);
       const orderedMediaItems = mainItem ? [mainItem, ...otherItems] : [];
-      const mediaUrls = orderedMediaItems.map(m => m.url);
+      const mediaUrls = orderedMediaItems.length > 0 ? orderedMediaItems.map(m => m.url) : [defaultImageUrl];
 
+      const finalLat = lat ?? 1.2136;
+      const finalLng = lng ?? -77.2811;
+      const parsedPrice = Number(price) > 0 ? Number(price) : 80000;
+
+      const token = session?.access_token;
       const res = await fetch('/api/admin-actions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           action: 'update_pitch',
           payload: {
@@ -439,22 +449,23 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
             grass_color: grassColor,
             custom_surface: customSurface,
             tone,
-            price,
+            price: parsedPrice,
+            price_per_hour: parsedPrice,
             booking_percentage: bookingType === 'percentage' ? bookingPct : 0,
-            custom_pricing: { ...customPricing, booking_type: bookingType, booking_fixed: Number(bookingFixedAmount), time_slots: timeSlots },
+            custom_pricing: { ...customPricing, booking_type: bookingType, booking_fixed: Number(bookingFixedAmount) || 40000, time_slots: timeSlots },
             amenities: amenityChips.join(' · '),
             contact_phone: contactPhone,
             payment_methods: paymentMethods,
-            image_url: mediaUrls[0] || null,
+            image_url: mediaUrls[0] || defaultImageUrl,
             media_urls: mediaUrls,
-            lat,
-            lng,
+            lat: finalLat,
+            lng: finalLng,
           },
         }),
       });
 
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'No se pudo crear la cancha.');
+      if (!res.ok || !data.success) throw new Error(data.error || 'No se pudo actualizar la cancha.');
       router.push('/dashboard/pitches');
       router.refresh();
     } catch (err: any) {
@@ -462,7 +473,41 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
     } finally {
       setLoading(false);
     }
+  };
 
+  const handleDeletePitch = async () => {
+    if (!pitchId || !user?.id) return;
+    setDeleting(true);
+    setDeleteError('');
+
+    try {
+      const token = session?.access_token;
+      const res = await fetch('/api/admin-actions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          action: 'delete_pitch',
+          payload: {
+            pitch_id: pitchId,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'No se pudo eliminar la cancha.');
+      }
+
+      router.push('/dashboard/pitches');
+      router.refresh();
+    } catch (err: any) {
+      setDeleteError(err.message || 'Error al intentar eliminar la cancha.');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const previewData = {
@@ -505,14 +550,40 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
           </div>
         </div>
 
-        {/* Botón Vista Previa con texto visible */}
-        <button
-          onClick={() => setShowPreview(true)}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer active:scale-95 self-start sm:self-auto"
-        >
-          <Eye size={15} />
-          <span>Vista Previa</span>
-        </button>
+        {/* Acciones principales en cabecera */}
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => {
+              setDeleteError('');
+              setShowDeleteModal(true);
+            }}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30 text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer active:scale-95"
+            title="Eliminar Cancha"
+          >
+            <Trash2 size={15} />
+            <span className="hidden sm:inline">Eliminar</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowPreview(true)}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-secondary hover:bg-secondary/80 text-foreground border border-border text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer active:scale-95"
+          >
+            <Eye size={15} />
+            <span className="hidden sm:inline">Vista Previa</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold rounded-xl transition-all shadow-md shadow-emerald-600/20 cursor-pointer active:scale-95 disabled:opacity-50"
+          >
+            {loading ? <Loader2 size={15} className="animate-spin shrink-0" /> : <Check size={15} className="shrink-0" />}
+            <span>{loading ? 'Guardando...' : 'Actualizar Cancha'}</span>
+          </button>
+        </div>
       </div>
 
       {errorMsg && (
@@ -796,9 +867,20 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
             </div>
           </div>
 
-          <button onClick={() => setActiveSection('pricing')} className="w-full btn-primary py-3">
-            Continuar → Precios
-          </button>
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={loading}
+              className="flex-1 py-3 px-4 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-98 disabled:opacity-50"
+            >
+              {loading && <Loader2 size={15} className="animate-spin shrink-0" />}
+              <span>{loading ? 'Guardando...' : 'Actualizar Cancha'}</span>
+            </button>
+            <button onClick={() => setActiveSection('pricing')} className="flex-1 btn-primary py-3">
+              Continuar → Precios
+            </button>
+          </div>
         </div>
       )}
 
@@ -1012,8 +1094,17 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
             </div>
           </div>
 
-          <div className="flex gap-3">
-            <button onClick={() => setActiveSection('basic')} className="flex-1 btn-primary bg-secondary text-foreground hover:bg-border py-3">← Atrás</button>
+          <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+            <button onClick={() => setActiveSection('basic')} className="btn-primary bg-secondary text-foreground hover:bg-border py-3 px-4">← Atrás</button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={loading}
+              className="flex-1 py-3 px-4 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-98 disabled:opacity-50"
+            >
+              {loading && <Loader2 size={14} className="animate-spin shrink-0" />}
+              <span>{loading ? 'Guardando...' : 'Actualizar Cancha'}</span>
+            </button>
             <button onClick={() => setActiveSection('media')} className="flex-1 btn-primary py-3">Continuar → Fotos</button>
           </div>
         </div>
@@ -1106,12 +1197,22 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
             )}
           </div>
 
-          <div className="flex gap-3">
-            <button onClick={() => setActiveSection('pricing')} className="flex-1 btn-primary bg-secondary text-foreground hover:bg-border py-3">← Atrás</button>
-            <button onClick={() => setActiveSection('location')} className="flex-1 btn-primary py-3">Continuar → Ubicación Mapa</button>
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+              <button onClick={() => setActiveSection('pricing')} className="btn-primary bg-secondary text-foreground hover:bg-border py-3 px-4">← Atrás</button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={loading}
+                className="flex-1 py-3 px-4 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-98 disabled:opacity-50"
+              >
+                {loading && <Loader2 size={14} className="animate-spin shrink-0" />}
+                <span>{loading ? 'Guardando...' : 'Actualizar Cancha'}</span>
+              </button>
+              <button onClick={() => setActiveSection('location')} className="flex-1 btn-primary py-3">Continuar → Ubicación Mapa</button>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* ─── SECCIÓN 4: UBICACIÓN ─── */}
       {/* ─── SECCIÓN 4: UBICACIÓN Y MAPA ─── */}
@@ -1136,7 +1237,7 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
             </p>
 
             {/* Contenedor del Mapa Adaptable */}
-            <div className="h-56 sm:h-72 w-full rounded-xl overflow-hidden border border-border shadow-inner relative z-0">
+            <div className="w-full">
               <LocationPicker
                 lat={lat || 1.2136}
                 lng={lng || -77.2811}
@@ -1172,14 +1273,84 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
               className="flex-[2] py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed active:scale-98"
             >
               {loading && <Loader2 size={16} className="animate-spin shrink-0" />}
-              <span>{loading ? 'Publicando...' : 'Publicar Cancha'}</span>
+              <span>{loading ? 'Guardando...' : 'Actualizar Cancha'}</span>
             </button>
           </div>
         </div>
       )}
 
+      {/* Zona de peligro: Eliminar cancha */}
+      <div className="mt-12 p-5 border border-red-500/20 bg-red-500/5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-bold text-red-600 dark:text-red-400 flex items-center gap-2">
+            <Trash2 size={16} /> Zona de peligro
+          </h3>
+          <p className="text-xs text-muted-foreground max-w-lg">
+            Si ya no administras esta cancha o deseas retirarla del sistema, puedes eliminarla permanentemente. Esta acción no se puede deshacer.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setDeleteError('');
+            setShowDeleteModal(true);
+          }}
+          className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm shrink-0 cursor-pointer active:scale-95"
+        >
+          <Trash2 size={14} />
+          Eliminar esta cancha
+        </button>
+      </div>
+
+      {/* ─── MODAL DE CONFIRMACIÓN PARA ELIMINAR CANCHA ─── */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-background border border-border rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl animate-in fade-in zoom-in-95">
+            <div className="w-12 h-12 rounded-full bg-red-500/10 text-red-600 flex items-center justify-center mx-auto">
+              <Trash2 size={24} />
+            </div>
+            <div className="text-center space-y-2">
+              <h2 className="font-bold text-lg text-foreground">¿Eliminar esta cancha?</h2>
+              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                Estás a punto de eliminar <strong className="text-foreground">"{name || 'esta cancha'}"</strong>.
+                Esta acción es permanente y eliminará la configuración y disponibilidad de este campo deportivo.
+              </p>
+            </div>
+
+            {deleteError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs rounded-xl flex items-center gap-2">
+                <ShieldAlert size={16} className="shrink-0" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteError('');
+                }}
+                disabled={deleting}
+                className="flex-1 py-2.5 border border-border rounded-xl text-xs sm:text-sm font-semibold bg-secondary hover:bg-secondary/80 text-foreground transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDeletePitch}
+                disabled={deleting}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-60 shadow-sm cursor-pointer active:scale-98"
+              >
+                {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                <span>{deleting ? 'Eliminando...' : 'Sí, eliminar'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── MODAL DE VISTA PREVIA ─── */}
-      {/* MODAL DE VISTA PREVIA */}
       {showPreview && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-background border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
