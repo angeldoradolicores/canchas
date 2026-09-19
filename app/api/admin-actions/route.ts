@@ -193,6 +193,8 @@ export async function POST(req: NextRequest) {
           media_urls: data.media_urls,
           lat: typeof payload.lat === 'number' ? payload.lat : null,
           lng: typeof payload.lng === 'number' ? payload.lng : null,
+          city: typeof payload.city === 'string' ? payload.city.slice(0, 100) : 'Pasto',
+          department: typeof payload.department === 'string' ? payload.department.slice(0, 100) : 'Nariño',
         })
         .select()
         .single();
@@ -247,6 +249,9 @@ export async function POST(req: NextRequest) {
         lng: payload.lng || null,
       };
 
+      if (payload.city !== undefined) updateFields.city = payload.city;
+      if (payload.department !== undefined) updateFields.department = payload.department;
+
       const { data: pitch, error } = await supabase
         .from('pitches')
         .update(updateFields)
@@ -277,12 +282,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'No tienes permiso para eliminar esta cancha' }, { status: 403 });
       }
 
-      // Limpiar favoritos asociados para evitar conflictos de claves foráneas
-      try {
-        await supabase.from('favorites').delete().eq('pitch_id', pitch_id);
-      } catch (e) {
-        console.warn('Advertencia al limpiar favoritos asociados:', e);
-      }
+      // Eliminar en cascada todos los registros dependientes (para evitar errores de FK constraint)
+      try { await supabase.from('pitch_favorites').delete().eq('pitch_id', pitch_id); } catch (e) { /* ignorar */ }
+      try { await supabase.from('favorites').delete().eq('pitch_id', pitch_id); } catch (e) { /* ignorar */ }
+      try { await supabase.from('pitch_reviews').delete().eq('pitch_id', pitch_id); } catch (e) { /* ignorar */ }
+      try { await supabase.from('tournaments').delete().eq('pitch_id', pitch_id); } catch (e) { /* ignorar */ }
+      try { await supabase.from('schools').delete().eq('pitch_id', pitch_id); } catch (e) { /* ignorar */ }
+      try { await supabase.from('challenges').delete().eq('pitch_id', pitch_id); } catch (e) { /* ignorar */ }
+      try { await supabase.from('bookings').delete().eq('pitch_id', pitch_id); } catch (e) { /* ignorar */ }
 
       const { error } = await supabase
         .from('pitches')

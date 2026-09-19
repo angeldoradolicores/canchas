@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   ArrowRight, CalendarDays, DollarSign, Grid2X2,
   TrendingUp, Clock, CheckCircle2, AlertCircle, Trophy, XCircle,
-  BarChart3, Wallet, Star, Activity, Zap, ChevronRight, Users
+  BarChart3, Wallet, Star, Activity, Zap, ChevronRight, Users, Bell, X
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 
 type DateFilter = 'hoy' | 'ayer' | 'semana' | 'mes' | 'total';
 
@@ -98,18 +99,13 @@ function StatCard({
 export function OwnerDashboard() {
   const { user, profile, session, loading: authLoading } = useAuth();
   const router = useRouter();
+  const supabase = createClient();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
   const [filter, setFilter] = useState<DateFilter>('hoy');
+  const [newPendingToast, setNewPendingToast] = useState<string | null>(null);
 
-  // ⚠️ Esperar a que el contexto de auth termine de cargar antes de pedir stats
-  useEffect(() => {
-    if (authLoading) return;   // auth todavía cargando – no hacer nada
-    if (!user?.id) { setLoading(false); return; }  // no hay sesión
-    fetchStats();
-  }, [user?.id, authLoading]);
-
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     setLoading(true);
     try {
       const token = session?.access_token;
@@ -125,7 +121,44 @@ export function OwnerDashboard() {
       if (json.success && json.data) setStats(json.data);
       else setStats(null);
     } catch (e) { console.error(e); } finally { setLoading(false); }
-  };
+  }, [session?.access_token]);
+
+  // ⚠️ Esperar a que el contexto de auth termine de cargar antes de pedir stats
+  useEffect(() => {
+    if (authLoading) return;   // auth todavía cargando – no hacer nada
+    if (!user?.id) { setLoading(false); return; }  // no hay sesión
+    fetchStats();
+  }, [user?.id, authLoading, fetchStats]);
+
+  // Realtime: escuchar nuevas reservas pending
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`owner-bookings-realtime:${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'bookings',
+      }, (payload: any) => {
+        if (payload.new?.status === 'pending') {
+          const name = payload.new.customer_name || 'Un cliente';
+          setNewPendingToast(`📩 Nueva reserva pendiente de ${name}`);
+          setTimeout(() => setNewPendingToast(null), 7000);
+          fetchStats(); // Refrescar estadísticas automáticamente
+        }
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'bookings',
+      }, () => {
+        fetchStats(); // Cualquier cambio refresca
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id, fetchStats]);
 
   const allBookings: any[] = stats?.recentBookings || [];
   const pitches: any[] = stats?.pitches || [];
@@ -186,6 +219,16 @@ export function OwnerDashboard() {
 
   return (
     <section className="page-content px-3 sm:px-6 py-4 max-w-7xl mx-auto space-y-6">
+      {/* Toast de nueva reserva */}
+      {newPendingToast && (
+        <div className="fixed top-4 right-4 z-[9999] flex items-center gap-3 bg-amber-500 text-white px-4 py-3 rounded-2xl shadow-2xl animate-slide-in-right max-w-sm">
+          <Bell size={16} className="shrink-0 animate-bounce" />
+          <p className="text-sm font-bold flex-1">{newPendingToast}</p>
+          <button onClick={() => setNewPendingToast(null)} className="opacity-80 hover:opacity-100">
+            <X size={14} />
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="min-w-0">

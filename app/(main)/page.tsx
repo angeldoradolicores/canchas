@@ -7,6 +7,7 @@ import { PitchDetail } from '@/components/booking/PitchDetail';
 import { BookingFlow } from '@/components/booking/BookingFlow';
 import { useActiveBooking } from '@/lib/active-booking-context';
 import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
+import { PhoneOnboarding } from '@/components/auth/PhoneOnboarding';
 
 export default function ExplorePage() {
   const [booking, setBooking] = useState<Pitch | null>(null);
@@ -110,6 +111,7 @@ export default function ExplorePage() {
           onOpen={(pitch) => setDetail(pitch)}
         />
       )}
+      <PhoneOnboarding />
     </>
   );
 }

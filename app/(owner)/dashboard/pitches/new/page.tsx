@@ -138,6 +138,8 @@ export default function NewPitchPage() {
   const [surface, setSurface] = useState('Sintética');
   const [tone, setTone] = useState('field-emerald');
   const [address, setAddress] = useState('Pasto, Nariño');
+  const [city, setCity] = useState('Pasto');
+  const [department, setDepartment] = useState('Nariño');
   const [lat, setLat] = useState<number | null>(1.2136);
   const [lng, setLng] = useState<number | null>(-77.2811);
   const [grassColor, setGrassColor] = useState('');
@@ -419,6 +421,8 @@ export default function NewPitchPage() {
             media_urls: mediaUrls,
             lat: finalLat,
             lng: finalLng,
+            city,
+            department,
           },
         }),
       });
@@ -1156,6 +1160,34 @@ export default function NewPitchPage() {
             <p className="text-xs text-muted-foreground leading-relaxed">
               Haz clic o arrastra el marcador en el mapa para fijar la ubicación exacta de tu cancha.
             </p>
+
+            {/* Departamento y Ciudad */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1">
+                  <span>Departamento *</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: Nariño"
+                  value={department}
+                  onChange={e => setDepartment(e.target.value)}
+                  className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1">
+                  <span>Ciudad / Municipio *</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: Pasto"
+                  value={city}
+                  onChange={e => setCity(e.target.value)}
+                  className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium"
+                />
+              </div>
+            </div>
 
             {/* Contenedor del Mapa Adaptable */}
             <div className="w-full">

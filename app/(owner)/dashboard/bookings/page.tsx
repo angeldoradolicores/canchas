@@ -284,34 +284,40 @@ export default function BookingsPage() {
   }, [bookings, filterStatus, listDateFilter, selectedDate, calView, searchQuery, getDaysRange]);
 
   const groupedBookings = useMemo(() => {
-    const groups: Record<string, any> = {};
+    const groupsList: any[] = [];
 
-    filteredBookings.forEach(b => {
-      const dateStr = getLocalDateString(b.start_time);
-      const key = `${b.pitch_id}-${b.customer_name || 'Anon'}-${dateStr}-${b.status}`;
+    // Ordenar reservas cronológicamente para agrupar las hechas en el mismo momento
+    const sorted = [...filteredBookings].sort(
+      (a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+    );
 
-      if (!groups[key]) {
-        groups[key] = {
-          key,
-          id: b.id, // main id for key mapping
-          status: b.status,
-          customer_name: b.customer_name,
-          customer_phone: b.customer_phone,
-          pitches: b.pitches,
-          start_time: b.start_time,
-          source: b.source,
-          payment_proof_url: b.payment_proof_url,
-          bookings: [],
-          total_price: 0,
-          deposit_amount: 0,
-        };
-      }
+    sorted.forEach((b: any) => {
+      const bProof = b.payment_proof_url?.trim() || null;
+      const bCreated = new Date(b.created_at || b.start_time).getTime();
+      const bDateStr = getLocalDateString(b.start_time);
 
-      groups[key].bookings.push(b);
-      // update start_time to earliest
-      if (new Date(b.start_time) < new Date(groups[key].start_time)) {
-        groups[key].start_time = b.start_time;
-      }
+      // Buscar si ya existe un grupo que pertenezca a la misma reserva/transacción
+      const existingGroup = groupsList.find((g: any) => {
+        if (g.pitch_id !== b.pitch_id || g.status !== b.status) return false;
+
+        // 1. Si ambos tienen comprobante de pago: deben ser idénticos para agruparse
+        if (bProof && g.payment_proof_url) {
+          return bProof === g.payment_proof_url;
+        }
+
+        // Si uno tiene comprobante y el otro no, son reservas distintas
+        if (Boolean(bProof) !== Boolean(g.payment_proof_url)) {
+          return false;
+        }
+
+        // 2. Si no tienen comprobante: mismo cliente, misma fecha y creados al mismo tiempo (< 3 minutos)
+        const sameCustomer = (b.customer_name || '').trim().toLowerCase() === (g.customer_name || '').trim().toLowerCase();
+        const gDateStr = getLocalDateString(g.start_time);
+        const gCreated = new Date(g.created_at || g.start_time).getTime();
+        const diffMs = Math.abs(bCreated - gCreated);
+
+        return sameCustomer && bDateStr === gDateStr && diffMs <= 3 * 60 * 1000;
+      });
 
       const tPrice = b.total_price || b.pitches?.price_per_hour || 80000;
       let dAmount = b.deposit_amount || 0;
@@ -328,16 +334,41 @@ export default function BookingsPage() {
           dAmount = (tPrice * Number(pct)) / 100;
         }
       }
-      groups[key].total_price += tPrice;
-      groups[key].deposit_amount += dAmount;
+
+      if (existingGroup) {
+        existingGroup.bookings.push(b);
+        existingGroup.total_price += tPrice;
+        existingGroup.deposit_amount += dAmount;
+        if (new Date(b.start_time) < new Date(existingGroup.start_time)) {
+          existingGroup.start_time = b.start_time;
+        }
+      } else {
+        const key = `${b.pitch_id}-${b.customer_name || 'Anon'}-${bDateStr}-${b.status}-${bProof || b.id}`;
+        groupsList.push({
+          key,
+          id: b.id,
+          pitch_id: b.pitch_id,
+          status: b.status,
+          customer_name: b.customer_name,
+          customer_phone: b.customer_phone,
+          pitches: b.pitches,
+          start_time: b.start_time,
+          source: b.source,
+          payment_proof_url: b.payment_proof_url,
+          created_at: b.created_at,
+          bookings: [b],
+          total_price: tPrice,
+          deposit_amount: dAmount,
+        });
+      }
     });
 
-    // Sort items by start_time so they render in order
-    Object.values(groups).forEach(g => {
+    // Ordenar reservas dentro de cada grupo por start_time
+    groupsList.forEach(g => {
       g.bookings.sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
     });
 
-    return Object.values(groups).sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
+    return groupsList.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
   }, [filteredBookings]);
 
   const formatSelectedDateText = (dateStr: string) => {

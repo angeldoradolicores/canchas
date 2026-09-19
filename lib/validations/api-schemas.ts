@@ -101,6 +101,8 @@ export const AdminCreatePitchSchema = z.object({
   media_urls: z.array(z.string().max(1000)).max(10).optional().default([]),
   opening_time: z.string().regex(/^\d{2}:\d{2}$/, 'Formato HH:mm').optional().default('08:00'),
   closing_time: z.string().regex(/^\d{2}:\d{2}$/, 'Formato HH:mm').optional().default('23:00'),
+  city: z.string().max(100).optional().default('Pasto'),
+  department: z.string().max(100).optional().default('Nariño'),
 }).transform((data) => ({
   ...data,
   price_per_hour: data.price_per_hour ?? data.price ?? 80000,
@@ -118,7 +120,7 @@ export const AdminDeletePitchSchema = z.object({
 export const AdminManualBookingSchema = z.object({
   pitch_id: z.string().min(1, 'ID de cancha requerido'),
   selected_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD'),
-  selected_times: z.array(z.string().regex(/^\d{2}:\d{2}$/)).min(1).max(8),
+  selected_times: z.array(z.string().regex(/^\d{2}:\d{2}$/)).min(1).max(24),
   customer_name: z.string().min(2).max(100),
   customer_phone: z.string().max(25).optional().nullable(),
   total_price: z.coerce.number().nonnegative().optional().nullable(),

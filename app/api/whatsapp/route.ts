@@ -122,16 +122,18 @@ export async function POST(req: NextRequest) {
       } else if (rawCode) {
         try {
           const QRCode = (await import('qrcode')).default;
-          finalQrImage = await QRCode.toDataURL(rawCode);
+          finalQrImage = await QRCode.toDataURL(rawCode, { margin: 2, scale: 8, color: { dark: '#000000', light: '#FFFFFF' } });
         } catch (e) {
           const qrData = encodeURIComponent(rawCode);
-          finalQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${qrData}&color=15803d`;
+          finalQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${qrData}&color=000000&margin=10`;
         }
       }
 
       if (!finalQrImage) {
-        const fallbackData = encodeURIComponent(`2@EvolutionAPI-MultiTenant:${instanceName}:${Date.now()}`);
-        finalQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${fallbackData}&color=15803d`;
+        return NextResponse.json({
+          error: 'Evolution API no devolvió un código QR. Por favor verifica que Evolution API esté activo o presiona Regenerar.',
+          instanceName,
+        }, { status: 502 });
       }
 
       await supabase
@@ -165,15 +167,24 @@ export async function POST(req: NextRequest) {
           const state = evoData?.instance?.state || evoData?.state;
 
           if (state === 'open') {
+            const rawOwner = evoData?.instance?.owner || evoData?.owner || evoData?.instance?.jid || evoData?.jid || '';
+            const detectedPhone = rawOwner
+              ? rawOwner.replace('@s.whatsapp.net', '').replace('@c.us', '')
+              : (company?.whatsapp_connected_phone || company?.owner_phone || '');
+
             await supabase
               .from('companies')
-              .update({ whatsapp_status: 'connected', whatsapp_qr_code: null })
+              .update({
+                whatsapp_status: 'connected',
+                whatsapp_qr_code: null,
+                whatsapp_connected_phone: detectedPhone || null,
+              })
               .eq('id', companyId);
 
             return NextResponse.json({
               success: true,
               status: 'connected',
-              phone: company?.whatsapp_connected_phone || company?.owner_phone || '',
+              phone: detectedPhone,
             });
           }
         }

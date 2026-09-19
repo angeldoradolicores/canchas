@@ -91,6 +91,11 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
   const supabase = createClient();
 
   useEffect(() => {
+    // Siempre arrancar desde el tope (importante en móvil)
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [pitch.id]);
+
+  useEffect(() => {
     if (today && !selectedDate && !initialDate) {
       setSelectedDate(today);
     }

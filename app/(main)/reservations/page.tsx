@@ -22,6 +22,10 @@ export default function UserReservationsPage() {
   const supabase = createClient();
 
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, []);
+
+  useEffect(() => {
     const t = setTimeout(() => {
       setAuthChecked(true);
       if (!user) setLoading(false);
@@ -287,21 +291,24 @@ export default function UserReservationsPage() {
 
       // Buscar si ya existe un grupo con el que fue reservada EN EL MISMO MOMENTO
       const existingGroup = groups.find((g: any) => {
-        if (g.status !== b.status) return false;
+        if (g.pitch_id !== b.pitch_id || g.status !== b.status) return false;
 
         // 1. Mismo comprobante de pago subido en el checkout
-        if (bProof && g.payment_proof_url && bProof === g.payment_proof_url) {
-          return true;
+        if (bProof && g.payment_proof_url) {
+          return bProof === g.payment_proof_url;
         }
 
-        // 2. Si no hay comprobante o difiere, verificar si se crearon en el mismo instante (margen de 3 minutos)
+        // Si uno tiene comprobante y el otro no, son reservas distintas
+        if (Boolean(bProof) !== Boolean(g.payment_proof_url)) {
+          return false;
+        }
+
+        // 2. Si no hay comprobante: verificar si se crearon en el mismo instante (< 3 minutos) y misma fecha
         const gTime = new Date(g.created_at || g.start_time).getTime();
         const diffMs = Math.abs(bTime - gTime);
-        if (diffMs <= 3 * 60 * 1000) {
-          return true;
-        }
-
-        return false;
+        const bDate = new Date(b.start_time).toDateString();
+        const gDate = new Date(g.start_time).toDateString();
+        return bDate === gDate && diffMs <= 3 * 60 * 1000;
       });
 
       const tPrice = b.total_price || b.pitches?.price_per_hour || 80000;

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   MapPin, Star, Layers, ShieldCheck, CreditCard,
-  ChevronLeft, ChevronRight, Edit3, Eye, Sparkles, X, Share2, DollarSign, Heart
+  ChevronLeft, ChevronRight, Edit3, Eye, Sparkles, X, Share2, DollarSign, Heart, Trash2, AlertTriangle, Loader2
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
@@ -52,7 +52,11 @@ interface PitchCardProps {
 export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: PitchCardProps) {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const router = useRouter();
+  const { session } = useAuth();
   const { isFavorite: checkFav, toggleFavorite: doToggleFav } = useFavorites();
   const isFavorite = checkFav(pitch.id);
 
@@ -117,6 +121,29 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
       await doToggleFav(pitch.id);
     } finally {
       setLoadingFavorite(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      const res = await fetch('/api/admin-actions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ action: 'delete_pitch', payload: { pitch_id: pitch.id } }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Error al eliminar la cancha');
+      // Recargar página para reflejar el cambio
+      router.refresh();
+      window.location.reload();
+    } catch (err: any) {
+      setDeleteError(err.message || 'Error al eliminar');
+      setDeleting(false);
     }
   };
 
@@ -485,15 +512,64 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
                 {isAdmin && editUrl && (
                   <Link
                     href={editUrl}
-                    className="px-5 py-2.5 bg-primary text-white font-bold text-xs rounded-xl hover:bg-primary/90 transition-colors flex items-center gap-2 shadow-sm"
+                    className="px-4 py-2.5 bg-primary text-white font-bold text-xs rounded-xl hover:bg-primary/90 transition-colors flex items-center gap-2 shadow-sm"
                   >
-                    <Edit3 size={14} /> Editar esta Cancha
+                    <Edit3 size={14} /> Editar
                   </Link>
+                )}
+                {isAdmin && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
+                    className="px-4 py-2.5 bg-red-600 text-white font-bold text-xs rounded-xl hover:bg-red-700 transition-colors flex items-center gap-2 shadow-sm"
+                    title="Eliminar cancha"
+                  >
+                    <Trash2 size={14} /> Eliminar
+                  </button>
                 )}
               </div>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Confirmación de Eliminación */}
+      {showDeleteConfirm && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => !deleting && setShowDeleteConfirm(false)}>
+          <div className="bg-card border border-border rounded-2xl shadow-2xl p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-500/20 flex items-center justify-center shrink-0">
+                <AlertTriangle size={20} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-black text-base text-foreground">¿Eliminar cancha?</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">{pitch.name}</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mb-5">
+              Esta acción es <strong className="text-foreground">permanente e irreversible</strong>. Se eliminarán la cancha y <strong className="text-red-600">todas sus reservas asociadas</strong>.
+            </p>
+            {deleteError && (
+              <p className="text-xs text-red-600 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl p-3 mb-4">{deleteError}</p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowDeleteConfirm(false); setDeleteError(''); }}
+                disabled={deleting}
+                className="flex-1 py-2.5 text-sm font-bold border border-border rounded-xl hover:bg-secondary transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 py-2.5 text-sm font-bold bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {deleting ? <><Loader2 size={14} className="animate-spin" /> Eliminando...</> : <><Trash2 size={14} /> Sí, eliminar</>}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {typeof document !== 'undefined' && flyingHearts.map(h => createPortal(
