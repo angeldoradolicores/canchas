@@ -2,10 +2,19 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
   const role = searchParams.get('role');
   const next = searchParams.get('next');
+
+  let origin = new URL(request.url).origin;
+  
+  // Usar variable de entorno si existe (para producción en Vercel)
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    origin = process.env.NEXT_PUBLIC_SITE_URL;
+  } else if (process.env.VERCEL_URL) {
+    origin = `https://${process.env.VERCEL_URL}`;
+  }
 
   if (code) {
     const supabase = await createClient();

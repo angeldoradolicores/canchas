@@ -175,7 +175,11 @@ as $$
 #variable_conflict use_column
 declare
   result jsonb;
+  v_proof text;
 begin
+  -- Obtener el comprobante de pago de la reserva actual
+  select payment_proof_url into v_proof from bookings where id = p_booking_id;
+
   select jsonb_build_object(
     'booking_id', b.id,
     'short_id', left(b.id::text, 6),
@@ -193,9 +197,20 @@ begin
     'pitch_name', p.name,
     'company_id', c.id,
     'company_name', c.name,
-    -- Teléfono personal del dueño en su perfil (o respaldo en companies)
     'owner_phone', coalesce(prof.phone, c.owner_phone),
-    'whatsapp_instance_name', c.whatsapp_instance_name
+    'whatsapp_instance_name', c.whatsapp_instance_name,
+    'sibling_bookings', (
+      -- Buscar otras reservas con el MISMO comprobante (para agruparlas)
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'booking_id', sb.id,
+        'pitch_name', sp.name,
+        'start_time', sb.start_time
+      )), '[]'::jsonb)
+      from bookings sb
+      join pitches sp on sp.id = sb.pitch_id
+      where sb.payment_proof_url = v_proof 
+        and v_proof is not null
+    )
   )
   into result
   from bookings b
