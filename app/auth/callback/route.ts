@@ -17,7 +17,9 @@ export async function GET(request: Request) {
   }
   
   // Remover barra final por si acaso
-  origin = origin.replace(/\\/$/, '');
+  if (origin.endsWith('/')) {
+    origin = origin.slice(0, -1);
+  }
 
   if (code) {
     const supabase = await createClient();
