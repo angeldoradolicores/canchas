@@ -159,10 +159,12 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
       popupAnchor: [0, -44],
     });
 
-    // ── Agrupar pitches por proximidad física / coordenadas ──
-    // Canchas en el mismo lugar físico forman un solo pin de complejo con su lista de canchas.
-    // Si una cancha está en otra ubicación (otra dirección o ciudad), tiene su propio marcador separado en el mapa.
+    // ── Agrupar pitches por company_id (complejo) ──
+    // Cada empresa/complejo tiene SIEMPRE un pin separado en el mapa,
+    // independientemente de qué tan cerca estén físicamente de otro complejo.
+    // Solo se agrupan canchas del MISMO complejo.
     interface LocationGroup {
+      companyId: string | null;
       lat: number;
       lng: number;
       name: string;
@@ -178,17 +180,19 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
       const lng = Number(pitch.lng ?? comp?.lng);
       if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
 
-      // Buscar si ya existe un complejo cercano (tolerancia ~120 metros: 0.0012 grados)
-      const existing = locationGroups.find(g => {
-        const dLat = Math.abs(g.lat - lat);
-        const dLng = Math.abs(g.lng - lng);
-        return dLat < 0.0012 && dLng < 0.0012;
-      });
+      const companyId = comp?.id || pitch.company_id || null;
+
+      // Si tiene company_id, agrupar solo por empresa (nunca mezclar empresas distintas)
+      // Si no tiene company_id, crear siempre un pin individual
+      const existing = companyId
+        ? locationGroups.find(g => g.companyId === companyId)
+        : null;
 
       if (existing) {
         existing.pitches.push(pitch);
       } else {
         locationGroups.push({
+          companyId,
           lat,
           lng,
           name: comp?.name || pitch.name || 'Complejo Deportivo',

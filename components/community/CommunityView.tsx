@@ -14,6 +14,7 @@ import {
   Clock3Icon,
   CalendarIcon, UserPlus
 } from 'lucide-react';
+import Link from 'next/link';
 
 type Tab = 'retos' | 'buscar-jugador' | 'buscar-equipo';
 
@@ -80,10 +81,10 @@ export function CommunityView() {
           ))}
         </div>
 
-        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#054D27]/10 text-[#054D27] border border-[#054D27]/20 shadow-2xs">
+        {/* <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#054D27]/10 text-[#054D27] border border-[#054D27]/20 shadow-2xs">
           <MapPin size={13} />
           <span>{selectedCity === 'Todas' ? 'Toda Colombia' : selectedCity}</span>
-        </div>
+        </div> */}
       </div>
 
       {activeTab === 'retos' && <RetosTab showAlert={showAlert} selectedCity={selectedCity} onSelectCity={handleSetCity} />}
@@ -278,10 +279,10 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
               <h1 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
                 Retos y Partidos
               </h1>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#054D27]/10 text-[#054D27] border border-[#054D27]/20">
+              {/* <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#054D27]/10 text-[#054D27] border border-[#054D27]/20">
                 <MapPin size={12} />
                 <span>{selectedCity === 'Todas' ? 'Toda Colombia' : selectedCity}</span>
-              </span>
+              </span> */}
             </div>
             <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1 leading-relaxed">
               ¿Tu equipo está listo para jugar? Desafía a otros grupos, acuerda el nivel y organiza un partido competitivo.
@@ -318,7 +319,7 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
                 }`}
             >
               <Flame size={14} className={filterUrgent ? 'text-white' : 'text-red-500'} strokeWidth={2.5} />
-              <span className="truncate">Urgente</span>
+              <span className="">Urgente</span>
             </button>
 
             {/* Filtro Fecha (Dropdown) */}
@@ -483,19 +484,18 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
                       </span>
                     </div>
 
-                    {/* Botón o Nombre de Cancha */}
+                    {/* Botón o Nombre de Cancha / Complejo */}
                     <div className="pt-1">
                       {c.pitches ? (
-                        <button
-                          type="button"
-                          onClick={() => setPreviewPitch(c.pitches)}
-                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all border border-emerald-200/80 shadow-sm cursor-pointer"
+                        <Link
+                          href={`/cancha/${c.pitches.id}`}
+                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 dark:text-emerald-300 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all border border-emerald-200/80 dark:border-emerald-800/80 shadow-sm cursor-pointer"
                         >
-                          🏟️ {c.pitches.name.toUpperCase()}  <span className="text-[10px] text-emerald-600 font-semibold">(Ver cancha)</span>
-                        </button>
+                          🏟️ {(c.pitches.companies?.name || c.pitches.name).toUpperCase()}  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">(Ver complejo)</span>
+                        </Link>
                       ) : (
                         <span className="px-3 py-1.5 bg-secondary text-foreground rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 border border-border">
-                          📍 CANCHA: {c.custom_pitch_name || 'Por definir'.toUpperCase()}
+                          📍 {c.custom_pitch_name || 'Por definir'.toUpperCase()}
                         </span>
                       )}
                     </div>
@@ -715,10 +715,10 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
               <h1 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
                 Convocatorias
               </h1>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#054D27]/10 text-[#054D27] border border-[#054D27]/20">
+              {/* <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#054D27]/10 text-[#054D27] border border-[#054D27]/20">
                 <MapPin size={12} />
                 <span>{selectedCity === 'Todas' ? 'Toda Colombia' : selectedCity}</span>
-              </span>
+              </span> */}
             </div>
             <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1 leading-relaxed">
               ¿Tienes un partido reservado pero te falta gente? Publica aquí y encuentra los jugadores exactos que necesitas.
@@ -761,7 +761,7 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
                 }`}
             >
               <Flame size={14} className={filterUrgent ? 'text-white' : 'text-red-500'} strokeWidth={2.5} />
-              <span className="truncate">Urgente</span>
+              <span className="">Urgente</span>
             </button>
 
             {/* Filtro Fecha (Dropdown) */}
@@ -943,16 +943,15 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
 
                     <div className="pt-1">
                       {c.pitches ? (
-                        <button
-                          type="button"
-                          onClick={() => setPreviewPitch(c.pitches)}
-                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all border border-emerald-200/80 shadow-sm cursor-pointer"
+                        <Link
+                          href={`/cancha/${c.pitches.id}`}
+                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 dark:text-emerald-300 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all border border-emerald-200/80 dark:border-emerald-800/80 shadow-sm cursor-pointer"
                         >
-                          🏟️ {c.pitches.name.toUpperCase()}  <span className="text-[10px] text-emerald-600 font-semibold">(Ver cancha )</span>
-                        </button>
+                          🏟️ {(c.pitches.companies?.name || c.pitches.name).toUpperCase()}  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">(Ver complejo)</span>
+                        </Link>
                       ) : (
                         <span className="px-3 py-1.5 bg-secondary text-foreground rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 border border-border">
-                          📍 CANCHA: {c.custom_pitch_name || 'POR DEFINIR'.toUpperCase()}
+                          📍 {c.custom_pitch_name || 'POR DEFINIR'.toUpperCase()}
                         </span>
                       )}
                     </div>
@@ -1039,7 +1038,7 @@ function ChallengeFormModal({
   const [openDropdown, setOpenDropdown] = useState<'zone' | 'level' | 'players' | null>(null);
 
   const [pitchId, setPitchId] = useState(editingItem?.pitch_id || '');
-  const [pitchQuery, setPitchQuery] = useState(editingItem?.pitches?.name || editingItem?.custom_pitch_name || '');
+  const [pitchQuery, setPitchQuery] = useState(editingItem?.pitches?.companies?.name || editingItem?.custom_pitch_name || '');
   const [pitchSuggestions, setPitchSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -1094,14 +1093,20 @@ function ChallengeFormModal({
 
     if (q.length < 2) { setShowSuggestions(false); return; }
 
-    const { data } = await supabase
-      .from('pitches')
-      .select('id, name, type, companies(name, zone)')
-      .ilike('name', `%${q}%`)
-      .limit(5);
-    setPitchSuggestions(data || []);
-    setShowSuggestions(true);
+    try {
+      const res = await fetch(`/api/search-companies?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      setPitchSuggestions(data || []);
+      setShowSuggestions(true);
+    } catch (err) {
+      console.error('Error buscando complejos:', err);
+      setShowSuggestions(false);
+    }
   };
+
+
+
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1413,35 +1418,44 @@ function ChallengeFormModal({
             </div>
           )}
 
-          {/* Autocompletado / Nombre Escrito de Cancha */}
+          {/* Autocompletado / Nombre de Complejo */}
           <div className="auth-field sm:col-span-2 relative">
-            <span>Cancha del partido <span className="text-muted-foreground text-xs">(Selecciona una o escríbela)</span></span>
+            <span>Lugar del partido <span className="text-muted-foreground text-xs">(Selecciona un lugar o escríbelo)</span></span>
             <input
               type="text"
               value={pitchQuery}
               onChange={e => handlePitchSearch(e.target.value)}
-              placeholder="Ej: El Golazo o cancha sintetica..."
+              placeholder="Ej: El Golazo, Canchas El Barrio..."
               className="h-[46px] w-full px-3 border border-border rounded-lg bg-card text-sm"
             />
             {showSuggestions && pitchSuggestions.length > 0 && (
               <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-card border border-border rounded-xl shadow-xl overflow-hidden">
                 <div className="px-3 py-1.5 text-[11px] font-bold text-muted-foreground bg-secondary">
-                  🏟️ Canchas registradas en el sistema
+                  Complejos registrados en el sistema
                 </div>
-                {pitchSuggestions.map((p: any) => (
+                {pitchSuggestions.map((c: any) => (
                   <button
-                    key={p.id}
+                    key={c.id}
                     type="button"
                     onClick={() => {
-                      setPitchId(p.id);
-                      setPitchQuery(p.name);
+                      setPitchId(c.pitch_id || c.id);
+                      setPitchQuery(c.name);
                       setCustomPitchName('');
                       setShowSuggestions(false);
                     }}
                     className="w-full px-4 py-2.5 text-left text-sm hover:bg-primary/10 flex items-center justify-between transition-colors border-b border-border/40"
                   >
-                    <span className="font-semibold text-foreground">🏟️ {p.name.toUpperCase()}</span>
-                    <span className="text-xs text-muted-foreground">{p.type.toUpperCase()} </span>
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-foreground">🏟️ {c.name.toUpperCase()}</span>
+                      {(c.city || c.address) && (
+                        <span className="text-xs text-muted-foreground">{[c.city || c.address].filter(Boolean).join(' · ')}</span>
+                      )}
+                    </div>
+                    {c.pitches_count > 0 && (
+                      <span className="text-[11px] text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-md">
+                        {c.pitches_count} {c.pitches_count === 1 ? 'cancha' : 'canchas'}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>

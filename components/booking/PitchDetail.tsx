@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowRight, Clock3, Heart, MapPin, ShieldCheck, CalendarDays, Calendar, CheckCircle, Loader2, Grid, X, ChevronLeft, ChevronRight, Trophy, CheckCircle2, Phone, Users, Building2, Layers, LandPlot } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
@@ -64,6 +64,8 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
 
   const [showGalleryModal, setShowGalleryModal] = useState(false);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const [mobileGalleryIndex, setMobileGalleryIndex] = useState(0);
+  const mobileGalleryRef = useRef<HTMLDivElement>(null);
   const [tournaments, setTournaments] = useState<any[]>([]);
   const [schools, setSchools] = useState<any[]>([]);
 
@@ -388,227 +390,289 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
       <button type="button" className="back-link flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6" onClick={onBack}>
         ← Volver a explorar
       </button>
-
-      {/* Header con Nombre y Complejo */}
-      <div className="detail-header flex justify-between items-start mb-4">
-        <div>
-          {/* {complexInfo?.name && (
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-800 dark:text-emerald-300 mb-2">
-              <Building2 size={15} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span className="text-xs font-black uppercase tracking-wider">
-                Complejo: {complexInfo.name}
-              </span>
-              {complexInfo.city && (
-                <span className="text-[10px] text-muted-foreground font-semibold">
-                  • {pitch.city}
-                </span>
-              )}
-            </div>
-          )} */}
-          <p className="eyebrow accent-label text-xs font-bold text-primary uppercase">
-            {complexInfo?.name ? 'COMPLEJO DEPORTIVO' : 'PERFIL DE LA CANCHA'}
-          </p>
+      <div className="order-2 md:order-1 detail-header flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 p-4 -mx-1 rounded-3xl bg-gradient-to-br from-primary/[0.07] via-emerald-500/[0.05] to-transparent border border-primary/10 md:p-0 md:mx-0 md:mb-4 md:rounded-none md:bg-none md:border-0">
+        <div className="min-w-0 flex-1">
           <div className="space-y-1">
             {/* Nombre del Complejo con gran protagonismo */}
-            <h1 className="text-3xl sm:text-4xl font-black tracking-tight bg-gradient-to-r from-primary to-emerald-600 bg-clip-text text-transparent">
+            <h1 className="text-[28px] leading-[1.1] sm:text-3xl md:text-4xl font-black tracking-tight bg-gradient-to-r from-primary to-emerald-600 bg-clip-text text-transparent break-words">
               {complexInfo?.name || currentPitch.name}
             </h1>
 
             {/* Nombre de la Cancha si difiere del complejo */}
             {complexInfo?.name && complexInfo.name !== currentPitch.name && (
-              <h3 className="text-lg sm:text-xl font-bold text-foreground/80 uppercase tracking-wide">
+              <h3 className="text-base sm:text-lg md:text-xl font-bold text-foreground/80 uppercase tracking-wide">
                 {currentPitch.name}
               </h3>
             )}
-
-            {/* Calificación y reseñas */}
-            <p className="lead flex items-center gap-2 text-sm text-muted-foreground pt-1">
-              <span className="rating text-amber-500 font-bold flex items-center gap-1">
-                <span>★</span> {pitchAny.rating || '5.0'} ({reviews.length > 0 ? reviews.length : (pitchAny.reviews || 0)} reseñas)
-              </span>
-            </p>
           </div>
         </div>
+
+        {/* Calificación y reseñas ubicadas a la derecha */}
+        <div className="flex items-center shrink-0 pt-1 sm:pt-0">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card/80 border border-border/60 shadow-xs">
+            <span className="text-amber-500 font-bold text-sm sm:text-base">★</span>
+            <span className="font-black text-sm sm:text-base text-foreground">
+              {pitchAny.rating || '5.0'}
+            </span>
+            <span className="text-xs text-muted-foreground font-medium">
+              ({reviews.length > 0 ? reviews.length : (pitchAny.reviews || 0)} reseñas)
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Bloque reordenable: en móvil primero fotos, luego título, luego selector de canchas.
+          En PC se mantiene el orden original: título, selector de canchas, fotos. */}
+      <div className="flex flex-col">
+
+        {/* Header con Nombre y Complejo */}
+
         <button
           type="button"
           onClick={toggleFavorite}
           disabled={loadingFavorite}
-          className={`p-3 rounded-2xl border transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer flex items-center justify-center shrink-0 ${
-            isFavorite
-              ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-500 shadow-md shadow-emerald-500/10'
-              : 'bg-secondary/70 hover:bg-secondary border-border/80 text-muted-foreground hover:text-emerald-500 hover:border-emerald-500/40'
-          }`}
-          title={isFavorite ? "Complejo en favoritos (clic para quitar)" : "Guardar este complejo en favoritos"}
+          className={`hidden md:inline-flex md:items-center md:justify-center shrink-0 p-3 rounded-full border shadow-sm transition-all duration-300 hover:scale-110 active:scale-90 disabled:opacity-50 ${isFavorite
+            ? 'bg-green-50 border-green-200 text-green-500 shadow-md shadow-green-100/50 scale-105'
+            : 'bg-background border-border text-muted-foreground hover:text-green-500 hover:bg-green-50/30 hover:border-green-100'
+            }`}
           aria-label={isFavorite ? "Quitar complejo de favoritos" : "Guardar complejo en favoritos"}
         >
           <Heart
             size={22}
-            className={`transition-transform duration-300 ${
-              isFavorite
-                ? "fill-emerald-500 text-emerald-500 scale-110"
-                : "text-current"
-            }`}
-            strokeWidth={isFavorite ? 0 : 2.2}
+            className={`transition-all duration-300 transform sm:w-6 sm:h-6 ${isFavorite
+              ? "fill-current scale-110 animate-[bounce_0.4s_ease-in-out_1]"
+              : "scale-100"
+              }`}
+            strokeWidth={isFavorite ? 2 : 2.5}
           />
         </button>
-      </div>
 
-      {/* Selector de Canchas Asociadas al Complejo */}
-      {siblingPitches.length > 1 && (
-        <div className="mb-6 p-3 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-primary/5 to-transparent border border-emerald-500/20 shadow-xs">
-          {/* Encabezado */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2 mb-3">
-            <div className="flex items-center gap-2">
-              <LandPlot size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <h3 className="text-xs sm:text-sm font-black text-foreground uppercase tracking-wide">
-                Canchas en este complejo ({siblingPitches.length})
-              </h3>
+
+        {/* Selector de Canchas Asociadas al Complejo */}
+        {siblingPitches.length > 1 && (
+          <div className="order-3 md:order-2 mb-6 p-4 sm:p-4 rounded-3xl sm:rounded-2xl bg-gradient-to-r from-emerald-500/10 via-primary/5 to-transparent border border-emerald-500/20 shadow-xs">
+            {/* Encabezado */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <LandPlot size={17} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <h3 className="text-[11px] sm:text-sm font-black text-foreground uppercase tracking-wide">
+                  Canchas en este complejo ({siblingPitches.length})
+                </h3>
+              </div>
+              <span className="text-[10px] sm:text-[11px] text-muted-foreground font-medium">
+                Desliza para ver más canchas
+              </span>
             </div>
-            <span className="text-[11px] text-muted-foreground font-medium">
-              Desliza para ver más canchas
-            </span>
-          </div>
 
-          {/* Contenedor con scroll horizontal */}
-          <div className="flex items-center gap-2.5 overflow-x-auto pb-2 pt-1 scrollbar-none [-webkit-overflow-scrolling:touch]">
-            {siblingPitches.map((sp, idx: number) => {
-              const isCurrent = sp.id === currentPitch.id;
-              const spPrice = Number((sp as any).price_per_hour || (sp as any).price || 0);
-              const spImg = (sp as any).media_urls?.[0] || (sp as any).image_url;
+            {/* Contenedor con scroll horizontal */}
+            <div className="flex items-center gap-2.5 overflow-x-auto pb-2 pt-1 scrollbar-none [-webkit-overflow-scrolling:touch] snap-x snap-mandatory">
+              {siblingPitches.map((sp, idx: number) => {
+                const isCurrent = sp.id === currentPitch.id;
+                const spPrice = Number((sp as any).price_per_hour || (sp as any).price || 0);
+                const spImg = (sp as any).media_urls?.[0] || (sp as any).image_url;
 
-              return (
-                <button
-                  key={sp.id || idx}
-                  type="button"
-                  onClick={() => handleSwitchPitch(sp)}
-                  className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all relative cursor-pointer shrink-0 w-[240px] sm:w-[260px] ${isCurrent
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/25 ring-2 ring-emerald-600/30'
-                    : 'bg-card text-foreground border-border hover:border-emerald-500/50 hover:bg-secondary/60'
-                    }`}
-                >
-                  {/* Imagen miniatura de la cancha */}
-                  <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-secondary/50 border border-white/15 relative">
-                    {spImg ? (
-                      <img src={spImg} alt={sp.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className={`w-full h-full ${(sp as any).tone || 'field-emerald'} flex items-center justify-center text-xs opacity-60`}>
-                        ⚽
-                      </div>
-                    )}
-                    {isCurrent && (
-                      <div className="absolute inset-0 bg-emerald-950/50 flex items-center justify-center">
-                        <CheckCircle2 size={16} className="text-white drop-shadow" />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Información de la cancha */}
-                  <div className="min-w-0 flex-1 flex flex-col justify-center">
-                    <div className="flex items-center justify-between gap-1 mb-0.5">
-                      <p className={`text-xs font-black uppercase truncate ${isCurrent ? 'text-white' : 'text-foreground'}`}>
-                        {sp.name}
-                      </p>
+                return (
+                  <button
+                    key={sp.id || idx}
+                    type="button"
+                    onClick={() => handleSwitchPitch(sp)}
+                    className={`flex items-center gap-3 p-3 rounded-2xl sm:rounded-xl border text-left transition-all relative cursor-pointer shrink-0 snap-start w-[220px] sm:w-[260px] ${isCurrent
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/25 ring-2 ring-emerald-600/30'
+                      : 'bg-card text-foreground border-border hover:border-emerald-500/50 hover:bg-secondary/60'
+                      }`}
+                  >
+                    {/* Imagen miniatura de la cancha */}
+                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-lg overflow-hidden shrink-0 bg-secondary/50 border border-white/15 relative">
+                      {spImg ? (
+                        <img src={spImg} alt={sp.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className={`w-full h-full ${(sp as any).tone || 'field-emerald'} flex items-center justify-center text-xs opacity-60`}>
+                          ⚽
+                        </div>
+                      )}
                       {isCurrent && (
-                        <span className="text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded bg-white text-emerald-700 tracking-wider shrink-0 shadow-2xs">
-                          Viendo
-                        </span>
+                        <div className="absolute inset-0 bg-emerald-950/50 flex items-center justify-center">
+                          <CheckCircle2 size={16} className="text-white drop-shadow" />
+                        </div>
                       )}
                     </div>
-                    <p className={`text-[11px] truncate ${isCurrent ? 'text-emerald-100' : 'text-muted-foreground'}`}>
-                      {sp.type || 'Fútbol 5'} · ${spPrice > 0 ? spPrice.toLocaleString('es-CO') : '80.000'}/h
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
+
+                    {/* Información de la cancha */}
+                    <div className="min-w-0 flex-1 flex flex-col justify-center">
+                      <div className="flex items-center justify-between gap-1 mb-0.5">
+                        <p className={`text-xs font-black uppercase truncate ${isCurrent ? 'text-white' : 'text-foreground'}`}>
+                          {sp.name}
+                        </p>
+                        {isCurrent && (
+                          <span className="text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded bg-white text-emerald-700 tracking-wider shrink-0 shadow-2xs">
+                            Viendo
+                          </span>
+                        )}
+                      </div>
+                      <p className={`text-[11px] truncate ${isCurrent ? 'text-emerald-100' : 'text-muted-foreground'}`}>
+                        {sp.type || 'Fútbol 5'} · ${spPrice > 0 ? spPrice.toLocaleString('es-CO') : '80.000'}/h
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Galería estilo Airbnb */}
-      {(() => {
-        const mediaUrls = Array.isArray(pitchAny.media_urls) && pitchAny.media_urls.length > 0
-          ? pitchAny.media_urls
-          : pitchAny.image_url ? [pitchAny.image_url] : [];
+        {/* Galería estilo Airbnb */}
+        {(() => {
+          const mediaUrls = Array.isArray(pitchAny.media_urls) && pitchAny.media_urls.length > 0
+            ? pitchAny.media_urls
+            : pitchAny.image_url ? [pitchAny.image_url] : [];
 
-        if (mediaUrls.length === 0) return null;
+          if (mediaUrls.length === 0) return null;
 
-        const gridClasses = mediaUrls.length >= 5
-          ? 'grid-cols-1 md:grid-cols-4 md:grid-rows-2 md:h-[450px] lg:h-[500px]'
-          : mediaUrls.length === 4
-            ? 'grid-cols-1 md:grid-cols-3 md:grid-rows-2 md:h-[450px] lg:h-[500px]'
-            : mediaUrls.length === 3
-              ? 'grid-cols-1 md:grid-cols-3 md:grid-rows-1 md:h-[400px]'
-              : mediaUrls.length === 2
-                ? 'grid-cols-1 md:grid-cols-2 md:grid-rows-1 md:h-[400px]'
-                : 'grid-cols-1 md:h-[450px] lg:h-[500px]';
+          const gridClasses = mediaUrls.length >= 5
+            ? 'grid-cols-1 md:grid-cols-4 md:grid-rows-2 md:h-[450px] lg:h-[500px]'
+            : mediaUrls.length === 4
+              ? 'grid-cols-1 md:grid-cols-3 md:grid-rows-2 md:h-[450px] lg:h-[500px]'
+              : mediaUrls.length === 3
+                ? 'grid-cols-1 md:grid-cols-3 md:grid-rows-1 md:h-[400px]'
+                : mediaUrls.length === 2
+                  ? 'grid-cols-1 md:grid-cols-2 md:grid-rows-1 md:h-[400px]'
+                  : 'grid-cols-1 md:h-[450px] lg:h-[500px]';
 
-        return (
-          <div className="relative mb-10 rounded-2xl overflow-hidden group border border-border">
-            <div className={`grid gap-2 h-[300px] ${gridClasses}`}>
-              <div
-                className={`relative w-full h-full cursor-pointer hover:opacity-90 transition-opacity bg-black ${mediaUrls.length >= 5 ? 'md:col-span-2 md:row-span-2' : mediaUrls.length >= 3 ? 'md:col-span-2 md:row-span-2' : ''}`}
-                onClick={() => { setActiveMediaIndex(0); setShowGalleryModal(true); }}
+          return (
+            <div className="order-1 md:order-3 relative mb-8 sm:mb-10 rounded-3xl sm:rounded-2xl overflow-hidden group border border-border shadow-lg shadow-black/5 sm:shadow-none">
+              {/* Corazón flotante — solo móvil, sobre la foto para que no quede "solo" */}
+              <button
+                type="button"
+                onClick={toggleFavorite}
+                disabled={loadingFavorite}
+                className={`md:hidden absolute top-3 left-3 z-30 p-2.5 rounded-full border shadow-lg backdrop-blur-md transition-all duration-300 hover:scale-110 active:scale-90 disabled:opacity-50 ${isFavorite
+                  ? 'bg-green-50/95 border-green-200 text-green-500'
+                  : 'bg-black/40 border-white/25 text-white hover:text-green-400'
+                  }`}
+                aria-label={isFavorite ? "Quitar complejo de favoritos" : "Guardar complejo en favoritos"}
               >
-                {getYoutubeId(mediaUrls[0]) ? (
-                  <>
-                    <iframe src={`https://www.youtube.com/embed/${getYoutubeId(mediaUrls[0])}`} className="w-full h-full object-cover pointer-events-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
-                    <div className="absolute inset-0 bg-transparent cursor-pointer z-10" />
-                  </>
-                ) : (
-                  <img src={mediaUrls[0]} alt="Foto principal" className="w-full h-full object-cover" />
+                <Heart
+                  size={20}
+                  className={`transition-all duration-300 transform ${isFavorite
+                    ? "fill-current scale-110 animate-[bounce_0.4s_ease-in-out_1]"
+                    : "scale-100"
+                    }`}
+                  strokeWidth={isFavorite ? 2 : 2.5}
+                />
+              </button>
+
+              {/* Carrusel deslizable — solo móvil: muestra TODAS las fotos, no solo la primera */}
+              <div className="md:hidden">
+                <div
+                  ref={mobileGalleryRef}
+                  onScroll={(e) => {
+                    const el = e.currentTarget;
+                    const idx = Math.round(el.scrollLeft / el.clientWidth);
+                    if (idx !== mobileGalleryIndex) setMobileGalleryIndex(idx);
+                  }}
+                  className="flex overflow-x-auto snap-x snap-mandatory scrollbar-none [-webkit-overflow-scrolling:touch] h-[300px] sm:h-[280px]"
+                >
+                  {mediaUrls.map((url: string, idx: number) => (
+                    <div
+                      key={idx}
+                      className="relative w-full h-full shrink-0 snap-center cursor-pointer bg-black"
+                      onClick={() => { setActiveMediaIndex(idx); setShowGalleryModal(true); }}
+                    >
+                      {getYoutubeId(url) ? (
+                        <>
+                          <iframe src={`https://www.youtube.com/embed/${getYoutubeId(url)}`} className="w-full h-full object-cover pointer-events-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                          <div className="absolute inset-0 bg-transparent cursor-pointer z-10" />
+                        </>
+                      ) : (
+                        <img src={url} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Puntos indicadores + contador */}
+                {mediaUrls.length > 1 && (
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10">
+                    {mediaUrls.map((_: string, idx: number) => (
+                      <span
+                        key={idx}
+                        className={`h-1.5 rounded-full transition-all ${idx === mobileGalleryIndex ? 'w-5 bg-white' : 'w-1.5 bg-white/50'}`}
+                      />
+                    ))}
+                  </div>
                 )}
+                <div className="absolute top-3 right-3 bg-black/60 text-white text-[11px] font-bold px-2 py-0.5 rounded-full z-10">
+                  {mobileGalleryIndex + 1}/{mediaUrls.length}
+                </div>
               </div>
 
-              {mediaUrls.slice(1, 5).map((url: string, idx: number) => (
+              {/* Grilla estilo Airbnb — solo escritorio */}
+              <div className={`hidden md:grid gap-2 ${gridClasses}`}>
                 <div
-                  key={idx}
-                  className="relative w-full h-full cursor-pointer hover:opacity-90 transition-opacity hidden md:block bg-black"
-                  onClick={() => { setActiveMediaIndex(idx + 1); setShowGalleryModal(true); }}
+                  className={`relative w-full h-full cursor-pointer hover:opacity-90 transition-opacity bg-black ${mediaUrls.length >= 5 ? 'md:col-span-2 md:row-span-2' : mediaUrls.length >= 3 ? 'md:col-span-2 md:row-span-2' : ''}`}
+                  onClick={() => { setActiveMediaIndex(0); setShowGalleryModal(true); }}
                 >
-                  {getYoutubeId(url) ? (
+                  {getYoutubeId(mediaUrls[0]) ? (
                     <>
-                      <iframe src={`https://www.youtube.com/embed/${getYoutubeId(url)}`} className="w-full h-full object-cover pointer-events-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                      <iframe src={`https://www.youtube.com/embed/${getYoutubeId(mediaUrls[0])}`} className="w-full h-full object-cover pointer-events-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
                       <div className="absolute inset-0 bg-transparent cursor-pointer z-10" />
                     </>
                   ) : (
-                    <img src={url} alt={`Foto ${idx + 2}`} className="w-full h-full object-cover" />
+                    <img src={mediaUrls[0]} alt="Foto principal" className="w-full h-full object-cover" />
                   )}
                 </div>
-              ))}
+
+                {mediaUrls.slice(1, 5).map((url: string, idx: number) => (
+                  <div
+                    key={idx}
+                    className="relative w-full h-full cursor-pointer hover:opacity-90 transition-opacity hidden md:block bg-black"
+                    onClick={() => { setActiveMediaIndex(idx + 1); setShowGalleryModal(true); }}
+                  >
+                    {getYoutubeId(url) ? (
+                      <>
+                        <iframe src={`https://www.youtube.com/embed/${getYoutubeId(url)}`} className="w-full h-full object-cover pointer-events-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                        <div className="absolute inset-0 bg-transparent cursor-pointer z-10" />
+                      </>
+                    ) : (
+                      <img src={url} alt={`Foto ${idx + 2}`} className="w-full h-full object-cover" />
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => { setActiveMediaIndex(mobileGalleryIndex); setShowGalleryModal(true); }}
+                className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 bg-white/95 dark:bg-zinc-900/95 text-foreground px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 sm:gap-2 shadow-lg border border-border/50 hover:scale-105 active:scale-95 transition-transform"
+              >
+                <Grid size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Mostrar todas las fotos</span><span className="sm:hidden">Ver fotos</span>
+              </button>
             </div>
+          );
+        })()}
 
-            <button
-              type="button"
-              onClick={() => { setActiveMediaIndex(0); setShowGalleryModal(true); }}
-              className="absolute bottom-4 right-4 bg-white/95 dark:bg-zinc-900/95 text-foreground px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg border border-border/50 hover:scale-105 active:scale-95 transition-transform"
-            >
-              <Grid size={16} /> Mostrar todas las fotos
-            </button>
-          </div>
-        );
-      })()}
+      </div>
 
-      <div className="flex flex-col md:flex-row gap-10">
-        <div className="flex-1 w-full max-w-full md:max-w-[55%] lg:max-w-[65%] space-y-10">
-          <div className="bg-card px-6 py-6 md:px-8 md:py-8 rounded-2xl border border-border shadow-sm">
-            <h2 className="text-xl font-bold mb-4 text-foreground">Sobre esta cancha</h2>
-            <p className="text-base text-muted-foreground leading-relaxed">
+      <div className="flex flex-col md:flex-row gap-6 md:gap-10">
+        <div className="order-2 md:order-1 flex-1 w-full max-w-full md:max-w-[55%] lg:max-w-[65%] space-y-6 md:space-y-10">
+          <div className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border shadow-sm shadow-black/[0.03] md:shadow-sm">
+            <h2 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-foreground">Sobre esta cancha</h2>
+            <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
               {pitchAny.description || 'Cancha de alto rendimiento perfecta para partidos entre amigos, entrenamientos y torneos locales. Espacio cuidado, iluminado y listo para jugar.'}
             </p>
-            <div className="flex flex-wrap gap-3 mt-5">
+            <div className="flex flex-wrap gap-2 sm:gap-3 mt-4 sm:mt-5">
               {amenitiesList.slice(0, 4).map((a: string, i: number) => (
                 <span
                   key={i}
-                  className="inline-flex items-center gap-2 text-xs font-bold bg-emerald-50 text-emerald-800 px-3.5 py-1.5 rounded-lg border border-emerald-200 shadow-sm transition-all"
+                  className="inline-flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-bold bg-emerald-50 text-emerald-800 px-3.5 py-2 sm:px-3.5 sm:py-1.5 rounded-full sm:rounded-lg border border-emerald-200 shadow-sm transition-all"
                 >
-                  <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                  <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
                   {a}
                 </span>
               ))}
 
               {amenitiesList.length > 4 && (
-                <span className="inline-flex items-center text-xs text-emerald-800 font-extrabold px-2 py-1.5 bg-emerald-100/60 rounded-lg border border-emerald-200/40">
+                <span className="inline-flex items-center text-[11px] sm:text-xs text-emerald-800 font-extrabold px-2 py-1.5 bg-emerald-100/60 rounded-lg border border-emerald-200/40">
                   +{amenitiesList.length - 4} más
                 </span>
               )}
@@ -618,25 +682,25 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
 
           </div>
 
-          <div className="bg-card px-4 py-5 sm:p-6 md:p-8 rounded-2xl border border-border shadow-sm">
-            <h2 className="text-lg sm:text-xl font-black mb-4 text-foreground">
+          <div className="bg-card px-4 py-5 sm:p-6 md:p-8 rounded-[28px] md:rounded-2xl border border-border shadow-sm shadow-black/[0.03] md:shadow-sm">
+            <h2 className="text-base sm:text-lg md:text-xl font-black mb-3 sm:mb-4 text-foreground">
               Detalles Técnicos
             </h2>
 
             {/* GRID DE DETALLES */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 w-full">
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-3 mt-3 sm:mt-4 w-full">
               {[
                 ['Tipo', currentPitch.type || 'Fútbol 5'],
                 ['Superficie', currentPitch.surface || 'Sintética'],
               ].map(([k, v]) => (
                 <div
                   key={k}
-                  className="p-3.5 bg-emerald-500/5 dark:bg-emerald-500/10 rounded-xl border border-emerald-500/10 dark:border-emerald-500/20 shadow-xs flex flex-col items-center justify-center text-center transition-all hover:scale-[1.02] duration-200 w-full"
+                  className="p-3.5 sm:p-3.5 bg-emerald-500/5 dark:bg-emerald-500/10 rounded-2xl sm:rounded-xl border border-emerald-500/10 dark:border-emerald-500/20 shadow-xs flex flex-col items-center justify-center text-center transition-all hover:scale-[1.02] duration-200 w-full"
                 >
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
+                  <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
                     {k}
                   </p>
-                  <p className="font-black text-sm text-emerald-700 dark:text-emerald-400 leading-tight">
+                  <p className="font-black text-xs sm:text-sm text-emerald-700 dark:text-emerald-400 leading-tight">
                     {v}
                   </p>
                 </div>
@@ -645,24 +709,24 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
 
             {/* CONTENEDOR DEL TELÉFONO CENTRADO */}
             {pitchAny.contact_phone && (
-              <div className="mt-4 p-3.5 bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/15 dark:border-emerald-500/20 rounded-2xl group relative">
+              <div className="mt-3 sm:mt-4 p-4 sm:p-3.5 bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/15 dark:border-emerald-500/20 rounded-3xl sm:rounded-2xl group relative">
 
                 {/* Enlace para llamar */}
                 <a
                   href={`tel:${pitchAny.contact_phone.replace(/\s/g, '')}`}
-                  className="flex items-center justify-center gap-3 w-full pb-1"
+                  className="flex items-center justify-center gap-2.5 sm:gap-3 w-full pb-1"
                 >
                   {/* Ícono de Teléfono */}
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-500/20 transition-colors">
-                    <Phone size={18} className="text-emerald-600 dark:text-emerald-400" />
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-500/20 transition-colors">
+                    <Phone size={17} className="sm:w-[18px] sm:h-[18px] text-emerald-600 dark:text-emerald-400" />
                   </div>
 
                   {/* Texto centrado con respecto al bloque */}
                   <div className="flex flex-col items-start">
-                    <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400/80 uppercase tracking-wider">
+                    <p className="text-[9px] sm:text-[10px] font-bold text-emerald-700 dark:text-emerald-400/80 uppercase tracking-wider">
                       Teléfono de contacto
                     </p>
-                    <p className="font-extrabold text-base text-foreground tracking-wider leading-tight mt-0.5">
+                    <p className="font-extrabold text-sm sm:text-base text-foreground tracking-wider leading-tight mt-0.5">
                       {pitchAny.contact_phone}
                     </p>
                   </div>
@@ -695,13 +759,13 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
             )}
           </div>
 
-          <div className="bg-card px-6 py-6 md:px-8 md:py-8 rounded-2xl ">
-            <h2 className="text-xl font-bold mb-4 text-foreground">Ubicación</h2>
+          <div className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border/60 md:border-0 shadow-sm shadow-black/[0.03] md:shadow-none">
+            <h2 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-foreground">Ubicación</h2>
             {pitchAny.lat && pitchAny.lng ? (
               <div className="rounded-xl overflow-hidden border border-border">
                 <iframe
                   width="100%"
-                  height="220"
+                  height="200"
                   style={{ border: 0 }}
                   loading="lazy"
                   allowFullScreen
@@ -730,29 +794,29 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
           </div>
 
           {tournaments.length > 0 && (
-            <div className="bg-card px-6 py-6 md:px-8 md:py-8 rounded-2xl border border-border shadow-sm mt-6">
-              <h2 className="text-xl font-bold mb-5 flex items-center gap-2 text-foreground">
-                <Trophy size={22} className="text-emerald-600" /> Campeonatos en esta cancha
+            <div className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border shadow-sm shadow-black/[0.03] md:shadow-sm mt-6">
+              <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-5 flex items-center gap-2 text-foreground">
+                <Trophy size={20} className="sm:w-[22px] sm:h-[22px] text-emerald-600" /> Campeonatos en esta cancha
               </h2>
-              <div className="grid gap-3.5">
+              <div className="grid gap-3 sm:gap-3.5">
                 {tournaments.map(t => (
                   <Link href="/tournaments" key={t.id} className="block group">
-                    <div className="flex items-center gap-4 p-4 bg-emerald-50/30 rounded-xl border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/60 shadow-sm transition-all duration-200">
+                    <div className="flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 bg-emerald-50/30 rounded-2xl sm:rounded-xl border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/60 shadow-sm transition-all duration-200">
                       {/* Contenedor de Imagen o Icono */}
-                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform">
                         {t.media_urls?.[0] ? (
                           <img src={t.media_urls[0]} alt="" className="w-full h-full object-cover rounded-xl" />
                         ) : (
-                          <Trophy size={24} />
+                          <Trophy size={22} />
                         )}
                       </div>
 
                       {/* Información del Torneo */}
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-extrabold capitalize text-base text-foreground truncate group-hover:text-emerald-700 transition-colors">
+                        <h4 className="font-extrabold capitalize text-sm sm:text-base text-foreground truncate group-hover:text-emerald-700 transition-colors">
                           {t.name}
                         </h4>
-                        <p className="text-xs font-medium text-muted-foreground mt-0.5 truncate">
+                        <p className="text-[11px] sm:text-xs font-medium text-muted-foreground mt-0.5 truncate">
                           Inicia: {new Date(t.start_date + 'T12:00:00').toLocaleDateString('es-CO')}
                         </p>
                       </div>
@@ -775,26 +839,26 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
           )}
 
           {schools.length > 0 && (
-            <div className="bg-card px-6 py-6 md:px-8 md:py-8 rounded-2xl border border-border shadow-sm mt-6">
-              <h2 className="text-xl font-bold mb-5 flex items-center gap-2 text-foreground">
-                <Users size={22} className="text-primary" /> Escuelas de formación
+            <div className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border shadow-sm shadow-black/[0.03] md:shadow-sm mt-6">
+              <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-5 flex items-center gap-2 text-foreground">
+                <Users size={20} className="sm:w-[22px] sm:h-[22px] text-primary" /> Escuelas de formación
               </h2>
-              <div className="grid grid-cols-1 gap-3.5 w-full">
+              <div className="grid grid-cols-1 gap-3 sm:gap-3.5 w-full">
                 {schools.map(s => (
                   <Link href="/schools" key={s.id} className="block group w-full">
-                    <div className="flex items-center gap-4 p-4 bg-secondary/30 rounded-xl border border-border/60 hover:border-primary/50 hover:bg-secondary/60 shadow-sm transition-all duration-200 w-full">
-                      <div className="w-14 h-14 rounded-xl bg-card border border-border/80 flex items-center justify-center text-muted-foreground flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform overflow-hidden">
+                    <div className="flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 bg-secondary/30 rounded-2xl sm:rounded-xl border border-border/60 hover:border-primary/50 hover:bg-secondary/60 shadow-sm transition-all duration-200 w-full">
+                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-card border border-border/80 flex items-center justify-center text-muted-foreground flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform overflow-hidden">
                         {s.logo_url ? (
                           <img src={s.logo_url} alt="" className="w-full h-full object-cover" />
                         ) : (
-                          <Users size={24} />
+                          <Users size={22} />
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-extrabold capitalize text-base text-foreground truncate group-hover:text-primary transition-colors">
+                        <h4 className="font-extrabold capitalize text-sm sm:text-base text-foreground truncate group-hover:text-primary transition-colors">
                           {s.name}
                         </h4>
-                        <p className="text-xs font-medium text-muted-foreground mt-0.5 truncate">
+                        <p className="text-[11px] sm:text-xs font-medium text-muted-foreground mt-0.5 truncate">
                           {s.categories || 'Formación deportiva'}
                         </p>
                       </div>
@@ -808,20 +872,20 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
         </div>
 
         {/* Módulo lateral de Disponibilidad y Reserva */}
-        <aside className="w-full md:w-[45%] lg:w-[35%]">
-          <div className="bg-card p-6 rounded-2xl border border-border shadow-2xl space-y-5 sticky top-24">
-            <p className="eyebrow accent-label text-xs font-bold text-primary uppercase">DISPONIBILIDAD</p>
-            <h2 className="text-lg font-bold">Consultar horarios</h2>
+        <aside className="order-1 md:order-2 w-full md:w-[45%] lg:w-[35%]">
+          <div className="bg-card p-4 sm:p-6 rounded-[28px] md:rounded-2xl border-2 border-primary/15 md:border md:border-border shadow-xl md:shadow-2xl shadow-primary/10 md:shadow-black/10 space-y-4 sm:space-y-5 md:sticky md:top-24">
+            <p className="eyebrow accent-label text-[11px] sm:text-xs font-bold text-primary uppercase tracking-wider">DISPONIBILIDAD</p>
+            <h2 className="text-base sm:text-lg font-bold">Consultar horarios</h2>
             <p className="text-xs text-muted-foreground">
               Selecciona una fecha en el calendario para ver los horarios disponibles en tiempo real.
             </p>
 
             {/* Selector de fecha con Calendario Custom */}
             <div>
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between mb-3">
-                <span className="flex items-center gap-1"><CalendarDays size={12} /> Fecha</span>
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between mb-3 gap-2">
+                <span className="flex items-center gap-1 shrink-0"><CalendarDays size={12} /> Fecha</span>
                 {selectedDate && (
-                  <span className="text-primary font-bold text-sm capitalize">
+                  <span className="text-primary font-bold text-xs sm:text-sm capitalize text-right truncate">
                     {formattedDate}
                   </span>
                 )}
@@ -831,7 +895,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                 <button
                   type="button"
                   onClick={() => setShowCalendar(true)}
-                  className="w-full py-3 bg-secondary/50 hover:bg-secondary text-foreground font-bold rounded-xl border border-border transition-colors flex items-center justify-center gap-2"
+                  className="w-full py-2.5 sm:py-3 bg-secondary/50 hover:bg-secondary text-foreground font-bold rounded-xl border border-border transition-colors flex items-center justify-center gap-2 text-sm"
                 >
                   <CalendarDays size={18} className="text-primary" />
                   Ver Calendario
@@ -857,14 +921,14 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
               )}
             </div>
 
-            <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-4 uppercase font-bold tracking-wider">
+            <div className="flex items-center gap-2.5 sm:gap-3 text-[9px] sm:text-[10px] text-muted-foreground mt-4 uppercase font-bold tracking-wider flex-wrap">
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-primary/20 border border-primary/40 inline-block" /> Libre</span>
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-100 border border-amber-300 inline-block" /> Res.</span>
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-300 inline-block" /> Ocup.</span>
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2 gap-2">
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                   <Clock3 size={12} /> Hora(s) disponibles
                 </label>
@@ -872,7 +936,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                   <button
                     type="button"
                     onClick={() => setSelectedTimes([])}
-                    className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                    className="text-[11px] text-muted-foreground hover:text-foreground underline shrink-0"
                   >
                     Limpiar
                   </button>
@@ -882,7 +946,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
               {selectedTimes.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {[...selectedTimes].sort().map(s => (
-                    <span key={s} className="inline-flex items-center gap-1 bg-primary text-white text-[11px] font-bold px-2.5 py-1 rounded-full">
+                    <span key={s} className="inline-flex items-center gap-1 bg-primary text-white text-[10px] sm:text-[11px] font-bold px-2 sm:px-2.5 py-1 rounded-full">
                       ⏰ {fmtSlot(s)} (${getSlotPrice(s).toLocaleString('es-CO')})
                       <button type="button" onClick={() => toggleTime(s)} className="opacity-70 hover:opacity-100 ml-1">✕</button>
                     </span>
@@ -890,7 +954,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                 </div>
               )}
 
-              <div className="flex bg-secondary p-1 rounded-xl border border-border gap-1">
+              <div className="flex bg-secondary p-1.5 sm:p-1 rounded-2xl sm:rounded-xl border border-border gap-1">
                 {([
                   { key: 'manana', title: 'Mañana' },
                   { key: 'tarde', title: 'Tarde' },
@@ -900,14 +964,14 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                     key={cat.key}
                     type="button"
                     onClick={() => setActiveTimeCategory(cat.key)}
-                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${activeTimeCategory === cat.key ? 'bg-card text-primary shadow-xs' : 'text-muted-foreground'}`}
+                    className={`flex-1 py-2 sm:py-1.5 text-[11px] sm:text-xs font-bold rounded-xl sm:rounded-lg transition-all ${activeTimeCategory === cat.key ? 'bg-card text-primary shadow-xs' : 'text-muted-foreground'}`}
                   >
                     {cat.title}
                   </button>
                 ))}
               </div>
 
-              <div className="rounded-xl border border-border bg-background p-3 min-h-[140px] flex items-center justify-center relative">
+              <div className="rounded-xl border border-border bg-background p-2.5 sm:p-3 min-h-[130px] sm:min-h-[140px] flex items-center justify-center relative">
                 {loadingSlots && takenSlots.size === 0 && (
                   <div className="absolute top-2 right-2 flex h-4 w-4 items-center justify-center">
                     <Loader2 size={12} className="animate-spin text-muted-foreground/50" />
@@ -933,7 +997,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                   }
 
                   return (
-                    <div className="grid grid-cols-3 gap-2 w-full">
+                    <div className="grid grid-cols-3 gap-1.5 sm:gap-2 w-full">
                       {currentCatSlots.map((slot) => {
                         const slotData = takenSlots.get(slot);
                         let isTaken = !!slotData;
@@ -982,7 +1046,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                                 setSelectedTimes(prev => [...prev, slot].sort());
                               }
                             }}
-                            className={`p-2 rounded-xl border text-center transition-all select-none font-bold text-xs relative overflow-hidden ${btnClass}`}
+                            className={`p-2 sm:p-2 rounded-2xl sm:rounded-xl border text-center transition-all select-none font-bold text-[11px] sm:text-xs relative overflow-hidden ${btnClass}`}
                           >
                             <span className="block leading-tight">{h12}:00</span>
                             <span className="text-[9px] uppercase opacity-75">{ampm}</span>
@@ -1023,7 +1087,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
 
             {/* Desglose dinámico de precios seleccionados */}
             {selectedTimes.length > 0 && (
-              <div className="space-y-2 p-3 bg-secondary/50 rounded-xl border border-border">
+              <div className="space-y-2 p-2.5 sm:p-3 bg-secondary/50 rounded-xl border border-border">
                 <p className="text-xs font-bold text-foreground">Desglose de selección:</p>
                 {selectedTimes.map(slot => (
                   <div key={slot} className="flex justify-between text-xs text-muted-foreground">
@@ -1040,7 +1104,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
 
             <button
               type="button"
-              className="w-full py-3.5 rounded-xl bg-primary text-white font-bold text-sm hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+              className="w-full py-4 sm:py-3.5 rounded-2xl sm:rounded-xl bg-primary text-white font-bold text-sm hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary/25 sm:shadow-md"
               onClick={async () => {
                 if (selectedTimes.length === 0) return;
 
@@ -1239,13 +1303,13 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
       </div>
 
       {/* Sección de Reseñas (Final de la página) */}
-      <div className="bg-card px-6 py-6 md:px-8 md:py-8 rounded-2xl border border-border shadow-sm mt-6 mb-8">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-foreground">Reseñas ({reviews.length})</h2>
+      <div className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border shadow-sm shadow-black/[0.03] md:shadow-sm mt-6 mb-8">
+        <div className="flex items-center justify-between mb-5 sm:mb-6 gap-2">
+          <h2 className="text-lg sm:text-2xl font-bold text-foreground">Reseñas ({reviews.length})</h2>
           {reviews.length > 3 && (
             <button
               onClick={() => setShowAllReviewsModal(true)}
-              className="text-sm font-bold text-primary hover:underline"
+              className="text-xs sm:text-sm font-bold text-primary hover:underline shrink-0"
             >
               Ver todas las reseñas
             </button>
@@ -1253,7 +1317,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
         </div>
 
         {user ? (
-          <form onSubmit={submitReview} className="mb-8 bg-secondary/30 p-4 rounded-xl border border-border">
+          <form onSubmit={submitReview} className="mb-6 sm:mb-8 bg-secondary/30 p-3.5 sm:p-4 rounded-xl border border-border">
             <h3 className="text-sm font-bold mb-3">Deja tu opinión</h3>
             <div className="flex items-center gap-2 mb-3">
               {[1, 2, 3, 4, 5].map(star => (
@@ -1295,10 +1359,10 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
             <p className="text-sm text-muted-foreground text-center p-4 col-span-full">Aún no hay reseñas. ¡Sé el primero en opinar!</p>
           ) : (
             reviews.slice(0, 4).map(review => (
-              <div key={review.id} className="p-4 border border-border rounded-xl bg-background shadow-sm hover:border-primary/40 transition-colors">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
+              <div key={review.id} className="p-3.5 sm:p-4 border border-border rounded-2xl sm:rounded-xl bg-background shadow-sm hover:border-primary/40 transition-colors">
+                <div className="flex items-center justify-between mb-2 gap-2">
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden shrink-0">
                       {review.profiles?.avatar_url ? (
                         <img src={review.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                       ) : (
@@ -1307,8 +1371,8 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                         </span>
                       )}
                     </div>
-                    <div>
-                      <Link href={`/profile/${review.user_id}`} className="font-bold text-sm text-foreground hover:text-primary transition-colors">
+                    <div className="min-w-0">
+                      <Link href={`/profile/${review.user_id}`} className="font-bold text-sm text-foreground hover:text-primary transition-colors truncate block">
                         {review.profiles?.full_name || 'Usuario'}
                       </Link>
                       <div className="flex items-center gap-1">
@@ -1316,7 +1380,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                       </div>
                     </div>
                   </div>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-[10px] text-muted-foreground shrink-0">
                     {new Date(review.created_at).toLocaleDateString('es-CO')}
                   </span>
                 </div>
@@ -1340,23 +1404,23 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
 
       {/* Modal de Todas las Reseñas */}
       {showAllReviewsModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-card w-full max-w-2xl max-h-[80vh] flex flex-col rounded-2xl shadow-2xl border border-border overflow-hidden animate-in zoom-in-95">
-            <div className="p-5 border-b border-border flex items-center justify-between bg-secondary/30">
-              <h2 className="text-lg font-bold">Todas las reseñas ({reviews.length})</h2>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+          <div className="bg-card w-full max-w-2xl max-h-[85vh] sm:max-h-[80vh] flex flex-col rounded-2xl shadow-2xl border border-border overflow-hidden animate-in zoom-in-95">
+            <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between bg-secondary/30">
+              <h2 className="text-base sm:text-lg font-bold">Todas las reseñas ({reviews.length})</h2>
               <button
                 onClick={() => setShowAllReviewsModal(false)}
-                className="p-2 bg-background hover:bg-secondary rounded-full transition-colors text-muted-foreground"
+                className="p-2 bg-background hover:bg-secondary rounded-full transition-colors text-muted-foreground shrink-0"
               >
                 <X size={20} />
               </button>
             </div>
-            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-3 sm:space-y-4">
               {reviews.map(review => (
-                <div key={review.id} className="p-4 border border-border rounded-xl bg-background">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
+                <div key={review.id} className="p-3.5 sm:p-4 border border-border rounded-xl bg-background">
+                  <div className="flex items-center justify-between mb-2 gap-2">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden shrink-0">
                         {review.profiles?.avatar_url ? (
                           <img src={review.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                         ) : (
@@ -1365,8 +1429,8 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                           </span>
                         )}
                       </div>
-                      <div>
-                        <Link href={`/profile/${review.user_id}`} onClick={() => setShowAllReviewsModal(false)} className="font-bold text-sm text-foreground hover:text-primary transition-colors">
+                      <div className="min-w-0">
+                        <Link href={`/profile/${review.user_id}`} onClick={() => setShowAllReviewsModal(false)} className="font-bold text-sm text-foreground hover:text-primary transition-colors truncate block">
                           {review.profiles?.full_name || 'Usuario'}
                         </Link>
                         <div className="flex items-center gap-1">
@@ -1374,7 +1438,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                         </div>
                       </div>
                     </div>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-[10px] text-muted-foreground shrink-0">
                       {new Date(review.created_at).toLocaleDateString('es-CO')}
                     </span>
                   </div>
@@ -1389,8 +1453,8 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
       {/* Modal de Galería Pantalla Completa */}
       {showGalleryModal && (
         <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col animate-in fade-in duration-200">
-          <div className="p-4 flex items-center justify-between">
-            <div className="text-white font-bold text-sm">
+          <div className="p-3 sm:p-4 flex items-center justify-between shrink-0">
+            <div className="text-white font-bold text-xs sm:text-sm">
               {activeMediaIndex + 1} / {(pitchAny.media_urls?.length || 1)}
             </div>
             <button
@@ -1398,10 +1462,10 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
               onClick={() => setShowGalleryModal(false)}
               className="p-2 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors"
             >
-              <X size={24} />
+              <X size={22} className="sm:w-6 sm:h-6" />
             </button>
           </div>
-          <div className="flex-1 relative flex items-center justify-center p-4">
+          <div className="flex-1 relative flex items-center justify-center p-2 sm:p-4 min-h-0">
             {(() => {
               const mediaUrls = Array.isArray(pitchAny.media_urls) && pitchAny.media_urls.length > 0
                 ? pitchAny.media_urls
@@ -1413,18 +1477,18 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                     type="button"
                     onClick={() => setActiveMediaIndex(prev => Math.max(0, prev - 1))}
                     disabled={activeMediaIndex === 0}
-                    className="absolute left-4 p-4 text-white bg-black/50 hover:bg-black/80 rounded-full disabled:opacity-30 transition-all z-10"
+                    className="absolute left-1.5 sm:left-4 p-2.5 sm:p-4 text-white bg-black/50 hover:bg-black/80 rounded-full disabled:opacity-30 transition-all z-10"
                   >
-                    <ChevronLeft size={32} />
+                    <ChevronLeft size={22} className="sm:w-8 sm:h-8" />
                   </button>
 
                   {getYoutubeId(mediaUrls[activeMediaIndex]) ? (
-                    <iframe src={`https://www.youtube.com/embed/${getYoutubeId(mediaUrls[activeMediaIndex])}`} className="max-h-[85vh] w-full max-w-4xl object-contain shadow-2xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                    <iframe src={`https://www.youtube.com/embed/${getYoutubeId(mediaUrls[activeMediaIndex])}`} className="max-h-[80vh] sm:max-h-[85vh] w-full max-w-4xl object-contain shadow-2xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
                   ) : (
                     <img
                       src={mediaUrls[activeMediaIndex]}
                       alt={`Foto ${activeMediaIndex + 1}`}
-                      className="max-h-[85vh] max-w-full object-contain"
+                      className="max-h-[80vh] sm:max-h-[85vh] max-w-full object-contain"
                     />
                   )}
 
@@ -1432,9 +1496,9 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                     type="button"
                     onClick={() => setActiveMediaIndex(prev => Math.min(mediaUrls.length - 1, prev + 1))}
                     disabled={activeMediaIndex === mediaUrls.length - 1}
-                    className="absolute right-4 p-4 text-white bg-black/50 hover:bg-black/80 rounded-full disabled:opacity-30 transition-all z-10"
+                    className="absolute right-1.5 sm:right-4 p-2.5 sm:p-4 text-white bg-black/50 hover:bg-black/80 rounded-full disabled:opacity-30 transition-all z-10"
                   >
-                    <ChevronRight size={32} />
+                    <ChevronRight size={22} className="sm:w-8 sm:h-8" />
                   </button>
                 </>
               );

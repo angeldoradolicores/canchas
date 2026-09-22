@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth-context';
-import { Loader2, Save, LogOut, User, Shield, HelpCircle, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Loader2, Save, LogOut, User, Shield, HelpCircle, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -71,6 +71,10 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const toggleFaq = (index: number) => {
     setOpenFaq(openFaq === index ? null : index);
@@ -121,6 +125,35 @@ export default function ProfilePage() {
   const handleLogout = async () => {
     await signOut();
     router.push('/');
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmation.trim().toUpperCase() !== 'ELIMINAR') return;
+    setDeleteLoading(true);
+    setDeleteError('');
+    try {
+      // Obtener token JWT activo de la sesión para autenticar la petición
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const res = await fetch('/api/delete-account', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ confirmation: 'ELIMINAR' }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Error al eliminar');
+      await signOut();
+      window.location.href = '/';
+    } catch (err: any) {
+      console.error('Error al eliminar cuenta:', err);
+      setDeleteError(err.message || 'Error al eliminar la cuenta');
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   if (!user) {
@@ -316,17 +349,88 @@ export default function ProfilePage() {
       </div>
 
       {/* Danger Zone */}
-      <div className="mt-6 mb-12 p-5 bg-card border border-border rounded-3xl">
+      <div className="mt-6 mb-12 p-5 bg-card border border-red-500/20 rounded-3xl shadow-xs">
         <h3 className="text-red-500 font-bold flex items-center gap-2 mb-2">
-          <AlertTriangle size={18} /> TEN ENCUENTA
+          <AlertTriangle size={18} /> TEN EN CUENTA
         </h3>
-        <p className="text-xs text-muted-foreground mb-4">
-          Esta acción es permanente e irreversible. Se eliminarán tu cuenta, reservas y publicaciones.
+        <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+          Esta acción es permanente e irreversible. Se eliminarán tu cuenta, reservas activas, historial y publicaciones comunitarias.
         </p>
-        <button className="w-full py-3 rounded-xl border border-red-500/30 text-red-500 hover:bg-red-500/10 font-bold text-sm transition-colors">
-          Eliminar mi cuenta
+        <button
+          type="button"
+          onClick={() => { setShowDeleteModal(true); setDeleteConfirmation(''); setDeleteError(''); }}
+          className="w-full py-3 rounded-xl border border-red-500/40 text-red-500 hover:bg-red-500/10 font-bold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+        >
+          <Trash2 size={16} /> Eliminar mi cuenta
         </button>
       </div>
+
+      {/* Modal de confirmación de eliminación */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-card border border-border rounded-3xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                <AlertTriangle size={20} className="text-red-500" />
+              </div>
+              <h2 className="font-bold text-lg text-foreground">¿Eliminar cuenta?</h2>
+            </div>
+            <p className="text-sm text-muted-foreground mb-1">
+              Esta acción es <strong className="text-red-500">permanente e irreversible</strong>. Se eliminarán:
+            </p>
+            <ul className="text-xs text-muted-foreground mb-4 mt-2 space-y-1 list-disc list-inside">
+              <li>Tu perfil e información personal</li>
+              <li>Todas tus reservas registradas</li>
+              <li>Tus retos y convocatorias publicadas</li>
+            </ul>
+            <p className="text-xs font-semibold mb-2 text-foreground">
+              Escribe <span className="text-red-500 font-bold tracking-wider">ELIMINAR</span> para confirmar:
+            </p>
+            <div className="relative mb-3">
+              <input
+                type="text"
+                value={deleteConfirmation}
+                onChange={e => setDeleteConfirmation(e.target.value.toUpperCase())}
+                placeholder="Escribe ELIMINAR"
+                autoFocus
+                className="w-full px-4 py-2.5 border border-border rounded-xl bg-background text-sm font-semibold tracking-wider outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all uppercase"
+              />
+              {deleteConfirmation.trim().toUpperCase() === 'ELIMINAR' && (
+                <span className="absolute right-3 top-2.5 text-xs text-green-500 font-bold flex items-center gap-1">
+                  ✓ Listo
+                </span>
+              )}
+            </div>
+            {deleteError && (
+              <div className="p-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-xs text-red-600 dark:text-red-400 font-medium mb-3">
+                {deleteError}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleteLoading}
+                className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-secondary transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirmation.trim().toUpperCase() !== 'ELIMINAR' || deleteLoading}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold transition-all hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer shadow-md"
+              >
+                {deleteLoading ? (
+                  <><Loader2 size={15} className="animate-spin" /> Eliminando...</>
+                ) : (
+                  'Eliminar'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
