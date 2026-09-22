@@ -3,12 +3,25 @@
 import { useEffect, useRef } from 'react';
 import { Pitch } from '@/lib/types';
 
+export const COLOMBIAN_CITIES: Record<string, { lat: number; lng: number }> = {
+  'Pasto': { lat: 1.2136, lng: -77.2811 },
+  'Ipiales': { lat: 0.8294, lng: -77.6444 },
+  'Popayán': { lat: 2.4419, lng: -76.6063 },
+  'Cali': { lat: 3.4516, lng: -76.5320 },
+  'Bogotá': { lat: 4.7110, lng: -74.0721 },
+  'Medellín': { lat: 6.2442, lng: -75.5812 },
+  'Barranquilla': { lat: 10.9685, lng: -74.7813 },
+  'Bucaramanga': { lat: 7.1254, lng: -73.1198 },
+};
+
 interface DynamicMapProps {
   pitches: Pitch[];
   onMarkerClick: (pitch: Pitch) => void;
+  userCoords?: { lat: number; lng: number } | null;
+  selectedCity?: string;
 }
 
-export default function DynamicMap({ pitches, onMarkerClick }: DynamicMapProps) {
+export default function DynamicMap({ pitches, onMarkerClick, userCoords, selectedCity = 'Pasto' }: DynamicMapProps) {
   const mapRef = useRef<any>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<any[]>([]);
@@ -21,8 +34,10 @@ export default function DynamicMap({ pitches, onMarkerClick }: DynamicMapProps) 
 
       if (!mapContainerRef.current || mapRef.current) return;
 
-      // Pasto, Colombia
-      const DEFAULT_CENTER: [number, number] = [1.2136, -77.2811];
+      const cityCoords = COLOMBIAN_CITIES[selectedCity] || COLOMBIAN_CITIES['Pasto'];
+      const DEFAULT_CENTER: [number, number] = userCoords
+        ? [userCoords.lat, userCoords.lng]
+        : [cityCoords.lat, cityCoords.lng];
 
       // Arreglar íconos de Leaflet en Next.js
       delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -79,7 +94,7 @@ export default function DynamicMap({ pitches, onMarkerClick }: DynamicMapProps) 
     };
   }, []);
 
-  // Actualizar marcadores cuando cambien los pitches
+  // Actualizar marcadores cuando cambien los pitches, coordenadas del usuario o ciudad
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -100,10 +115,18 @@ export default function DynamicMap({ pitches, onMarkerClick }: DynamicMapProps) 
         popupAnchor: [0, -40],
       });
       updateMarkers(L, greenIcon, pitches);
+
+      // Si el usuario tiene GPS, centrar en su ubicación
+      if (userCoords && mapRef.current) {
+        mapRef.current.flyTo([userCoords.lat, userCoords.lng], 14, { duration: 1.2 });
+      } else if (selectedCity && COLOMBIAN_CITIES[selectedCity] && mapRef.current) {
+        const c = COLOMBIAN_CITIES[selectedCity];
+        mapRef.current.flyTo([c.lat, c.lng], 13, { duration: 1.2 });
+      }
     };
 
     updateMap();
-  }, [pitches]);
+  }, [pitches, userCoords, selectedCity]);
 
   const updateMarkers = (L: any, greenIcon: any, pitchesList: Pitch[]) => {
     if (!mapRef.current) return;
@@ -111,6 +134,42 @@ export default function DynamicMap({ pitches, onMarkerClick }: DynamicMapProps) 
     // Limpiar marcadores anteriores
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];
+
+    // Marcador de ubicación actual del usuario con pulso azul
+    if (userCoords) {
+      const userIcon = L.divIcon({
+        className: '',
+        html: `
+          <div style="position: relative; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+            <div style="
+              position: absolute; width: 32px; height: 32px;
+              background: rgba(37, 99, 235, 0.3);
+              border-radius: 50%;
+              animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+            "></div>
+            <div style="
+              width: 18px; height: 18px;
+              background: #2563eb;
+              border: 3px solid #ffffff;
+              border-radius: 50%;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+              position: relative; z-index: 2;
+            "></div>
+          </div>
+        `,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+      });
+
+      const userMarker = L.marker([userCoords.lat, userCoords.lng], { icon: userIcon, zIndexOffset: 1000 })
+        .addTo(mapRef.current)
+        .bindPopup(`
+          <div style="font-family: Inter, sans-serif; font-size: 13px; font-weight: bold; color: #1e40af; text-align: center; padding: 2px;">
+            📍 Tu ubicación actual
+          </div>
+        `);
+      markersRef.current.push(userMarker);
+    }
 
     // For pitches with individual coords, create individual markers
     // For pitches without coords, group by company
@@ -137,8 +196,6 @@ export default function DynamicMap({ pitches, onMarkerClick }: DynamicMapProps) 
         companyMap.get(key)!.pitches.push(pitch);
       }
     });
-
-    if (individualPitches.length === 0 && companyMap.size === 0) return;
 
     companyMap.forEach((company) => {
       const popupContent = `
@@ -200,8 +257,9 @@ export default function DynamicMap({ pitches, onMarkerClick }: DynamicMapProps) 
     <div className="relative w-full rounded-2xl overflow-hidden border border-border shadow-md" style={{ height: '420px' }}>
       <div ref={mapContainerRef} className="w-full h-full" />
       {/* Overlay de marca */}
-      <div className="absolute bottom-3 left-3 z-[1000] bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-xl text-xs font-semibold text-green-700 border border-green-100 shadow-sm">
-        📍 Pasto, Nariño
+      <div className="absolute bottom-3 left-3 z-[1000] bg-white/90 dark:bg-black/80 backdrop-blur-sm px-2.5 py-1 rounded-xl text-xs font-semibold text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 shadow-sm flex items-center gap-1.5">
+        <span>📍</span>
+        <span>{selectedCity ? `${selectedCity}, Colombia` : 'Colombia'}</span>
       </div>
     </div>
   );

@@ -76,8 +76,9 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
 
   // Auth & Favorites & ActiveBooking hooks
   const { user, profile } = useAuth();
-  const { isFavorite: checkFav, toggleFavorite: doToggleFav } = useFavorites();
-  const isFavorite = checkFav(currentPitch.id);
+  const { isFavorite: checkFav, toggleFavorite: doToggleFav, isFavoriteComplex, toggleFavoriteComplex } = useFavorites();
+  const complexId = currentPitch.company_id || (currentPitch as any)?.companies?.id || (currentPitch as any)?.company?.id;
+  const isFavorite = complexId ? isFavoriteComplex(complexId) : checkFav(currentPitch.id);
   const [loadingFavorite, setLoadingFavorite] = useState(false);
   const { startLock, lockLoading, lockError, activeBooking } = useActiveBooking();
 
@@ -114,7 +115,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
           .from('pitches')
           .select('*, companies(id, name, address, zone)')
           .eq('company_id', compId)
-          .order('name', { ascending: true });
+          .order('created_at', { ascending: true });
 
         if (!error && data) {
           setSiblingPitches(data);
@@ -278,13 +279,18 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
         isOpen: true,
         type: 'login_required',
         title: 'Inicia sesión',
-        message: 'Debes iniciar sesión o crear una cuenta para guardar canchas en favoritos.'
+        message: 'Debes iniciar sesión o crear una cuenta para guardar complejos en favoritos.'
       });
       return;
     }
     setLoadingFavorite(true);
     try {
-      await doToggleFav(currentPitch.id);
+      const cId = currentPitch.company_id || (currentPitch as any)?.companies?.id || (currentPitch as any)?.company?.id;
+      if (cId) {
+        await toggleFavoriteComplex(cId);
+      } else {
+        await doToggleFav(currentPitch.id);
+      }
     } catch (e: any) {
       console.error(e);
     } finally {
@@ -399,17 +405,21 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
               )}
             </div>
           )} */}
-          <p className="eyebrow accent-label text-xs font-bold text-primary uppercase">PERFIL DE LA CANCHA</p>
+          <p className="eyebrow accent-label text-xs font-bold text-primary uppercase">
+            {complexInfo?.name ? 'COMPLEJO DEPORTIVO' : 'PERFIL DE LA CANCHA'}
+          </p>
           <div className="space-y-1">
-            {/* Nombre del Complejo con gran protagonismo y un toque de color degradado */}
+            {/* Nombre del Complejo con gran protagonismo */}
             <h1 className="text-3xl sm:text-4xl font-black tracking-tight bg-gradient-to-r from-primary to-emerald-600 bg-clip-text text-transparent">
-              {complexInfo?.name}
+              {complexInfo?.name || currentPitch.name}
             </h1>
 
-            {/* Nombre de la Cancha como subtítulo secundario pero llamativo */}
-            <h3 className="text-lg sm:text-xl font-bold text-foreground/80 uppercase tracking-wide">
-              {currentPitch.name}
-            </h3>
+            {/* Nombre de la Cancha si difiere del complejo */}
+            {complexInfo?.name && complexInfo.name !== currentPitch.name && (
+              <h3 className="text-lg sm:text-xl font-bold text-foreground/80 uppercase tracking-wide">
+                {currentPitch.name}
+              </h3>
+            )}
 
             {/* Calificación y reseñas */}
             <p className="lead flex items-center gap-2 text-sm text-muted-foreground pt-1">
@@ -427,7 +437,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
             ? 'bg-green-50 border-green-200 text-green-500 shadow-md shadow-green-100/50 scale-105'
             : 'bg-background border-border text-muted-foreground hover:text-green-500 hover:bg-green-50/30 hover:border-green-100'
             }`}
-          aria-label={isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
+          aria-label={isFavorite ? "Quitar complejo de favoritos" : "Guardar complejo en favoritos"}
         >
           <Heart
             size={24}
@@ -442,7 +452,8 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
 
       {/* Selector de Canchas Asociadas al Complejo */}
       {siblingPitches.length > 1 && (
-        <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-primary/5 to-transparent border border-emerald-500/20 shadow-xs">
+        <div className="mb-6 p-3 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-primary/5 to-transparent border border-emerald-500/20 shadow-xs">
+          {/* Encabezado */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2 mb-3">
             <div className="flex items-center gap-2">
               <LandPlot size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -451,48 +462,51 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
               </h3>
             </div>
             <span className="text-[11px] text-muted-foreground font-medium">
-              Selecciona una para ver su disponibilidad
+              Desliza para ver más canchas
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-            {siblingPitches.map((sp) => {
+          {/* Contenedor con scroll horizontal */}
+          <div className="flex items-center gap-2.5 overflow-x-auto pb-2 pt-1 scrollbar-none [-webkit-overflow-scrolling:touch]">
+            {siblingPitches.map((sp, idx: number) => {
               const isCurrent = sp.id === currentPitch.id;
               const spPrice = Number((sp as any).price_per_hour || (sp as any).price || 0);
               const spImg = (sp as any).media_urls?.[0] || (sp as any).image_url;
 
               return (
                 <button
-                  key={sp.id}
+                  key={sp.id || idx}
                   type="button"
                   onClick={() => handleSwitchPitch(sp)}
-                  className={`flex items-center gap-3 p-2.5 rounded-xl border text-left transition-all relative cursor-pointer ${isCurrent
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20 ring-2 ring-emerald-600/30'
+                  className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all relative cursor-pointer shrink-0 w-[240px] sm:w-[260px] ${isCurrent
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/25 ring-2 ring-emerald-600/30'
                     : 'bg-card text-foreground border-border hover:border-emerald-500/50 hover:bg-secondary/60'
                     }`}
                 >
-                  <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-secondary/50 border border-white/10 relative">
+                  {/* Imagen miniatura de la cancha */}
+                  <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-secondary/50 border border-white/15 relative">
                     {spImg ? (
                       <img src={spImg} alt={sp.name} className="w-full h-full object-cover" />
                     ) : (
-                      <div className={`w-full h-full ${(sp as any).tone || 'field-emerald'} flex items-center justify-center text-xs opacity-50`}>
+                      <div className={`w-full h-full ${(sp as any).tone || 'field-emerald'} flex items-center justify-center text-xs opacity-60`}>
                         ⚽
                       </div>
                     )}
                     {isCurrent && (
-                      <div className="absolute inset-0 bg-emerald-950/40 flex items-center justify-center">
+                      <div className="absolute inset-0 bg-emerald-950/50 flex items-center justify-center">
                         <CheckCircle2 size={16} className="text-white drop-shadow" />
                       </div>
                     )}
                   </div>
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-1">
-                      <p className={`text-xs font-black truncate uppercase ${isCurrent ? 'text-white' : 'text-foreground'}`}>
+                  {/* Información de la cancha */}
+                  <div className="min-w-0 flex-1 flex flex-col justify-center">
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <p className={`text-xs font-black uppercase truncate ${isCurrent ? 'text-white' : 'text-foreground'}`}>
                         {sp.name}
                       </p>
                       {isCurrent && (
-                        <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-white text-emerald-700 tracking-wider shrink-0">
+                        <span className="text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded bg-white text-emerald-700 tracking-wider shrink-0 shadow-2xs">
                           Viendo
                         </span>
                       )}

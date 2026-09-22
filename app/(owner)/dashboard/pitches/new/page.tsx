@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useRef, useCallback, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import {
   ArrowLeft, Loader2, Plus, ShieldAlert, Eye, X, MapPin,
@@ -9,10 +9,10 @@ import {
   ChevronLeft, ChevronRight, CreditCard, ArrowUp, ArrowDown, Copy, CheckCheck, GripVertical, Layers, Palette, Upload, Star, Clock, ChevronDown
 } from 'lucide-react';
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
+import nextDynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
 
-const LocationPicker = dynamic(() => import('@/components/maps/LocationPicker'), {
+const LocationPicker = nextDynamic(() => import('@/components/maps/LocationPicker'), {
   ssr: false,
   loading: () => <div className="h-48 bg-secondary rounded-xl border border-border flex items-center justify-center"><Loader2 size={20} className="animate-spin text-primary" /></div>,
 });
@@ -126,8 +126,9 @@ function PreviewCard({ data }: { data: any }) {
   );
 }
 
-export default function NewPitchPage() {
+function NewPitchForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, session } = useAuth();
   const supabase = createClient();
 
@@ -188,6 +189,8 @@ export default function NewPitchPage() {
 
   // Company info for displaying in header
   const [ownerCompanyName, setOwnerCompanyName] = useState<string | null>(null);
+  const [isDuplicate, setIsDuplicate] = useState(false);
+  const [duplicateLoadError, setDuplicateLoadError] = useState('');
 
   useEffect(() => {
     if (!user?.id) return;
@@ -202,6 +205,78 @@ export default function NewPitchPage() {
         if (data?.name) setOwnerCompanyName(data.name);
       });
   }, [user?.id, supabase]);
+
+  // Load duplicate pitch data from URL params
+  useEffect(() => {
+    const duplicateId = searchParams.get('duplicate');
+    if (!duplicateId || !user?.id) return;
+
+    const loadDuplicate = async () => {
+      const { data, error } = await supabase
+        .from('pitches')
+        .select('*')
+        .eq('id', duplicateId)
+        .maybeSingle();
+
+      if (error || !data) {
+        setDuplicateLoadError('No se pudo cargar la cancha a duplicar.');
+        return;
+      }
+
+      // Pre-fill all form fields
+      setName(data.name ? `${data.name} (Copia)` : '');
+      setDescription(data.description || '');
+      if (Array.isArray(data.supported_types) && data.supported_types.length > 0) {
+        setTypes(data.supported_types);
+      } else if (data.type) {
+        setTypes([data.type]);
+      }
+      setSurface(data.surface || 'Sintética');
+      setTone(data.tone || 'field-emerald');
+      setAddress(data.address || 'Pasto, Nariño');
+      setCity(data.city || 'Pasto');
+      setDepartment(data.department || 'Nariño');
+      setLat(data.lat ?? 1.2136);
+      setLng(data.lng ?? -77.2811);
+      setGrassColor(data.grass_color || '');
+      setCustomSurface(data.custom_surface || '');
+      setContactPhone(data.contact_phone || '');
+      setPrice(String(data.price_per_hour || data.price || 80000));
+      const cp = data.custom_pricing || {};
+      setBookingType(cp.booking_type || 'percentage');
+      setBookingPct(Number(data.booking_percentage || 50));
+      setBookingFixedAmount(String(cp.booking_fixed || 40000));
+      // Custom pricing per slot (exclude meta keys)
+      const slotPricing: Record<string, number> = {};
+      Object.entries(cp).forEach(([k, v]) => {
+        if (!['booking_type', 'booking_fixed', 'booking_percentage', 'time_slots'].includes(k)) {
+          slotPricing[k] = Number(v);
+        }
+      });
+      setCustomPricing(slotPricing);
+      if (Array.isArray(cp.time_slots) && cp.time_slots.length > 0) {
+        setTimeSlots(cp.time_slots);
+      }
+      if (Array.isArray(data.payment_methods) && data.payment_methods.length > 0) {
+        setPaymentMethods(data.payment_methods);
+      }
+      const amenList: string[] = Array.isArray(data.amenities)
+        ? data.amenities
+        : typeof data.amenities === 'string'
+          ? data.amenities.split('·').map((a: string) => a.trim()).filter(Boolean)
+          : ['Iluminación LED', 'Parqueadero'];
+      setAmenityChips(amenList);
+      // Media URLs
+      if (Array.isArray(data.media_urls) && data.media_urls.length > 0) {
+        setMediaItems(data.media_urls.map((url: string, idx: number) => ({ type: 'photo' as const, url, isMain: idx === 0 })));
+      } else if (data.image_url) {
+        setMediaItems([{ type: 'photo', url: data.image_url, isMain: true }]);
+      }
+      setIsDuplicate(true);
+    };
+
+    loadDuplicate();
+  }, [searchParams, user?.id, supabase]);
 
   const toggleType = (t: string) => {
     setTypes(prev => prev.includes(t) ? (prev.length > 1 ? prev.filter(x => x !== t) : prev) : [...prev, t]);
@@ -487,9 +562,9 @@ export default function NewPitchPage() {
             <ArrowLeft size={18} />
           </Link>
           <div>
-            <p className="eyebrow accent-label">NUEVA CANCHA</p>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Registrar Cancha</h1>
-            <p className="lead text-xs sm:text-sm">Completa la información para publicar tu espacio.</p>
+            <p className="eyebrow accent-label">{isDuplicate ? 'DUPLICAR CANCHA' : 'NUEVA CANCHA'}</p>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">{isDuplicate ? 'Duplicar Cancha' : 'Registrar Cancha'}</h1>
+            <p className="lead text-xs sm:text-sm">{isDuplicate ? 'Datos pre-cargados. Cambia el nombre y ajusta lo que necesites.' : 'Completa la información para publicar tu espacio.'}</p>
           </div>
         </div>
 
@@ -515,6 +590,28 @@ export default function NewPitchPage() {
           </button>
         </div>
       </div>
+
+      {/* Banner Duplicar */}
+      {isDuplicate && (
+        <div className="mb-5 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500/10 to-transparent border border-blue-500/25">
+          <span className="text-lg">🗒️</span>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              Modo Duplicar
+            </p>
+            <p className="text-sm font-black text-foreground">
+              Datos copiados — Cambia el nombre y guarda como nueva cancha
+            </p>
+          </div>
+        </div>
+      )}
+
+      {duplicateLoadError && (
+        <div className="mb-5 p-3 bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-medium rounded-xl flex items-center gap-2">
+          <ShieldAlert size={16} className="shrink-0" />
+          <span>{duplicateLoadError}</span>
+        </div>
+      )}
 
       {/* Banner de Complejo Asociado */}
       {ownerCompanyName && (
@@ -1292,5 +1389,19 @@ export default function NewPitchPage() {
         )
       }
     </div >
+  );
+}
+
+export default function NewPitchPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <Loader2 className="animate-spin text-primary" size={32} />
+        </div>
+      }
+    >
+      <NewPitchForm />
+    </Suspense>
   );
 }

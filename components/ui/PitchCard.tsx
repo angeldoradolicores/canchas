@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   MapPin, Star, Layers, ShieldCheck, CreditCard,
-  ChevronLeft, ChevronRight, Edit3, Eye, Sparkles, X, Share2, DollarSign, Heart, Trash2, AlertTriangle, Loader2
+  ChevronLeft, ChevronRight, Edit3, Eye, Sparkles, X, Share2, DollarSign, Heart, Trash2, AlertTriangle, Loader2, Copy
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
@@ -350,6 +350,23 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
           className="p-4 border-t border-border/80 bg-secondary/20"
           onClick={() => { if (onOpen) onOpen(pitch); else setShowDetailModal(true); }}
         >
+          {isAdmin && editUrl && (
+            <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+              <Link
+                href={editUrl}
+                className="flex-1 py-2.5 text-xs font-bold bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <Edit3 size={13} /> Editar
+              </Link>
+              <Link
+                href={`/dashboard/pitches/new?duplicate=${pitch.id}`}
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-bold bg-secondary hover:bg-secondary/80 text-foreground border border-border rounded-xl transition-all shadow-sm"
+                title="Duplicar esta cancha"
+              >
+                <Copy size={13} /> Duplicar
+              </Link>
+            </div>
+          )}
           {onBook && (
             <button
               type="button"

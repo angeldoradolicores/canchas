@@ -12,12 +12,16 @@ import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertMo
 import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
 import { useActiveBooking } from '@/lib/active-booking-context';
-import { Calendar, Clock } from "lucide-react";
+import { Calendar, Clock } from 'lucide-react';
+import { ComplexCard, ComplexData } from '@/components/ui/ComplexCard';
+import { groupPitchesByComplex } from '@/lib/complex-utils';
+
 const DEFAULT_TIME_SLOTS = [
   '06:00', '07:00', '08:00', '09:00', '10:00', '11:00',
   '12:00', '13:00', '14:00', '15:00', '16:00', '17:00',
   '18:00', '19:00', '20:00', '21:00', '22:00', '23:00'
 ];
+
 
 const DynamicMap = dynamic(() => import('./DynamicMap'), {
   ssr: false,
@@ -70,6 +74,76 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
   const [loading, setLoading] = useState(true);
   const [selectedCity, setSelectedCity] = useState('Pasto');
   const [selectedFormats, setSelectedFormats] = useState<string[]>([]); // Inicializa como arreglo vacío
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsError, setGpsError] = useState(false);
+
+  const requestGPS = () => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      setGpsError(true);
+      return;
+    }
+    setGpsLoading(true);
+    setGpsError(false);
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setUserCoords(coords);
+          setGpsLoading(false);
+
+          // Detectar ciudad colombiana más cercana si se activa GPS
+          const KNOWN_COORDS: Record<string, { lat: number; lng: number }> = {
+            'Pasto': { lat: 1.2136, lng: -77.2811 },
+            'Ipiales': { lat: 0.8294, lng: -77.6444 },
+            'Popayán': { lat: 2.4419, lng: -76.6063 },
+            'Cali': { lat: 3.4516, lng: -76.5320 },
+            'Bogotá': { lat: 4.7110, lng: -74.0721 },
+            'Medellín': { lat: 6.2442, lng: -75.5812 },
+            'Barranquilla': { lat: 10.9685, lng: -74.7813 },
+          };
+
+          let closest = 'Pasto';
+          let minDist = Infinity;
+          Object.entries(KNOWN_COORDS).forEach(([cityName, c]) => {
+            const dist = Math.sqrt(Math.pow(c.lat - coords.lat, 2) + Math.pow(c.lng - coords.lng, 2));
+            if (dist < minDist) {
+              minDist = dist;
+              closest = cityName;
+            }
+          });
+
+          if (minDist < 1.5) {
+            setSelectedCity(closest);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('selectedCity', closest);
+              window.dispatchEvent(new CustomEvent('cityChange', { detail: closest }));
+            }
+          }
+        },
+        (err) => {
+          console.info('GPS permission denied or unavailable:', err.message);
+          setGpsError(true);
+          setGpsLoading(false);
+        },
+        { timeout: 8000 }
+      );
+    } catch {
+      setGpsError(true);
+      setGpsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Escuchar coordenadas del header si se activa GPS allí
+    const onGps = (e: any) => {
+      if (e.detail?.lat && e.detail?.lng) {
+        setUserCoords(e.detail);
+      }
+    };
+    window.addEventListener('gpsCoords', onGps);
+    return () => window.removeEventListener('gpsCoords', onGps);
+  }, []);
 
   const handleFormatToggle = (format: string) => {
     if (format === 'Todos') {
@@ -354,13 +428,19 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
 
   useEffect(() => {
     const fetchPitches = async () => {
-      const { data, error } = await supabase.from('pitches').select('*, companies(name, zone, lat, lng)');
+      const { data, error } = await supabase
+        .from('pitches')
+        .select('*, companies(id, name, zone, address, lat, lng)');
+      if (error) {
+        console.error('Error fetching pitches:', error);
+      }
       if (data && !error && data.length > 0) {
         const mapped = data.map((p: any) => ({
           ...p,
-          zone: p.companies?.zone || 'Norte',
+          zone: p.companies?.zone || p.zone || 'Norte',
+          city: p.city || 'Pasto',
           distance: '1.2 km',
-          rating: '4.8',
+          rating: '5.0',
           reviews: 120,
           open: true,
           price: `$${p.price_per_hour?.toLocaleString('es-CO')}`,
@@ -371,16 +451,71 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
         }));
         setPitches(mapped as any);
       }
+      setLoading(false);
     };
     fetchPitches();
-  }, []);
+  }, [supabase]);
+
+  // Agrupación híbrida: Modelo Complejo-Primero (con GPS si disponible)
+  const complexes = useMemo(() => {
+    return groupPitchesByComplex(pitches, userCoords);
+  }, [pitches, userCoords]);
+
+  const filteredComplexes = useMemo(() => {
+    const matches = complexes.filter(c => {
+      const matchesCity = selectedCity === 'Todas' || (c.city || 'Pasto').toLowerCase() === selectedCity.toLowerCase();
+
+      const searchTarget = [
+        c.name,
+        c.city,
+        c.department,
+        c.zone,
+        c.address,
+        c.formats.join(' '),
+        c.surfaces.join(' '),
+        c.amenities.join(' '),
+        c.pitches.map(p => `${p.name} ${(p as any).department || ''} ${(p as any).city || ''}`).join(' ')
+      ].filter(Boolean).join(' ').toLowerCase();
+
+      const cleanQuery = query.trim().toLowerCase();
+      const matchesQuery = !cleanQuery || searchTarget.includes(cleanQuery);
+
+      const matchesFormat = selectedFormats.length === 0 ||
+        selectedFormats.some(sf => c.formats.includes(sf));
+
+      return matchesCity && matchesQuery && matchesFormat;
+    });
+
+    // Barajado aleatorio para que los resultados sean equitativos y no salga siempre la misma cancha primero
+    const shuffled = [...matches];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }, [complexes, query, selectedFormats, selectedCity]);
+
+  // Ordenar por distancia GPS (si disponible)
+  const nearbyComplexes = useMemo(() => {
+    if (!userCoords) return filteredComplexes;
+    return [...filteredComplexes].sort((a, b) =>
+      (a.distanceKm ?? 999) - (b.distanceKm ?? 999)
+    );
+  }, [filteredComplexes, userCoords]);
+
+  // Ordenar por popularidad (número de reservas totales)
+  const popularComplexes = useMemo(() => {
+    return [...filteredComplexes]
+      .sort((a, b) => (b.totalBookings ?? 0) - (a.totalBookings ?? 0))
+      .filter((_, i) => i < 10);
+  }, [filteredComplexes]);
 
   const filtered = useMemo(() =>
     pitches.filter(p => {
       const pZone = ((p as any).zone || 'Norte').toLowerCase();
-      let pCity = 'Pasto';
+      const pCity = (p as any).city || ((p as any).companies?.city) || 'Pasto';
 
-      const matchesCity = selectedCity === 'Todas' || pCity === selectedCity;
+      const matchesCity = selectedCity === 'Todas' || pCity.toLowerCase() === selectedCity.toLowerCase();
       const matchesQuery = `${p.name} ${(p as any).zone} ${(p as any).amenity} ${p.type}`
         .toLowerCase().includes(query.toLowerCase());
 
@@ -393,6 +528,11 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
 
       return matchesCity && matchesQuery && matchesFormat;
     }), [query, selectedFormats, pitches, selectedCity]);
+
+  const groupedSearchResults = useMemo(() => {
+    if (!searchResults) return null;
+    return groupPitchesByComplex(searchResults);
+  }, [searchResults]);
 
   // ── Buscar disponibilidad (multi-hora) ────────────────────────────────────
   const handleSearch = useCallback(async (silent = false) => {
@@ -595,80 +735,88 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
         </div>
 
 
-        {/* Tarjetas de coincidencia instantánea debajo del buscador */}
+        {/* Tarjetas de coincidencia instantánea debajo del buscador (Complejos) */}
         {query.trim().length > 0 && (
-          <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-2xl shadow-xl p-4 max-h-[320px] overflow-y-auto z-50 flex flex-col gap-2 animate-in fade-in slide-in-from-top-2">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Resultados de búsqueda ({filtered.length})</p>
-            {filtered.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-2 text-center">No se encontraron coincidencias.</p>
+          <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-2xl shadow-xl p-4 max-h-[360px] overflow-y-auto z-50 flex flex-col gap-2 animate-in fade-in slide-in-from-top-2">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
+              Complejos encontrados ({filteredComplexes.length})
+            </p>
+            {filteredComplexes.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-3 text-center">No se encontraron complejos coincidentes.</p>
             ) : (
-              filtered.map(pitch => (
-                <div
-                  key={pitch.id}
-                  onClick={() => onOpen(pitch)}
-                  className="flex items-center gap-3 p-2 hover:bg-primary/5 rounded-xl cursor-pointer transition-all border border-transparent hover:border-primary/10"
-                >
+              filteredComplexes.map(comp => {
+                const firstPitch = [...comp.pitches].sort((a, b) => {
+                  const da = (a as any).created_at || '';
+                  const db = (b as any).created_at || '';
+                  return da < db ? -1 : da > db ? 1 : 0;
+                })[0] || comp.featuredPitch;
+                return (
                   <div
-                    className="w-12 h-12 rounded-lg flex-shrink-0 overflow-hidden bg-muted"
+                    key={comp.id}
+                    onClick={() => onOpen(firstPitch)}
+                    className="flex items-center gap-3 p-2.5 hover:bg-primary/5 rounded-xl cursor-pointer transition-all border border-transparent hover:border-primary/15"
                   >
-                    {((pitch as any).media_urls?.[0] || (pitch as any).image_url) ? (
+                    <div className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden bg-muted relative">
                       <img
-                        src={(pitch as any).media_urls?.[0] || (pitch as any).image_url}
-                        alt={pitch.name.toUpperCase()}
+                        src={comp.image}
+                        alt={comp.name}
                         className="w-full h-full object-cover"
                       />
-                    ) : (
-                      <div className={`w-full h-full ${(pitch as any).tone || 'field-emerald'}`} />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0 pr-2">
-                    {((pitch as any).companies?.name || (pitch as any).company?.name) && (
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 truncate">
-
-                        {((pitch as any).companies?.name || (pitch as any).company?.name)} - {pitch.city}
+                    </div>
+                    <div className="flex-1 min-w-0 pr-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 truncate">
+                          {comp.city || 'Pasto'}
+                        </span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-secondary text-muted-foreground">
+                          {comp.pitchesCount} {comp.pitchesCount === 1 ? 'cancha' : 'canchas'}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-sm text-foreground">
+                        {comp.name}
+                      </h4>
+                      <p className="text-xs text-muted-foreground">
+                        {comp.formats.join(', ')}
                       </p>
-
-
-
-                    )}
-                    <h4 className="font-bold text-xs text-foreground break-words whitespace-normal">
-                      {pitch.name.toUpperCase()}
-                    </h4>
-                    <p className="text-xs text-muted-foreground break-words whitespace-normal">
-                      {pitch.type}
-                    </p>
+                    </div>
+                    <div className="flex flex-col gap-1.5 shrink-0 w-24">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onOpen(firstPitch); }}
+                        className="w-full justify-center px-2.5 py-1.5 bg-secondary hover:bg-secondary/80 text-foreground text-xs font-bold rounded-lg transition-colors flex items-center gap-1 border border-border/70 cursor-pointer active:scale-95"
+                      >
+                        <span>Ver</span>
+                        <ChevronRight size={11} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleBook(firstPitch); }}
+                        className="w-full justify-center px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer active:scale-95 shadow-xs"
+                      >
+                        <span>Reservar</span>
+                        <ChevronRight size={11} />
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleBook(pitch);
-                    }}
-                    className="px-3 py-1.5 bg-primary text-white text-[11px] font-bold rounded-lg hover:bg-primary/95 transition-colors shrink-0"
-                  >
-                    Reservar
-                  </button>
-
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}
       </div>
 
-      {/* Carrusel de canchas destacadas */}
-      <div className="discovery-stack flex flex-col gap-4 my-2">
+      {/* Carrusel de complejos destacados (Un complejo por tarjeta) */}
+      <div className="discovery-stack flex flex-col gap-6 my-2">
+        {gpsLoading && (
+          <div className="flex items-center gap-3 px-4 py-3 bg-secondary border border-border rounded-2xl">
+            <Loader2 size={16} className="animate-spin text-primary" />
+            <span className="text-sm text-muted-foreground font-medium">Obteniendo tu ubicación...</span>
+          </div>
+        )}
         <DiscoverRail
-          title="Cerca de ti"
-          subtitle="Canchas a menos de 2 km"
-          items={pitches}
-          onOpen={onOpen}
-          onBook={handleBook}
-        />
-        <DiscoverRail
-          title="Populares en Pasto"
-          subtitle="Las más reservadas esta semana"
-          items={[...pitches].reverse()}
+          title={userCoords ? '📍 Cerca de ti' : '📍 Cerca de ti'}
+          subtitle={userCoords ? 'Complejos ordenados por distancia exacta a tu ubicación actual' : `Espacios deportivos en ${selectedCity === 'Todas' ? 'Colombia' : selectedCity}`}
+          items={nearbyComplexes}
           onOpen={onOpen}
           onBook={handleBook}
         />
@@ -959,135 +1107,109 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                 </button>
               </div>
 
-              {searchResults.length === 0 ? (
+              {groupedSearchResults && groupedSearchResults.length === 0 ? (
                 <div className="p-8 bg-card border border-border rounded-2xl text-center">
                   <p className="text-4xl mb-3">😔</p>
                   <h4 className="font-bold mb-1">Todas las canchas están ocupadas</h4>
                   <p className="text-sm text-muted-foreground">Intenta con otras horas o fecha en el calendario.</p>
                 </div>
               ) : (
-                <div className="grid gap-3">
-                  {searchResults.map(pitch => {
-                    const totalPrice = selectedHours.reduce(
-                      (sum, h) => sum + Number((pitch as any).custom_pricing?.[h] || (pitch as any).price_per_hour || 0),
-                      0
-                    );
-
-                    return (
-                      <div
-                        key={pitch.id}
-                        className="p-3.5 bg-card border border-border rounded-2xl hover:border-primary/40 hover:shadow-sm transition-all flex flex-col gap-3"
-                      >
-                        {/* 1. Encabezado: Imagen + Info de Cancha */}
-                        <div className="flex items-center gap-3">
-                          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex-shrink-0 overflow-hidden bg-muted">
-                            {((pitch as any).media_urls?.[0] || (pitch as any).image_url) ? (
-                              <img
-                                src={(pitch as any).media_urls?.[0] || (pitch as any).image_url}
-                                alt={pitch.name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className={`w-full h-full ${(pitch as any).tone || 'field-emerald'}`} />
-                            )}
-                          </div>
-
-                          <div className="flex-1 min-w-0">
-                            {((pitch as any).companies?.name || (pitch as any).company?.name) && (
-                              <div className="flex items-center gap-1.5 text-xs sm:text-sm font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1">
-                                <span className="truncate">
-                                  {((pitch as any).companies?.name || (pitch as any).company?.name)}
-                                </span>
-                              </div>
-                            )}
-                            <h4 className="font-bold text-xs sm:text-sm leading-tight uppercase text-foreground/80 truncate">
-                              {pitch.name}
-                            </h4>
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {(Array.isArray((pitch as any).supported_types)
-                                ? (pitch as any).supported_types
-                                : [pitch.type]
-                              ).map((type: string, index: number) => (
-                                <span key={index} className="text-[10px] text-muted-foreground bg-secondary px-2 py-0.5 rounded-md font-semibold uppercase">
-                                  {type}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
+                <div className="grid gap-4">
+                  {groupedSearchResults?.map(complex => (
+                    <div
+                      key={complex.id}
+                      className="p-4 bg-card border border-border rounded-2xl shadow-xs hover:border-primary/40 transition-all flex flex-col gap-3"
+                    >
+                      {/* Cabecera del Complejo con disponibilidad */}
+                      <div className="flex items-center gap-3 pb-3 border-b border-border/60">
+                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex-shrink-0 overflow-hidden bg-muted">
+                          <img
+                            src={complex.image}
+                            alt={complex.name}
+                            className="w-full h-full object-cover"
+                          />
                         </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                              {complex.city || 'Pasto'} {complex.zone ? `· ${complex.zone}` : ''}
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                              {complex.pitches.length} {complex.pitches.length === 1 ? 'cancha disponible' : 'canchas disponibles'}
+                            </span>
+                          </div>
+                          <h4 className="font-black text-sm sm:text-base text-foreground uppercase truncate">
+                            {complex.name}
+                          </h4>
+                        </div>
+                      </div>
 
-                        {/* 2. Bloque Resumen: Fecha, Hora(s) y Total Dinámico */}
-                        <div className="bg-primary/5 border border-primary/15 rounded-xl p-3 flex items-center justify-between gap-3">
-                          {/* Lado izquierdo: Fecha e Horas elegidas */}
-                          <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-                            {/* Fecha con icono */}
-                            <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-                              <Calendar size={13} className="text-primary shrink-0" />
-                              <span className="capitalize truncate">
-                                {selectedDate
-                                  ? new Date(selectedDate + 'T00:00:00').toLocaleDateString('es-CO', {
-                                    weekday: 'short',
-                                    day: 'numeric',
-                                    month: 'short',
-                                  })
-                                  : 'Fecha no seleccionada'}
-                              </span>
-                            </div>
+                      {/* Lista de canchas disponibles en este complejo */}
+                      <div className="grid gap-2.5">
+                        {complex.pitches.map(pitch => {
+                          const totalPrice = selectedHours.reduce(
+                            (sum, h) => sum + Number((pitch as any).custom_pricing?.[h] || (pitch as any).price_per_hour || 0),
+                            0
+                          );
 
-                            {/* Badges de Hora(s) */}
-                            <div className="flex flex-wrap items-center gap-1">
-                              {[...selectedHours].sort().map(h => {
-                                const price = Number((pitch as any).custom_pricing?.[h] || (pitch as any).price_per_hour || 0);
-                                return (
-                                  <span
-                                    key={h}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-card border border-border rounded-lg text-[11px] font-bold text-foreground shadow-2xs"
-                                  >
-                                    <Clock size={11} className="text-muted-foreground shrink-0" />
-                                    <span>{fmtSlot(h)}</span>
-                                    {selectedHours.length > 1 && (
-                                      <span className="text-[10px] text-muted-foreground font-normal">
-                                        (${price.toLocaleString('es-CO')})
+                          return (
+                            <div
+                              key={pitch.id}
+                              className="p-3 bg-secondary/30 rounded-xl border border-border/80 flex flex-col gap-2.5"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <h5 className="font-bold text-xs sm:text-sm text-foreground uppercase truncate">
+                                    {pitch.name}
+                                  </h5>
+                                  <div className="flex flex-wrap gap-1 mt-0.5">
+                                    {(Array.isArray((pitch as any).supported_types)
+                                      ? (pitch as any).supported_types
+                                      : [pitch.type]
+                                    ).map((type: string, index: number) => (
+                                      <span key={index} className="text-[10px] text-muted-foreground bg-card border border-border/50 px-1.5 py-0.5 rounded font-medium">
+                                        {type}
+                                      </span>
+                                    ))}
+                                    {(pitch as any).surface && (
+                                      <span className="text-[10px] text-muted-foreground bg-card border border-border/50 px-1.5 py-0.5 rounded font-medium">
+                                        {(pitch as any).surface}
                                       </span>
                                     )}
+                                  </div>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <span className="block text-[9px] font-bold uppercase text-muted-foreground">
+                                    {selectedHours.length > 1 ? `Total (${selectedHours.length}h)` : 'Por hora'}
                                   </span>
-                                );
-                              })}
+                                  <span className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400">
+                                    ${totalPrice.toLocaleString('es-CO')}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => onOpen(pitch)}
+                                  className="h-9 bg-card text-foreground font-bold rounded-lg border border-border hover:bg-secondary transition-colors text-xs flex items-center justify-center cursor-pointer"
+                                >
+                                  Ver Cancha
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleBook(pitch, selectedHours, selectedDate)}
+                                  className="h-9 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors flex items-center justify-center shadow-xs cursor-pointer"
+                                >
+                                  Reservar
+                                </button>
+                              </div>
                             </div>
-                          </div>
-
-                          {/* Lado derecho: Etiqueta y Precio Dinámico */}
-                          <div className="text-right shrink-0 border-l border-primary/10 pl-3">
-                            <span className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground leading-none mb-1">
-                              {selectedHours.length > 1 ? `Total (${selectedHours.length} hrs)` : 'Precio'}
-                            </span>
-                            <span className="text-base font-black text-primary leading-none">
-                              ${totalPrice.toLocaleString('es-CO')}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* 3. Botones de Acción */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => onOpen(pitch)}
-                            className="h-10 bg-secondary text-foreground font-bold rounded-xl hover:bg-border transition-colors text-xs flex items-center justify-center"
-                          >
-                            Ver Cancha
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleBook(pitch, selectedHours, selectedDate)}
-                            className="h-10 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center shadow-sm"
-                          >
-                            Reservar
-                          </button>
-                        </div>
-
+                          );
+                        })}
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -1182,14 +1304,74 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
             </div>
           )}
 
-          {/* ═══ MAPA ═══ */}
+          {/* ═══ COMPLEJOS POPULARES EN LA CIUDAD (DESLIZABLE EN MÓVIL Y GRID EN PC) ═══ */}
+          <div id="catalog-section" className="mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
+              <div>
+                <p className="eyebrow accent-label text-xs font-bold text-primary uppercase flex items-center gap-1.5">
+                  <span>🔥</span> POPULARES Y MÁS SOLICITADOS
+                </p>
+                <h3 className="text-xl font-bold tracking-tight text-foreground">
+                  Populares en {selectedCity === 'Todas' ? 'Colombia' : selectedCity}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Los complejos con mayor número de reservas y preferencia por los jugadores.
+                </p>
+              </div>
+              <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 self-start sm:self-auto">
+                {popularComplexes.length} {popularComplexes.length === 1 ? 'complejo' : 'complejos'}
+              </span>
+            </div>
+
+            {popularComplexes.length === 0 ? (
+              <div className="p-8 bg-card border border-border rounded-2xl text-center">
+                <p className="text-4xl mb-3">🔍</p>
+                <h4 className="font-bold text-sm mb-1">No encontramos complejos en {selectedCity}</h4>
+                <p className="text-xs text-muted-foreground mb-4">Prueba cambiando los filtros de formato o explorando todas las ciudades.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCity('Todas');
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('selectedCity', 'Todas');
+                      window.dispatchEvent(new CustomEvent('cityChange', { detail: 'Todas' }));
+                    }
+                  }}
+                  className="px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold shadow-xs hover:bg-primary/90 cursor-pointer"
+                >
+                  Ver complejos en todas las ciudades
+                </button>
+              </div>
+            ) : (
+              <div className="flex md:grid overflow-x-auto md:overflow-visible gap-4 pb-4 md:pb-0 scrollbar-hide snap-x snap-mandatory md:grid-cols-2 lg:grid-cols-3 items-stretch">
+                {popularComplexes.map((complex) => (
+                  <div
+                    key={complex.id}
+                    className="flex-shrink-0 w-[285px] sm:w-[320px] md:w-auto snap-start h-full"
+                  >
+                    <ComplexCard
+                      complex={complex}
+                      onOpen={onOpen}
+                      onBook={handleBook}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ═══ MAPA INTERACTIVO CON UBICACIÓN EN VIVO ═══ */}
           <div className="mb-6 relative z-0">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-sm text-muted-foreground uppercase tracking-wider">Mapa de canchas</h3>
-              <span className="text-xs text-muted-foreground">{filtered.length} canchas</span>
+              <h3 className="font-bold text-sm text-muted-foreground uppercase tracking-wider">
+                Mapa de complejos y canchas {userCoords ? '(con tu ubicación 📍)' : ''}
+              </h3>
+              <span className="text-xs text-muted-foreground">{filteredComplexes.length} complejos ({filtered.length} canchas)</span>
             </div>
             <DynamicMap
               pitches={filtered}
+              userCoords={userCoords}
+              selectedCity={selectedCity}
               onMarkerClick={pitch => onOpen(pitch)}
             />
           </div>

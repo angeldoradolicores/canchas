@@ -102,28 +102,106 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
     ? profile.full_name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
     : user?.email?.[0]?.toUpperCase() ?? '?';
 
-  // ── Selector de ciudad ──
-  const CITIES = ['Pasto'];
+  // ── Selector de ciudad dinámico ──
+  const CITY_DEPARTMENTS: Record<string, string> = {
+    'Pasto': 'Nariño',
+    'Ipiales': 'Nariño',
+    'Popayán': 'Cauca',
+    'Cali': 'Valle',
+    'Bogotá': 'D.C.',
+    'Medellín': 'Antioquia',
+    'Barranquilla': 'Atlántico',
+    'Bucaramanga': 'Santander',
+    'Todas': 'Colombia',
+  };
+
+  const KNOWN_COORDS: Record<string, { lat: number; lng: number }> = {
+    'Pasto': { lat: 1.2136, lng: -77.2811 },
+    'Ipiales': { lat: 0.8294, lng: -77.6444 },
+    'Popayán': { lat: 2.4419, lng: -76.6063 },
+    'Cali': { lat: 3.4516, lng: -76.5320 },
+    'Bogotá': { lat: 4.7110, lng: -74.0721 },
+    'Medellín': { lat: 6.2442, lng: -75.5812 },
+    'Barranquilla': { lat: 10.9685, lng: -74.7813 },
+  };
+
+  const [citiesList, setCitiesList] = useState<string[]>([
+    'Pasto', 'Bogotá', 'Cali', 'Medellín', 'Popayán', 'Ipiales', 'Barranquilla', 'Todas'
+  ]);
   const [selectedCity, setSelectedCity] = useState('Pasto');
   const [showCityDropdown, setShowCityDropdown] = useState(false);
   const [locating, setLocating] = useState(false);
 
+  // Cargar ciudad guardada y ciudades registradas en la BD
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('selectedCity');
+      if (saved) setSelectedCity(saved);
+    }
+
+    const handler = (e: any) => {
+      if (e.detail) setSelectedCity(e.detail);
+    };
+    window.addEventListener('cityChange', handler);
+
+    // Cargar ciudades distintas existentes en canchas de Supabase
+    supabase
+      .from('pitches')
+      .select('city')
+      .not('city', 'is', null)
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          const dbCities = Array.from(new Set(data.map((d: any) => d.city).filter(Boolean)));
+          setCitiesList(prev => Array.from(new Set([...prev.filter(c => c !== 'Todas'), ...dbCities, 'Todas'])));
+        }
+      });
+
+    return () => window.removeEventListener('cityChange', handler);
+  }, [supabase]);
+
   const handleCitySelect = (city: string) => {
     setSelectedCity(city);
     setShowCityDropdown(false);
-    window.dispatchEvent(new CustomEvent('cityChange', { detail: city }));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('selectedCity', city);
+      window.dispatchEvent(new CustomEvent('cityChange', { detail: city }));
+    }
   };
 
   const handleGPS = () => {
-    if (!navigator.geolocation) return;
+    if (typeof window === 'undefined' || !navigator.geolocation) return;
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      () => {
-        setLocating(false);
-        handleCitySelect('Pasto');
-      },
-      () => setLocating(false)
-    );
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setLocating(false);
+          const { latitude: uLat, longitude: uLng } = pos.coords;
+          
+          // Notificar coordenadas al resto de la app
+          window.dispatchEvent(new CustomEvent('gpsCoords', { detail: { lat: uLat, lng: uLng } }));
+
+          // Encontrar ciudad más cercana
+          let closestCity = 'Pasto';
+          let minDistance = Infinity;
+
+          Object.entries(KNOWN_COORDS).forEach(([cityName, coords]) => {
+            const dLat = coords.lat - uLat;
+            const dLon = coords.lng - uLng;
+            const dist = Math.sqrt(dLat * dLat + dLon * dLon);
+            if (dist < minDistance) {
+              minDistance = dist;
+              closestCity = cityName;
+            }
+          });
+
+          handleCitySelect(closestCity);
+        },
+        () => setLocating(false),
+        { timeout: 8000 }
+      );
+    } catch {
+      setLocating(false);
+    }
   };
 
   return (
@@ -149,7 +227,8 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
             className="location flex items-center gap-1 font-semibold text-sm hover:text-primary transition-colors"
             onClick={() => { setShowCityDropdown(v => !v); setShowDropdown(false); setShowNotifications(false); }}
           >
-            <MapPin size={15} className="text-primary" /> {selectedCity}, Nariño
+            <MapPin size={15} className="text-primary" />
+            <span>{selectedCity}{CITY_DEPARTMENTS[selectedCity] ? `, ${CITY_DEPARTMENTS[selectedCity]}` : ''}</span>
             <ChevronDown size={14} className={`transition-transform duration-200 ${showCityDropdown ? 'rotate-180' : ''}`} />
           </button>
 
@@ -157,8 +236,8 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
           <button
             onClick={handleGPS}
             disabled={locating}
-            title="Usar mi ubicación GPS"
-            className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 hover:bg-primary/20 text-primary transition-all text-xs font-bold border border-primary/20 active:scale-95"
+            title="Detectar mi ciudad por GPS"
+            className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 hover:bg-primary/20 text-primary transition-all text-xs font-bold border border-primary/20 active:scale-95 cursor-pointer"
           >
             {locating ? (
               <span className="animate-spin text-xs">⏳</span>
@@ -170,20 +249,20 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
 
         {/* Dropdown ciudades centrado */}
         {showCityDropdown && (
-          <div className="absolute top-full mt-2 w-48 bg-card border border-border rounded-2xl shadow-2xl z-[9999] overflow-hidden text-left">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-3 pt-3 pb-1">Selecciona ciudad</p>
-            {CITIES.map(city => (
+          <div className="absolute top-full mt-2 w-52 max-h-64 overflow-y-auto bg-card border border-border rounded-2xl shadow-2xl z-[9999] text-left">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-3 pt-3 pb-1">Selecciona tu ciudad</p>
+            {citiesList.map(city => (
               <button
                 key={city}
-                onClick={() => {
-                  handleCitySelect(city);
-                  setShowCityDropdown(false);
-                }}
-                className={`w-full text-left px-4 py-2.5 text-sm font-semibold hover:bg-primary/10 transition-colors flex items-center gap-2 ${selectedCity === city ? 'text-primary bg-primary/10' : 'text-foreground'
+                onClick={() => handleCitySelect(city)}
+                className={`w-full text-left px-4 py-2 text-sm font-semibold hover:bg-primary/10 transition-colors flex items-center gap-2 cursor-pointer ${selectedCity === city ? 'text-primary bg-primary/10' : 'text-foreground'
                   }`}
               >
                 <MapPin size={14} className={selectedCity === city ? 'text-primary' : 'text-muted-foreground'} />
-                {city}
+                <span>{city}</span>
+                {CITY_DEPARTMENTS[city] && (
+                  <span className="text-[10px] text-muted-foreground font-normal ml-1">({CITY_DEPARTMENTS[city]})</span>
+                )}
                 {selectedCity === city && <Check size={14} className="ml-auto text-primary" />}
               </button>
             ))}
