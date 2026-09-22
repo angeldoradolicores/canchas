@@ -11,6 +11,11 @@ export interface Pitch {
   amenities: string | null;
   contact_phone?: string | null; // Nuevo campo para teléfono de la cancha
   created_at: string;
+  city?: string | null;
+
+  // Relación con el Complejo / Empresa
+  company?: { id?: string; name: string; address?: string | null; zone?: string | null } | null;
+  companies?: { id?: string; name: string; address?: string | null; zone?: string | null } | null;
 
   // UI computed fields (para mantener compatibilidad con el UI existente)
   distance?: string;
@@ -37,7 +42,9 @@ export interface Company {
   account_holder: string | null;
   /** WhatsApp del dueño – n8n lo usa para enviarle notificación de nuevo comprobante */
   owner_phone: string | null;
-  
+  city?: string | null;
+
+
   /** Integración Multi-Tenant WhatsApp (Evolution API / Baileys) */
   whatsapp_instance_name: string | null;
   whatsapp_status: 'disconnected' | 'connecting' | 'connected' | null;

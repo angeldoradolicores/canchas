@@ -122,7 +122,8 @@ export default function WhatsAppConnectionPage() {
   }, [status, company, inputPhone]);
 
   // 3. Generar / Regenerar Código QR
-  const handleGenerateQR = async () => {
+  const handleGenerateQR = async (forceParam?: boolean | any) => {
+    const isForce = forceParam === true;
     setGenerating(true);
     setErrorMsg(null);
     try {
@@ -156,12 +157,16 @@ export default function WhatsAppConnectionPage() {
       const res = await fetch('/api/whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generate_qr', companyId }),
+        body: JSON.stringify({ action: 'generate_qr', companyId, force: isForce }),
       });
 
       const data = await res.json();
 
-      if (data.success && (data.qr || data.qrCode)) {
+      if (data.success && data.status === 'connected') {
+        setStatus('connected');
+        if (data.phone) setConnectedPhone(data.phone);
+        setQrCode(null);
+      } else if (data.success && (data.qr || data.qrCode)) {
         setQrCode(data.qr || data.qrCode);
         setStatus('connecting');
       } else {
@@ -373,7 +378,7 @@ export default function WhatsAppConnectionPage() {
                       <Loader2 size={32} className="animate-spin text-emerald-600" />
                       <span className="text-xs font-semibold">Generando código QR...</span>
                       <button
-                        onClick={handleGenerateQR}
+                        onClick={() => handleGenerateQR(false)}
                         disabled={generating}
                         className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 mt-2"
                       >
@@ -389,7 +394,7 @@ export default function WhatsAppConnectionPage() {
                     Abre WhatsApp ➔ Menú ➔ Dispositivos vinculados ➔ Vincular dispositivo.
                   </p>
                   <button
-                    onClick={handleGenerateQR}
+                    onClick={() => handleGenerateQR(true)}
                     disabled={generating}
                     className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold text-xs rounded-xl inline-flex items-center gap-1.5 transition-colors border border-zinc-200 mt-2"
                   >
@@ -432,7 +437,7 @@ export default function WhatsAppConnectionPage() {
                 </div>
 
                 <button
-                  onClick={handleGenerateQR}
+                  onClick={() => handleGenerateQR(false)}
                   disabled={generating}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl text-sm font-bold inline-flex items-center gap-2 shadow-lg transition-all"
                 >

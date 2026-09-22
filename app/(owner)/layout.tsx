@@ -69,8 +69,9 @@ function OwnerLayoutInner({ children }: { children: React.ReactNode }) {
             </div>
             <div className="flex flex-col gap-2 border-t border-border pt-4 mt-6">
               <div className="px-3 mb-2">
-                <p className="truncate text-sm font-semibold">{profile?.full_name || 'Dueño'}</p>
-                <p className="truncate text-xs text-muted-foreground">Administrador de Complejo</p>
+                <p className="truncate text-sm font-semibold">
+                  {(profile?.full_name || 'Dueño').toLowerCase().replace(/(^\w{1})|(\s+\w{1})/g, letter => letter.toUpperCase())}
+                </p>                <p className="truncate text-xs text-muted-foreground capitalize">Administrador de Complejo</p>
               </div>
               <button onClick={handleLogout} className="nav-item text-red-600 hover:bg-red-50 hover:text-red-700">
                 <LogOut size={19} />

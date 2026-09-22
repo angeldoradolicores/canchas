@@ -151,7 +151,7 @@ export default function ProfilePage() {
           {initials}
         </div>
         <div>
-          <h2 className="text-xl font-bold">{fullName || 'Jugador'}</h2>
+          <h2 className="text-xl font-bold capitalize">{fullName || 'Jugador'}</h2>
           <p className="text-sm text-muted-foreground">{user.email}</p>
           <div className="mt-2 flex gap-2">
             {profile?.role === 'owner' && (
@@ -172,24 +172,24 @@ export default function ProfilePage() {
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="flex flex-col">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Nombre completo</span>
-            <input 
-              type="text" 
-              value={fullName} 
-              onChange={e => setFullName(e.target.value)} 
-              placeholder="Tu nombre" 
+            <input
+              type="text"
+              value={fullName}
+              onChange={e => setFullName(e.target.value)}
+              placeholder="Tu nombre"
               className="w-full h-11 px-3 border border-border rounded-xl bg-background text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-colors placeholder:text-muted-foreground"
             />
           </div>
           <div className="flex flex-col">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Teléfono (WhatsApp)</span>
-            <input 
-              type="tel" 
-              value={phone} 
+            <input
+              type="tel"
+              value={phone}
               onChange={e => {
                 const val = e.target.value.replace(/\D/g, '');
                 setPhone(val);
-              }} 
-              placeholder="3001234567" 
+              }}
+              placeholder="3001234567"
               className="w-full h-11 px-3 border border-border rounded-xl bg-background text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-colors placeholder:text-muted-foreground"
             />
           </div>

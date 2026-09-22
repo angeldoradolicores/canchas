@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowRight, Clock3, Heart, MapPin, ShieldCheck, CalendarDays, Calendar, CheckCircle, Loader2, Grid, X, ChevronLeft, ChevronRight, Trophy, CheckCircle2, Phone, Users } from 'lucide-react';
+import { ArrowRight, Clock3, Heart, MapPin, ShieldCheck, CalendarDays, Calendar, CheckCircle, Loader2, Grid, X, ChevronLeft, ChevronRight, Trophy, CheckCircle2, Phone, Users, Building2, Layers, LandPlot } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
@@ -17,9 +17,10 @@ import { Copy, Check } from "lucide-react";
 interface PitchDetailProps {
   pitch: Pitch;
   onBack: () => void;
-  onBook: (selectedTimes: string[], date: string) => void;
+  onBook: (selectedTimes: string[], date: string, chosenPitch?: Pitch) => void;
   initialDate?: string;
   initialTimes?: string[];
+  onSelectPitch?: (pitch: Pitch) => void;
 }
 
 const DEFAULT_TIME_SLOTS = [
@@ -53,8 +54,14 @@ const getYoutubeId = (url: string) => {
   return (match && match[2].length === 11) ? match[2] : null;
 };
 
-export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }: PitchDetailProps) {
+export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, onSelectPitch }: PitchDetailProps) {
   const today = useToday();
+  const [currentPitch, setCurrentPitch] = useState<Pitch>(pitch);
+  const [siblingPitches, setSiblingPitches] = useState<Pitch[]>([]);
+  const [complexInfo, setComplexInfo] = useState<{ id?: string; name?: string; address?: string | null; zone?: string | null; city?: string | null } | null>(
+    (pitch as any)?.companies || (pitch as any)?.company || null
+  );
+
   const [showGalleryModal, setShowGalleryModal] = useState(false);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [tournaments, setTournaments] = useState<any[]>([]);
@@ -70,7 +77,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
   // Auth & Favorites & ActiveBooking hooks
   const { user, profile } = useAuth();
   const { isFavorite: checkFav, toggleFavorite: doToggleFav } = useFavorites();
-  const isFavorite = checkFav(pitch.id);
+  const isFavorite = checkFav(currentPitch.id);
   const [loadingFavorite, setLoadingFavorite] = useState(false);
   const { startLock, lockLoading, lockError, activeBooking } = useActiveBooking();
 
@@ -91,9 +98,51 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
   const supabase = createClient();
 
   useEffect(() => {
+    setCurrentPitch(pitch);
+    if ((pitch as any)?.companies || (pitch as any)?.company) {
+      setComplexInfo((pitch as any).companies || (pitch as any).company);
+    }
+  }, [pitch]);
+
+  useEffect(() => {
+    const compId = currentPitch.company_id || (currentPitch as any)?.companies?.id || (currentPitch as any)?.company?.id;
+    if (!compId) return;
+
+    const loadSiblings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('pitches')
+          .select('*, companies(id, name, address, zone)')
+          .eq('company_id', compId)
+          .order('name', { ascending: true });
+
+        if (!error && data) {
+          setSiblingPitches(data);
+          if (data[0]?.companies) {
+            setComplexInfo(data[0].companies);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching sibling pitches:', err);
+      }
+    };
+
+    loadSiblings();
+  }, [currentPitch.company_id, supabase]);
+
+  const handleSwitchPitch = (newPitch: Pitch) => {
+    if (newPitch.id === currentPitch.id) return;
+    setCurrentPitch(newPitch);
+    setSelectedTimes([]);
+    if (onSelectPitch) {
+      onSelectPitch(newPitch);
+    }
+  };
+
+  useEffect(() => {
     // Siempre arrancar desde el tope (importante en móvil)
     window.scrollTo({ top: 0, behavior: 'instant' });
-  }, [pitch.id]);
+  }, [currentPitch.id]);
 
   useEffect(() => {
     if (today && !selectedDate && !initialDate) {
@@ -102,7 +151,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
   }, [today, selectedDate, initialDate]);
 
   // Lógica de Precios Variables por Hora
-  const pitchAny = pitch as any;
+  const pitchAny = currentPitch as any;
   const customPricing = pitchAny.custom_pricing || {};
   const basePrice = Number(pitchAny.price_per_hour || 0);
 
@@ -113,8 +162,8 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
   const totalPrice = selectedTimes.reduce((sum, slot) => sum + getSlotPrice(slot), 0);
 
   useEffect(() => {
-    if (!pitch.id) return;
-    fetch(`/api/tournaments?pitch_id=${pitch.id}`)
+    if (!currentPitch.id) return;
+    fetch(`/api/tournaments?pitch_id=${currentPitch.id}`)
       .then(res => res.json())
       .then(data => {
         if (data.success) {
@@ -123,7 +172,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
       })
       .catch(err => console.error("Error fetching tournaments", err));
 
-    fetch(`/api/schools?pitch_id=${pitch.id}`)
+    fetch(`/api/schools?pitch_id=${currentPitch.id}`)
       .then(res => res.json())
       .then(data => {
         if (data.success) {
@@ -131,11 +180,11 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
         }
       })
       .catch(err => console.error("Error fetching schools", err));
-  }, [pitch.id]);
+  }, [currentPitch.id]);
 
   // Función para obtener los slots ocupados (llamada por useEffect y por botón de reserva)
   const fetchTakenSlots = useCallback(async (silent = false) => {
-    if (!selectedDate || !pitch.id) return;
+    if (!selectedDate || !currentPitch.id) return;
     if (!silent) setLoadingSlots(true);
     const dayStart = `${selectedDate}T00:00:00-05:00`;
     const dayEnd = `${selectedDate}T23:59:59-05:00`;
@@ -143,7 +192,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
     const { data, error } = await supabase
       .from('bookings')
       .select('start_time, status, expires_at')
-      .eq('pitch_id', pitch.id)
+      .eq('pitch_id', currentPitch.id)
       .gte('start_time', dayStart)
       .lte('start_time', dayEnd)
       .neq('status', 'cancelled');
@@ -166,11 +215,11 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
       setTakenSlots(taken);
     }
     if (!silent) setLoadingSlots(false);
-  }, [selectedDate, pitch.id, supabase]);
+  }, [selectedDate, currentPitch.id, supabase]);
 
   // Cargar slots ocupados cuando cambia la fecha y escuchar en tiempo real
   useEffect(() => {
-    if (!selectedDate || !pitch.id) return;
+    if (!selectedDate || !currentPitch.id) return;
     if (!initialTimes || initialTimes.length === 0) {
       setSelectedTimes([]);
     }
@@ -181,10 +230,10 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
     const pollInterval = setInterval(() => fetchTakenSlots(true), 3500);
 
     const channel = supabase
-      .channel(`public:bookings:pitch_id=eq.${pitch.id}`)
+      .channel(`public:bookings:pitch_id=eq.${currentPitch.id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'bookings', filter: `pitch_id=eq.${pitch.id}` },
+        { event: '*', schema: 'public', table: 'bookings', filter: `pitch_id=eq.${currentPitch.id}` },
         () => {
           fetchTakenSlots(true);
         }
@@ -195,11 +244,11 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
       clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
-  }, [selectedDate, pitch.id, fetchTakenSlots, supabase, initialTimes]);
+  }, [selectedDate, currentPitch.id, fetchTakenSlots, supabase, initialTimes]);
 
   // Load reviews
   useEffect(() => {
-    if (!pitch.id) return;
+    if (!currentPitch.id) return;
 
     const fetchExtras = async () => {
       try {
@@ -209,7 +258,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
             id, rating, comment, created_at, user_id,
             profiles (full_name, avatar_url)
           `)
-          .eq('pitch_id', pitch.id)
+          .eq('pitch_id', currentPitch.id)
           .order('created_at', { ascending: false });
 
         if (!revError && revData) setReviews(revData);
@@ -221,7 +270,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
     };
 
     fetchExtras();
-  }, [pitch.id, supabase]);
+  }, [currentPitch.id, supabase]);
 
   const toggleFavorite = async () => {
     if (!user) {
@@ -235,7 +284,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
     }
     setLoadingFavorite(true);
     try {
-      await doToggleFav(pitch.id);
+      await doToggleFav(currentPitch.id);
     } catch (e: any) {
       console.error(e);
     } finally {
@@ -250,7 +299,20 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
     const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
     return `${h12}:00 ${ampm}`;
   }
-
+  const toggleTime = (slot: string) => {
+    if (selectedTimes.includes(slot)) {
+      setSelectedTimes(prev => prev.filter(s => s !== slot));
+    } else if (selectedTimes.length >= 4) {
+      setAlertState({
+        isOpen: true,
+        type: 'warning',
+        title: '⏰ Límite de horas alcanzado',
+        message: 'Solo puedes reservar un máximo de 4 horas por transacción. Si necesitas más tiempo, crea una nueva reserva.',
+      });
+    } else {
+      setSelectedTimes(prev => [...prev, slot].sort());
+    }
+  };
   const handleCopy = async (e: React.MouseEvent, text: string) => {
     e.preventDefault(); // Evita que dispare el enlace de llamada
     try {
@@ -321,15 +383,41 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
         ← Volver a explorar
       </button>
 
-      <div className="detail-header flex justify-between items-start mb-6">
+      {/* Header con Nombre y Complejo */}
+      <div className="detail-header flex justify-between items-start mb-4">
         <div>
+          {/* {complexInfo?.name && (
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-800 dark:text-emerald-300 mb-2">
+              <Building2 size={15} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span className="text-xs font-black uppercase tracking-wider">
+                Complejo: {complexInfo.name}
+              </span>
+              {complexInfo.city && (
+                <span className="text-[10px] text-muted-foreground font-semibold">
+                  • {pitch.city}
+                </span>
+              )}
+            </div>
+          )} */}
           <p className="eyebrow accent-label text-xs font-bold text-primary uppercase">PERFIL DE LA CANCHA</p>
-          <h1 className="text-2xl sm:text-3xl font-black text-foreground">{pitch.name.toUpperCase()}</h1>
-          <p className="lead flex items-center gap-2 text-sm text-muted-foreground mt-1">
-            <span className="rating text-amber-500 font-bold flex items-center gap-1">
-              <span>★</span> {pitchAny.rating || '4.9'} ({reviews.length > 0 ? reviews.length : (pitchAny.reviews || 0)} reseñas)
-            </span>
-          </p>
+          <div className="space-y-1">
+            {/* Nombre del Complejo con gran protagonismo y un toque de color degradado */}
+            <h1 className="text-3xl sm:text-4xl font-black tracking-tight bg-gradient-to-r from-primary to-emerald-600 bg-clip-text text-transparent">
+              {complexInfo?.name}
+            </h1>
+
+            {/* Nombre de la Cancha como subtítulo secundario pero llamativo */}
+            <h3 className="text-lg sm:text-xl font-bold text-foreground/80 uppercase tracking-wide">
+              {currentPitch.name}
+            </h3>
+
+            {/* Calificación y reseñas */}
+            <p className="lead flex items-center gap-2 text-sm text-muted-foreground pt-1">
+              <span className="rating text-amber-500 font-bold flex items-center gap-1">
+                <span>★</span> {pitchAny.rating || '5.0'} ({reviews.length > 0 ? reviews.length : (pitchAny.reviews || 0)} reseñas)
+              </span>
+            </p>
+          </div>
         </div>
         <button
           type="button"
@@ -350,8 +438,75 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
             strokeWidth={isFavorite ? 2 : 2.5}
           />
         </button>
-
       </div>
+
+      {/* Selector de Canchas Asociadas al Complejo */}
+      {siblingPitches.length > 1 && (
+        <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-primary/5 to-transparent border border-emerald-500/20 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <LandPlot size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <h3 className="text-xs sm:text-sm font-black text-foreground uppercase tracking-wide">
+                Canchas en este complejo ({siblingPitches.length})
+              </h3>
+            </div>
+            <span className="text-[11px] text-muted-foreground font-medium">
+              Selecciona una para ver su disponibilidad
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+            {siblingPitches.map((sp) => {
+              const isCurrent = sp.id === currentPitch.id;
+              const spPrice = Number((sp as any).price_per_hour || (sp as any).price || 0);
+              const spImg = (sp as any).media_urls?.[0] || (sp as any).image_url;
+
+              return (
+                <button
+                  key={sp.id}
+                  type="button"
+                  onClick={() => handleSwitchPitch(sp)}
+                  className={`flex items-center gap-3 p-2.5 rounded-xl border text-left transition-all relative cursor-pointer ${isCurrent
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20 ring-2 ring-emerald-600/30'
+                    : 'bg-card text-foreground border-border hover:border-emerald-500/50 hover:bg-secondary/60'
+                    }`}
+                >
+                  <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-secondary/50 border border-white/10 relative">
+                    {spImg ? (
+                      <img src={spImg} alt={sp.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className={`w-full h-full ${(sp as any).tone || 'field-emerald'} flex items-center justify-center text-xs opacity-50`}>
+                        ⚽
+                      </div>
+                    )}
+                    {isCurrent && (
+                      <div className="absolute inset-0 bg-emerald-950/40 flex items-center justify-center">
+                        <CheckCircle2 size={16} className="text-white drop-shadow" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <p className={`text-xs font-black truncate uppercase ${isCurrent ? 'text-white' : 'text-foreground'}`}>
+                        {sp.name}
+                      </p>
+                      {isCurrent && (
+                        <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-white text-emerald-700 tracking-wider shrink-0">
+                          Viendo
+                        </span>
+                      )}
+                    </div>
+                    <p className={`text-[11px] truncate ${isCurrent ? 'text-emerald-100' : 'text-muted-foreground'}`}>
+                      {sp.type || 'Fútbol 5'} · ${spPrice > 0 ? spPrice.toLocaleString('es-CO') : '80.000'}/h
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Galería estilo Airbnb */}
       {(() => {
@@ -451,11 +606,11 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
               Detalles Técnicos
             </h2>
 
-            {/* GRID DE DETALLES: Cambiado a 1 columna en celulares muy mini para que nada se corte, y 3 en PC */}
+            {/* GRID DE DETALLES */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 w-full">
               {[
-                ['Tipo', pitch.type || 'Fútbol 5'],
-                ['Superficie', pitch.surface || 'Sintética'],
+                ['Tipo', currentPitch.type || 'Fútbol 5'],
+                ['Superficie', currentPitch.surface || 'Sintética'],
               ].map(([k, v]) => (
                 <div
                   key={k}
@@ -692,9 +847,31 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
             </div>
 
             <div className="space-y-2">
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                <Clock3 size={12} /> Horas disponibles · {formattedDate}
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock3 size={12} /> Hora(s) disponibles
+                </label>
+                {selectedTimes.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTimes([])}
+                    className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                  >
+                    Limpiar
+                  </button>
+                )}
+              </div>
+
+              {selectedTimes.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {[...selectedTimes].sort().map(s => (
+                    <span key={s} className="inline-flex items-center gap-1 bg-primary text-white text-[11px] font-bold px-2.5 py-1 rounded-full">
+                      ⏰ {fmtSlot(s)} (${getSlotPrice(s).toLocaleString('es-CO')})
+                      <button type="button" onClick={() => toggleTime(s)} className="opacity-70 hover:opacity-100 ml-1">✕</button>
+                    </span>
+                  ))}
+                </div>
+              )}
 
               <div className="flex bg-secondary p-1 rounded-xl border border-border gap-1">
                 {([
@@ -794,7 +971,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
                             <span className="text-[9px] uppercase opacity-75">{ampm}</span>
                             {!isTaken && (
                               <span className={`text-[9px] block mt-0.5 ${isSel ? 'text-white/90' : 'text-primary'}`}>
-                                ${slotPrice.toLocaleString()}
+                                ${slotPrice.toLocaleString('es-CO')}
                               </span>
                             )}
 
@@ -902,10 +1079,15 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
                 }
 
                 const messageNode = (
-                  <div className="flex flex-col gap-3 items-center text-center mt-2">
+                  <div className="flex flex-col gap-2.5 items-center text-center mt-2">
                     <p className="text-sm text-muted-foreground">Estás a punto de iniciar una reserva en:</p>
+                    {complexInfo?.name && (
+                      <div className="flex items-center justify-center gap-1.5 text-xs font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                        <span>🏟️</span> Complejo: {complexInfo.name}
+                      </div>
+                    )}
                     <p className="text-xl font-black uppercase text-primary bg-primary/10 px-5 py-2.5 rounded-xl border border-primary/20 tracking-wider w-full shadow-sm">
-                      {pitch.name}
+                      {currentPitch.name}
                     </p>
                     <div className="bg-secondary/60 border border-border rounded-xl p-3.5 w-full space-y-2 mt-1">
                       <p className="flex justify-between items-center text-xs">
@@ -916,7 +1098,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
                         <span>Desglose de Horas</span>
                         <div className="w-full space-y-1 mt-1">
                           {[...selectedTimes].sort().map(t => {
-                            const slotPrice = Number(pitchAny.custom_pricing?.[t] || pitch.price_per_hour);
+                            const slotPrice = Number(pitchAny.custom_pricing?.[t] || currentPitch.price_per_hour);
                             return (
                               <div key={t} className="flex justify-between text-xs bg-primary/5 px-2 py-1 rounded-md">
                                 <span className="font-bold text-primary">{fmtSlotLocal(t)}</span>
@@ -965,9 +1147,9 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes }
                   cancelButtonClassName: 'flex-1 h-12 rounded-xl font-bold flex items-center justify-center transition-all bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-500/10 dark:text-red-500 dark:hover:bg-red-500/20',
                   onConfirm: async () => {
                     setAlertState(prev => ({ ...prev, isOpen: false }));
-                    const ok = await startLock(pitch, selectedDate, selectedTimes);
+                    const ok = await startLock(currentPitch, selectedDate, selectedTimes);
                     if (ok) {
-                      onBook(selectedTimes, selectedDate);
+                      onBook(selectedTimes, selectedDate, currentPitch);
                     } else {
                       fetchTakenSlots();
                       setAlertState({

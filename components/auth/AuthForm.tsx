@@ -32,7 +32,29 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
     setGoogleLoading(true);
     try {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      const callbackUrl = `${origin}/auth/callback?role=${forcedRole}&next=${encodeURIComponent(redirectPath)}`;
+      const params = new URLSearchParams({
+        role: forcedRole,
+        next: redirectPath,
+      });
+      if (fullName.trim()) {
+        params.set('company_name', fullName.trim());
+      }
+      const callbackUrl = `${origin}/auth/callback?${params.toString()}`;
+
+      if (typeof document !== 'undefined') {
+        document.cookie = `sb_pending_role=${forcedRole}; path=/; max-age=600; SameSite=Lax`;
+        document.cookie = `sb_pending_next=${encodeURIComponent(redirectPath)}; path=/; max-age=600; SameSite=Lax`;
+        if (fullName.trim()) {
+          document.cookie = `sb_pending_company=${encodeURIComponent(fullName.trim())}; path=/; max-age=600; SameSite=Lax`;
+        }
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('sb_pending_role', forcedRole);
+        localStorage.setItem('sb_pending_next', redirectPath);
+        if (fullName.trim()) {
+          localStorage.setItem('sb_pending_company', fullName.trim());
+        }
+      }
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -73,7 +95,29 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
       }
     } else {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      const emailRedirectTo = `${origin}/auth/callback?role=${forcedRole}&next=${encodeURIComponent(redirectPath)}`;
+      const params = new URLSearchParams({
+        role: forcedRole,
+        next: redirectPath,
+      });
+      if (fullName.trim()) {
+        params.set('company_name', fullName.trim());
+      }
+      const emailRedirectTo = `${origin}/auth/callback?${params.toString()}`;
+
+      if (typeof document !== 'undefined') {
+        document.cookie = `sb_pending_role=${forcedRole}; path=/; max-age=600; SameSite=Lax`;
+        document.cookie = `sb_pending_next=${encodeURIComponent(redirectPath)}; path=/; max-age=600; SameSite=Lax`;
+        if (fullName.trim()) {
+          document.cookie = `sb_pending_company=${encodeURIComponent(fullName.trim())}; path=/; max-age=600; SameSite=Lax`;
+        }
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('sb_pending_role', forcedRole);
+        localStorage.setItem('sb_pending_next', redirectPath);
+        if (fullName.trim()) {
+          localStorage.setItem('sb_pending_company', fullName.trim());
+        }
+      }
 
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -102,11 +146,18 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
     setResendStatus('sending');
     try {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const params = new URLSearchParams({
+        role: forcedRole,
+        next: redirectPath,
+      });
+      if (fullName.trim()) {
+        params.set('company_name', fullName.trim());
+      }
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email,
         options: {
-          emailRedirectTo: `${origin}/auth/callback?role=${forcedRole}&next=${encodeURIComponent(redirectPath)}`,
+          emailRedirectTo: `${origin}/auth/callback?${params.toString()}`,
         },
       });
       if (error) {
@@ -273,7 +324,7 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
             <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
               <User size={14} className="text-emerald-500" />
               <span>
-                {forcedRole === 'owner' ? 'Nombre del complejo o cancha' : 'Nombre completo'}
+                {forcedRole === 'owner' ? 'Nombre del complejo (Sede principal)' : 'Nombre completo'}
               </span>
             </label>
             <input
@@ -285,6 +336,11 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
               autoComplete="name"
               className="w-full px-4 py-3 bg-secondary/30 border border-border focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-2xl text-sm outline-none transition-all placeholder:text-muted-foreground/50"
             />
+            {forcedRole === 'owner' && (
+              <p className="text-[11px] text-muted-foreground leading-tight">
+                Este nombre será el principal de tu sede (ej. <em>Complejo San Juan</em>). Luego podrás asociarle Cancha 1, Cancha 2, Cancha 3, etc.
+              </p>
+            )}
           </div>
         )}
 

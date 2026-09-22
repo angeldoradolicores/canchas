@@ -724,7 +724,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                   <div className="flex flex-wrap gap-1.5 mb-3">
                     {[...selectedTimes].sort().map(s => (
                       <span key={s} className="inline-flex items-center gap-1 bg-primary text-white text-[11px] font-bold px-2.5 py-1 rounded-full">
-                        ⏰ {fmtSlot(s)} (${getSlotPrice(s).toLocaleString()})
+                        ⏰ {fmtSlot(s)} (${getSlotPrice(s).toLocaleString('es-CO')})
                         <button type="button" onClick={() => toggleTime(s)} className="opacity-70 hover:opacity-100 ml-1">✕</button>
                       </span>
                     ))}
@@ -800,7 +800,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                               <>
                                 <span className="text-sm block leading-tight">{h12}:00</span>
                                 <span className="text-[9px] uppercase opacity-70">{ampm}</span>
-                                <span className="text-[9px] block text-primary mt-0.5 font-semibold">${slotPrice.toLocaleString()}</span>
+                                <span className="text-[9px] block text-primary mt-0.5 font-semibold">${slotPrice.toLocaleString('es-CO')}</span>
                               </>
                             )}
                           </button>

@@ -35,7 +35,29 @@ export function AuthModal({ isOpen = true, onClose, defaultMode = 'login', defau
     try {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       const redirectPath = role === 'owner' ? '/dashboard' : '/';
-      const callbackUrl = `${origin}/auth/callback?role=${role}&next=${encodeURIComponent(redirectPath)}`;
+      const params = new URLSearchParams({
+        role,
+        next: redirectPath,
+      });
+      if (fullName.trim()) {
+        params.set('company_name', fullName.trim());
+      }
+      const callbackUrl = `${origin}/auth/callback?${params.toString()}`;
+
+      if (typeof document !== 'undefined') {
+        document.cookie = `sb_pending_role=${role}; path=/; max-age=600; SameSite=Lax`;
+        document.cookie = `sb_pending_next=${encodeURIComponent(redirectPath)}; path=/; max-age=600; SameSite=Lax`;
+        if (fullName.trim()) {
+          document.cookie = `sb_pending_company=${encodeURIComponent(fullName.trim())}; path=/; max-age=600; SameSite=Lax`;
+        }
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('sb_pending_role', role);
+        localStorage.setItem('sb_pending_next', redirectPath);
+        if (fullName.trim()) {
+          localStorage.setItem('sb_pending_company', fullName.trim());
+        }
+      }
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -85,7 +107,29 @@ export function AuthModal({ isOpen = true, onClose, defaultMode = 'login', defau
     } else {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       const redirectPath = role === 'owner' ? '/dashboard' : '/';
-      const emailRedirectTo = `${origin}/auth/callback?role=${role}&next=${encodeURIComponent(redirectPath)}`;
+      const params = new URLSearchParams({
+        role,
+        next: redirectPath,
+      });
+      if (fullName.trim()) {
+        params.set('company_name', fullName.trim());
+      }
+      const emailRedirectTo = `${origin}/auth/callback?${params.toString()}`;
+
+      if (typeof document !== 'undefined') {
+        document.cookie = `sb_pending_role=${role}; path=/; max-age=600; SameSite=Lax`;
+        document.cookie = `sb_pending_next=${encodeURIComponent(redirectPath)}; path=/; max-age=600; SameSite=Lax`;
+        if (fullName.trim()) {
+          document.cookie = `sb_pending_company=${encodeURIComponent(fullName.trim())}; path=/; max-age=600; SameSite=Lax`;
+        }
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('sb_pending_role', role);
+        localStorage.setItem('sb_pending_next', redirectPath);
+        if (fullName.trim()) {
+          localStorage.setItem('sb_pending_company', fullName.trim());
+        }
+      }
 
       const { data, error } = await supabase.auth.signUp({
         email,

@@ -39,6 +39,8 @@ export interface PitchData {
   payment_methods?: PaymentMethod[] | any;
   lat?: number;
   lng?: number;
+  company?: { id?: string; name: string; address?: string | null; zone?: string | null };
+  companies?: { id?: string; name: string; address?: string | null; zone?: string | null };
 }
 
 interface PitchCardProps {
@@ -59,6 +61,7 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
   const { session } = useAuth();
   const { isFavorite: checkFav, toggleFavorite: doToggleFav } = useFavorites();
   const isFavorite = checkFav(pitch.id);
+  const complexName = (pitch as any)?.companies?.name || (pitch as any)?.company?.name;
 
   const [loadingFavorite, setLoadingFavorite] = useState(false);
   const [showFlyAnim, setShowFlyAnim] = useState(false);
@@ -216,6 +219,9 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
             {/* Badges de encabezado sobre la imagen */}
             <div className="absolute top-3 left-3 right-16 flex items-center gap-2 z-10">
               <div className="flex flex-wrap gap-1.5">
+                {/* <span className="bg-emerald-600/90 backdrop-blur-md text-white font-extrabold text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
+                  {complexName}
+                </span> */}
                 <span className="bg-emerald-600/90 backdrop-blur-md text-white font-extrabold text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
                   {modalities[0]}
                 </span>
@@ -241,9 +247,18 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
 
             {/* Nombre sobre la parte inferior del Banner */}
             <div className="absolute bottom-3 left-4 right-4 z-10">
-              <h3 className="text-l font-black tracking-tighter uppercase text-white leading-none drop-shadow-md group-hover:text-green-300 transition-all duration-300 mb-2">
-                {pitch.name}
-              </h3>
+
+              <div className="flex flex-col gap-0.5 mb-2">
+                {/* Nombre del Complejo (Más pequeño pero manteniendo protagonismo) */}
+                <h3 className="text-base sm:text-lg font-black tracking-normal uppercase text-white leading-tight drop-shadow-md group-hover:text-green-300 transition-all duration-300">
+                  {complexName}
+                </h3>
+
+                {/* Nombre de la Cancha (Más sutil y compacto abajo) */}
+                <span className="text-[11px] sm:text-xs font-bold tracking-wide uppercase text-white/80 drop-shadow">
+                  {pitch.name}
+                </span>
+              </div>
 
               {pitch.grass_color && (
                 <p className="text-[11px] text-emerald-200/90 font-medium flex items-center gap-1 mt-0.5">
@@ -255,6 +270,7 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
 
           {/* CUERPO DE LA TARJETA */}
           <div className="p-4 space-y-3.5">
+
             {/* Descripción corta */}
             {pitch.description ? (
               <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
@@ -295,7 +311,6 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
                       key={idx}
                       className="inline-flex items-center gap-1 text-[10px] font-semibold bg-secondary/80 text-foreground px-2.5 py-1 rounded-lg border border-border/50"
                     >
-                      <Sparkles size={9} className="text-emerald-500" />
                       {item}
                     </span>
                   ))}
@@ -359,11 +374,15 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
           >
             {/* Encabezado del Modal */}
             <div className="p-4 border-b border-border flex items-center justify-between bg-secondary/40">
-              <div>
-                <h2 className="text-3xl font-black tracking-tighter uppercase text-foreground mb-4 font-sans drop-shadow-sm">
+              <div className="space-y-1">
+                {complexName && (
+                  <h2 className="text-2xl sm:text-3xl font-black tracking-normal uppercase text-emerald-600 dark:text-emerald-400 font-sans drop-shadow-sm flex items-center gap-1.5">
+                    <span></span> {complexName}
+                  </h2>
+                )}
+                <p className="text-xs sm:text-sm font-bold tracking-wide uppercase text-muted-foreground">
                   {pitch.name}
-                </h2>
-
+                </p>
               </div>
               <button
                 type="button"
@@ -447,7 +466,7 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
                   <div className="flex flex-wrap gap-2">
                     {amenityList.map((item, idx) => (
                       <span key={idx} className="px-3 py-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 text-xs font-semibold rounded-xl flex items-center gap-1.5">
-                        <Sparkles size={12} /> {item}
+                        {item}
                       </span>
                     ))}
                   </div>
@@ -517,7 +536,7 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
                     <Edit3 size={14} /> Editar
                   </Link>
                 )}
-                {isAdmin && (
+                {/* {isAdmin && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
                     className="px-4 py-2.5 bg-red-600 text-white font-bold text-xs rounded-xl hover:bg-red-700 transition-colors flex items-center gap-2 shadow-sm"
@@ -525,7 +544,7 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
                   >
                     <Trash2 size={14} /> Eliminar
                   </button>
-                )}
+                )} */}
               </div>
             </div>
           </div>

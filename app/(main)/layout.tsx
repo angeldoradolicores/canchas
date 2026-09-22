@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Search, CalendarDays, Trophy, Users, LayoutDashboard, ShieldCheck, Smartphone, Heart, Swords, GraduationCap } from 'lucide-react';
+import { X, Search, CalendarDays, Trophy, Users, LayoutDashboard, ShieldCheck, Smartphone, Heart, Swords, GraduationCap, User } from 'lucide-react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { MobileNav } from '@/components/layout/MobileNav';
 import { Logo } from '@/components/layout/Logo';
 import { AuthModal } from '@/components/auth/AuthModal';
+import { PhoneOnboarding } from '@/components/auth/PhoneOnboarding';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -76,6 +77,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             <FloatingBookingTimer />
 
             {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+
+            {/* Modal para solicitar número de WhatsApp al jugador (obligatorio, sólo números, una sola vez) */}
+            <PhoneOnboarding />
           </div>
         </ActiveBookingProvider>
       </FavoritesProvider>
@@ -94,7 +98,7 @@ function MobileNavLinks({ onClose }: { onClose: () => void }) {
     { label: 'Retos y Jugadores', Icon: Swords, path: '/community' },
     { label: 'Campeonatos', Icon: Trophy, path: '/tournaments' },
     { label: 'Escuelas de fútbol', Icon: GraduationCap, path: '/schools' },
-    { label: 'Mi perfil', Icon: Users, path: '/profile' },
+    { label: 'Mi perfil', Icon: User, path: '/profile' },
   ];
 
   return (
@@ -108,13 +112,13 @@ function MobileNavLinks({ onClose }: { onClose: () => void }) {
             href={path}
             onClick={onClose}
             className={`group flex items-center gap-3 px-3 py-2.5 rounded-2xl text-[13.5px] font-semibold transition-all duration-200 ${isActive
-                ? 'bg-primary/12 text-primary font-bold shadow-sm'
-                : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              ? 'bg-primary/12 text-primary font-bold shadow-sm'
+              : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
               }`}
           >
             <span className={`flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-200 shrink-0 ${isActive
-                ? 'bg-primary text-white shadow-sm'
-                : 'bg-secondary/80 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
+              ? 'bg-primary text-white shadow-sm'
+              : 'bg-secondary/80 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
               }`}>
               <Icon size={16} />
             </span>
@@ -140,13 +144,13 @@ function MobileNavLinks({ onClose }: { onClose: () => void }) {
                 href={href}
                 onClick={onClose}
                 className={`group flex items-center gap-3 px-3 py-2.5 rounded-2xl text-[13.5px] font-semibold transition-all duration-200 ${isActive
-                    ? 'bg-primary/12 text-primary font-bold'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                  ? 'bg-primary/12 text-primary font-bold'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                   }`}
               >
                 <span className={`flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-200 shrink-0 ${isActive
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'bg-secondary/80 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'bg-secondary/80 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
                   }`}>
                   <Icon size={16} />
                 </span>

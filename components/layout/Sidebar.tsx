@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   Smartphone,
   Trophy,
-  Users,
+  User,
   Swords,
   GraduationCap
 } from 'lucide-react';
@@ -31,7 +31,7 @@ export function Sidebar() {
     ['Retos y Jugadores', Swords, '/community'],
     ['Campeonatos', Trophy, '/tournaments'],
     ['Escuelas de fútbol', GraduationCap, '/schools'],
-    ['Mi perfil', Users, '/profile'],
+    ['Mi perfil', User, '/profile'],
   ] as const;
 
   return (
@@ -83,13 +83,13 @@ export function Sidebar() {
               <span>Conectar WhatsApp</span>
             </Link>
 
-            <Link
+            {/* <Link
               href="/dashboard/schools"
               className={`nav-item ${pathname === '/dashboard/schools' ? 'active' : ''}`}
             >
               <GraduationCap size={19} />
-              <span>Escuelas</span>
-            </Link>
+              <span>Escuelas de Fútbol</span>
+            </Link> */}
           </>
         )}
 
@@ -124,8 +124,7 @@ export function Sidebar() {
               {profile?.full_name ? profile.full_name.substring(0, 2).toUpperCase() : 'US'}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{profile?.full_name || 'Usuario'}</p>
-              <p className="truncate text-xs text-muted-foreground capitalize">{profile?.role}</p>
+              <p className="truncate text-sm font-semibold capitalize">{profile?.full_name || 'Usuario'}</p>
             </div>
             <MoreHorizontal className="ml-auto text-muted-foreground" size={17} />
           </div>

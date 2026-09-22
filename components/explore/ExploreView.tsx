@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useToday, BOOKING_HOURS } from '@/lib/use-today';
-import { CalendarDays, Grid2X2, ListFilter, Loader2, Search, Clock3, ChevronRight, ChevronDown, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { CalendarDays, Grid2X2, ListFilter, Loader2, Search, Clock3, ChevronRight, ChevronDown, CheckCircle2, ShieldCheck, LandPlot } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { pitches as mockPitches } from '@/lib/mock-data';
 import { DiscoverRail } from './DiscoverRail';
@@ -136,11 +136,20 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
           </p>
 
           {/* Nombre de la cancha destacado */}
-          <div className="w-full py-2.5 px-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-center gap-2">
-            <ShieldCheck size={18} className="text-emerald-500 shrink-0" />
-            <span className="text-base font-black uppercase text-foreground tracking-wider truncate">
-              {pitch.name}
-            </span>
+          <div className="w-full py-3 px-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex flex-col items-center justify-center gap-1">
+            {/* Nombre del Complejo (Ahora es el elemento más grande y protagonista) */}
+            {((pitch as any).companies?.name || (pitch as any).company?.name) && (
+              <span className="text-base sm:text-lg font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300 text-center truncate max-w-full">
+                {((pitch as any).companies?.name || (pitch as any).company?.name)}
+              </span>
+            )}
+
+            {/* Nombre de la Cancha (Ahora actúa como un subtítulo secundario más pequeño) */}
+            <div className="flex items-center justify-center gap-2 max-w-full">
+              <span className="text-xs sm:text-sm font-bold uppercase text-muted-foreground tracking-wider truncate">
+                {pitch.name}
+              </span>
+            </div>
           </div>
 
           {/* Contenedor principal de detalles */}
@@ -613,6 +622,15 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                     )}
                   </div>
                   <div className="flex-1 min-w-0 pr-2">
+                    {((pitch as any).companies?.name || (pitch as any).company?.name) && (
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 truncate">
+
+                        {((pitch as any).companies?.name || (pitch as any).company?.name)} - {pitch.city}
+                      </p>
+
+
+
+                    )}
                     <h4 className="font-bold text-xs text-foreground break-words whitespace-normal">
                       {pitch.name.toUpperCase()}
                     </h4>
@@ -975,7 +993,14 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                           </div>
 
                           <div className="flex-1 min-w-0">
-                            <h4 className="font-bold text-sm sm:text-base leading-tight uppercase text-foreground truncate">
+                            {((pitch as any).companies?.name || (pitch as any).company?.name) && (
+                              <div className="flex items-center gap-1.5 text-xs sm:text-sm font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1">
+                                <span className="truncate">
+                                  {((pitch as any).companies?.name || (pitch as any).company?.name)}
+                                </span>
+                              </div>
+                            )}
+                            <h4 className="font-bold text-xs sm:text-sm leading-tight uppercase text-foreground/80 truncate">
                               {pitch.name}
                             </h4>
                             <div className="flex flex-wrap gap-1 mt-1">

@@ -96,7 +96,14 @@ export default function PublicPitchPage({ params }: { params: Promise<{ id: stri
       initialDate={savedDateRef.current}
       initialTimes={savedTimesRef.current}
       onBack={() => window.history.back()}
-      onBook={(times, date) => {
+      onSelectPitch={(newPitch) => {
+        setPitch(newPitch);
+        if (typeof window !== 'undefined') {
+          window.history.replaceState(null, '', `/cancha/${newPitch.id}`);
+        }
+      }}
+      onBook={(times, date, chosenPitch) => {
+        if (chosenPitch) setPitch(chosenPitch);
         savedTimesRef.current = times || [];
         savedDateRef.current = date || '';
         setBooking(true);

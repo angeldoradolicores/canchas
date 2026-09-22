@@ -12,6 +12,7 @@ interface AuthContextType {
   loading: boolean;
   signOut: () => Promise<void>;
   ensureProfile: () => Promise<Profile | null>;
+  refreshProfile: () => Promise<Profile | null>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -21,6 +22,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   signOut: async () => {},
   ensureProfile: async () => null,
+  refreshProfile: async () => null,
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -84,12 +86,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       let finalProfile = data;
 
+      // Verificar si hubo intención de registrarse como dueño
+      const pendingRole = typeof window !== 'undefined' ? localStorage.getItem('sb_pending_role') : null;
+      const pendingCompany = typeof window !== 'undefined' ? localStorage.getItem('sb_pending_company') : null;
+      const shouldBeOwner = authUser.user_metadata?.role === 'owner' || pendingRole === 'owner';
+
       if (!finalProfile) {
         // Auto-heal: el perfil no existe en public.profiles, crearlo automáticamente
         const fallbackProfile = {
           id: authUser.id,
-          full_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Jugador',
-          role: authUser.user_metadata?.role || 'player',
+          full_name: pendingCompany || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || (shouldBeOwner ? 'Dueño' : 'Jugador'),
+          role: shouldBeOwner ? 'owner' : (authUser.user_metadata?.role || 'player'),
         };
 
         const { data: created } = await supabase
@@ -99,6 +106,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .single();
 
         finalProfile = created || fallbackProfile as any;
+      } else if (shouldBeOwner && finalProfile.role !== 'owner') {
+        // Auto-heal: el perfil existía como player pero el usuario se registró como dueño
+        const updateData: any = { role: 'owner' };
+        if (pendingCompany) updateData.full_name = pendingCompany;
+        await supabase.from('profiles').update(updateData).eq('id', authUser.id);
+        finalProfile = { ...finalProfile, role: 'owner', ...(pendingCompany ? { full_name: pendingCompany } : {}) };
+      }
+
+      if (pendingRole && typeof window !== 'undefined') {
+        localStorage.removeItem('sb_pending_role');
+        localStorage.removeItem('sb_pending_next');
+        localStorage.removeItem('sb_pending_company');
       }
 
       if (finalProfile) {
@@ -106,7 +125,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Si es dueño, asegurar que tenga empresa creada (silenciosamente)
         if (finalProfile.role === 'owner') {
-          // Obtener sesión actual para incluir el token JWT
           supabase.auth.getSession().then(({ data: sessData }) => {
             const token = sessData?.session?.access_token;
             fetch('/api/admin-actions', {
@@ -118,9 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               body: JSON.stringify({
                 action: 'ensure_company',
                 payload: {
-                  company_name: finalProfile.full_name
-                    ? `Complejo ${finalProfile.full_name}`
-                    : 'Mi Complejo Deportivo',
+                  company_name: finalProfile.full_name?.trim() || 'Mi Complejo Deportivo',
                 },
               }),
             }).catch(e => console.warn('No se pudo crear empresa automáticamente:', e));
@@ -134,6 +150,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshProfile = async (): Promise<Profile | null> => {
+    if (!user) return null;
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (data) {
+        setProfile(data);
+        return data;
+      }
+    } catch (err) {
+      console.warn('Error refreshing profile:', err);
+    }
+    return null;
+  };
 
   const ensureProfile = async (): Promise<Profile | null> => {
     if (!user) return null;
@@ -175,7 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, session, loading, signOut, ensureProfile }}>
+    <AuthContext.Provider value={{ user, profile, session, loading, signOut, ensureProfile, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

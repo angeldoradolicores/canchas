@@ -2,13 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { Plus, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, Loader2, AlertCircle, Building2, Edit3, Check, X } from 'lucide-react';
 import Link from 'next/link';
 import { PitchCard, PitchData } from '@/components/ui/PitchCard';
 
 export default function PitchesPage() {
   const { user, session, loading: authLoading } = useAuth();
   const [pitches, setPitches] = useState<PitchData[]>([]);
+  const [company, setCompany] = useState<{ id: string; name: string } | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [newCompanyName, setNewCompanyName] = useState('');
+  const [savingCompany, setSavingCompany] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -38,6 +42,10 @@ export default function PitchesPage() {
         if (!res.ok || !data.success) throw new Error(data.error || 'Error al cargar las canchas.');
         
         setPitches(data.data || []);
+        if (data.company) {
+          setCompany(data.company);
+          setNewCompanyName(data.company.name || '');
+        }
       } catch (err: any) {
         setError(err.message || 'Error al cargar las canchas.');
       } finally {
@@ -47,6 +55,32 @@ export default function PitchesPage() {
 
     fetchPitches();
   }, [user?.id, session?.access_token, authLoading]);
+
+  const handleSaveCompanyName = async () => {
+    if (!newCompanyName.trim() || !session?.access_token) return;
+    setSavingCompany(true);
+    try {
+      const res = await fetch('/api/admin-actions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: 'update_company',
+          payload: { name: newCompanyName.trim() },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Error al actualizar nombre.');
+      setCompany(data.data);
+      setEditingName(false);
+    } catch (err: any) {
+      alert(err.message || 'No se pudo actualizar el nombre del complejo.');
+    } finally {
+      setSavingCompany(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -58,17 +92,83 @@ export default function PitchesPage() {
 
   return (
     <div className="max-w-7xl mx-auto pb-20 p-4 sm:p-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-foreground">Mis Canchas</h1>
-          <p className="text-sm text-muted-foreground mt-1">Administra tus campos deportivos y precios.</p>
+      {/* ── Banner de Complejo Deportivo Principal ── */}
+      <div className="mb-6 p-5 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/20 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-md shadow-emerald-600/20 shrink-0">
+            <Building2 size={24} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                Sede Principal
+              </span>
+              <span className="text-xs text-muted-foreground font-medium">
+                · {pitches.length} {pitches.length === 1 ? 'cancha asociada' : 'canchas asociadas'}
+              </span>
+            </div>
+
+            {editingName ? (
+              <div className="flex items-center gap-2 mt-1.5">
+                <input
+                  type="text"
+                  value={newCompanyName}
+                  onChange={e => setNewCompanyName(e.target.value)}
+                  className="px-3 py-1 text-base font-bold bg-background border border-emerald-500 rounded-lg outline-none"
+                  placeholder="Nombre del complejo"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveCompanyName}
+                  disabled={savingCompany}
+                  className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                  title="Guardar"
+                >
+                  <Check size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setEditingName(false); setNewCompanyName(company?.name || ''); }}
+                  className="p-1.5 bg-secondary text-muted-foreground rounded-lg hover:text-foreground"
+                  title="Cancelar"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 mt-0.5">
+                <h2 className="text-xl sm:text-2xl font-black text-foreground capitalize">
+                  {company?.name || 'Mi Complejo Deportivo'}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setEditingName(true)}
+                  className="p-1 text-muted-foreground hover:text-primary transition-colors"
+                  title="Editar nombre del complejo"
+                >
+                  <Edit3 size={14} />
+                </button>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Tus canchas (Cancha 1, Cancha 2, etc.) se muestran agrupadas bajo este complejo para tus clientes.
+            </p>
+          </div>
         </div>
+
         <Link
           href="/dashboard/pitches/new"
-          className="btn-primary flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold rounded-xl"
+          className="btn-primary flex items-center justify-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-bold rounded-xl shrink-0"
         >
-          <Plus size={18} /> Nueva Cancha
+          <Plus size={16} /> Agregar Cancha a este Complejo
         </Link>
+      </div>
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-foreground">Campos Deportivos</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Listado de canchas disponibles en esta sede.</p>
+        </div>
       </div>
 
       {error && (

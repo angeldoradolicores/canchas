@@ -394,7 +394,7 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
         <div className="p-4 border-t border-border bg-card flex items-center justify-between">
           <div>
             <span className="block text-xs text-muted-foreground font-bold uppercase">Total ({selectedTimes.length}h)</span>
-            <strong className="text-lg text-primary">${totalPrice.toLocaleString()}</strong>
+            <strong className="text-lg text-primary">${totalPrice.toLocaleString('es-CO')}</strong>
           </div>
           <button onClick={handleCreate} disabled={loading} className="btn-primary py-2.5 px-6">
             {loading ? <Loader2 size={16} className="animate-spin" /> : 'Confirmar Reserva'}

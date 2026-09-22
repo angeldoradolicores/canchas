@@ -186,6 +186,23 @@ export default function NewPitchPage() {
   const [showCustomSurface, setShowCustomSurface] = useState(false);
   const [customSurfaceInput, setCustomSurfaceInput] = useState('');
 
+  // Company info for displaying in header
+  const [ownerCompanyName, setOwnerCompanyName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase
+      .from('companies')
+      .select('id, name')
+      .eq('owner_id', user.id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.name) setOwnerCompanyName(data.name);
+      });
+  }, [user?.id, supabase]);
+
   const toggleType = (t: string) => {
     setTypes(prev => prev.includes(t) ? (prev.length > 1 ? prev.filter(x => x !== t) : prev) : [...prev, t]);
   };
@@ -499,6 +516,24 @@ export default function NewPitchPage() {
         </div>
       </div>
 
+      {/* Banner de Complejo Asociado */}
+      {ownerCompanyName && (
+        <div className="mb-5 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-500/10 to-transparent border border-emerald-500/25">
+          <span className="text-lg">🏟️</span>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+              Sede del Complejo
+            </p>
+            <p className="text-sm font-black text-foreground">
+              {ownerCompanyName}
+            </p>
+          </div>
+          <span className="ml-auto text-[11px] text-muted-foreground bg-secondary px-2.5 py-1 rounded-lg font-medium border border-border">
+            Esta cancha se asociará automáticamente
+          </span>
+        </div>
+      )}
+
       {/* Alerta de Error */}
       {errorMsg && (
         <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs font-medium rounded-xl flex items-center gap-2 mb-5">
@@ -538,7 +573,7 @@ export default function NewPitchPage() {
               <label className="text-xs font-bold text-muted-foreground uppercase">Nombre de la Cancha *</label>
               <input
                 type="text"
-                placeholder="Ej: Cancha Sintética "
+                placeholder={ownerCompanyName ? `Ej: Cancha 1, Cancha 2 – ${ownerCompanyName}...` : 'Ej: Cancha Sintética 1, Cancha 2...'}
                 value={name}
                 onChange={e => setName(e.target.value)}
                 className="w-full px-4 py-3 text-sm border border-border rounded-xl bg-background outline-none focus:border-primary transition-colors"
@@ -1107,8 +1142,7 @@ export default function NewPitchPage() {
                       <button
                         type="button"
                         onClick={() => setMediaItems(prev => prev.filter((_, idx) => idx !== i))}
-                        className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
+                        className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"                      >
                         <Trash2 size={12} />
                       </button>
                     </div>

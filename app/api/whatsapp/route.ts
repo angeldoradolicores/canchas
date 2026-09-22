@@ -70,9 +70,78 @@ export async function POST(req: NextRequest) {
 
     // 1. GENERAR CÓDIGO QR (ON DEMAND)
     if (action === 'generate_qr') {
+      const isForce = Boolean(body.force);
       let rawBase64 = null;
       let rawCode = null;
 
+      // Si el usuario fuerza la regeneración (desconectar anterior y obtener nuevo QR)
+      if (isForce) {
+        try {
+          await fetchWithTimeout(`${evoUrl}/instance/logout/${instanceName}`, {
+            method: 'DELETE',
+            headers: { apikey: evoApiKey },
+          }, 3000);
+        } catch (e) { /* ignorar */ }
+        try {
+          await fetchWithTimeout(`${evoUrl}/instance/delete/${instanceName}`, {
+            method: 'DELETE',
+            headers: { apikey: evoApiKey },
+          }, 3000);
+        } catch (e) { /* ignorar */ }
+      }
+
+      // Si no es forzado, verificar primero si la instancia ya está abierta/conectada
+      if (!isForce) {
+        try {
+          const stateRes = await fetchWithTimeout(`${evoUrl}/instance/connectionState/${instanceName}`, {
+            headers: { apikey: evoApiKey },
+          }, 3000);
+
+          if (stateRes.ok) {
+            const stateData = await stateRes.json();
+            const state = stateData?.instance?.state || stateData?.state;
+            if (state === 'open') {
+              // Buscar información del teléfono conectado
+              let detectedPhone = company?.whatsapp_connected_phone || company?.owner_phone || '';
+              try {
+                const instRes = await fetchWithTimeout(`${evoUrl}/instance/fetchInstances`, {
+                  headers: { apikey: evoApiKey },
+                }, 3000);
+                if (instRes.ok) {
+                  const instList = await instRes.json();
+                  const found = Array.isArray(instList) ? instList.find((i: any) => i.name === instanceName) : null;
+                  if (found?.ownerJid) {
+                    detectedPhone = found.ownerJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
+                  }
+                }
+              } catch (e) { /* ignorar */ }
+
+              await supabase
+                .from('companies')
+                .update({
+                  whatsapp_status: 'connected',
+                  whatsapp_qr_code: null,
+                  whatsapp_connected_phone: detectedPhone || null,
+                  whatsapp_updated_at: new Date().toISOString(),
+                })
+                .eq('id', companyId);
+
+              return NextResponse.json({
+                success: true,
+                status: 'connected',
+                alreadyConnected: true,
+                phone: detectedPhone,
+                instanceName,
+                message: 'Tu WhatsApp ya está conectado.',
+              });
+            }
+          }
+        } catch (e) {
+          // Continuar al flujo de conexión
+        }
+      }
+
+      // Intentar obtener QR conectando
       try {
         const connectRes = await fetchWithTimeout(`${evoUrl}/instance/connect/${instanceName}`, {
           method: 'GET',
@@ -81,13 +150,41 @@ export async function POST(req: NextRequest) {
 
         if (connectRes.ok) {
           const connectData = await connectRes.json();
+          const state = connectData?.instance?.state || connectData?.state;
+          if (state === 'open') {
+            const rawOwner = connectData?.instance?.owner || connectData?.owner || connectData?.instance?.ownerJid || '';
+            const detectedPhone = rawOwner
+              ? rawOwner.replace('@s.whatsapp.net', '').replace('@c.us', '')
+              : (company?.whatsapp_connected_phone || company?.owner_phone || '');
+
+            await supabase
+              .from('companies')
+              .update({
+                whatsapp_status: 'connected',
+                whatsapp_qr_code: null,
+                whatsapp_connected_phone: detectedPhone || null,
+                whatsapp_updated_at: new Date().toISOString(),
+              })
+              .eq('id', companyId);
+
+            return NextResponse.json({
+              success: true,
+              status: 'connected',
+              alreadyConnected: true,
+              phone: detectedPhone,
+              instanceName,
+              message: 'Tu WhatsApp ya está conectado.',
+            });
+          }
+
           rawBase64 = connectData?.base64 || connectData?.qrcode?.base64;
           rawCode = connectData?.code || connectData?.qrcode?.code;
         }
       } catch (e) {
-        // Fallback para crear si no existe
+        // Continuar al fallback de creación
       }
 
+      // Si no devolvió QR, intentar crear la instancia
       if (!rawBase64 && !rawCode) {
         try {
           const createRes = await fetchWithTimeout(`${evoUrl}/instance/create`, {
@@ -114,6 +211,21 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Si aún no hay QR tras crear, pedir connect una vez más
+      if (!rawBase64 && !rawCode) {
+        try {
+          const retryRes = await fetchWithTimeout(`${evoUrl}/instance/connect/${instanceName}`, {
+            method: 'GET',
+            headers: { apikey: evoApiKey },
+          }, 4000);
+          if (retryRes.ok) {
+            const retryData = await retryRes.json();
+            rawBase64 = retryData?.base64 || retryData?.qrcode?.base64;
+            rawCode = retryData?.code || retryData?.qrcode?.code;
+          }
+        } catch (e) { /* ignorar */ }
+      }
+
       let finalQrImage = '';
       if (rawBase64) {
         finalQrImage = rawBase64.startsWith('data:image')
@@ -131,7 +243,7 @@ export async function POST(req: NextRequest) {
 
       if (!finalQrImage) {
         return NextResponse.json({
-          error: 'Evolution API no devolvió un código QR. Por favor verifica que Evolution API esté activo o presiona Regenerar.',
+          error: 'Evolution API no devolvió un código QR. Presiona "Generar de nuevo" para reiniciar la sesión.',
           instanceName,
         }, { status: 502 });
       }

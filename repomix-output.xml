@@ -14758,9 +14758,9 @@ export function Sidebar() {
               href="/dashboard/schools"
               className={`nav-item ${pathname === '/dashboard/schools' ? 'active' : ''}`}
             >
-              <GraduationCap size={19} />
-              <span>Escuelas</span>
-            </Link>
+              <!-- <GraduationCap size={19} />
+              <span>Escuelas de Fútbol</span>
+            </Link> -->
           </>
         )}
         {profile?.role === 'superadmin' && (

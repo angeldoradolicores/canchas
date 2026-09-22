@@ -10,7 +10,7 @@ import { toPng } from 'html-to-image';
 export default function UserReservationsPage() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [dateFilter, setDateFilter] = useState<'todas' | 'hoy' | 'pasados_3' | 'pasados_7' | 'historial'>('todas');
-  const [statusFilter, setStatusFilter] = useState<'todas' | 'confirmed' | 'pending' | 'cancelled'>('todas');
+  const [statusFilter, setStatusFilter] = useState<'todas' | 'confirmed' | 'pending' | 'cancelled'>('pending');
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
@@ -197,15 +197,17 @@ export default function UserReservationsPage() {
         statusHeader = '❌ Cancelado por el dueño';
       }
 
+      const complexName = b.pitches?.companies?.name || b.bookings?.[0]?.pitches?.companies?.name;
       const pitchTitle = (b.displayPitchName || b.pitches?.name || '').toUpperCase();
+      const complexLine = complexName ? `${complexName.toUpperCase()}\n` : '';
       const hoursList = b.bookings && b.bookings.length > 0
         ? b.bookings.map((xb: any) => {
-            const t = new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-            return b.displayPitchName?.includes('+') && xb.pitches?.name ? `${xb.pitches.name} (${t})` : t;
-          }).join(', ')
+          const t = new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+          return b.displayPitchName?.includes('+') && xb.pitches?.name ? `${xb.pitches.name} (${t})` : t;
+        }).join(', ')
         : new Date(b.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
 
-      const text = `${statusHeader}\n\n📍 ${pitchTitle}\n📅 Fecha: ${new Date(b.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}\n⏰ Horarios: ${hoursList}\n\nVer cancha y ubicación: ${pitchUrl}\n\n¡Allá nos vemos!`;
+      const text = `${statusHeader}\n\n${complexLine}⚽ Cancha: ${pitchTitle}\n📅 Fecha: ${new Date(b.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}\n⏰ Horarios: ${hoursList}\n\nVer cancha y ubicación: ${pitchUrl}\n\n¡Allá nos vemos!`;
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
@@ -390,6 +392,15 @@ export default function UserReservationsPage() {
           {/* CONTENIDO DEL LADO DERECHO */}
           <div className="flex-1 min-w-0 p-3 sm:p-4 flex flex-col justify-between gap-3">
             <div>
+              {(() => {
+                const compName = b.pitches?.companies?.name || b.bookings?.[0]?.pitches?.companies?.name;
+                return compName ? (
+                  <p className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mb-1 truncate">
+                    <span></span> {compName}
+                  </p>
+                ) : null;
+              })()}
+
               {/* Título y Estado: flex-wrap permite que si el nombre es largo, el estado baje elegantemente sin cortarse */}
               <div className="flex flex-wrap items-start justify-between gap-2 mb-1.5">
                 {/* CORRECCIÓN: Quitamos 'truncate' para que el nombre se lea completo en varias líneas si es largo */}
@@ -688,6 +699,20 @@ export default function UserReservationsPage() {
                 </div>
 
                 <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', opacity: 0.85, marginTop: 12, marginBottom: 4 }}>TICKET DE RESERVA</p>
+                {(() => {
+                  const compName = selectedTicket.pitches?.companies?.name || selectedTicket.bookings?.[0]?.pitches?.companies?.name;
+                  return compName ? (
+                    <div style={{
+                      fontSize: 11,
+                      fontWeight: 900,
+                      letterSpacing: '0.12em',
+                      color: selectedTicket.status === 'pending' ? '#111827' : '#A7F3D0',
+                      textTransform: 'uppercase',
+                      marginBottom: 3
+                    }}>
+                    </div>
+                  ) : null;
+                })()}
                 <h2 style={{ fontSize: 26, fontWeight: 900, lineHeight: 1.1, marginBottom: 8 }}>
                   {(selectedTicket.displayPitchName || selectedTicket.pitches?.name || 'CANCHA').toUpperCase()}
                 </h2>

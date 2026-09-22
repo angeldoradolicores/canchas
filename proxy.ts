@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // ── 1. PROTECCIÓN GLOBAL DE RATE LIMITING PARA RUTAS /api/* ──
@@ -18,7 +18,11 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  let supabaseResponse = NextResponse.next({ request });
+  let supabaseResponse = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  });
 
   // ── 2. CABECERAS DE SEGURIDAD OWASP ──
   supabaseResponse.headers.set('X-Content-Type-Options', 'nosniff');
@@ -41,7 +45,9 @@ export async function middleware(request: NextRequest) {
             cookiesToSet.forEach(({ name, value }) =>
               request.cookies.set(name, value)
             );
-            supabaseResponse = NextResponse.next({ request });
+            supabaseResponse = NextResponse.next({
+              request,
+            });
             cookiesToSet.forEach(({ name, value, options }) =>
               supabaseResponse.cookies.set(name, value, options)
             );
@@ -52,7 +58,7 @@ export async function middleware(request: NextRequest) {
 
     await supabase.auth.getUser();
   } catch {
-    // Si falla la conexión con Supabase en middleware, no bloquear la navegación pública
+    // Si falla la conexión con Supabase en proxy, no bloquear la navegación pública
   }
 
   return supabaseResponse;

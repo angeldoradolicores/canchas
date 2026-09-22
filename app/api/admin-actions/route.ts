@@ -95,6 +95,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, data: company });
     }
 
+    // ── ACCIÓN: UPDATE_COMPANY ──
+    if (action === 'update_company') {
+      if (!ownerId) {
+        return NextResponse.json({ error: 'Sesión no autorizada' }, { status: 401 });
+      }
+      const newName = typeof payload?.name === 'string' ? payload.name.trim().slice(0, 100) : null;
+      if (!newName) {
+        return NextResponse.json({ error: 'Nombre de complejo inválido' }, { status: 400 });
+      }
+      const { data: updated, error } = await supabase
+        .from('companies')
+        .update({ name: newName })
+        .eq('owner_id', ownerId)
+        .select('*')
+        .maybeSingle();
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ success: true, data: updated });
+    }
+
     // ── 4. ACCIÓN: GET_PITCHES ──
     if (action === 'get_pitches') {
       const targetOwnerId = ownerId || (typeof payload?.owner_id === 'string' ? payload.owner_id : null);
@@ -104,23 +124,23 @@ export async function POST(req: NextRequest) {
 
       const { data: companies } = await supabase
         .from('companies')
-        .select('id')
+        .select('id, name')
         .eq('owner_id', targetOwnerId);
 
       if (!companies || companies.length === 0) {
-        return NextResponse.json({ success: true, data: [] });
+        return NextResponse.json({ success: true, data: [], company: null });
       }
 
       const companyIds = companies.map(c => c.id);
 
       const { data: pitches, error } = await supabase
         .from('pitches')
-        .select('*')
+        .select('*, companies(id, name, address, zone)')
         .in('company_id', companyIds)
         .order('created_at', { ascending: false });
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ success: true, data: pitches || [] });
+      return NextResponse.json({ success: true, data: pitches || [], company: companies[0] });
     }
 
     // ── 5. ACCIÓN: CREATE_PITCH ──
