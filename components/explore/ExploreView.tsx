@@ -721,7 +721,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Buscar canchas o complejos"
+            placeholder="Buscar complejos"
           />
         </div>
         <div className="filter-pills">
@@ -1089,19 +1089,11 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                       ? `${searchResults.length} cancha${searchResults.length > 1 ? 's' : ''} disponible${searchResults.length > 1 ? 's' : ''}`
                       : 'Sin disponibilidad'}
                   </h3>
-                  {/* <p className="text-sm text-muted-foreground capitalize">
-                    📅 {formattedSelectedDate} <br /> 🕓 {[...selectedHours].sort().map(h => {
-                      const hNum = parseInt(h.split(':')[0]);
-                      const h12 = hNum === 0 ? 12 : hNum > 12 ? hNum - 12 : hNum;
-                      const ampm = hNum < 12 ? 'am' : 'pm';
-                      return `${h12}:00 ${ampm}`;
-                    }).join(', ')}
-                  </p> */}
                 </div>
                 <button
                   type="button"
                   onClick={() => setSearchResults(null)}
-                  className="text-xs text-muted-foreground hover:text-foreground underline"
+                  className="text-xs text-muted-foreground hover:text-foreground underline cursor-pointer"
                 >
                   Limpiar resultados
                 </button>
@@ -1146,9 +1138,9 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
 
                       {/* Lista de canchas disponibles en este complejo */}
                       <div className="grid gap-2.5">
-                        {complex.pitches.map(pitch => {
+                        {complex.pitches.map((pitch: any) => {
                           const totalPrice = selectedHours.reduce(
-                            (sum, h) => sum + Number((pitch as any).custom_pricing?.[h] || (pitch as any).price_per_hour || 0),
+                            (sum, h) => sum + Number(pitch.custom_pricing?.[h] || pitch.price_per_hour || 0),
                             0
                           );
 
@@ -1157,27 +1149,72 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                               key={pitch.id}
                               className="p-3 bg-secondary/30 rounded-xl border border-border/80 flex flex-col gap-2.5"
                             >
+                              {/* Nombre y tipos/superficie de la cancha */}
                               <div className="flex items-center justify-between gap-2">
                                 <div className="min-w-0">
                                   <h5 className="font-bold text-xs sm:text-sm text-foreground uppercase truncate">
                                     {pitch.name}
                                   </h5>
-                                  <div className="flex flex-wrap gap-1 mt-0.5">
-                                    {(Array.isArray((pitch as any).supported_types)
-                                      ? (pitch as any).supported_types
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {(Array.isArray(pitch.supported_types)
+                                      ? pitch.supported_types
                                       : [pitch.type]
                                     ).map((type: string, index: number) => (
                                       <span key={index} className="text-[10px] text-muted-foreground bg-card border border-border/50 px-1.5 py-0.5 rounded font-medium">
                                         {type}
                                       </span>
                                     ))}
-                                    {(pitch as any).surface && (
+
+                                    {pitch.surface && (
                                       <span className="text-[10px] text-muted-foreground bg-card border border-border/50 px-1.5 py-0.5 rounded font-medium">
-                                        {(pitch as any).surface}
+                                        {pitch.surface}
                                       </span>
                                     )}
                                   </div>
                                 </div>
+                              </div>
+
+                              {/* Bloque Resumen: Fecha, Hora(s) y Total Dinámico */}
+                              <div className="bg-primary/5 border border-primary/15 rounded-xl p-3 flex items-center justify-between gap-3">
+                                {/* Lado izquierdo: Fecha e Horas elegidas */}
+                                <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+                                  {/* Fecha con icono */}
+                                  <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                                    <Calendar size={13} className="text-primary shrink-0" />
+                                    <span className="capitalize truncate">
+                                      {selectedDate
+                                        ? new Date(selectedDate + 'T00:00:00').toLocaleDateString('es-CO', {
+                                          weekday: 'short',
+                                          day: 'numeric',
+                                          month: 'short',
+                                        })
+                                        : 'Fecha no seleccionada'}
+                                    </span>
+                                  </div>
+
+                                  {/* Badges de Hora(s) */}
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    {[...selectedHours].sort().map(h => {
+                                      const price = Number(pitch.custom_pricing?.[h] || pitch.price_per_hour || 0);
+                                      return (
+                                        <span
+                                          key={h}
+                                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-card border border-border rounded-lg text-[11px] font-bold text-foreground shadow-2xs"
+                                        >
+                                          <Clock size={11} className="text-muted-foreground shrink-0" />
+                                          <span>{fmtSlot(h)}</span>
+                                          {selectedHours.length > 1 && (
+                                            <span className="text-[10px] text-muted-foreground font-normal">
+                                              (${price.toLocaleString('es-CO')})
+                                            </span>
+                                          )}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                {/* Lado derecho: Total */}
                                 <div className="text-right shrink-0">
                                   <span className="block text-[9px] font-bold uppercase text-muted-foreground">
                                     {selectedHours.length > 1 ? `Total (${selectedHours.length}h)` : 'Por hora'}
@@ -1188,18 +1225,19 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                                 </div>
                               </div>
 
+                              {/* Botones de acción */}
                               <div className="grid grid-cols-2 gap-2 pt-1">
                                 <button
                                   type="button"
                                   onClick={() => onOpen(pitch)}
-                                  className="h-9 bg-card text-foreground font-bold rounded-lg border border-border hover:bg-secondary transition-colors text-xs flex items-center justify-center cursor-pointer"
+                                  className="h-9 bg-card text-foreground font-bold rounded-lg border border-border hover:bg-secondary transition-colors text-xs flex items-center justify-center cursor-pointer active:scale-[0.98]"
                                 >
                                   Ver Cancha
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleBook(pitch, selectedHours, selectedDate)}
-                                  className="h-9 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors flex items-center justify-center shadow-xs cursor-pointer"
+                                  className="h-9 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors flex items-center justify-center shadow-xs cursor-pointer active:scale-[0.98]"
                                 >
                                   Reservar
                                 </button>
@@ -1213,10 +1251,9 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                 </div>
               )}
 
-              {/* ── Canchas en proceso de reserva con Cronómetro ── */}
+              {/* Canchas en proceso de reserva con Cronómetro */}
               {inProgressResults.length > 0 && (
-                <div className="grid gap-3">
-                  {/* Encabezado */}
+                <div className="grid gap-3 mt-6">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="relative flex h-2.5 w-2.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
@@ -1231,21 +1268,14 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                     Estas canchas tienen un bloqueo temporal por otro usuario. Si no confirman el pago antes de finalizar el cronómetro, se liberarán:
                   </p>
 
-                  {/* Lista de Tarjetas */}
                   <div className="grid gap-3">
                     {inProgressResults.map(p => {
-                      // Función auxiliar para formatear horas numéricas (ej: 7 o 19) a formato 12h (7am / 7pm)
                       const formatSlotHour = (slot: any) => {
                         if (!slot && slot !== 0) return '';
                         const strSlot = String(slot).trim();
-
-                        // Si ya incluye am o pm, devolverlo directamente
                         if (/am|pm/i.test(strSlot)) return strSlot;
-
-                        // Convertir hora numérica (ej: "19", "7", "19:00")
                         const hourNum = parseInt(strSlot, 10);
                         if (isNaN(hourNum)) return strSlot;
-
                         const period = hourNum >= 12 ? 'pm' : 'am';
                         const formattedHour = hourNum % 12 === 0 ? 12 : hourNum % 12;
                         return `${formattedHour}${period}`;
@@ -1256,7 +1286,6 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                           key={p.id}
                           className="flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 bg-amber-500/5 border border-amber-500/30 rounded-2xl transition-all"
                         >
-                          {/* Fila Superior en Móvil: Imagen + Nombre y Timer */}
                           <div className="flex items-center gap-3 flex-1 min-w-0">
                             <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex-shrink-0 overflow-hidden bg-muted">
                               {((p as any).media_urls?.[0] || (p as any).image_url) ? (
@@ -1287,7 +1316,6 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                             </div>
                           </div>
 
-                          {/* Botón Acción */}
                           <button
                             type="button"
                             onClick={() => onOpen(p)}

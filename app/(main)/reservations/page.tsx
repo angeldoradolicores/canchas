@@ -714,8 +714,12 @@ export default function UserReservationsPage() {
                   ) : null;
                 })()}
                 <h2 style={{ fontSize: 26, fontWeight: 900, lineHeight: 1.1, marginBottom: 8 }}>
-                  {(selectedTicket.displayPitchName || selectedTicket.pitches?.name || 'CANCHA').toUpperCase()}
+                  {(selectedTicket.pitches?.companies?.name || selectedTicket.bookings?.[0]?.pitches?.companies?.name || 'CANCHA').toUpperCase()}
                 </h2>
+                <h4 style={{ fontSize: 26, fontWeight: 900, lineHeight: 1.1, marginBottom: 8 }}>
+                  {(selectedTicket.displayPitchName || selectedTicket.pitches?.name || 'CANCHA').toUpperCase()}
+                </h4>
+
                 <p style={{ fontSize: 13, fontWeight: 600, opacity: 0.9, marginBottom: 16 }}>⚽ {selectedTicket.pitches?.type || 'Fútbol 11'}</p>
 
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: selectedTicket.status === 'pending' ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.2)', borderRadius: 999, padding: '4px 14px' }}>

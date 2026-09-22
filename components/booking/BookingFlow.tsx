@@ -375,9 +375,21 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     const messageNode = (
       <div className="flex flex-col gap-3 items-center text-center mt-2">
         <p className="text-sm text-muted-foreground">Estás a punto de iniciar una reserva en:</p>
-        <p className="text-xl font-black uppercase text-primary bg-primary/10 px-5 py-2.5 rounded-xl border border-primary/20 tracking-wider w-full shadow-sm">
-          {pitch.name}
-        </p>
+        <div className="w-full py-3 px-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex flex-col items-center justify-center gap-1">
+          {/* Nombre del Complejo (Ahora es el elemento más grande y protagonista) */}
+          {((pitch as any).companies?.name || (pitch as any).company?.name) && (
+            <span className="text-base sm:text-lg font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300 text-center truncate max-w-full">
+              {((pitch as any).companies?.name || (pitch as any).company?.name)}
+            </span>
+          )}
+
+          {/* Nombre de la Cancha (Ahora actúa como un subtítulo secundario más pequeño) */}
+          <div className="flex items-center justify-center gap-2 max-w-full">
+            <span className="text-xs sm:text-sm font-bold uppercase text-muted-foreground tracking-wider truncate">
+              {pitch.name}
+            </span>
+          </div>
+        </div>
         <div className="bg-secondary/60 border border-border rounded-xl p-3.5 w-full space-y-2 mt-1">
           <p className="flex justify-between items-center text-xs">
             <span className="text-muted-foreground font-bold flex items-center gap-1"><CalendarDays size={13} /> Fecha</span>
@@ -932,6 +944,11 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
           </h2>
 
           <div className="space-y-3.5 mt-4 text-sm">
+            <div className="summary-line flex justify-between items-center">
+              <span className="text-zinc-500 font-medium">Complejo</span>
+              <strong className="uppercase font-semibold text-zinc-800 dark:text-zinc-200">{pitch.companies?.name}</strong>
+            </div>
+
             <div className="summary-line flex justify-between items-center">
               <span className="text-zinc-500 font-medium">Cancha</span>
               <strong className="uppercase font-semibold text-zinc-800 dark:text-zinc-200">{pitch.name}</strong>
