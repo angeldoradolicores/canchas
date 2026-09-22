@@ -398,7 +398,7 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
   const handleLocationChange = (newLat: number, newLng: number, geocodedAddress?: string) => {
     setLat(newLat);
     setLng(newLng);
-    if (geocodedAddress && !address) setAddress(geocodedAddress);
+    if (geocodedAddress) setAddress(geocodedAddress);
   };
   const getCurrentLocation = () => {
     if (navigator.geolocation) {
@@ -466,6 +466,7 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
             lng: finalLng,
             city,
             department,
+            address,
           },
         }),
       });
@@ -1257,6 +1258,19 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
                   className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium"
                 />
               </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1">
+                  <MapPin size={12} className="text-emerald-500" />
+                  <span>Dirección o Barrio (se autocompleta con el mapa) *</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: Calle 5 # 24-10, Barrio San Fernando"
+                  value={address}
+                  onChange={e => setAddress(e.target.value)}
+                  className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium"
+                />
+              </div>
             </div>
 
             {/* Contenedor del Mapa Adaptable */}
@@ -1265,6 +1279,7 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
                 lat={lat || 1.2136}
                 lng={lng || -77.2811}
                 onChange={handleLocationChange}
+                initialAddress={address}
               />
             </div>
 

@@ -713,10 +713,10 @@ export default function UserReservationsPage() {
                     </div>
                   ) : null;
                 })()}
-                <h2 style={{ fontSize: 26, fontWeight: 900, lineHeight: 1.1, marginBottom: 8 }}>
+                <h2 style={{ fontSize: 20, fontWeight: 900, lineHeight: 1.1, marginBottom: 8 }}>
                   {(selectedTicket.pitches?.companies?.name || selectedTicket.bookings?.[0]?.pitches?.companies?.name || 'CANCHA').toUpperCase()}
                 </h2>
-                <h4 style={{ fontSize: 26, fontWeight: 900, lineHeight: 1.1, marginBottom: 8 }}>
+                <h4 style={{ fontSize: 15, fontWeight: 900, lineHeight: 1.1, marginBottom: 8 }}>
                   {(selectedTicket.displayPitchName || selectedTicket.pitches?.name || 'CANCHA').toUpperCase()}
                 </h4>
 

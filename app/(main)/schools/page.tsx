@@ -361,6 +361,28 @@ export default function SchoolsPage() {
     }
   }
 
+  const [selectedCity, setSelectedCity] = useState('Pasto');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('selectedCity');
+      if (saved) setSelectedCity(saved);
+    }
+    const handler = (e: any) => {
+      if (e.detail) setSelectedCity(e.detail);
+    };
+    window.addEventListener('cityChange', handler);
+    return () => window.removeEventListener('cityChange', handler);
+  }, []);
+
+  const filteredSchools = schools.filter(s => {
+    if (selectedCity === 'Todas') return true;
+    const cityTarget = selectedCity.toLowerCase();
+    const pitchCity = ((s.pitches as any)?.city || '').toLowerCase();
+    const locText = `${s.custom_location || ''} ${s.pitches?.name || ''} ${s.description || ''} ${s.name || ''}`.toLowerCase();
+    return pitchCity.includes(cityTarget) || locText.includes(cityTarget);
+  });
+
   return (
     <div className="pb-28 pt-4 px-3 sm:px-6 max-w-7xl mx-auto min-h-screen">
       {/* Header */}
@@ -374,11 +396,15 @@ export default function SchoolsPage() {
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <GraduationCap className="text-[#007a3e]" size={26} strokeWidth={2.5} />
               <h1 className="text-2xl sm:text-3xl font-black text-foreground uppercase tracking-tight">
                 Escuelas de Fútbol
               </h1>
+              <span className="inline-flex items-center gap-1 bg-[#CDE0D1] text-[#054D27] font-bold text-xs px-2.5 py-1 rounded-full border border-[#BACFC0]">
+                <MapPin size={12} className="text-[#007a3e]" />
+                <span>{selectedCity === 'Todas' ? 'Toda Colombia' : selectedCity}</span>
+              </span>
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-1 leading-relaxed">
               Conoce los mejores centros de formación y entrenamiento.
@@ -403,25 +429,46 @@ export default function SchoolsPage() {
           <Loader2 size={34} className="animate-spin text-[#007a3e]" />
           <p className="text-xs font-bold text-[#1b5e39] uppercase tracking-wider">Cargando escuelas...</p>
         </div>
-      ) : schools.length === 0 ? (
+      ) : filteredSchools.length === 0 ? (
         <div className="bg-[#dcefe3] border border-dashed border-[#a4d4b4] rounded-3xl p-8 sm:p-14 text-center flex flex-col items-center gap-3">
           <div className="w-16 h-16 bg-[#cde4d5] rounded-full flex items-center justify-center">
             <Users size={28} className="text-[#1b5e39]" />
           </div>
-          <h3 className="font-extrabold text-[#0f3822] text-lg uppercase">Sin escuelas registradas</h3>
+          <h3 className="font-extrabold text-[#0f3822] text-lg uppercase">
+            {selectedCity !== 'Todas' ? `No hay escuelas en ${selectedCity}` : 'Sin escuelas registradas'}
+          </h3>
           <p className="text-xs sm:text-sm text-[#1b5e39] max-w-sm">
-            Sé el primero en registrar una academia o escuela deportiva para que miles de deportistas puedan inscribirse.
+            {selectedCity !== 'Todas'
+              ? `Actualmente no hay escuelas registradas en ${selectedCity}. Puedes ver las escuelas de todas las ciudades.`
+              : 'Sé el primero en registrar una academia o escuela deportiva para que miles de deportistas puedan inscribirse.'}
           </p>
-          <button
-            onClick={handleOpenCreate}
-            className="mt-3 bg-[#007a3e] hover:bg-[#006332] text-white font-black px-5 py-2.5 rounded-xl text-xs flex items-center gap-1.5 uppercase tracking-wider cursor-pointer shadow-sm transition"
-          >
-            <Plus size={14} /> Registrar Escuela
-          </button>
+          <div className="flex items-center gap-3 flex-wrap justify-center mt-2">
+            {selectedCity !== 'Todas' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCity('Todas');
+                  if (typeof window !== 'undefined') {
+                    localStorage.setItem('selectedCity', 'Todas');
+                    window.dispatchEvent(new CustomEvent('cityChange', { detail: 'Todas' }));
+                  }
+                }}
+                className="bg-[#cde4d5] hover:bg-[#b8dec4] text-[#0f3822] font-black px-4 py-2 rounded-xl text-xs uppercase tracking-wider cursor-pointer shadow-xs transition"
+              >
+                Ver en todas las ciudades
+              </button>
+            )}
+            <button
+              onClick={handleOpenCreate}
+              className="bg-[#007a3e] hover:bg-[#006332] text-white font-black px-5 py-2 rounded-xl text-xs flex items-center gap-1.5 uppercase tracking-wider cursor-pointer shadow-sm transition"
+            >
+              <Plus size={14} /> Registrar Escuela
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {schools.map(school => {
+          {filteredSchools.map(school => {
             const allImgs = Array.isArray(school.images) && school.images.length > 0
               ? school.images
               : (school.logo_url ? [school.logo_url] : []);

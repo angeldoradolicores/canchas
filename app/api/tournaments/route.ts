@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
           image_url,
           media_urls,
           type,
+          city,
           companies (
             name,
             zone

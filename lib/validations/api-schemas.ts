@@ -103,6 +103,7 @@ export const AdminCreatePitchSchema = z.object({
   closing_time: z.string().regex(/^\d{2}:\d{2}$/, 'Formato HH:mm').optional().default('23:00'),
   city: z.string().max(100).optional().default('Pasto'),
   department: z.string().max(100).optional().default('Nariño'),
+  address: z.string().max(300).optional().nullable(),
 }).transform((data) => ({
   ...data,
   price_per_hour: data.price_per_hour ?? data.price ?? 80000,

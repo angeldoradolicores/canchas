@@ -25,7 +25,7 @@ export default function FavoritesPage() {
       try {
         const { data, error } = await supabase
           .from('pitches')
-          .select('*, companies(id, name, zone, address, lat, lng)');
+          .select('*, companies(id, name, zone, address)');
 
         if (!error && data && data.length > 0) {
           const mapped = data.map((p: any) => ({

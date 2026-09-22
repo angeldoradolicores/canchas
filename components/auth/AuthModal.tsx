@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Eye, EyeOff, Loader2, Trophy, User, Building2, Mail, CheckCircle2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -26,6 +26,23 @@ export function AuthModal({ isOpen = true, onClose, defaultMode = 'login', defau
   const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
   const supabase = createClient();
+
+  // Restaurar estado de carga si el usuario retrocede con el navegador desde Google
+  useEffect(() => {
+    const handlePageShow = () => {
+      setGoogleLoading(false);
+      setLoading(false);
+    };
+    const handleFocus = () => {
+      setGoogleLoading(false);
+    };
+    window.addEventListener('pageshow', handlePageShow);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
 
   if (isOpen === false) return null;
 

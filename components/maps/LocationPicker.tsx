@@ -8,6 +8,8 @@ interface SuggestionItem {
   address: string;
   lat: number;
   lng: number;
+  place_id?: string;
+  source?: 'google' | 'osm';
 }
 
 interface LocationPickerProps {
@@ -37,12 +39,35 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
   const debounceRef = useRef<any>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
+  const googleApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+  const [googleLoaded, setGoogleLoaded] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState(initialAddress);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [selectedAddress, setSelectedAddress] = useState(initialAddress);
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // Load Google Maps Places API script if API key is provided
+  useEffect(() => {
+    if (!googleApiKey || typeof window === 'undefined') return;
+    if ((window as any).google?.maps?.places) {
+      setGoogleLoaded(true);
+      return;
+    }
+    const existing = document.getElementById('google-maps-places-script');
+    if (!existing) {
+      const script = document.createElement('script');
+      script.id = 'google-maps-places-script';
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${googleApiKey}&libraries=places&language=es&region=CO`;
+      script.async = true;
+      script.onload = () => setGoogleLoaded(true);
+      document.head.appendChild(script);
+    } else {
+      existing.addEventListener('load', () => setGoogleLoaded(true));
+    }
+  }, [googleApiKey]);
 
   // Close suggestions on click outside
   useEffect(() => {
@@ -54,6 +79,40 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Reverse geocoding: lat/lng → dirección legible (Photon primero, Nominatim como fallback)
+  const reverseGeocode = async (lat: number, lng: number): Promise<string | null> => {
+    try {
+      // 1. Photon reverse
+      const photonRes = await fetch(
+        `https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}&lang=es`,
+        { signal: AbortSignal.timeout(4000) }
+      );
+      const photonData = await photonRes.json();
+      if (photonData?.features?.length > 0) {
+        const p = photonData.features[0].properties;
+        const parts: string[] = [];
+        if (p.name && p.name !== p.street) parts.push(p.name);
+        if (p.street) parts.push(p.street);
+        if (p.locality || p.district) parts.push(p.locality || p.district);
+        if (p.city || p.county) parts.push(p.city || p.county);
+        if (p.state) parts.push(p.state);
+        if (parts.length > 0) return parts.filter(Boolean).join(', ');
+      }
+    } catch {}
+
+    try {
+      // 2. Nominatim fallback
+      const nomRes = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=es`,
+        { headers: { 'Accept-Language': 'es' }, signal: AbortSignal.timeout(4000) }
+      );
+      const nomData = await nomRes.json();
+      if (nomData?.display_name) return nomData.display_name;
+    } catch {}
+
+    return null;
+  };
 
   useEffect(() => {
     let isCancelled = false;
@@ -131,25 +190,43 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
         if (lat && lng) {
           markerRef.current = L.marker([lat, lng], { icon: pinIconRef.current, draggable: true }).addTo(map);
           markerRef.current.bindPopup('<b>⚽ Cancha aquí</b><br/>Arrastra para ajustar').openPopup();
-          markerRef.current.on('dragend', (e: any) => {
+          markerRef.current.on('dragend', async (e: any) => {
             const pos = e.target.getLatLng();
-            onChange(pos.lat, pos.lng);
+            const addr = await reverseGeocode(pos.lat, pos.lng);
+            onChange(pos.lat, pos.lng, addr || undefined);
+            if (addr) {
+              setSelectedAddress(addr);
+              setSearchQuery(addr);
+            }
           });
         }
 
-        map.on('click', (e: any) => {
+        map.on('click', async (e: any) => {
           const { lat: clickLat, lng: clickLng } = e.latlng;
-          onChange(clickLat, clickLng);
           setShowSuggestions(false);
+
+          // Reverse geocoding para mostrar dirección al dueño
+          const addr = await reverseGeocode(clickLat, clickLng);
+          onChange(clickLat, clickLng, addr || undefined);
+          if (addr) {
+            setSelectedAddress(addr);
+            setSearchQuery(addr);
+          }
 
           if (markerRef.current) {
             markerRef.current.setLatLng([clickLat, clickLng]);
+            markerRef.current.bindPopup(`<b>⚽ Cancha aquí</b><br/>${addr || 'Arrastra para ajustar'}`).openPopup();
           } else {
             markerRef.current = L.marker([clickLat, clickLng], { icon: pinIconRef.current, draggable: true }).addTo(map);
-            markerRef.current.bindPopup('<b>⚽ Cancha aquí</b><br/>Arrastra para ajustar').openPopup();
-            markerRef.current.on('dragend', (ev: any) => {
+            markerRef.current.bindPopup(`<b>⚽ Cancha aquí</b><br/>${addr || 'Arrastra para ajustar'}`).openPopup();
+            markerRef.current.on('dragend', async (ev: any) => {
               const pos = ev.target.getLatLng();
-              onChange(pos.lat, pos.lng);
+              const dragAddr = await reverseGeocode(pos.lat, pos.lng);
+              onChange(pos.lat, pos.lng, dragAddr || undefined);
+              if (dragAddr) {
+                setSelectedAddress(dragAddr);
+                setSearchQuery(dragAddr);
+              }
             });
           }
         });
@@ -214,25 +291,23 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
         const L = LRef.current;
         markerRef.current = L.marker([lat, lng], { icon: pinIconRef.current, draggable: true }).addTo(map);
         markerRef.current.bindPopup('<b>⚽ Cancha aquí</b><br/>Arrastra para ajustar').openPopup();
-        markerRef.current.on('dragend', (e: any) => {
+        markerRef.current.on('dragend', async (e: any) => {
           const pos = e.target.getLatLng();
-          onChange(pos.lat, pos.lng);
+          const dragAddr = await reverseGeocode(pos.lat, pos.lng);
+          onChange(pos.lat, pos.lng, dragAddr || undefined);
+          if (dragAddr) {
+            setSelectedAddress(dragAddr);
+            setSearchQuery(dragAddr);
+          }
         });
         map.setView([lat, lng], 15, { animate: true });
       }
     } catch {}
   }, [lat, lng]);
 
-  // Fetch suggestions live as user types (debounced 400ms)
-  const fetchSuggestions = useCallback(async (query: string) => {
-    if (query.trim().length < 3) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-
+  // Live search suggestions (Google Places if key provided, else Photon/Nominatim OSM)
+  const fallbackOsmSuggestions = async (query: string) => {
     try {
-      // Photon: prioritize Colombia results
       const photonRes = await fetch(
         `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lang=es&limit=6&bbox=-79.0,-3.0,-66.0,13.0`,
         { signal: AbortSignal.timeout(5000) }
@@ -245,13 +320,13 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
           address: buildPhotonAddress(f.properties),
           lat: f.geometry.coordinates[1],
           lng: f.geometry.coordinates[0],
+          source: 'osm',
         }));
         setSuggestions(items);
         setShowSuggestions(true);
         return;
       }
 
-      // Fallback: Nominatim
       const nomRes = await fetch(
         `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&countrycodes=co&addressdetails=1&accept-language=es`,
         { headers: { 'Accept-Language': 'es' }, signal: AbortSignal.timeout(5000) }
@@ -263,6 +338,7 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
           address: r.display_name,
           lat: parseFloat(r.lat),
           lng: parseFloat(r.lon),
+          source: 'osm',
         }));
         setSuggestions(items);
         setShowSuggestions(true);
@@ -270,10 +346,50 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
         setSuggestions([]);
         setShowSuggestions(false);
       }
-    } catch {
-      // Silently ignore network errors during live suggestions
+    } catch {}
+  };
+
+  const fetchSuggestions = useCallback(async (query: string) => {
+    if (query.trim().length < 3) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
     }
-  }, []);
+
+    // 1. Google Places Autocomplete if configured & loaded
+    if (googleApiKey && typeof window !== 'undefined' && (window as any).google?.maps?.places?.AutocompleteService) {
+      try {
+        const service = new (window as any).google.maps.places.AutocompleteService();
+        service.getPlacePredictions(
+          {
+            input: query,
+            componentRestrictions: { country: 'co' },
+          },
+          (predictions: any[], status: any) => {
+            if (status === (window as any).google.maps.places.PlacesServiceStatus.OK && predictions && predictions.length > 0) {
+              const items: SuggestionItem[] = predictions.slice(0, 6).map((p: any) => ({
+                name: p.structured_formatting?.main_text || p.description,
+                address: p.description,
+                lat: 0,
+                lng: 0,
+                place_id: p.place_id,
+                source: 'google',
+              }));
+              setSuggestions(items);
+              setShowSuggestions(true);
+            } else {
+              fallbackOsmSuggestions(query);
+            }
+          }
+        );
+        return;
+      } catch (e) {
+        // Continue to OSM fallback
+      }
+    }
+
+    await fallbackOsmSuggestions(query);
+  }, [googleApiKey]);
 
   const handleInputChange = (value: string) => {
     setSearchQuery(value);
@@ -282,36 +398,67 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
     debounceRef.current = setTimeout(() => fetchSuggestions(value), 400);
   };
 
-  const selectSuggestion = (item: SuggestionItem) => {
-    setSearchQuery(item.address);
-    setSelectedAddress(item.address);
+  const selectSuggestion = async (item: SuggestionItem) => {
+    let targetLat = item.lat;
+    let targetLng = item.lng;
+    let targetAddress = item.address;
+
+    // Resolve lat/lng if item is from Google Places
+    if (item.place_id && typeof window !== 'undefined' && (window as any).google?.maps?.Geocoder) {
+      try {
+        const geocoder = new (window as any).google.maps.Geocoder();
+        const res = await new Promise<any>((resolve) => {
+          geocoder.geocode({ placeId: item.place_id }, (results: any[], status: any) => {
+            if (status === 'OK' && results && results[0]) resolve(results[0]);
+            else resolve(null);
+          });
+        });
+        if (res) {
+          targetLat = res.geometry.location.lat();
+          targetLng = res.geometry.location.lng();
+          targetAddress = res.formatted_address || item.address;
+        }
+      } catch (err) {
+        console.warn('Error resolviendo lugar con Google Maps:', err);
+      }
+    }
+
+    if (!targetLat && !targetLng) return;
+
+    setSearchQuery(targetAddress);
+    setSelectedAddress(targetAddress);
     setSuggestions([]);
     setShowSuggestions(false);
     setSearchError('');
 
-    onChange(item.lat, item.lng, item.address);
+    onChange(targetLat, targetLng, targetAddress);
 
     if (mapRef.current && (mapRef.current as any)._loaded && (mapRef.current as any)._mapPane) {
       try {
-        mapRef.current.setView([item.lat, item.lng], 17, { animate: true });
+        mapRef.current.setView([targetLat, targetLng], 17, { animate: true });
 
         if (markerRef.current) {
-          markerRef.current.setLatLng([item.lat, item.lng]);
-          markerRef.current.bindPopup(`<b>⚽ ${item.name}</b><br/>${item.address}`).openPopup();
+          markerRef.current.setLatLng([targetLat, targetLng]);
+          markerRef.current.bindPopup(`<b>⚽ ${item.name}</b><br/>${targetAddress}`).openPopup();
         } else if (pinIconRef.current && LRef.current) {
           const L = LRef.current;
-          markerRef.current = L.marker([item.lat, item.lng], { icon: pinIconRef.current, draggable: true }).addTo(mapRef.current);
-          markerRef.current.bindPopup(`<b>⚽ ${item.name}</b><br/>${item.address}`).openPopup();
-          markerRef.current.on('dragend', (ev: any) => {
+          markerRef.current = L.marker([targetLat, targetLng], { icon: pinIconRef.current, draggable: true }).addTo(mapRef.current);
+          markerRef.current.bindPopup(`<b>⚽ ${item.name}</b><br/>${targetAddress}`).openPopup();
+          markerRef.current.on('dragend', async (ev: any) => {
             const pos = ev.target.getLatLng();
-            onChange(pos.lat, pos.lng);
+            const dragAddr = await reverseGeocode(pos.lat, pos.lng);
+            onChange(pos.lat, pos.lng, dragAddr || undefined);
+            if (dragAddr) {
+              setSelectedAddress(dragAddr);
+              setSearchQuery(dragAddr);
+            }
           });
         }
       } catch {}
     }
   };
 
-  // Manual search button / Enter key (also queries Photon)
+  // Manual search button / Enter key
   const handleSearch = async () => {
     const raw = searchQuery.trim();
     if (!raw) return;
@@ -320,8 +467,36 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
     setSuggestions([]);
     setShowSuggestions(false);
 
+    // 1. Google Maps Geocoder if active
+    if (googleApiKey && typeof window !== 'undefined' && (window as any).google?.maps?.Geocoder) {
+      try {
+        const geocoder = new (window as any).google.maps.Geocoder();
+        const res = await new Promise<any>((resolve) => {
+          geocoder.geocode(
+            { address: raw, componentRestrictions: { country: 'co' } },
+            (results: any[], status: any) => {
+              if (status === 'OK' && results && results[0]) resolve(results[0]);
+              else resolve(null);
+            }
+          );
+        });
+        if (res) {
+          const newLat = res.geometry.location.lat();
+          const newLng = res.geometry.location.lng();
+          const addr = res.formatted_address || raw;
+          setSelectedAddress(addr);
+          onChange(newLat, newLng, addr);
+          moveMapAndPin(newLat, newLng, raw, addr);
+          setSearching(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('Google Maps geocoding error:', err);
+      }
+    }
+
     try {
-      // 1. Try Photon first
+      // 2. Try Photon
       const photonRes = await fetch(
         `https://photon.komoot.io/api/?q=${encodeURIComponent(raw)}&lang=es&limit=5&bbox=-79.0,-3.0,-66.0,13.0`
       );
@@ -338,7 +513,7 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
         return;
       }
 
-      // 2. Fallback: Nominatim with Colombia filter
+      // 3. Fallback: Nominatim with Colombia filter
       const nomRes = await fetch(
         `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(raw)}&format=json&limit=3&countrycodes=co&addressdetails=1&accept-language=es`,
         { headers: { 'Accept-Language': 'es' } }
@@ -346,7 +521,7 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
       const nomData = await nomRes.json();
 
       if (!nomData || nomData.length === 0) {
-        setSearchError('No se encontró ese lugar. Intenta con el nombre completo o agrega la ciudad (ej: "Cancha Los Campeones, Pasto").');
+        setSearchError('No se encontró ese lugar en el mapa. Intenta con el nombre completo o agrega el barrio/ciudad (ej: "Cancha Los Sauces, Pasto").');
         return;
       }
 
@@ -430,6 +605,19 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
           </button>
         </div>
 
+        {/* Status / Helper indicator */}
+        <div className="mt-1.5 flex items-center justify-between text-[11px] px-1">
+          {googleApiKey && googleLoaded ? (
+            <span className="text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1">
+              🟢 Google Places activo: búsqueda de canchas y complejos habilitada
+            </span>
+          ) : (
+            <span className="text-muted-foreground flex items-center gap-1 text-[10px] leading-normal">
+              ℹ️ Búsqueda en OpenStreetMap. Para buscar cualquier cancha registrada en Google Maps, puedes agregar <span className="font-mono bg-secondary px-1 rounded text-[9px] text-foreground">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</span> en tu archivo <code className="text-emerald-600 font-mono">.env.local</code>.
+            </span>
+          )}
+        </div>
+
         {/* Suggestions dropdown */}
         {showSuggestions && suggestions.length > 0 && (
           <div className="absolute top-full left-0 right-0 z-[2000] mt-1 bg-background border border-border rounded-xl shadow-xl overflow-hidden">
@@ -443,7 +631,12 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
                 <div className="flex items-start gap-2.5">
                   <MapPin size={13} className="mt-0.5 text-emerald-600 shrink-0" />
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-foreground group-hover:text-emerald-700 dark:group-hover:text-emerald-400 truncate">{item.name}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-semibold text-foreground group-hover:text-emerald-700 dark:group-hover:text-emerald-400 truncate">{item.name}</p>
+                      {item.source === 'google' && (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200 font-bold shrink-0">Google Maps</span>
+                      )}
+                    </div>
                     <p className="text-[10px] text-muted-foreground truncate leading-tight mt-0.5">{item.address}</p>
                   </div>
                 </div>

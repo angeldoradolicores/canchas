@@ -531,44 +531,87 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   if (step === 3) {
     const sortedTimes = [...selectedTimes].sort();
     return (
-      <div className="booking-success slide-up">
-        <div className="success-icon"><Check size={32} /></div>
-        <p className="eyebrow accent-label">RESERVA SOLICITADA</p>
-        <h1>¡Comprobante enviado!</h1>
-        <p>Tu solicitud para <strong>{pitch.name.toUpperCase()}</strong> ha sido enviada. El dueño validará tu abono y te confirmará pronto.</p>
-        <div className="confirmation-card">
-          <div
-            className="w-12 h-12 rounded-lg flex-shrink-0 overflow-hidden bg-muted"
-          >
-            {((pitch as any).media_urls?.[0] || (pitch as any).image_url) ? (
-              <img
-                src={(pitch as any).media_urls?.[0] || (pitch as any).image_url}
-                alt={pitch.name.toUpperCase()}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className={`w-full h-full ${(pitch as any).tone || 'field-emerald'}`} />
-            )}
-          </div>          <div className="flex-1 min-w-0">
-            <strong className="block text-sm truncate">{pitch.name.toUpperCase()}</strong>
-            <span className="text-xs text-muted-foreground">{formattedDate}</span>
-            <div className="flex flex-wrap gap-1 mt-1">
+      <div className="booking-success slide-up max-w-md mx-auto px-4 py-6 flex flex-col items-center text-center">
+        <div className="success-icon w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center mb-3 shadow-inner">
+          <Check size={32} />
+        </div>
+
+        <p className="eyebrow accent-label text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">
+          RESERVA SOLICITADA
+        </p>
+
+        <h1 className="text-2xl sm:text-3xl font-black text-foreground mb-2">
+          ¡Comprobante enviado!
+        </h1>
+
+        <p className="text-xs sm:text-sm text-muted-foreground mb-6 max-w-sm leading-relaxed">
+          Tu solicitud para <strong className="text-foreground uppercase">{pitch.name}</strong> ha sido enviada. El dueño validará tu abono y te confirmará pronto.
+        </p>
+
+        {/* Tarjeta de Confirmación Limpia y Estilizada para Móvil */}
+        <div className="confirmation-card w-full bg-card border border-border/80 rounded-2xl p-4 sm:p-5 shadow-sm text-left flex flex-col gap-4 mb-6 relative overflow-hidden">
+          <div className="absolute top-3 right-3">
+            <span className="status pending text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
+              Pendiente
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3.5 pr-16">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex-shrink-0 overflow-hidden bg-muted border border-border/50 shadow-xs">
+              {((pitch as any).media_urls?.[0] || (pitch as any).image_url) ? (
+                <img
+                  src={(pitch as any).media_urls?.[0] || (pitch as any).image_url}
+                  alt={pitch.name.toUpperCase()}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className={`w-full h-full ${(pitch as any).tone || 'field-emerald'}`} />
+              )}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              {/* Nombre del Complejo con gran protagonismo */}
+              <span className="block text-[11px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 truncate">
+                {pitch.companies?.name?.toUpperCase() || 'COMPLEJO DEPORTIVO'}
+              </span>
+
+              {/* Nombre de la Cancha */}
+              <h3 className="text-sm sm:text-base font-black text-foreground uppercase truncate mt-0.5">
+                {pitch.name}
+              </h3>
+
+              <p className="text-xs text-muted-foreground font-medium capitalize mt-0.5">
+                📅 {formattedDate}
+              </p>
+            </div>
+          </div>
+
+          <hr className="border-border/60 my-0" />
+
+          {/* Horas y Precios */}
+          <div>
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+              Horas seleccionadas:
+            </span>
+            <div className="flex flex-wrap gap-1.5">
               {sortedTimes.map(t => (
-                <span key={t} className="text-[10px] bg-primary/10 text-primary font-bold px-1.5 py-0.5 rounded-full">
-                  {fmtSlot(t)} (${getSlotPrice(t).toLocaleString('es-co')})
+                <span key={t} className="text-xs bg-primary/10 text-primary font-bold px-2.5 py-1 rounded-lg border border-primary/20 flex items-center gap-1">
+                  <span>{fmtSlot(t)}</span>
+                  <span className="text-[10px] opacity-80 font-normal">(${getSlotPrice(t).toLocaleString('es-co')})</span>
                 </span>
               ))}
             </div>
           </div>
-          <span className="status pending text-xs">Pendiente</span>
         </div>
+
         <button
           type="button"
-          className="btn-primary"
+          className="btn-primary w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-sm shadow-md cursor-pointer active:scale-95 transition-all"
           onClick={() => router.push(`/reservations`)}
         >
           Ir a mis reservas
-        </button>      </div>
+        </button>
+      </div>
     );
   }
 

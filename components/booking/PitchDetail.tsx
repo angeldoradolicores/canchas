@@ -433,19 +433,22 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
           type="button"
           onClick={toggleFavorite}
           disabled={loadingFavorite}
-          className={`p-3 rounded-full border shadow-sm transition-all duration-300 hover:scale-110 active:scale-90 disabled:opacity-50 ${isFavorite
-            ? 'bg-green-50 border-green-200 text-green-500 shadow-md shadow-green-100/50 scale-105'
-            : 'bg-background border-border text-muted-foreground hover:text-green-500 hover:bg-green-50/30 hover:border-green-100'
-            }`}
+          className={`p-3 rounded-2xl border transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer flex items-center justify-center shrink-0 ${
+            isFavorite
+              ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-500 shadow-md shadow-emerald-500/10'
+              : 'bg-secondary/70 hover:bg-secondary border-border/80 text-muted-foreground hover:text-emerald-500 hover:border-emerald-500/40'
+          }`}
+          title={isFavorite ? "Complejo en favoritos (clic para quitar)" : "Guardar este complejo en favoritos"}
           aria-label={isFavorite ? "Quitar complejo de favoritos" : "Guardar complejo en favoritos"}
         >
           <Heart
-            size={24}
-            className={`transition-all duration-300 transform ${isFavorite
-              ? "fill-current scale-110 animate-[bounce_0.4s_ease-in-out_1]"
-              : "scale-100"
-              }`}
-            strokeWidth={isFavorite ? 2 : 2.5}
+            size={22}
+            className={`transition-transform duration-300 ${
+              isFavorite
+                ? "fill-emerald-500 text-emerald-500 scale-110"
+                : "text-current"
+            }`}
+            strokeWidth={isFavorite ? 0 : 2.2}
           />
         </button>
       </div>

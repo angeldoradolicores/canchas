@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Eye, EyeOff, Loader2, ArrowRight, Mail, CheckCircle2, RotateCw, Lock, User, ShieldCheck } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -26,6 +26,23 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
   const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
   const router = useRouter();
   const supabase = createClient();
+
+  // Restaurar estado de carga si el usuario retrocede con el navegador desde Google
+  useEffect(() => {
+    const handlePageShow = () => {
+      setGoogleLoading(false);
+      setLoading(false);
+    };
+    const handleFocus = () => {
+      setGoogleLoading(false);
+    };
+    window.addEventListener('pageshow', handlePageShow);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
 
   const handleGoogleAuth = async () => {
     setError('');

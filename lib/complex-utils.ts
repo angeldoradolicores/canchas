@@ -36,6 +36,7 @@ export function groupPitchesByComplex(
     address?: string | null;
     zone?: string | null;
     city?: string | null;
+    department?: string | null;
     lat?: number;
     lng?: number;
     pitches: Pitch[];
@@ -44,19 +45,33 @@ export function groupPitchesByComplex(
   for (const pitch of pitches) {
     const pAny = pitch as any;
     const comp = pAny.companies || pAny.company;
-    const groupKey = comp?.id || pitch.company_id || pitch.id;
+    const pitchCity = (pAny.city || pitch.city || comp?.city || 'Pasto').trim();
+    // Agrupar canchas por empresa y ciudad: complejos en ciudades diferentes son complejos distintos
+    const baseId = comp?.id || pitch.company_id || pitch.id;
+    const groupKey = `${baseId}_${pitchCity.toLowerCase()}`;
     const compName = (comp?.name || pitch.name || 'Complejo Deportivo').trim();
+
+    // Priorizar la dirección real de la cancha sobre el placeholder por defecto de la empresa
+    let initialAddress = pAny.address;
+    if (!initialAddress || (initialAddress.toLowerCase().includes('pasto') && pitchCity.toLowerCase() !== 'pasto')) {
+      if (comp?.address && (!comp.address.toLowerCase().includes('pasto') || pitchCity.toLowerCase() === 'pasto')) {
+        initialAddress = comp.address;
+      } else {
+        const dept = (pitch as any).department || pAny.department || (pitchCity.toLowerCase() === 'cali' ? 'Valle del Cauca' : 'Nariño');
+        initialAddress = `${pitchCity}, ${dept}`;
+      }
+    }
 
     if (!map.has(groupKey)) {
       map.set(groupKey, {
         id: groupKey,
         name: compName,
-        address: comp?.address || pAny.address || null,
+        address: initialAddress,
         zone: comp?.zone || pAny.zone || null,
-        city: (comp as any)?.city || pitch.city || 'Pasto',
-        department: (comp as any)?.department || (pitch as any).department || 'Nariño',
-        lat: comp?.lat ?? pitch.lat,
-        lng: comp?.lng ?? pitch.lng,
+        city: pitchCity,
+        department: comp?.department || (pitch as any).department || pAny.department || (pitchCity.toLowerCase() === 'cali' ? 'Valle del Cauca' : 'Nariño'),
+        lat: comp?.lat ?? pAny.lat,
+        lng: comp?.lng ?? pAny.lng,
         pitches: [],
       });
     }
@@ -67,22 +82,50 @@ export function groupPitchesByComplex(
   const complexes: ComplexData[] = [];
 
   for (const group of map.values()) {
-    const siblingPitches = group.pitches;
+    // Ordenar para que la primera cancha agregada (created_at más antiguo) siempre sea la principal
+    const siblingPitches = [...group.pitches].sort((a, b) => {
+      const timeA = new Date((a as any).created_at || 0).getTime();
+      const timeB = new Date((b as any).created_at || 0).getTime();
+      return timeA - timeB;
+    });
+
+    const primaryPitch = siblingPitches[0] as any;
+    const primaryCity = primaryPitch.city || group.city || 'Pasto';
+    const primaryDept = primaryPitch.department || group.department || (primaryCity.toLowerCase() === 'cali' ? 'Valle del Cauca' : 'Nariño');
+
+    let resolvedAddress = primaryPitch.address || group.address;
+    if (!resolvedAddress || (resolvedAddress.toLowerCase().includes('pasto') && primaryCity.toLowerCase() !== 'pasto')) {
+      resolvedAddress = primaryPitch.address && !primaryPitch.address.toLowerCase().includes('pasto')
+        ? primaryPitch.address
+        : `${primaryCity}, ${primaryDept}`;
+    }
 
     // Obtener las mejores coordenadas disponibles
     let resolvedLat = group.lat;
     let resolvedLng = group.lng;
 
     if (!resolvedLat || !resolvedLng) {
-      const pitchWithCoords = siblingPitches.find(p => p.lat && p.lng);
+      const pitchWithCoords = siblingPitches.find(p => (p as any).lat && (p as any).lng) as any;
       if (pitchWithCoords) {
         resolvedLat = pitchWithCoords.lat;
         resolvedLng = pitchWithCoords.lng;
       } else {
-        // Asignar cercanía en Pasto con pequeña dispersión determinística
+        const CITY_CENTERS: Record<string, { lat: number; lng: number }> = {
+          'pasto': { lat: 1.2136, lng: -77.2811 },
+          'cali': { lat: 3.4516, lng: -76.5320 },
+          'ipiales': { lat: 0.8294, lng: -77.6444 },
+          'tumaco': { lat: 1.7986, lng: -78.8156 },
+          'túquerres': { lat: 1.0872, lng: -77.6186 },
+          'tuquerres': { lat: 1.0872, lng: -77.6186 },
+          'bogotá': { lat: 4.7110, lng: -74.0721 },
+          'bogota': { lat: 4.7110, lng: -74.0721 },
+          'medellín': { lat: 6.2442, lng: -75.5812 },
+          'medellin': { lat: 6.2442, lng: -75.5812 },
+        };
+        const center = CITY_CENTERS[primaryCity.toLowerCase()] || PASTO_CENTER;
         const hash = group.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-        resolvedLat = PASTO_CENTER.lat + ((hash % 20) - 10) * 0.0015;
-        resolvedLng = PASTO_CENTER.lng + (((hash * 3) % 20) - 10) * 0.0015;
+        resolvedLat = center.lat + ((hash % 20) - 10) * 0.0015;
+        resolvedLng = center.lng + (((hash * 3) % 20) - 10) * 0.0015;
       }
     }
 
@@ -163,10 +206,10 @@ export function groupPitchesByComplex(
     complexes.push({
       id: group.id,
       name: group.name,
-      address: group.address,
-      zone: group.zone,
-      city: group.city || 'Pasto',
-      department: (group as any).department || 'Nariño',
+      address: resolvedAddress,
+      zone: group.zone || primaryPitch.zone,
+      city: primaryCity,
+      department: primaryDept,
       lat: resolvedLat,
       lng: resolvedLng,
       rating: 5.0,

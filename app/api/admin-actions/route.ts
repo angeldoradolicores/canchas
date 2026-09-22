@@ -219,6 +219,21 @@ export async function POST(req: NextRequest) {
         .select()
         .single();
 
+      if (company && (payload.address || payload.city)) {
+        const finalCompanyAddress = payload.address || `${payload.city || 'Pasto'}${payload.department ? ', ' + payload.department : ''}`;
+        try {
+          await supabase
+            .from('companies')
+            .update({
+              address: finalCompanyAddress,
+              zone: payload.zone || undefined,
+            })
+            .eq('id', company.id);
+        } catch (e) {
+          console.error('Error updating company address:', e);
+        }
+      }
+
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ success: true, data: pitch });
     }
@@ -280,6 +295,17 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      if (payload.address || payload.city) {
+        try {
+          const { data: pitchRow } = await supabase.from('pitches').select('company_id').eq('id', pitch_id).single();
+          if (pitchRow?.company_id) {
+            const finalCompanyAddress = payload.address || `${payload.city || 'Pasto'}${payload.department ? ', ' + payload.department : ''}`;
+            await supabase.from('companies').update({ address: finalCompanyAddress }).eq('id', pitchRow.company_id);
+          }
+        } catch (e) {}
+      }
+
       return NextResponse.json({ success: true, data: pitch });
     }
 

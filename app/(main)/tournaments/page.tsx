@@ -31,6 +31,7 @@ interface Tournament {
   pitches?: {
     id: string;
     name: string;
+    city?: string;
     image_url?: string;
     media_urls?: string[];
     type?: string;
@@ -332,7 +333,30 @@ export default function TournamentsPage() {
     });
   };
 
-  const filtered = statusFilter === 'all' ? tournaments : tournaments.filter(t => t.status === statusFilter);
+  const [selectedCity, setSelectedCity] = useState('Pasto');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('selectedCity');
+      if (saved) setSelectedCity(saved);
+    }
+    const handler = (e: any) => {
+      if (e.detail) setSelectedCity(e.detail);
+    };
+    window.addEventListener('cityChange', handler);
+    return () => window.removeEventListener('cityChange', handler);
+  }, []);
+
+  const filtered = tournaments.filter(t => {
+    const matchesStatus = statusFilter === 'all' || t.status === statusFilter;
+    if (!matchesStatus) return false;
+
+    if (selectedCity === 'Todas') return true;
+
+    const tCity = (t.pitches?.city || t.location || '').toLowerCase();
+    const cityTarget = selectedCity.toLowerCase();
+    return tCity.includes(cityTarget);
+  });
 
   return (
     <div className="page-content fade-in max-w-6xl mx-auto">
@@ -344,11 +368,15 @@ export default function TournamentsPage() {
         {/* Encabezado: Título y Botón de Acción */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-[#C8DACB]">
           <div>
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <Trophy className="text-[#054D27]" size={26} strokeWidth={2.5} />
               <h1 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
                 Campeonatos
               </h1>
+              <span className="inline-flex items-center gap-1 bg-[#CDE0D1] text-[#054D27] font-bold text-xs px-2.5 py-1 rounded-full border border-[#BACFC0]">
+                <MapPin size={12} className="text-[#008744]" />
+                <span>{selectedCity === 'Todas' ? 'Toda Colombia' : selectedCity}</span>
+              </span>
             </div>
             <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1">
               Explora y participa en los torneos y campeonatos organizados por centros deportivos y la comunidad de jugadores.            </p>
@@ -419,13 +447,32 @@ export default function TournamentsPage() {
             <Trophy size={32} />
           </div>
           <h3 className="font-black text-xl text-[#054D27] uppercase tracking-tight mb-1">
-            {statusFilter !== 'all'
-              ? `No hay campeonatos ${STATUS_LABELS[statusFilter]?.label || ''}`
-              : 'No hay campeonatos aún'}
+            {selectedCity !== 'Todas'
+              ? `No hay campeonatos en ${selectedCity}`
+              : (statusFilter !== 'all'
+                  ? `No hay campeonatos ${STATUS_LABELS[statusFilter]?.label || ''}`
+                  : 'No hay campeonatos aún')}
           </h3>
-          <p className="text-[#4D715B] text-sm font-medium max-w-sm mx-auto">
-            {user ? '¡Sé el primero en crear y publicar un campeonato!' : 'Inicia sesión para registrar tu torneo.'}
+          <p className="text-[#4D715B] text-sm font-medium max-w-sm mx-auto mb-4">
+            {selectedCity !== 'Todas'
+              ? `Actualmente no hay torneos registrados en ${selectedCity}. Puedes ver los torneos disponibles a nivel nacional.`
+              : (user ? '¡Sé el primero en crear y publicar un campeonato!' : 'Inicia sesión para registrar tu torneo.')}
           </p>
+          {selectedCity !== 'Todas' && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCity('Todas');
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('selectedCity', 'Todas');
+                  window.dispatchEvent(new CustomEvent('cityChange', { detail: 'Todas' }));
+                }
+              }}
+              className="px-4 py-2 bg-[#008744] hover:bg-[#054D27] text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              Ver campeonatos en todas las ciudades
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -20,12 +20,33 @@ type Tab = 'retos' | 'buscar-jugador' | 'buscar-equipo';
 // ── Componente principal ────────────────────────────────────────────────────
 export function CommunityView() {
   const [activeTab, setActiveTab] = useState<Tab>('retos');
+  const [selectedCity, setSelectedCity] = useState('Pasto');
   const [alertState, setAlertState] = useState<AlertModalState>({
     isOpen: false,
     type: 'info',
     title: '',
     message: '',
   });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('selectedCity');
+      if (saved) setSelectedCity(saved);
+    }
+    const handler = (e: any) => {
+      if (e.detail) setSelectedCity(e.detail);
+    };
+    window.addEventListener('cityChange', handler);
+    return () => window.removeEventListener('cityChange', handler);
+  }, []);
+
+  const handleSetCity = (city: string) => {
+    setSelectedCity(city);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('selectedCity', city);
+      window.dispatchEvent(new CustomEvent('cityChange', { detail: city }));
+    }
+  };
 
   const showAlert = (type: AlertModalState['type'], title: string, message: string, onConfirm?: () => void) => {
     setAlertState({ isOpen: true, type, title, message, onConfirm });
@@ -37,45 +58,43 @@ export function CommunityView() {
     <section className="page-content fade-in">
       <CustomAlertModal alertState={alertState} onClose={closeAlert} />
 
-      {/* Header */}
-      {/* <div className="page-heading mb-6">
-        <div>
-          <p className="eyebrow accent-label">COMUNIDAD</p>
-          <h1>Juega con tu gente</h1>
-          <p className="lead">Forma equipo, reta rivales o únete a una convocatoria cerca de ti.</p>
+      {/* Tabs Premium + City Badge */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
+        <div className="flex gap-2 p-1.5 bg-secondary rounded-2xl border border-border w-fit">
+          {[
+            { id: 'retos' as Tab, label: 'Retos', icon: Swords },
+            { id: 'buscar-jugador' as Tab, label: 'Buscar Jugador', icon: UserPlus },
+          ].map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === id
+                ? 'bg-primary text-white shadow-md'
+                : 'text-muted-foreground hover:text-foreground hover:bg-card'
+                }`}
+            >
+              <Icon size={16} />
+              {label}
+            </button>
+          ))}
         </div>
-      </div> */}
 
-      {/* Tabs Premium */}
-      <div className="flex gap-2 mb-8 p-1.5 bg-secondary rounded-2xl border border-border w-fit">
-        {[
-          { id: 'retos' as Tab, label: 'Retos', icon: Swords },
-          { id: 'buscar-jugador' as Tab, label: 'Buscar Jugador', icon: UserPlus },
-        ].map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setActiveTab(id)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === id
-              ? 'bg-primary text-white shadow-md'
-              : 'text-muted-foreground hover:text-foreground hover:bg-card'
-              }`}
-          >
-            <Icon size={16} />
-            {label}
-          </button>
-        ))}
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#054D27]/10 text-[#054D27] border border-[#054D27]/20 shadow-2xs">
+          <MapPin size={13} />
+          <span>{selectedCity === 'Todas' ? 'Toda Colombia' : selectedCity}</span>
+        </div>
       </div>
 
-      {activeTab === 'retos' && <RetosTab showAlert={showAlert} />}
-      {activeTab === 'buscar-jugador' && <BuscarJugadorTab showAlert={showAlert} />}
+      {activeTab === 'retos' && <RetosTab showAlert={showAlert} selectedCity={selectedCity} onSelectCity={handleSetCity} />}
+      {activeTab === 'buscar-jugador' && <BuscarJugadorTab showAlert={showAlert} selectedCity={selectedCity} onSelectCity={handleSetCity} />}
       {activeTab === 'buscar-equipo' && <BuscarEquipoTab showAlert={showAlert} />}
     </section>
   );
 }
 
 // ── TAB: RETOS ──────────────────────────────────────────────────────────────
-function RetosTab({ showAlert }: { showAlert: (type: AlertModalState['type'], title: string, msg: string, onConfirm?: () => void) => void }) {
+function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type: AlertModalState['type'], title: string, msg: string, onConfirm?: () => void) => void; selectedCity: string; onSelectCity: (city: string) => void }) {
   const [challenges, setChallenges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [contacted, setContacted] = useState<string[]>([]);
@@ -222,8 +241,23 @@ function RetosTab({ showAlert }: { showAlert: (type: AlertModalState['type'], ti
       }
     }
 
-    return matchesUrgent && matchesZone && matchesLevel && matchesDate;
+    if (!matchesUrgent || !matchesZone || !matchesLevel || !matchesDate) return false;
 
+    // Filtro por ciudad seleccionada
+    if (selectedCity && selectedCity !== 'Todas') {
+      const cityTarget = selectedCity.toLowerCase().trim();
+      const pitchCity = (c.pitches?.city || '').toLowerCase().trim();
+      if (pitchCity) {
+        if (!pitchCity.includes(cityTarget)) return false;
+      } else {
+        const combined = `${c.location_zone || ''} ${c.custom_pitch_name || ''} ${c.message || ''}`.toLowerCase();
+        const majorCities = ['pasto', 'cali', 'bogota', 'bogotá', 'medellin', 'medellín', 'barranquilla', 'ipiales', 'popayan', 'popayán'];
+        const mentionsOtherCity = majorCities.some(city => combined.includes(city) && !cityTarget.includes(city));
+        if (mentionsOtherCity) return false;
+      }
+    }
+
+    return true;
   });
 
   if (loading) return <div className="py-20 flex justify-center"><Loader2 size={32} className="animate-spin text-primary" /></div>;
@@ -239,11 +273,15 @@ function RetosTab({ showAlert }: { showAlert: (type: AlertModalState['type'], ti
         {/* Encabezado: Título, Descripción y Botón de Acción */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-[#C8DACB]">
           <div>
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <Swords className="text-[#054D27]" size={26} strokeWidth={2.5} />
               <h1 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
                 Retos y Partidos
               </h1>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#054D27]/10 text-[#054D27] border border-[#054D27]/20">
+                <MapPin size={12} />
+                <span>{selectedCity === 'Todas' ? 'Toda Colombia' : selectedCity}</span>
+              </span>
             </div>
             <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1 leading-relaxed">
               ¿Tu equipo está listo para jugar? Desafía a otros grupos, acuerda el nivel y organiza un partido competitivo.
@@ -393,7 +431,29 @@ function RetosTab({ showAlert }: { showAlert: (type: AlertModalState['type'], ti
 
       {/* Lista de Retos */}
       {filtered.length === 0 && !showForm && !editingChallenge ? (
-        <EmptyState icon={<Trophy size={16} />} title="No hay retos que coincidan" desc="Ajusta los filtros o sé el primero en crear un reto." />
+        <div className="text-center py-16 px-4 border-2 border-dashed border-border rounded-2xl bg-card/40">
+          <div className="w-14 h-14 bg-secondary rounded-full flex items-center justify-center mx-auto mb-3 text-primary">
+            <Trophy size={24} />
+          </div>
+          <h3 className="font-bold text-lg mb-1">
+            {selectedCity !== 'Todas' ? `No hay retos en ${selectedCity}` : 'No hay retos que coincidan'}
+          </h3>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto mb-4">
+            {selectedCity !== 'Todas'
+              ? `Actualmente no hay retos registrados en ${selectedCity}. Puedes ver los retos a nivel nacional o crear el primero.`
+              : 'Ajusta los filtros o sé el primero en crear un reto.'}
+          </p>
+          {selectedCity !== 'Todas' && (
+            <button
+              type="button"
+              onClick={() => onSelectCity('Todas')}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#008744] hover:bg-[#054D27] text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+            >
+              <MapPin size={14} />
+              Ver retos en todas las ciudades
+            </button>
+          )}
+        </div>
       ) : (
         <div className="grid gap-4">
           {filtered.map(c => {
@@ -494,7 +554,7 @@ function RetosTab({ showAlert }: { showAlert: (type: AlertModalState['type'], ti
 }
 
 // ── TAB: BUSCAR JUGADOR (Convocatorias) ────────────────────────────────────
-function BuscarJugadorTab({ showAlert }: { showAlert: (type: AlertModalState['type'], title: string, msg: string, onConfirm?: () => void) => void }) {
+function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type: AlertModalState['type'], title: string, msg: string, onConfirm?: () => void) => void; selectedCity: string; onSelectCity: (city: string) => void }) {
   const [convocatorias, setConvocatorias] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [contacted, setContacted] = useState<string[]>([]);
@@ -612,7 +672,23 @@ function BuscarJugadorTab({ showAlert }: { showAlert: (type: AlertModalState['ty
       else if (filterDate === 'historial') matchesDate = diffDays > 7;
     }
 
-    return matchesUrgent && matchesZone && matchesLevel && matchesDate;
+    if (!matchesUrgent || !matchesZone || !matchesLevel || !matchesDate) return false;
+
+    // Filtro por ciudad seleccionada
+    if (selectedCity && selectedCity !== 'Todas') {
+      const cityTarget = selectedCity.toLowerCase().trim();
+      const pitchCity = (c.pitches?.city || '').toLowerCase().trim();
+      if (pitchCity) {
+        if (!pitchCity.includes(cityTarget)) return false;
+      } else {
+        const combined = `${c.location_zone || ''} ${c.custom_pitch_name || ''} ${c.message || ''}`.toLowerCase();
+        const majorCities = ['pasto', 'cali', 'bogota', 'bogotá', 'medellin', 'medellín', 'barranquilla', 'ipiales', 'popayan', 'popayán'];
+        const mentionsOtherCity = majorCities.some(city => combined.includes(city) && !cityTarget.includes(city));
+        if (mentionsOtherCity) return false;
+      }
+    }
+
+    return true;
   });
 
   if (loading) return <div className="py-16 flex justify-center"><Loader2 size={32} className="animate-spin text-primary" /></div>;
@@ -634,11 +710,15 @@ function BuscarJugadorTab({ showAlert }: { showAlert: (type: AlertModalState['ty
         {/* Encabezado: Título, Descripción y Botón de Acción */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-[#C8DACB]">
           <div>
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <UserPlus className="text-[#054D27]" size={26} strokeWidth={2.5} />
               <h1 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
                 Convocatorias
               </h1>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#054D27]/10 text-[#054D27] border border-[#054D27]/20">
+                <MapPin size={12} />
+                <span>{selectedCity === 'Todas' ? 'Toda Colombia' : selectedCity}</span>
+              </span>
             </div>
             <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1 leading-relaxed">
               ¿Tienes un partido reservado pero te falta gente? Publica aquí y encuentra los jugadores exactos que necesitas.
@@ -811,7 +891,29 @@ function BuscarJugadorTab({ showAlert }: { showAlert: (type: AlertModalState['ty
       )}
 
       {filtered.length === 0 && !showForm && !editingItem ? (
-        <EmptyState icon={UserCheck} title="No hay convocatorias encontradas" desc="Prueba cambiar los filtros o publica la primera." />
+        <div className="text-center py-16 px-4 border-2 border-dashed border-border rounded-2xl bg-card/40">
+          <div className="w-14 h-14 bg-secondary rounded-full flex items-center justify-center mx-auto mb-3 text-primary">
+            <Users size={24} />
+          </div>
+          <h3 className="font-bold text-lg mb-1">
+            {selectedCity !== 'Todas' ? `No hay convocatorias en ${selectedCity}` : 'No hay convocatorias encontradas'}
+          </h3>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto mb-4">
+            {selectedCity !== 'Todas'
+              ? `Actualmente no hay convocatorias de jugadores registradas en ${selectedCity}. Puedes ver las disponibles a nivel nacional o publicar una.`
+              : 'Prueba cambiar los filtros o publica la primera.'}
+          </p>
+          {selectedCity !== 'Todas' && (
+            <button
+              type="button"
+              onClick={() => onSelectCity('Todas')}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#008744] hover:bg-[#054D27] text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+            >
+              <MapPin size={14} />
+              Ver convocatorias en todas las ciudades
+            </button>
+          )}
+        </div>
       ) : (
         <div className="grid gap-4">
           {filtered.map(c => {

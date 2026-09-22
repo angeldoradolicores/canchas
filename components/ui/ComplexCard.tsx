@@ -38,7 +38,7 @@ interface ComplexCardProps {
   onBook?: (pitch: Pitch) => void;
 }
 
-export function ComplexCard({ complex, onOpen }: ComplexCardProps) {
+export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
   const { isFavoriteComplex, toggleFavoriteComplex } = useFavorites();
   const isFavorite = isFavoriteComplex(complex.id);
 
@@ -180,19 +180,12 @@ export function ComplexCard({ complex, onOpen }: ComplexCardProps) {
 
             {/* Badges superiores sobre la imagen */}
             <div className="absolute top-2.5 left-2.5 flex flex-wrap items-center gap-1.5 z-10 max-w-[calc(100%-55px)]">
-              {/* Conteo de canchas */}
-              {/* <span className="inline-flex items-center gap-1 bg-emerald-600/95 backdrop-blur-md text-white font-extrabold text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
-                <LandPlot size={11} className="shrink-0" />
-                {complex.pitchesCount} {complex.pitchesCount === 1 ? 'Cancha' : 'Canchas'}
+              {/* Badge de Ciudad destacada */}
+              {/* <span className="inline-flex items-center gap-1 bg-black/75 backdrop-blur-md text-white font-extrabold text-[10px] px-2.5 py-0.5 rounded-full border border-white/20 uppercase tracking-wider shadow-sm">
+                <MapPin size={10} className="text-emerald-400 shrink-0" />
+                <span>{complex.city || 'Pasto'}</span>
+                {complex.formattedDistance && <span className="opacity-70 font-normal">· {complex.formattedDistance}</span>}
               </span> */}
-
-              {/* Distancia GPS o Ubicación */}
-              {/* {locationLabel && (
-                <span className="inline-flex items-center gap-1 bg-black/60 backdrop-blur-md text-white font-semibold text-[10px] px-2 py-0.5 rounded-full border border-white/20 truncate">
-                  <MapPin size={9} className="text-emerald-400 shrink-0" />
-                  <span className="truncate">{locationLabel}</span>
-                </span>
-              )} */}
 
               {/* Indicador de reservas / popularidad si existe */}
               {complex.totalBookings && complex.totalBookings > 5 ? (
@@ -261,9 +254,13 @@ export function ComplexCard({ complex, onOpen }: ComplexCardProps) {
 
             {/* Fila 3: Dirección / Zona compacta */}
             <div className="flex items-center gap-1 text-[11px] text-muted-foreground pt-1 border-t border-border/40">
-              <MapPin size={11} className="text-muted-foreground/70 shrink-0" />
-              <span className="truncate">
-                {complex.address || `${complex.city || 'Pasto'}`}
+              <MapPin size={11} className="text-emerald-500 shrink-0" />
+              <span className="truncate font-medium">
+                {complex.address
+                  ? (complex.address.toLowerCase().includes((complex.city || '').toLowerCase())
+                    ? complex.address
+                    : `${complex.city ? complex.city + ' · ' : ''}${complex.address}`)
+                  : `${complex.city || 'Pasto'}${complex.department ? ', ' + complex.department : ''}`}
               </span>
             </div>
           </div>
@@ -271,6 +268,18 @@ export function ComplexCard({ complex, onOpen }: ComplexCardProps) {
 
         {/* PIE DE TARJETA: BOTONES */}
         <div className="p-3 border-t border-border/80 bg-secondary/25 shrink-0 flex gap-2">
+          {/* <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowPreviewModal(true);
+            }}
+            className="flex-1 py-2.5 px-3 bg-secondary hover:bg-secondary/80 text-foreground font-bold text-xs uppercase tracking-wide rounded-xl border border-border/70 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98]"
+            title="Ver vista previa del complejo"
+          >
+            <Eye size={13} />
+            <span>Ver</span>
+          </button> */}
 
           <button
             type="button"
@@ -312,7 +321,13 @@ export function ComplexCard({ complex, onOpen }: ComplexCardProps) {
                 </div>
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <MapPin size={12} className="text-emerald-500 shrink-0" />
-                  <span>{complex.address || `${complex.city || 'Pasto'}, ${complex.zone || 'Norte'}`}</span>
+                  <span>
+                    {complex.address
+                      ? (complex.address.toLowerCase().includes((complex.city || '').toLowerCase())
+                        ? complex.address
+                        : `${complex.city ? complex.city + ' · ' : ''}${complex.address}`)
+                      : `${complex.city || 'Pasto'}, ${complex.department || 'Nariño'}`}
+                  </span>
                   <span>·</span>
                   <span>{complex.pitchesCount} {complex.pitchesCount === 1 ? 'Cancha' : 'Canchas'}</span>
                 </p>
@@ -381,7 +396,7 @@ export function ComplexCard({ complex, onOpen }: ComplexCardProps) {
                         <ChevronRight size={16} />
                       </button>
                       <div className="absolute bottom-2.5 inset-x-0 flex justify-center gap-1.5">
-                        {currentPitchMedia.map((_, idx) => (
+                        {currentPitchMedia.map((_: any, idx: number) => (
                           <span
                             key={idx}
                             className={`h-1.5 rounded-full transition-all ${idx === activeMediaIdx ? 'bg-white w-5' : 'bg-white/50 w-1.5'

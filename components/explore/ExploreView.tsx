@@ -430,15 +430,17 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
     const fetchPitches = async () => {
       const { data, error } = await supabase
         .from('pitches')
-        .select('*, companies(id, name, zone, address, lat, lng)');
+        .select('*, companies(id, name, zone, address)');
       if (error) {
-        console.error('Error fetching pitches:', error);
+        console.error('Error fetching pitches:', error.message || error);
       }
       if (data && !error && data.length > 0) {
         const mapped = data.map((p: any) => ({
           ...p,
-          zone: p.companies?.zone || p.zone || 'Norte',
+          zone: p.companies?.zone || p.zone || null,
           city: p.city || 'Pasto',
+          department: p.department || 'Nariño',
+          address: p.address || p.companies?.address || null,
           distance: '1.2 km',
           rating: '5.0',
           reviews: 120,
@@ -531,7 +533,13 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
 
   const groupedSearchResults = useMemo(() => {
     if (!searchResults) return null;
-    return groupPitchesByComplex(searchResults);
+    const grouped = groupPitchesByComplex(searchResults);
+    // Orden aleatorio para que los resultados de disponibilidad sean equitativos
+    for (let i = grouped.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [grouped[i], grouped[j]] = [grouped[j], grouped[i]];
+    }
+    return grouped;
   }, [searchResults]);
 
   // ── Buscar disponibilidad (multi-hora) ────────────────────────────────────

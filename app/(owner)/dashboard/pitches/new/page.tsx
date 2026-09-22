@@ -447,7 +447,8 @@ function NewPitchForm() {
   const handleLocationChange = (newLat: number, newLng: number, geocodedAddress?: string) => {
     setLat(newLat);
     setLng(newLng);
-    if (geocodedAddress && !address) setAddress(geocodedAddress);
+    // Siempre actualizar la dirección si viene del reverse geocoding del mapa
+    if (geocodedAddress) setAddress(geocodedAddress);
   };
   const getCurrentLocation = () => {
     if (navigator.geolocation) {
@@ -515,6 +516,7 @@ function NewPitchForm() {
             lng: finalLng,
             city,
             department,
+            address,
           },
         }),
       });
@@ -616,10 +618,9 @@ function NewPitchForm() {
       {/* Banner de Complejo Asociado */}
       {ownerCompanyName && (
         <div className="mb-5 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-500/10 to-transparent border border-emerald-500/25">
-          <span className="text-lg">🏟️</span>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-              Sede del Complejo
+              Complejo
             </p>
             <p className="text-sm font-black text-foreground">
               {ownerCompanyName}
@@ -755,11 +756,11 @@ function NewPitchForm() {
                       key={s}
                       type="button"
                       onClick={() => setSurface(s)}
-                      className={`p-3 rounded-xl border text-xs font-bold text-center transition-all relative truncate ${active
+                      className={`p-3 rounded-xl border text-xs font-bold text-center transition-all relative ${active
                         ? 'bg-primary text-white border-primary shadow-md'
                         : 'bg-card border-border text-muted-foreground hover:border-primary/30 hover:text-foreground'}`}
                     >
-                      <span className="truncate block w-full px-2">{s}</span>
+                      <span className=" block w-full px-2">{s}</span>
                     </button>
                   );
                 })}
@@ -1318,6 +1319,19 @@ function NewPitchForm() {
                   className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium"
                 />
               </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1">
+                  <MapPin size={12} className="text-emerald-500" />
+                  <span>Dirección o Barrio (se autocompleta con el mapa) *</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: Calle 5 # 24-10, Barrio San Fernando"
+                  value={address}
+                  onChange={e => setAddress(e.target.value)}
+                  className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium"
+                />
+              </div>
             </div>
 
             {/* Contenedor del Mapa Adaptable */}
@@ -1326,6 +1340,7 @@ function NewPitchForm() {
                 lat={lat || 1.2136}
                 lng={lng || -77.2811}
                 onChange={handleLocationChange}
+                initialAddress={address}
               />
             </div>
 
