@@ -57,8 +57,14 @@ export async function POST(req: NextRequest) {
     }
 
     const rawEvoUrl = process.env.EVOLUTION_API_URL || 'http://127.0.0.1:8080';
-    const evoUrl = rawEvoUrl.replace('localhost', '127.0.0.1');
+    const evoUrl = rawEvoUrl.trim().replace(/\/+$/, '').replace('localhost', '127.0.0.1');
     const evoApiKey = process.env.EVOLUTION_API_KEY || process.env.EVOLUTION_GLOBAL_APIKEY || 'TusClavesSecretasDeEvolution123';
+
+    const evoHeaders: Record<string, string> = {
+      apikey: evoApiKey,
+      'Bypass-Tunnel-Reminder': 'true',
+      'bypass-tunnel-reminder': 'true',
+    };
 
     const { data: company } = await supabase
       .from('companies')
@@ -79,13 +85,13 @@ export async function POST(req: NextRequest) {
         try {
           await fetchWithTimeout(`${evoUrl}/instance/logout/${instanceName}`, {
             method: 'DELETE',
-            headers: { apikey: evoApiKey },
+            headers: evoHeaders,
           }, 3000);
         } catch (e) { /* ignorar */ }
         try {
           await fetchWithTimeout(`${evoUrl}/instance/delete/${instanceName}`, {
             method: 'DELETE',
-            headers: { apikey: evoApiKey },
+            headers: evoHeaders,
           }, 3000);
         } catch (e) { /* ignorar */ }
       }
@@ -94,7 +100,7 @@ export async function POST(req: NextRequest) {
       if (!isForce) {
         try {
           const stateRes = await fetchWithTimeout(`${evoUrl}/instance/connectionState/${instanceName}`, {
-            headers: { apikey: evoApiKey },
+            headers: evoHeaders,
           }, 3000);
 
           if (stateRes.ok) {
@@ -105,7 +111,7 @@ export async function POST(req: NextRequest) {
               let detectedPhone = company?.whatsapp_connected_phone || company?.owner_phone || '';
               try {
                 const instRes = await fetchWithTimeout(`${evoUrl}/instance/fetchInstances`, {
-                  headers: { apikey: evoApiKey },
+                  headers: evoHeaders,
                 }, 3000);
                 if (instRes.ok) {
                   const instList = await instRes.json();
@@ -145,7 +151,7 @@ export async function POST(req: NextRequest) {
       try {
         const connectRes = await fetchWithTimeout(`${evoUrl}/instance/connect/${instanceName}`, {
           method: 'GET',
-          headers: { apikey: evoApiKey },
+          headers: evoHeaders,
         }, 4000);
 
         if (connectRes.ok) {
@@ -190,8 +196,8 @@ export async function POST(req: NextRequest) {
           const createRes = await fetchWithTimeout(`${evoUrl}/instance/create`, {
             method: 'POST',
             headers: {
+              ...evoHeaders,
               'Content-Type': 'application/json',
-              apikey: evoApiKey,
             },
             body: JSON.stringify({
               instanceName,
@@ -216,7 +222,7 @@ export async function POST(req: NextRequest) {
         try {
           const retryRes = await fetchWithTimeout(`${evoUrl}/instance/connect/${instanceName}`, {
             method: 'GET',
-            headers: { apikey: evoApiKey },
+            headers: evoHeaders,
           }, 4000);
           if (retryRes.ok) {
             const retryData = await retryRes.json();
@@ -271,7 +277,7 @@ export async function POST(req: NextRequest) {
     if (action === 'check_status') {
       try {
         const evoRes = await fetchWithTimeout(`${evoUrl}/instance/connectionState/${instanceName}`, {
-          headers: { apikey: evoApiKey },
+          headers: evoHeaders,
         }, 3000);
 
         if (evoRes.ok) {
@@ -338,7 +344,7 @@ export async function POST(req: NextRequest) {
       try {
         await fetchWithTimeout(`${evoUrl}/instance/logout/${instanceName}`, {
           method: 'DELETE',
-          headers: { apikey: evoApiKey },
+          headers: evoHeaders,
         }, 3000);
       } catch (e) {
         console.warn('Error al desloguear:', e);
@@ -367,8 +373,8 @@ export async function POST(req: NextRequest) {
         const sendRes = await fetchWithTimeout(`${evoUrl}/message/sendText/${instanceName}`, {
           method: 'POST',
           headers: {
+            ...evoHeaders,
             'Content-Type': 'application/json',
-            apikey: evoApiKey,
           },
           body: JSON.stringify({
             number: formattedPhone,
