@@ -3,12 +3,15 @@ import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
 import { getAuthenticatedUser, verifyCompanyOwnership } from '@/lib/auth-guard';
 
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-async function fetchWithTimeout(url: string, options: any = {}, timeoutMs = 5000) {
+async function fetchWithTimeout(url: string, options: any = {}, timeoutMs = 12000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -152,7 +155,7 @@ export async function POST(req: NextRequest) {
         const connectRes = await fetchWithTimeout(`${evoUrl}/instance/connect/${instanceName}`, {
           method: 'GET',
           headers: evoHeaders,
-        }, 4000);
+        }, 10000);
 
         if (connectRes.ok) {
           const connectData = await connectRes.json();
@@ -205,7 +208,7 @@ export async function POST(req: NextRequest) {
               qrcode: true,
               integration: 'WHATSAPP-BAILEYS',
             }),
-          }, 5000);
+          }, 35000);
 
           if (createRes.ok) {
             const createData = await createRes.json();
@@ -223,7 +226,7 @@ export async function POST(req: NextRequest) {
           const retryRes = await fetchWithTimeout(`${evoUrl}/instance/connect/${instanceName}`, {
             method: 'GET',
             headers: evoHeaders,
-          }, 4000);
+          }, 10000);
           if (retryRes.ok) {
             const retryData = await retryRes.json();
             rawBase64 = retryData?.base64 || retryData?.qrcode?.base64;
