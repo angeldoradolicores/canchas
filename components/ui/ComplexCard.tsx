@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { MapPin, Heart, ChevronRight, ChevronLeft, LandPlot, Flame, Eye, X, CreditCard, Check } from 'lucide-react';
+import { MapPin, Heart, ChevronRight, ChevronLeft, Check, Star, CreditCard, Sparkles, X, Layers, Navigation } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { useFavorites } from '@/lib/favorites-context';
-import { useEffect } from 'react';
+
 export interface ComplexData {
   id: string;
   name: string;
@@ -100,17 +100,16 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
 
     setLoadingFavorite(true);
     try {
-      // Guardar el complejo completo como favorito (no sólo la cancha principal)
       await toggleFavoriteComplex(complex.id);
     } finally {
       setLoadingFavorite(false);
     }
   };
+
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [selectedPitchIdx, setSelectedPitchIdx] = useState(0);
   const [activeMediaIdx, setActiveMediaIdx] = useState(0);
 
-  // Pitches ordenadas de la más antigua a la más reciente (primera agregada = índice 0)
   const sortedPitches = [...complex.pitches].sort((a, b) => {
     const da = (a as any).created_at || '';
     const db = (b as any).created_at || '';
@@ -131,156 +130,88 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
     setShowPreviewModal(true);
   };
 
-  const formattedMinPrice = complex.minPrice > 0
-    ? `$${complex.minPrice.toLocaleString('es-CO')}`
-    : '$60.000';
-
-  const locationLabel = complex.formattedDistance
-    ? `${complex.formattedDistance}`
-    : [complex.city || 'Pasto', complex.zone].filter(Boolean).join(' · ');
-
   return (
     <>
+      {/* TARJETA PRINCIPAL (ESTILO AIRBNB LIMPIO) */}
       <div
         onClick={handleCardClick}
-        className="group relative bg-card border border-border/80 rounded-2xl overflow-hidden shadow-xs hover:shadow-lg transition-all duration-250 hover:-translate-y-0.5 flex flex-col justify-between cursor-pointer h-full select-none"
+        className="group relative bg-card rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1 flex flex-col justify-between cursor-pointer h-full select-none border border-border/40 hover:border-border shadow-xs hover:shadow-xl"
       >
-        {/* Botón corazón favoritos (agrega el complejo) */}
+        {/* Botón de favoritos con color VERDE activo y animación de vuelo */}
         <button
           ref={heartBtnRef}
           type="button"
           onClick={toggleFavorite}
           disabled={loadingFavorite}
-          className={`absolute top-2.5 right-2.5 z-30 p-2 rounded-full shadow-md backdrop-blur-md transition-all hover:scale-110 active:scale-95 cursor-pointer ${isFavorite
+          className={`absolute top-3.5 right-3.5 z-30 p-2 rounded-full backdrop-blur-md transition-all hover:scale-110 active:scale-95 cursor-pointer shadow-md ${isFavorite
             ? 'bg-emerald-500 text-white'
-            : 'bg-black/50 hover:bg-black/75 text-white border border-white/20 hover:text-emerald-400'
+            : 'bg-black/40 hover:bg-black/60 text-white border border-white/20'
             }`}
           title="Guardar complejo en favoritos"
         >
-          <Heart size={14} className={isFavorite ? 'fill-current' : ''} />
+          <Heart size={18} className={isFavorite ? 'fill-current text-white' : 'text-white'} />
         </button>
 
-        {/* Flying Heart Animation */}
+        {/* Animación del Corazón Volador Verde */}
         {showFlyAnim && (
-          <div className="absolute top-2.5 right-2.5 z-50 pointer-events-none origin-center animate-fly-heart">
+          <div className="absolute top-3.5 right-3.5 z-50 pointer-events-none origin-center animate-fly-heart">
             <Heart size={26} className="text-emerald-500 fill-emerald-500 drop-shadow-xl" />
           </div>
         )}
 
         <div className="flex-1 flex flex-col">
-          {/* BANNER / FOTO DEL COMPLEJO */}
-          <div className="relative aspect-[16/10] w-full bg-secondary overflow-hidden shrink-0">
+          {/* Imagen Limpia */}
+          <div className="relative aspect-[4/3] w-full bg-secondary overflow-hidden shrink-0">
             <img
               src={complex.image}
               alt={complex.name}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
             />
-            {/* Gradientes elegantes */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-black/10" />
-
-            {/* Badges superiores sobre la imagen */}
-            <div className="absolute top-2.5 left-2.5 flex flex-wrap items-center gap-1.5 z-10 max-w-[calc(100%-55px)]">
-              {/* Badge de Ciudad destacada */}
-              {/* <span className="inline-flex items-center gap-1 bg-black/75 backdrop-blur-md text-white font-extrabold text-[10px] px-2.5 py-0.5 rounded-full border border-white/20 uppercase tracking-wider shadow-sm">
-                <MapPin size={10} className="text-emerald-400 shrink-0" />
-                <span>{complex.city || 'Pasto'}</span>
-                {complex.formattedDistance && <span className="opacity-70 font-normal">· {complex.formattedDistance}</span>}
-              </span> */}
-
-              {/* Indicador de reservas / popularidad si existe */}
-              {complex.totalBookings && complex.totalBookings > 5 ? (
-                <span className="inline-flex items-center gap-0.5 bg-amber-500/90 text-white font-extrabold text-[9px] px-1.5 py-0.5 rounded-full shadow-xs">
-                  <Flame size={10} className="fill-white shrink-0" />
-                  {complex.totalBookings}
-                </span>
-              ) : null}
-            </div>
-
-            {/* Nombre y calificación en la base de la foto */}
-            <div className="absolute bottom-2.5 left-3 right-3 z-10">
-              <h3 className="text-base sm:text-lg font-black tracking-normal uppercase text-white leading-tight drop-shadow-md group-hover:text-emerald-300 transition-colors duration-200 truncate">
-                {complex.name}
-              </h3>
-
-              <div className="flex items-center gap-2 mt-0.5">
-                {/* <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-400 bg-black/60 backdrop-blur-sm px-1.5 py-0.2 rounded border border-amber-400/20">
-                  <span>★</span> {complex.rating || 5.0}
-                </span> */}
-
-                {/* {complex.surfaces.length > 0 && (
-                  <span className="text-[10px] text-white/80 font-medium truncate">
-                    {complex.surfaces[0]}
-                  </span>
-                )} */}
-              </div>
-            </div>
+            <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
           </div>
 
-          {/* CUERPO UNIFORME DE LA TARJETA (ALTURA ESTÁNDAR) */}
-          <div className="p-3 space-y-2 flex-1 flex flex-col justify-between">
-            {/* Fila 1: Formatos soportados (máximo 3 visibles + contador) */}
-            <div className="flex flex-wrap items-center gap-1">
-              {(complex.formats.length > 0 ? complex.formats.slice(0, 3) : ['Fútbol 5']).map((fmt, idx) => (
-                <span
-                  key={idx}
-                  className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 whitespace-nowrap"
-                >
-                  {fmt}
+          {/* Cuerpo de la Tarjeta */}
+          <div className="p-4 space-y-2 flex-1 flex flex-col justify-between bg-card">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span className="font-semibold tracking-tight uppercase flex items-center gap-1 truncate">
+                  <MapPin size={12} className="text-emerald-500 shrink-0" />
+                  {complex.city || 'Pasto'}, {complex.department}
                 </span>
-              ))}
-              {complex.formats.length > 3 && (
-                <span className="text-[8.5px] font-bold text-muted-foreground bg-secondary px-1 py-0.5 rounded whitespace-nowrap">
-                  +{complex.formats.length - 3}
-                </span>
-              )}
+
+                <div className="flex items-center gap-1 text-foreground font-medium shrink-0">
+                  <Star size={13} className="fill-amber-400 text-amber-400" />
+                  <span>{complex.rating || '4.9'}</span>
+                </div>
+              </div>
+
+              <h3 className="text-sm font-bold tracking-tight text-foreground line-clamp-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                {complex.name}
+              </h3>
             </div>
 
-            {/* Fila 2: Chips de espacios/canchas (máximo 3 visibles + contador) - orden: primera agregada primero */}
-            <div className="flex flex-wrap items-center gap-1">
-              {sortedPitches.slice(0, 3).map((p) => (
-                <span
-                  key={p.id}
-                  className="text-[9px] font-semibold bg-secondary/80 text-foreground px-1.5 py-0.5 rounded border border-border/60 whitespace-nowrap"
-                >
-                  {p.name}
+            <div className="pt-2 border-t border-border/40 flex items-center justify-between text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5 truncate">
+                <span className="font-medium text-foreground bg-secondary px-2 py-0.5 rounded-md text-[11px]">
+                  {complex.pitchesCount} {complex.pitchesCount === 1 ? 'Cancha' : 'Canchas'}
                 </span>
-              ))}
-              {sortedPitches.length > 3 && (
-                <span className="text-[8.5px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded whitespace-nowrap">
-                  +{sortedPitches.length - 3} más
+                {complex.formats.length > 0 && (
+                  <span className="truncate text-[11px] text-muted-foreground capitalize">
+                    ({complex.formats.join(', ')})
+                  </span>
+                )}
+              </div>
+
+              {complex.formattedDistance && (
+                <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 shrink-0">
+                  {complex.formattedDistance}
                 </span>
               )}
-            </div>
-
-            {/* Fila 3: Dirección / Zona compacta */}
-            <div className="flex items-center gap-1 text-[11px] text-muted-foreground pt-1 border-t border-border/40">
-              <MapPin size={11} className="text-emerald-500 shrink-0" />
-              <span className="truncate font-medium">
-                {complex.address
-                  ? (complex.address.toLowerCase().includes((complex.city || '').toLowerCase())
-                    ? complex.address
-                    : `${complex.city ? complex.city + ' · ' : ''}${complex.address}`)
-                  : `${complex.city || 'Pasto'}${complex.department ? ', ' + complex.department : ''}`}
-              </span>
             </div>
           </div>
         </div>
 
-        {/* PIE DE TARJETA: BOTONES */}
-        <div className="p-3 border-t border-border/80 bg-secondary/25 shrink-0 flex gap-2">
-          {/* <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowPreviewModal(true);
-            }}
-            className="flex-1 py-2.5 px-3 bg-secondary hover:bg-secondary/80 text-foreground font-bold text-xs uppercase tracking-wide rounded-xl border border-border/70 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98]"
-            title="Ver vista previa del complejo"
-          >
-            <Eye size={13} />
-            <span>Ver</span>
-          </button> */}
-
+        <div className="px-4 pb-4 pt-0">
           <button
             type="button"
             onClick={(e) => {
@@ -288,64 +219,56 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
               if (onBook) onBook(currentPitch);
               else onOpen(currentPitch);
             }}
-            className="flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wide rounded-xl transition-all shadow-2xs hover:shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98]"
+            className="w-full py-2 px-3 bg-secondary hover:bg-emerald-600 text-foreground hover:text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer group/btn"
           >
-            <span>Reservar</span>
-            <ChevronRight size={13} />
+            <span>Ver disponibilidad</span>
+            <ChevronRight size={14} className="transition-transform group-hover/btn:translate-x-0.5" />
           </button>
         </div>
       </div>
 
-      {/* ── MODAL VISTA PREVIA DETALLADA DEL COMPLEJO ── */}
+      {/* ── MODAL DE VISTA PREVIA REDISEÑADO (PC Y MÓVIL) ── */}
       {showPreviewModal && (
         <div
-          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200"
           onClick={(e) => {
             e.stopPropagation();
             setShowPreviewModal(false);
           }}
         >
           <div
-            className="bg-card border border-border w-full max-w-2xl max-h-[92vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col animate-in zoom-in-95 duration-200 text-left"
+            className="bg-card border border-border w-full max-w-3xl h-[90vh] sm:h-auto sm:max-h-[92vh] rounded-t-[28px] sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col animate-in slide-in-from-bottom sm:zoom-in-95 duration-200 text-left"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header del Modal */}
-
-            <div className="p-4 border-b border-border flex items-center justify-between bg-secondary/40">
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl"></span>
-                  <h2 className="text-xl sm:text-2xl font-black uppercase text-emerald-600 dark:text-emerald-400 leading-tight">
-                    {complex.name}
-                  </h2>
-                </div>
-                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+            {/* Cabecera Fija del Modal */}
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-secondary/60 shrink-0">
+              <div className="space-y-0.5 pr-4 min-w-0">
+                <h2 className="text-lg sm:text-xl font-black uppercase text-foreground truncate leading-tight">
+                  {complex.name}
+                </h2>
+                <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
                   <MapPin size={12} className="text-emerald-500 shrink-0" />
-                  <span>
-                    {complex.address
-                      ? (complex.address.toLowerCase().includes((complex.city || '').toLowerCase())
-                        ? complex.address
-                        : `${complex.city ? complex.city + ' · ' : ''}${complex.address}`)
-                      : `${complex.city || 'Pasto'}, ${complex.department || 'Nariño'}`}
+                  <span className="truncate">
+                    {`${complex.city || 'Pasto'}, ${complex.department || 'Nariño'}`}
                   </span>
-                  <span>·</span>
-                  <span>{complex.pitchesCount} {complex.pitchesCount === 1 ? 'Cancha' : 'Canchas'}</span>
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={() => setShowPreviewModal(false)}
-                className="p-2 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                className="p-2 rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-colors cursor-pointer shrink-0"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
-            {/* Pestañas de canchas del complejo - orden: primera agregada primero */}
+            {/* Selector de Canchas / Espacios (Si hay múltiples) */}
             {sortedPitches.length > 1 && (
-              <div className="flex items-center gap-1.5 px-4 py-2.5 bg-secondary/20 border-b border-border overflow-x-auto scrollbar-hide">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase mr-1 shrink-0">Canchas:</span>
+              <div className="px-5 py-2.5 bg-secondary/20 border-b border-border flex items-center gap-2 overflow-x-auto scrollbar-hide shrink-0">
+                <span className="text-[10px] font-extrabold text-muted-foreground uppercase shrink-0 flex items-center gap-1">
+                  Canchas:
+                </span>
                 {sortedPitches.map((p, idx) => (
                   <button
                     key={p.id}
@@ -354,8 +277,8 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
                       setSelectedPitchIdx(idx);
                       setActiveMediaIdx(0);
                     }}
-                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${idx === selectedPitchIdx
-                      ? 'bg-emerald-600 text-white shadow-xs'
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${idx === selectedPitchIdx
+                      ? 'bg-emerald-600 text-white shadow-sm'
                       : 'bg-secondary hover:bg-secondary/80 text-muted-foreground'
                       }`}
                   >
@@ -365,16 +288,14 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
               </div>
             )}
 
-
-            {/* Contenido desplazable del modal */}
-            <div className="p-5 overflow-y-auto space-y-5">
-              {/* Carrusel de fotos de la cancha activa */}
-              {/* Carrusel de medios de la cancha activa */}
+            {/* Cuerpo Desplazable del Modal */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1">
+              {/* Carrusel de Imágenes de la Cancha Activa */}
               {currentPitchMedia.length > 0 && (
                 <div className="relative rounded-2xl overflow-hidden bg-black aspect-[16/9] border border-border shadow-md">
                   <img
                     src={currentPitchMedia[activeMediaIdx] || complex.image}
-                    alt="Cancha media"
+                    alt="Vista previa cancha"
                     className="w-full h-full object-cover"
                   />
                   {currentPitchMedia.length > 1 && (
@@ -409,58 +330,58 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
                 </div>
               )}
 
-              {/* Modalidades y Superficie */}
+              {/* Grid de Características Clave */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-secondary/50 rounded-2xl border border-border">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Modalidad</span>
+                <div className="p-3.5 bg-secondary/40 rounded-2xl border border-border/60">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase block mb-0.5">Modalidad Activa</span>
                   <span className="text-sm font-extrabold text-foreground">
                     {(currentPitch as any).supported_types?.join(', ') || currentPitch.type || 'Fútbol 5'}
                   </span>
                 </div>
-                <div className="p-3 bg-secondary/50 rounded-2xl border border-border">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Superficie & Césped</span>
+                <div className="p-3.5 bg-secondary/40 rounded-2xl border border-border/60">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase block mb-0.5">Superficie</span>
                   <span className="text-sm font-extrabold text-foreground">
                     {currentPitch.surface || 'Sintética'}
                   </span>
                 </div>
               </div>
 
-              {/* Descripción */}
+              {/* Descripción de la cancha si existe */}
               {(currentPitch as any).description && (
-                <div className="space-y-1">
-                  <h4 className="text-xs font-bold text-muted-foreground uppercase">Descripción</h4>
-                  <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed bg-secondary/30 p-3.5 rounded-2xl border border-border">
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Acerca de este espacio</h4>
+                  <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed bg-secondary/30 p-4 rounded-2xl border border-border/60">
                     {(currentPitch as any).description}
                   </p>
                 </div>
               )}
 
-              {/* Servicios / Amenidades del complejo */}
+              {/* Amenidades y Servicios del Complejo */}
               {complex.amenities.length > 0 && (
-                <div className="space-y-1.5">
-                  <h4 className="text-xs font-bold text-muted-foreground uppercase">Servicios Incluidos</h4>
-                  <div className="flex flex-wrap gap-1.5">
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Servicios del Complejo</h4>
+                  <div className="flex flex-wrap gap-2">
                     {complex.amenities.map((item, idx) => (
                       <span
                         key={idx}
-                        className="inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 px-3 py-1 rounded-xl"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 px-3 py-1.5 rounded-xl"
                       >
-                        <Check size={11} /> {item}
+                        <Check size={12} /> {item}
                       </span>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Métodos de Pago */}
+              {/* Métodos de Pago Disponibles */}
               {Array.isArray((currentPitch as any).payment_methods) && (currentPitch as any).payment_methods.length > 0 && (
-                <div className="space-y-1.5 pt-1 border-t border-border">
-                  <h4 className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1.5">
-                    <CreditCard size={12} className="text-primary" /> Métodos de Pago
+                <div className="space-y-2 pt-2 border-t border-border/60">
+                  <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <CreditCard size={13} className="text-primary" /> Métodos de Pago
                   </h4>
                   <div className="flex flex-wrap gap-1.5">
                     {(currentPitch as any).payment_methods.map((pm: any, idx: number) => (
-                      <span key={idx} className="text-xs font-bold px-3 py-1 bg-card border border-border rounded-xl text-foreground">
+                      <span key={idx} className="text-xs font-bold px-3 py-1.5 bg-card border border-border rounded-xl text-foreground shadow-2xs">
                         {pm.label || pm.type}
                       </span>
                     ))}
@@ -468,13 +389,13 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
                 </div>
               )}
 
-              {/* Ubicación en Mapa */}
+              {/* Ubicación Geográfica en Mapa integrado */}
               {(currentPitch as any).lat && (currentPitch as any).lng && (
-                <div className="space-y-2 pt-1 border-t border-border">
-                  <h4 className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1">
-                    <MapPin size={14} className="text-primary" /> Ubicación en Mapa
+                <div className="space-y-2 pt-2 border-t border-border/60">
+                  <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Navigation size={13} className="text-primary" /> Ubicación en el mapa
                   </h4>
-                  <div className="w-full h-40 rounded-2xl overflow-hidden border border-border">
+                  <div className="w-full h-40 rounded-2xl overflow-hidden border border-border shadow-xs">
                     <iframe
                       title="map-preview"
                       width="100%"
@@ -485,17 +406,14 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
                   </div>
                 </div>
               )}
-
             </div>
 
-            {/* Footer del Modal */}
-            <div className="p-4 border-t border-border bg-secondary/30 flex items-center justify-between gap-4">
-              {/* <div>
-                <span className="block text-[10px] font-bold uppercase text-muted-foreground">Tarifa por hora</span>
-                <span className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400">
-                  ${((currentPitch as any).price_per_hour || complex.minPrice)?.toLocaleString('es-CO')}
-                </span>
-              </div> */}
+            {/* Footer Fijo del Modal con Botón de Acción Claro */}
+            <div className="p-4 sm:p-5 border-t border-border bg-secondary/60 shrink-0 flex items-center justify-between gap-4">
+              <div className="hidden sm:block">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase block">Espacio seleccionado</span>
+                <span className="text-sm font-black text-foreground">{currentPitch.name}</span>
+              </div>
 
               <button
                 type="button"
@@ -504,7 +422,7 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
                   if (onBook) onBook(currentPitch);
                   else onOpen(currentPitch);
                 }}
-                className="py-3 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+                className="w-full sm:w-auto py-3 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm uppercase tracking-wider rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
               >
                 <span>Reservar en {currentPitch.name}</span>
                 <ChevronRight size={16} />
@@ -514,7 +432,7 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
         </div>
       )}
 
-      {/* Flying hearts portal */}
+      {/* Portal de Corazones Voladores */}
       {typeof document !== 'undefined' && flyingHearts.map(h => createPortal(
         <div
           key={h.id}

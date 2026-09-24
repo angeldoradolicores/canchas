@@ -723,7 +723,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
       </div>
 
       {/* Buscador */}
-      <div className="search-row relative z-50">
+      <div className="search-row relative">
         <div className="search-box w-full">
           <Search size={18} />
           <input

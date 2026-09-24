@@ -176,7 +176,7 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
         (pos) => {
           setLocating(false);
           const { latitude: uLat, longitude: uLng } = pos.coords;
-          
+
           // Notificar coordenadas al resto de la app
           window.dispatchEvent(new CustomEvent('gpsCoords', { detail: { lat: uLat, lng: uLng } }));
 
@@ -220,7 +220,7 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
       </div>
 
       {/* ── Centro: Selector de ubicación perfectamente centrado ── */}
-      <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center justify-center text-center pointer-events-auto">
+      <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center justify-center text-center pointer-events-auto z-9999 opacity-100">
         <p className="eyebrow text-[10px] text-muted-foreground uppercase tracking-wider font-bold">Mi ubicación</p>
         <div className="flex items-center gap-1.5 mt-0.5">
           <button
@@ -249,7 +249,7 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
 
         {/* Dropdown ciudades centrado */}
         {showCityDropdown && (
-          <div className="absolute top-full mt-2 w-52 max-h-64 overflow-y-auto bg-card border border-border rounded-2xl shadow-2xl z-[9999] text-left">
+          <div className="absolute top-full mt-2 w-52 max-h-64 overflow-y-auto bg-card border border-border rounded-2xl shadow-2xl z-[9999] text-left opacity-100">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-3 pt-3 pb-1">Selecciona tu ciudad</p>
             {citiesList.map(city => (
               <button

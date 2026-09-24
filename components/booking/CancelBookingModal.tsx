@@ -72,9 +72,19 @@ export function CancelBookingModal({
 
         {/* Tarjeta con detalles de la cancha y cronómetro */}
         <div className="bg-secondary/60 border border-border/60 rounded-2xl p-4 mb-5 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="font-bold text-sm text-foreground truncate">{activeBooking.pitch.name}</span>
-            <span className="font-mono font-black text-xs px-2.5 py-1 rounded-lg bg-primary text-white shadow-sm flex items-center gap-1">
+          <div className="flex items-center justify-between gap-3">
+            {/* Contenedor vertical: compañía arriba y nombre de la cancha abajo */}
+            <div className="flex flex-col min-w-0">
+              <span className="font-bold text-xs text-muted-foreground truncate capitalize">
+                {activeBooking.pitch.companies?.name || 'COMPLEJO DEPORTIVO'}
+              </span>
+              <span className="font-black text-sm text-foreground truncate capitalize">
+                {activeBooking.pitch.name}
+              </span>
+            </div>
+
+            {/* Hora de la reserva a la derecha */}
+            <span className="font-mono font-black text-xs px-2.5 py-1 rounded-lg bg-primary text-white shadow-sm flex items-center gap-1 shrink-0">
               <Clock3 size={13} /> {timeFormatted}
             </span>
           </div>

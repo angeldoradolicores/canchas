@@ -669,6 +669,9 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
 
           <div className={`booking-hero ${(pitch as any).tone || 'field-emerald'}`}>
             <div className="pitch-lines" />
+            <span>
+              {pitch.companies?.name?.toUpperCase() || 'COMPLEJO DEPORTIVO'}
+            </span>
             <span>{pitch.name.toUpperCase()}</span>
           </div>
 

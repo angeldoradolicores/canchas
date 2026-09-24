@@ -67,9 +67,10 @@ export function FloatingBookingTimer() {
               reservando
             </span>
           </div>
-          <p className="font-bold text-xs leading-tight uppercase min-w-0 break-words line-clamp-2">
-            {activeBooking.pitch.name.toUpperCase()}
+          <p className="font-bold text-xs leading-tight uppercase min-w-0 break-words line-clamp-2 capitalize">
+            {activeBooking.pitch.companies?.name}
           </p>
+          {/* <p className="text-xs leading-tight">{activeBooking.pitch.name}</p> */}
           {(() => {
             const booking = activeBooking as any;
 
@@ -170,9 +171,9 @@ export function FloatingBookingTimer() {
           showCancel: true,
           confirmOnLeft: true,
           confirmText: 'Sí, liberar cancha',
-          confirmButtonClassName: 'bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2.5 rounded-xl flex-1 shadow-sm transition-colors',
+          confirmButtonClassName: 'bg-red-600 hover:bg-red-700 text-white font-bold text-xs sm:text-sm px-4 py-3 rounded-xl flex-1 shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center',
           cancelText: 'Continuar reserva',
-          cancelButtonClassName: 'btn-primary bg-secondary text-foreground hover:bg-border flex-1 font-bold',
+          cancelButtonClassName: 'bg-secondary hover:bg-secondary/80 text-foreground font-bold text-xs sm:text-sm px-4 py-3 rounded-xl flex-1 border border-border/60 transition-all active:scale-95 cursor-pointer flex items-center justify-center',
           onConfirm: async () => {
             setConfirmCancelOpen(false);
             await cancelActiveBooking();
