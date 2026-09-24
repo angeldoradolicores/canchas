@@ -24,6 +24,12 @@ async function fetchWithTimeout(url: string, options: any = {}, timeoutMs = 1200
   }
 }
 
+function cleanPhoneNumber(raw: any): string {
+  if (!raw || typeof raw !== 'string') return '';
+  const noDomain = raw.split('@')[0].split(':')[0];
+  return noDomain.replace(/\D/g, '');
+}
+
 export async function POST(req: NextRequest) {
   // ── RATE LIMIT: 20 peticiones por minuto por IP ──
   const rateLimit = checkRateLimit(req, {
@@ -113,15 +119,17 @@ export async function POST(req: NextRequest) {
               // Buscar información del teléfono conectado
               let detectedPhone = company?.whatsapp_connected_phone || company?.owner_phone || '';
               try {
-                const instRes = await fetchWithTimeout(`${evoUrl}/instance/fetchInstances`, {
+                const instRes = await fetchWithTimeout(`${evoUrl}/instance/fetchInstances?instanceName=${instanceName}`, {
                   headers: evoHeaders,
-                }, 3000);
+                }, 4000);
                 if (instRes.ok) {
                   const instList = await instRes.json();
-                  const found = Array.isArray(instList) ? instList.find((i: any) => i.name === instanceName) : null;
-                  if (found?.ownerJid) {
-                    detectedPhone = found.ownerJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
-                  }
+                  const found = Array.isArray(instList)
+                    ? (instList.find((i: any) => i.name === instanceName || i.instanceName === instanceName) || instList[0])
+                    : (instList?.instance || instList);
+                  const owner = found?.ownerJid || found?.owner || found?.jid || found?.number;
+                  const parsed = cleanPhoneNumber(owner);
+                  if (parsed) detectedPhone = parsed;
                 }
               } catch (e) { /* ignorar */ }
 
@@ -162,9 +170,26 @@ export async function POST(req: NextRequest) {
           const state = connectData?.instance?.state || connectData?.state;
           if (state === 'open') {
             const rawOwner = connectData?.instance?.owner || connectData?.owner || connectData?.instance?.ownerJid || '';
-            const detectedPhone = rawOwner
-              ? rawOwner.replace('@s.whatsapp.net', '').replace('@c.us', '')
-              : (company?.whatsapp_connected_phone || company?.owner_phone || '');
+            let detectedPhone = cleanPhoneNumber(rawOwner);
+            if (!detectedPhone) {
+              try {
+                const instRes = await fetchWithTimeout(`${evoUrl}/instance/fetchInstances?instanceName=${instanceName}`, {
+                  headers: evoHeaders,
+                }, 4000);
+                if (instRes.ok) {
+                  const instList = await instRes.json();
+                  const found = Array.isArray(instList)
+                    ? (instList.find((i: any) => i.name === instanceName || i.instanceName === instanceName) || instList[0])
+                    : (instList?.instance || instList);
+                  const owner = found?.ownerJid || found?.owner || found?.jid || found?.number;
+                  const parsed = cleanPhoneNumber(owner);
+                  if (parsed) detectedPhone = parsed;
+                }
+              } catch (e) { /* ignorar */ }
+            }
+            if (!detectedPhone) {
+              detectedPhone = company?.whatsapp_connected_phone || company?.owner_phone || '';
+            }
 
             await supabase
               .from('companies')
@@ -288,24 +313,49 @@ export async function POST(req: NextRequest) {
           const state = evoData?.instance?.state || evoData?.state;
 
           if (state === 'open') {
-            const rawOwner = evoData?.instance?.owner || evoData?.owner || evoData?.instance?.jid || evoData?.jid || '';
-            const detectedPhone = rawOwner
-              ? rawOwner.replace('@s.whatsapp.net', '').replace('@c.us', '')
-              : (company?.whatsapp_connected_phone || company?.owner_phone || '');
+            let detectedPhone = company?.whatsapp_connected_phone || '';
 
-            await supabase
-              .from('companies')
-              .update({
-                whatsapp_status: 'connected',
-                whatsapp_qr_code: null,
-                whatsapp_connected_phone: detectedPhone || null,
-              })
-              .eq('id', companyId);
+            try {
+              const instRes = await fetchWithTimeout(`${evoUrl}/instance/fetchInstances?instanceName=${instanceName}`, {
+                headers: evoHeaders,
+              }, 4000);
+              if (instRes.ok) {
+                const instList = await instRes.json();
+                const found = Array.isArray(instList)
+                  ? (instList.find((i: any) => i.name === instanceName || i.instanceName === instanceName) || instList[0])
+                  : (instList?.instance || instList);
+                const owner = found?.ownerJid || found?.owner || found?.jid || found?.number;
+                const parsed = cleanPhoneNumber(owner);
+                if (parsed) detectedPhone = parsed;
+              }
+            } catch (e) { /* fallback */ }
+
+            if (!detectedPhone) {
+              const rawOwner = evoData?.instance?.owner || evoData?.owner || evoData?.instance?.jid || evoData?.jid || '';
+              const parsed = cleanPhoneNumber(rawOwner);
+              if (parsed) detectedPhone = parsed;
+            }
+
+            if (!detectedPhone) {
+              detectedPhone = company?.whatsapp_connected_phone || company?.owner_phone || '';
+            }
+
+            if (detectedPhone && detectedPhone !== company?.whatsapp_connected_phone) {
+              await supabase
+                .from('companies')
+                .update({
+                  whatsapp_status: 'connected',
+                  whatsapp_qr_code: null,
+                  whatsapp_connected_phone: detectedPhone,
+                  whatsapp_updated_at: new Date().toISOString(),
+                })
+                .eq('id', companyId);
+            }
 
             return NextResponse.json({
               success: true,
               status: 'connected',
-              phone: detectedPhone,
+              phone: detectedPhone || company?.whatsapp_connected_phone || company?.owner_phone || '',
             });
           }
         }
@@ -322,14 +372,14 @@ export async function POST(req: NextRequest) {
 
     // 3. CONFIRMAR / VINCULAR MANUALMENTE
     if (action === 'confirm_connect') {
-      const connectedPhone = (typeof phone === 'string' && phone.slice(0, 25)) || company?.owner_phone || '3001234567';
+      const cleanPhone = cleanPhoneNumber(phone) || cleanPhoneNumber(company?.owner_phone) || '';
       await supabase
         .from('companies')
         .update({
           whatsapp_instance_name: instanceName,
           whatsapp_status: 'connected',
           whatsapp_qr_code: null,
-          whatsapp_connected_phone: connectedPhone,
+          whatsapp_connected_phone: cleanPhone || null,
           whatsapp_updated_at: new Date().toISOString(),
         })
         .eq('id', companyId);
@@ -337,7 +387,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         status: 'connected',
-        connectedPhone,
+        connectedPhone: cleanPhone,
         instanceName,
       });
     }

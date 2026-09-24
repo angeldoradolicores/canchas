@@ -16,6 +16,23 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
+function formatDisplayPhone(phone?: string | null): string {
+  if (!phone) return '';
+  const cleaned = phone.trim();
+  const digits = cleaned.replace(/\D/g, '');
+  if (!digits) return '';
+
+  if (digits.startsWith('57') && digits.length >= 12) {
+    const nat = digits.slice(2);
+    return `+57 ${nat.slice(0, 3)} ${nat.slice(3, 6)} ${nat.slice(6)}`;
+  }
+  if (digits.length === 10) {
+    return `+57 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
+  }
+  if (cleaned.startsWith('+')) return cleaned;
+  return `+${digits}`;
+}
+
 export default function WhatsAppConnectionPage() {
   const { user, profile, session } = useAuth();
 
@@ -62,8 +79,11 @@ export default function WhatsAppConnectionPage() {
 
         if (isMounted && targetCompany) {
           setCompany(targetCompany);
-          setConnectedPhone(targetCompany.whatsapp_connected_phone || targetCompany.owner_phone || '');
-          if (targetCompany.owner_phone) setInputPhone(targetCompany.owner_phone);
+          const initialPhone = targetCompany.whatsapp_connected_phone || targetCompany.owner_phone || profile?.phone || '';
+          setConnectedPhone(initialPhone);
+          if (targetCompany.owner_phone || profile?.phone) {
+            setInputPhone(targetCompany.owner_phone || profile?.phone || '');
+          }
 
           // Consultar estado en tiempo real
           const statusRes = await fetch('/api/whatsapp', {
@@ -109,7 +129,11 @@ export default function WhatsAppConnectionPage() {
 
         if (data.success && data.status === 'connected') {
           setStatus('connected');
-          setConnectedPhone(data.phone || inputPhone || '3000000000');
+          if (data.phone) {
+            setConnectedPhone(data.phone);
+          } else if (inputPhone) {
+            setConnectedPhone(inputPhone);
+          }
           setQrCode(null);
           clearInterval(interval);
         }
@@ -184,7 +208,7 @@ export default function WhatsAppConnectionPage() {
     if (!company?.id) return;
     setGenerating(true);
     try {
-      const phoneToUse = inputPhone || company.owner_phone || '3001234567';
+      const phoneToUse = inputPhone || company.whatsapp_connected_phone || company.owner_phone || profile?.phone || '';
       const res = await fetch('/api/whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -282,7 +306,7 @@ export default function WhatsAppConnectionPage() {
           <Smartphone className="text-emerald-600" size={24} /> Conectar mi WhatsApp
         </h1>
         <p className="text-xs text-zinc-500">
-          Vincula el número oficial de tu complejo ({company?.name || profile?.full_name || 'Mi Complejo'}) para que tus clientes reciban confirmaciones automáticamente.
+          Vincula el número oficial de tu complejo <strong>{company?.name || profile?.full_name || 'Mi Complejo'}</strong> para que tus clientes reciban confirmaciones automáticamente.
         </p>
       </div>
 
@@ -327,9 +351,13 @@ export default function WhatsAppConnectionPage() {
                   </div>
                   <div>
                     <strong className="text-base block font-bold text-zinc-900">
-                      +57 {connectedPhone || '300 123 4567'}
+                      {formatDisplayPhone(connectedPhone) || 
+                       formatDisplayPhone(company?.whatsapp_connected_phone) || 
+                       formatDisplayPhone(company?.owner_phone) || 
+                       formatDisplayPhone(profile?.phone) || 
+                       'Número no registrado'}
                     </strong>
-                    <p className="text-xs text-zinc-500">Sesión activa · Vinculado a {company?.name || 'Mi Complejo'}</p>
+                    <p className="text-xs text-zinc-500">Sesión activa · Vinculado a <strong> {company?.name || 'Mi Complejo'}</strong></p>
                   </div>
                 </div>
 
@@ -340,7 +368,7 @@ export default function WhatsAppConnectionPage() {
                   </div>
                 </div>
 
-                <div className="mt-6 pt-4 border-t border-zinc-100">
+                {/* <div className="mt-6 pt-4 border-t border-zinc-100">
                   <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-2">
                     Probar envío de mensaje
                   </label>
@@ -361,7 +389,7 @@ export default function WhatsAppConnectionPage() {
                     </button>
                   </div>
                   {testResult && <p className="text-xs mt-2 font-medium">{testResult}</p>}
-                </div>
+                </div> */}
               </div>
             )}
 
@@ -472,7 +500,7 @@ export default function WhatsAppConnectionPage() {
               <Zap size={16} /> ¿Cómo funciona el envío?
             </h3>
             <p className="text-xs text-zinc-500 leading-relaxed">
-              Cada complejo deportivo en <strong>Canchas Pasto</strong> dispone de una instancia aislada para gestionar sus notificaciones sin interferir con otros negocios.
+              Cada complejo deportivo en <strong>Cancheros</strong> dispone de una instancia aislada para gestionar sus notificaciones sin interferir con otros negocios.
             </p>
           </div>
 

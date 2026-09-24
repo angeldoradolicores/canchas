@@ -506,7 +506,7 @@ function NewPitchForm() {
             price_per_hour: parsedPrice,
             duration_minutes: 60,
             booking_percentage: bookingType === 'percentage' ? bookingPct : 0,
-            custom_pricing: { ...customPricing, booking_type: bookingType, booking_fixed: Number(bookingFixedAmount) || 40000 },
+            custom_pricing: { ...customPricing, booking_type: bookingType, booking_fixed: Number(bookingFixedAmount) || 40000, time_slots: timeSlots },
             amenities: amenityChips.join(' · '),
             contact_phone: contactPhone,
             payment_methods: paymentMethods,
@@ -985,7 +985,7 @@ function NewPitchForm() {
                   </div>
                   <input type="range" min={10} max={100} step={5} value={bookingPct} onChange={e => setBookingPct(Number(e.target.value))} className="w-full accent-primary" />
                   <p className="text-xs text-muted-foreground bg-secondary/50 rounded-lg p-3">
-                    💡 Abono: <strong className="text-primary">${Math.round(Number(price || 0) * bookingPct / 100).toLocaleString()}</strong> por hora.
+                    💡 Abono: <strong className="text-primary">${Math.round(Number(price || 0) * bookingPct / 100).toLocaleString('es-CO')}</strong> por hora.
                   </p>
                 </div>
               ) : (
@@ -999,7 +999,7 @@ function NewPitchForm() {
                       className="w-full pl-9 pr-4 py-3 text-sm border border-border rounded-xl bg-background outline-none focus:border-primary" />
                   </div>
                   <p className="text-xs text-muted-foreground bg-secondary/50 rounded-lg p-3">
-                    💡 Abono: <strong className="text-primary">${Number(bookingFixedAmount || 0).toLocaleString()}</strong> fijos por hora.
+                    💡 Abono: <strong className="text-primary">${Number(bookingFixedAmount || 0).toLocaleString('es-CO')}</strong> fijos por hora.
                   </p>
                 </div>
               )}
@@ -1007,7 +1007,7 @@ function NewPitchForm() {
 
             <div className="space-y-4">
               {/* Encabezado y Selector Filtrado */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full max-w-full min-w-0">
                 <div>
                   <label className="text-xs font-bold text-foreground uppercase tracking-wider">
                     Horarios y Precios Especiales
@@ -1017,26 +1017,26 @@ function NewPitchForm() {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
                   {/* Desplegable Propio / Custom UI */}
-                  <div className="relative min-w-[200px]" ref={dropdownRef}>
+                  <div className="relative flex-1 sm:flex-initial sm:min-w-[200px] min-w-0" ref={dropdownRef}>
                     <button
                       type="button"
                       onClick={() => setIsOpen(!isOpen)}
-                      className="w-full px-3.5 py-2 text-xs font-bold border border-border rounded-xl bg-card hover:bg-secondary/50 text-foreground flex items-center justify-between gap-2 transition-all shadow-xs cursor-pointer focus:border-emerald-600 active:scale-98"
+                      className="w-full px-3.5 py-2 text-xs font-bold border border-border rounded-xl bg-card hover:bg-secondary/50 text-foreground flex items-center justify-between gap-2 transition-all shadow-xs cursor-pointer focus:border-emerald-600 active:scale-98 min-w-0"
                     >
-                      <div className="flex items-center gap-2 truncate">
+                      <div className="flex items-center gap-2 truncate min-w-0">
                         <Clock size={14} className="text-emerald-600 shrink-0" />
-                        <span className={newTimeInput ? 'text-foreground font-black' : 'text-muted-foreground font-medium'}>
+                        <span className={` ${newTimeInput ? 'text-foreground font-black' : 'text-muted-foreground text-xs'}`}>
                           {newTimeInput ? formatHourLabel(newTimeInput) : 'Seleccionar hora'}
                         </span>
                       </div>
-                      <ChevronDown size={15} className={`text-muted-foreground transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                      <ChevronDown size={15} className={`text-muted-foreground transition-transform duration-200 shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
                     </button>
 
                     {/* Menú Flotante con scroll suave y estilos del sistema */}
                     {isOpen && (
-                      <div className="absolute right-0 top-full mt-1.5 w-full bg-card border border-border rounded-xl shadow-lg z-50 max-h-52 overflow-y-auto p-1.5 space-y-1 backdrop-blur-md animate-in fade-in zoom-in-95 duration-150">
+                      <div className="absolute left-0 sm:right-0 sm:left-auto top-full mt-1.5 w-full sm:w-56 bg-card border border-border rounded-xl shadow-lg z-50 max-h-52 overflow-y-auto p-1.5 space-y-1 backdrop-blur-md animate-in fade-in zoom-in-95 duration-150">
                         {availableHours.length === 0 ? (
                           <div className="px-3 py-2 text-center text-[11px] text-muted-foreground font-medium">
                             Todas las horas han sido agregadas.
@@ -1057,8 +1057,8 @@ function NewPitchForm() {
                                   : 'hover:bg-emerald-500/10 hover:text-emerald-600 text-foreground'
                                   }`}
                               >
-                                <span>{formatHourLabel(timeStr)}</span>
-                                <span className={`text-[10px] font-semibold opacity-60 ${isSelected ? 'text-white' : 'text-muted-foreground'}`}>
+                                <span className="truncate">{formatHourLabel(timeStr)}</span>
+                                <span className={`text-[10px] font-semibold opacity-60 shrink-0 ml-2 ${isSelected ? 'text-white' : 'text-muted-foreground'}`}>
                                   {timeStr}
                                 </span>
                               </button>
@@ -1079,10 +1079,10 @@ function NewPitchForm() {
                       }
                     }}
                     disabled={!newTimeInput}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-xs active:scale-95"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-xs active:scale-95"
                   >
-                    <Plus size={16} />
-                    <span>Agregar</span>
+                    <Plus size={16} className="shrink-0" />
+                    <span className="truncate">Agregar</span>
                   </button>
                 </div>
               </div>
@@ -1170,28 +1170,28 @@ function NewPitchForm() {
       {/* ─── SECCIÓN 3: MULTIMEDIA Y SELECCIÓN DE PORTADA ─── */}
       {
         activeSection === 'media' && (
-          <div className="space-y-6 animate-in fade-in">
-            <div className="bg-card border border-border rounded-2xl p-6 space-y-5">
-              <h2 className="font-bold text-base border-b border-border pb-3">Galería Multimedia</h2>
+          <div className="space-y-6 animate-in fade-in w-full max-w-full min-w-0">
+            <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 space-y-5 w-full max-w-full min-w-0 shadow-sm">
+              <h2 className="font-bold text-base border-b border-border pb-3 text-foreground">Galería Multimedia</h2>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 w-full max-w-full">
                 <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple onChange={handleFileUpload} className="hidden" />
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-xl flex items-center gap-2"
+                  className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-xl flex items-center gap-2 cursor-pointer"
                 >
-                  <Upload size={14} /> Subir desde Dispositivo
+                  <Upload size={14} className="shrink-0" /> Subir desde Dispositivo
                 </button>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 w-full max-w-full min-w-0">
                 <input
                   type="url"
                   placeholder="https://... (enlace de imagen o video de YouTube)"
                   value={mediaLinkInput}
                   onChange={e => setMediaLinkInput(e.target.value)}
-                  className="flex-1 px-3 py-2 text-xs border border-border rounded-xl bg-background outline-none"
+                  className="flex-1 px-3 py-2 text-xs border border-border rounded-xl bg-background text-foreground outline-none min-w-0"
                 />
                 <button
                   type="button"
@@ -1201,7 +1201,7 @@ function NewPitchForm() {
                       setMediaLinkInput('');
                     }
                   }}
-                  className="btn-primary px-3 py-2 text-xs font-bold"
+                  className="btn-primary px-3 py-2 text-xs font-bold shrink-0 cursor-pointer"
                 >
                   Agregar Link
                 </button>
@@ -1209,13 +1209,13 @@ function NewPitchForm() {
 
               {uploadingMedia && (
                 <p className="text-xs text-primary font-bold flex items-center gap-2">
-                  <Loader2 size={14} className="animate-spin" /> Procesando archivos...
+                  <Loader2 size={14} className="animate-spin shrink-0" /> Procesando archivos...
                 </p>
               )}
 
-              {/* Grid de imágenes con selector de Foto Principal */}
+              {/* Grid de imágenes con selector de Foto Principal (Mantiene 2 columnas en móvil y 3 en sm) */}
               {mediaItems.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full min-w-0">
                   {mediaItems.map((item, i) => (
                     <div key={i} className={`relative rounded-xl overflow-hidden border aspect-video bg-black group ${item.isMain ? 'ring-2 ring-primary border-primary' : 'border-border'}`}>
                       {item.type === 'video' ? (
@@ -1233,29 +1233,30 @@ function NewPitchForm() {
                         className={`absolute top-2 left-2 p-1 rounded-md text-[10px] font-bold flex items-center gap-1 transition-all ${item.isMain ? 'bg-primary text-white' : 'bg-black/60 text-white/80 hover:bg-black'
                           }`}
                       >
-                        <Star size={10} fill={item.isMain ? 'white' : 'none'} />
-                        {item.isMain ? 'PORTADA' : 'Hacer Portada'}
+                        <Star size={10} fill={item.isMain ? 'white' : 'none'} className="shrink-0" />
+                        <span className="truncate">{item.isMain ? 'PORTADA' : 'Hacer Portada'}</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => setMediaItems(prev => prev.filter((_, idx) => idx !== i))}
-                        className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"                      >
-                        <Trash2 size={12} />
+                        className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
+                      >
+                        <Trash2 size={12} className="shrink-0" />
                       </button>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="border-2 border-dashed border-border rounded-xl p-8 text-center text-muted-foreground">
-                  <ImageIcon size={32} className="mx-auto mb-2 opacity-40" />
+                  <ImageIcon size={32} className="mx-auto mb-2 opacity-40 shrink-0" />
                   <p className="text-xs font-semibold">No has agregado fotos ni videos aún.</p>
                 </div>
               )}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
-              <button onClick={() => setActiveSection('pricing')} className="btn-primary bg-secondary text-foreground hover:bg-border py-3 px-4">← Atrás</button>
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-2 w-full max-w-full">
+              <button onClick={() => setActiveSection('pricing')} className="btn-primary bg-secondary text-foreground hover:bg-border py-3 px-4 cursor-pointer">← Atrás</button>
               <button
                 type="button"
                 onClick={handleSubmit}
@@ -1265,7 +1266,7 @@ function NewPitchForm() {
                 {loading && <Loader2 size={14} className="animate-spin shrink-0" />}
                 <span>{loading ? 'Creando...' : 'Crear Cancha'}</span>
               </button>
-              <button onClick={() => setActiveSection('location')} className="flex-1 btn-primary py-3">Continuar → Ubicación Mapa</button>
+              <button onClick={() => setActiveSection('location')} className="flex-1 btn-primary py-3 cursor-pointer">Continuar → Ubicación Mapa</button>
             </div>
           </div>
         )

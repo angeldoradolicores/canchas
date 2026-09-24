@@ -377,6 +377,24 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'No tienes permisos para agendar en esta cancha' }, { status: 403 });
       }
 
+      // Verify that all selected slots are operating hours
+      const { data: pitchData } = await supabase
+        .from('pitches')
+        .select('custom_pricing')
+        .eq('id', pitch_id)
+        .single();
+
+      const allowedSlots = pitchData?.custom_pricing?.time_slots;
+      if (Array.isArray(allowedSlots) && allowedSlots.length > 0) {
+        const closedSlot = selected_times.find((s: string) => !allowedSlots.includes(s));
+        if (closedSlot) {
+          return NextResponse.json(
+            { error: `La hora ${closedSlot} no es operable para esta cancha.` },
+            { status: 400 }
+          );
+        }
+      }
+
       const inserts = selected_times.map((slot: string) => {
         const hourNum = parseInt(slot.split(':')[0], 10);
         const endHourNum = (hourNum + 1) % 24;

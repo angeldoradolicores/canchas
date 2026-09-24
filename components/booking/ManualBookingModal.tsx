@@ -103,6 +103,7 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
   }, [selectedDate, selectedPitch]);
 
   const toggleTime = (slot: string) => {
+    if (allowedSlots && !allowedSlots.includes(slot)) return;
     setSelectedTimes(prev => prev.includes(slot) ? prev.filter(s => s !== slot) : [...prev, slot]);
   };
 
@@ -177,6 +178,12 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
   const pricePerHour = selectedPitch?.price_per_hour || 80000;
   const totalPrice = selectedTimes.reduce((total, time) => total + (customPricing[time] || pricePerHour), 0);
 
+  const allowedSlots = useMemo(() => {
+    const ts = (selectedPitch as any)?.custom_pricing?.time_slots;
+    if (Array.isArray(ts) && ts.length > 0) return ts as string[];
+    return null;
+  }, [selectedPitch]);
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm sm:items-center sm:justify-center p-0 sm:p-4 animate-in fade-in">
       <div className="bg-background w-full sm:max-w-xl h-[95vh] sm:h-auto sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 sm:slide-in-from-bottom-0 sm:zoom-in-95">
@@ -241,6 +248,7 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
                   const allAvailable = TIME_CATEGORIES
                     .flatMap(cat => cat.slots as unknown as string[])
                     .filter(slot => {
+                      if (allowedSlots && !allowedSlots.includes(slot)) return false;
                       const slotData = takenSlots.get(slot);
                       if (!slotData) return true;
                       if (slotData.status === 'draft' && slotData.expires_at && new Date(slotData.expires_at) < new Date()) return true;
@@ -283,6 +291,9 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
                     const slotData = takenSlots.get(slot);
                     const isTaken = !!slotData;
                     const isDraft = slotData?.status === 'draft';
+                    const isOperating = !allowedSlots || allowedSlots.includes(slot);
+                    const isClosed = !isOperating;
+                    const isDisabled = isTaken || isClosed;
                     const isSel = selectedTimes.includes(slot);
                     const hNum = parseInt(slot.split(':')[0]);
                     const ampm = hNum < 12 ? 'am' : 'pm';
@@ -293,28 +304,42 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
                       <button
                         key={slot}
                         type="button"
-                        disabled={isTaken}
+                        disabled={isDisabled}
                         onClick={() => toggleTime(slot)}
-                        className={`p-2.5 rounded-xl border flex flex-col items-center justify-center transition-all select-none font-bold relative min-h-[52px] ${isTaken
+                        className={`p-2 rounded-xl border flex flex-col items-center justify-center transition-all select-none font-bold relative min-h-[54px] ${isDisabled
                           ? isDraft
-                            ? 'bg-orange-50 text-orange-400 border-orange-200 cursor-not-allowed overflow-hidden'
-                            : 'bg-red-50 text-red-300 border-red-200 cursor-not-allowed overflow-hidden'
+                            ? 'bg-orange-50 text-orange-400 border-orange-200 cursor-not-allowed overflow-hidden dark:bg-orange-950/20 dark:border-orange-900/30'
+                            : isClosed
+                              ? 'bg-red-50/70 text-red-300 border-red-200/60 cursor-not-allowed overflow-hidden dark:bg-red-950/20 dark:border-red-900/30'
+                              : 'bg-red-50 text-red-300 border-red-200 cursor-not-allowed overflow-hidden dark:bg-red-950/20 dark:border-red-900/30'
                           : isSel
                             ? 'bg-primary text-white border-primary shadow-md ring-2 ring-primary/30 scale-102'
                             : 'bg-card hover:bg-primary/10 border-border text-foreground hover:border-primary/40'
                           }`}
                       >
-                        {isTaken ? (
+                        {isDisabled ? (
                           <div className="flex flex-col items-center justify-center">
                             {isDraft ? (
                               <>
-                                <Clock3 size={14} className="mx-auto opacity-70 mb-0.5" />
-                                <span className="text-[7px] leading-tight absolute bottom-1 w-full text-center">
-                                  <TimeLeft expiresAt={slotData.expires_at || ''} />
+                                <Clock3 size={14} className="mx-auto opacity-70 mb-0.5 text-orange-500" />
+                                <span className="text-[7px] leading-tight absolute bottom-1 w-full text-center text-orange-500">
+                                  <TimeLeft expiresAt={slotData?.expires_at || ''} />
+                                </span>
+                              </>
+                            ) : isClosed ? (
+                              <>
+                                <span className="text-[11px] font-bold opacity-50 line-through leading-none">{h12}:00 {ampm}</span>
+                                <span className="text-[8px] font-extrabold uppercase tracking-tight text-red-500 dark:text-red-400 mt-1">
+                                  Cerrado
                                 </span>
                               </>
                             ) : (
-                              <XCircle size={16} className="mx-auto opacity-40" />
+                              <>
+                                <span className="text-[11px] font-bold opacity-50 line-through leading-none">{h12}:00 {ampm}</span>
+                                <span className="text-[8px] font-extrabold uppercase tracking-tight absolute bottom-1 w-full text-center text-orange-500">
+                                  Ocupado
+                                </span>
+                              </>
                             )}
                           </div>
                         ) : (

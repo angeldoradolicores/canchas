@@ -77,20 +77,32 @@ function StatCard({
   return (
     <Tag
       onClick={onClick}
-      className={`group relative overflow-hidden rounded-2xl border border-border bg-card p-4 sm:p-5 flex flex-col justify-between gap-2.5 shadow-xs hover:shadow-md transition-all duration-200 w-full min-w-0 text-left ${onClick ? 'cursor-pointer hover:border-primary/50 active:scale-[0.98]' : ''
+      className={`group relative overflow-hidden rounded-2xl border border-border bg-card p-3 sm:p-5 flex flex-col justify-between gap-2 shadow-xs hover:shadow-md transition-all duration-200 w-full min-w-0 text-left ${onClick ? 'cursor-pointer hover:border-primary/50 active:scale-[0.98]' : ''
         }`}
     >
       <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full blur-2xl opacity-15 pointer-events-none ${accent || 'bg-primary'}`} />
+
       <div className="flex items-center justify-between relative z-10">
-        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center bg-secondary shrink-0">
+        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center bg-secondary shrink-0">
           {icon}
         </div>
-        {onClick && <ChevronRight size={14} className="text-muted-foreground opacity-60 group-hover:opacity-100 transition-opacity" />}
+        {onClick && <ChevronRight size={14} className="text-muted-foreground opacity-60 group-hover:opacity-100 transition-opacity shrink-0" />}
       </div>
+
       <div className="relative z-10 min-w-0 w-full">
-        <div className="text-xl sm:text-2xl font-black text-foreground leading-tight truncate">{value}</div>
-        <div className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground mt-0.5 uppercase tracking-wider truncate">{title}</div>
-        {sub && <div className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate">{sub}</div>}
+        {/* El valor solo hace truncate si es un número gigante o string largo, pero el texto fluye */}
+        <div className="text-lg sm:text-2xl font-black text-foreground leading-tight truncate">{value}</div>
+
+        {/* Quitamos truncate y permitimos que baje de línea (line-clamp-2) para que se lea completo */}
+        <div className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground mt-1 uppercase tracking-wider line-clamp-2 leading-tight">
+          {title}
+        </div>
+
+        {sub && (
+          <div className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 line-clamp-1">
+            {sub}
+          </div>
+        )}
       </div>
     </Tag>
   );
@@ -262,19 +274,33 @@ export function OwnerDashboard() {
       </div>
 
       {/* Grid Stat Cards Fila 1 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
-        <StatCard icon={<CheckCircle2 size={18} className="text-emerald-600" />} title="Reservas confirmadas" value={confirmed.length} sub={`de ${filteredBookings.length} totales`} accent="bg-emerald-500" onClick={() => router.push('/dashboard/bookings')} />
-        <StatCard icon={<DollarSign size={18} className="text-primary" />} title="Ingresos confirmados" value={fmt(totalIncome)} sub={`${confirmed.length} pagos aprobados`} accent="bg-primary" />
-        <StatCard icon={<AlertCircle size={18} className="text-amber-500" />} title="Pendientes de aprobar" value={pending.length} sub="Requieren atención" accent="bg-amber-500" onClick={() => router.push('/dashboard/bookings')} />
-        <StatCard icon={<Grid2X2 size={18} className="text-violet-600" />} title="Canchas activas" value={stats?.pitchesCount || 0} sub="En tu complejo" accent="bg-violet-500" onClick={() => router.push('/dashboard/pitches')} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 w-full max-w-full min-w-0">
+        <div className="min-w-0">
+          <StatCard icon={<CheckCircle2 size={18} className="text-emerald-600 shrink-0" />} title="Reservas confirmadas" value={confirmed.length} sub={`de ${filteredBookings.length} totales`} accent="bg-emerald-500" onClick={() => router.push('/dashboard/bookings')} />
+        </div>
+        <div className="min-w-0">
+          <StatCard icon={<DollarSign size={18} className="text-primary shrink-0" />} title="Ingresos confirmados" value={fmt(totalIncome)} sub={`${confirmed.length} pagos aprobados`} accent="bg-primary" />
+        </div>
+        <div className="min-w-0">
+          <StatCard icon={<AlertCircle size={18} className="text-amber-500 shrink-0" />} title="Pendientes de aprobar" value={pending.length} sub="Requieren atención" accent="bg-amber-500" onClick={() => router.push('/dashboard/bookings')} />
+        </div>
+        <div className="min-w-0">
+          <StatCard icon={<Grid2X2 size={18} className="text-violet-600 shrink-0" />} title="Canchas activas" value={stats?.pitchesCount || 0} sub="En tu complejo" accent="bg-violet-500" onClick={() => router.push('/dashboard/pitches')} />
+        </div>
       </div>
 
       {/* Grid Stat Cards Fila 2 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
-        {/* <StatCard icon={<Wallet size={18} className="text-sky-600" />} title="Total en abonos" value={fmt(totalDeposit)} sub="Depósitos recibidos" accent="bg-sky-500" /> */}
-        <StatCard icon={<TrendingUp size={18} className="text-teal-600" />} title="Promedio por reserva" value={fmt(avgIncome)} sub="Reservas confirmadas" accent="bg-teal-500" />
-        <StatCard icon={<Star size={18} className="text-orange-500" />} title="Tasa de confirmación" value={`${confirmRate}%`} sub="Del total solicitudes" accent="bg-orange-400" />
-        <StatCard icon={<Clock size={18} className="text-rose-500" />} title="Hora más popular" value={topHour ? topHour[0] : '—'} sub={topHour ? `${topHour[1]} reservas` : 'Sin datos'} accent="bg-rose-400" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 w-full max-w-full min-w-0">
+        {/* <StatCard icon={<Wallet size={18} className="text-sky-600 shrink-0" />} title="Total en abonos" value={fmt(totalDeposit)} sub="Depósitos recibidos" accent="bg-sky-500" /> */}
+        <div className="min-w-0">
+          <StatCard icon={<TrendingUp size={18} className="text-teal-600 shrink-0" />} title="Promedio por reserva" value={fmt(avgIncome)} sub="Reservas confirmadas" accent="bg-teal-500" />
+        </div>
+        <div className="min-w-0">
+          <StatCard icon={<Star size={18} className="text-orange-500 shrink-0" />} title="Tasa de confirmación" value={`${confirmRate}%`} sub="Del total solicitudes" accent="bg-orange-400" />
+        </div>
+        <div className="min-w-0">
+          <StatCard icon={<Clock size={18} className="text-rose-500 shrink-0" />} title="Hora más popular" value={topHour ? topHour[0] : '—'} sub={topHour ? `${topHour[1]} reservas` : 'Sin datos'} accent="bg-rose-400" />
+        </div>
       </div>
 
       {/* Grid Principal */}
