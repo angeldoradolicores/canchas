@@ -390,34 +390,45 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
       <button type="button" className="back-link flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6" onClick={onBack}>
         ← Volver a explorar
       </button>
-      <div className="order-2 md:order-1 detail-header flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 p-4 -mx-1 rounded-3xl bg-gradient-to-br from-primary/[0.07] via-emerald-500/[0.05] to-transparent border border-primary/10 md:p-0 md:mx-0 md:mb-4 md:rounded-none md:bg-none md:border-0">
-        <div className="min-w-0 flex-1">
-          <div className="space-y-1">
-            {/* Nombre del Complejo con gran protagonismo */}
-            <h1 className="text-[28px] leading-[1.1] sm:text-3xl md:text-4xl font-black tracking-tight bg-gradient-to-r from-primary to-emerald-600 bg-clip-text text-transparent break-words">
+      <div className="order-2 md:order-1 detail-header mb-5 -mx-1 p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-primary/10 via-card to-card border border-primary/15 shadow-sm md:mx-0 md:mb-4 md:rounded-2xl md:bg-card md:border-border w-full max-w-full min-w-0">
+
+        <div className="flex items-start justify-between gap-3 w-full min-w-0">
+
+          {/* Lado izquierdo: Nombres apilados pero muy compactos verticalmente */}
+          <div className="space-y-1 min-w-0 flex-1">
+            {/* Etiqueta decorativa o subtítulo superior */}
+            <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-bold uppercase tracking-widest text-primary">
+              <span className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
+              <span>Detalles del Complejo</span>
+            </div>
+            {/* Nombre del Complejo */}
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight bg-gradient-to-r from-foreground via-foreground to-foreground/80 bg-clip-text text-transparent break-words leading-tight">
               {complexInfo?.name || currentPitch.name}
             </h1>
 
-            {/* Nombre de la Cancha si difiere del complejo */}
+            {/* Nombre de la Cancha (Directamente abajo, sin divisiones y compacto) */}
             {complexInfo?.name && complexInfo.name !== currentPitch.name && (
-              <h3 className="text-base sm:text-lg md:text-xl font-bold text-foreground/80 uppercase tracking-wide">
+              <p className="text-xs sm:text-sm md:text-base font-bold text-primary/90 tracking-wide truncate">
                 {currentPitch.name}
-              </h3>
+              </p>
             )}
           </div>
-        </div>
 
-        {/* Calificación y reseñas ubicadas a la derecha */}
-        <div className="flex items-center shrink-0 pt-1 sm:pt-0">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card/80 border border-border/60 shadow-xs">
-            <span className="text-amber-500 font-bold text-sm sm:text-base">★</span>
-            <span className="font-black text-sm sm:text-base text-foreground">
-              {pitchAny.rating || '5.0'}
-            </span>
-            <span className="text-xs text-muted-foreground font-medium">
-              ({reviews.length > 0 ? reviews.length : (pitchAny.reviews || 0)} reseñas)
-            </span>
+          {/* Lado derecho: Calificación estilo badge moderno y limpio */}
+          <div className="flex items-center shrink-0 pt-0.5">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 shadow-xs">
+              <span className="text-amber-500 text-sm sm:text-base">★</span>
+              <div className="flex items-baseline gap-1">
+                <span className="font-black text-xs sm:text-sm text-foreground">
+                  {pitchAny.rating || '5.0'}
+                </span>
+                <span className="text-[10px] sm:text-xs text-muted-foreground font-medium">
+                  ({reviews.length > 0 ? reviews.length : (pitchAny.reviews || 0)})
+                </span>
+              </div>
+            </div>
           </div>
+
         </div>
       </div>
 
@@ -510,7 +521,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                         )}
                       </div>
                       <p className={`text-[11px] truncate ${isCurrent ? 'text-emerald-100' : 'text-muted-foreground'}`}>
-                        {sp.type || 'Fútbol 5'} · ${spPrice > 0 ? spPrice.toLocaleString('es-CO') : '80.000'}/h
+                        {sp.type || 'Fútbol 5'}
                       </p>
                     </div>
                   </button>
@@ -592,7 +603,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
 
                 {/* Puntos indicadores + contador */}
                 {mediaUrls.length > 1 && (
-                  <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10">
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10">
                     {mediaUrls.map((_: string, idx: number) => (
                       <span
                         key={idx}
@@ -640,13 +651,13 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                 ))}
               </div>
 
-              <button
+              {/* <button
                 type="button"
                 onClick={() => { setActiveMediaIndex(mobileGalleryIndex); setShowGalleryModal(true); }}
                 className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 bg-white/95 dark:bg-zinc-900/95 text-foreground px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 sm:gap-2 shadow-lg border border-border/50 hover:scale-105 active:scale-95 transition-transform"
               >
                 <Grid size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Mostrar todas las fotos</span><span className="sm:hidden">Ver fotos</span>
-              </button>
+              </button> */}
             </div>
           );
         })()}
@@ -794,20 +805,22 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
           </div>
 
           {tournaments.length > 0 && (
-            <div className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border shadow-sm shadow-black/[0.03] md:shadow-sm mt-6">
+            <div className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border shadow-sm shadow-black/[0.03] md:shadow-sm mt-6 w-full max-w-full min-w-0">
               <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-5 flex items-center gap-2 text-foreground">
-                <Trophy size={20} className="sm:w-[22px] sm:h-[22px] text-emerald-600" /> Campeonatos en esta cancha
+                <Trophy size={20} className="sm:w-[22px] sm:h-[22px] text-emerald-600 shrink-0" /> Campeonatos en esta cancha
               </h2>
-              <div className="grid gap-3 sm:gap-3.5">
+              {/* Cambiado a grid de 2 columnas en pantallas medianas o superior, o se acomodan horizontalmente */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-3.5 w-full min-w-0">
                 {tournaments.map(t => (
-                  <Link href="/tournaments" key={t.id} className="block group">
-                    <div className="flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 bg-emerald-50/30 rounded-2xl sm:rounded-xl border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/60 shadow-sm transition-all duration-200">
+                  <Link href="/tournaments" key={t.id} className="block group w-full min-w-0">
+                    <div className="flex items-center gap-3 p-3.5 sm:p-4 bg-emerald-50/30 rounded-2xl sm:rounded-xl border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/60 shadow-sm transition-all duration-200 w-full min-w-0">
+
                       {/* Contenedor de Imagen o Icono */}
-                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shrink-0 shadow-sm group-hover:scale-105 transition-transform overflow-hidden">
                         {t.media_urls?.[0] ? (
-                          <img src={t.media_urls[0]} alt="" className="w-full h-full object-cover rounded-xl" />
+                          <img src={t.media_urls[0]} alt="" className="w-full h-full object-cover" />
                         ) : (
-                          <Trophy size={22} />
+                          <Trophy size={22} className="shrink-0" />
                         )}
                       </div>
 
@@ -821,11 +834,11 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                         </p>
                       </div>
 
-                      {/* Premio Mayor Destacado */}
+                      {/* Premio Mayor Destacado (Adaptado para verse limpio horizontalmente) */}
                       {(t.prize || (t.prize_value && t.prize_value > 0)) && (
-                        <div className="hidden sm:flex flex-col items-end justify-center bg-emerald-100/50 border border-emerald-200/60 px-3.5 py-2 rounded-xl flex-shrink-0 text-right shadow-sm group-hover:bg-emerald-100 transition-colors">
-                          <p className="text-[10px] font-bold text-emerald-800/80 uppercase tracking-wider">Premio mayor</p>
-                          <p className="text-sm font-black text-emerald-700 tracking-tight mt-0.5">
+                        <div className="flex flex-col items-end justify-center bg-emerald-100/50 border border-emerald-200/60 px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl shrink-0 text-right shadow-xs group-hover:bg-emerald-100 transition-colors">
+                          <p className="text-[9px] sm:text-[10px] font-bold text-emerald-800/80 uppercase tracking-wider">Premio</p>
+                          <p className="text-xs sm:text-sm font-black text-emerald-700 tracking-tight mt-0.5 whitespace-nowrap">
                             {t.prize_value && t.prize_value > 0 ? `$${Number(t.prize_value).toLocaleString('es-CO')}` : t.prize}
                           </p>
                         </div>
@@ -835,33 +848,50 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                 ))}
               </div>
             </div>
-
           )}
 
           {schools.length > 0 && (
-            <div className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border shadow-sm shadow-black/[0.03] md:shadow-sm mt-6">
+            <div className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border shadow-sm shadow-black/[0.03] md:shadow-sm mt-6 w-full max-w-full min-w-0">
               <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-5 flex items-center gap-2 text-foreground">
-                <Users size={20} className="sm:w-[22px] sm:h-[22px] text-primary" /> Escuelas de formación
+                <Users size={20} className="sm:w-[22px] sm:h-[22px] text-primary shrink-0" /> Escuelas de formación
               </h2>
-              <div className="grid grid-cols-1 gap-3 sm:gap-3.5 w-full">
+
+              {/* Distribución en grilla horizontal de 2 columnas */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-3.5 w-full min-w-0">
                 {schools.map(s => (
-                  <Link href="/schools" key={s.id} className="block group w-full">
-                    <div className="flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 bg-secondary/30 rounded-2xl sm:rounded-xl border border-border/60 hover:border-primary/50 hover:bg-secondary/60 shadow-sm transition-all duration-200 w-full">
-                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-card border border-border/80 flex items-center justify-center text-muted-foreground flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform overflow-hidden">
+                  <Link href="/schools" key={s.id} className="block group w-full min-w-0">
+                    {/* Cambiado a items-start para que si la descripción crece, el logo y las categorías no se desalineen */}
+                    <div className="flex items-start gap-3 p-3.5 sm:p-4 bg-secondary/30 rounded-2xl sm:rounded-xl border border-border/60 hover:border-primary/50 hover:bg-secondary/60 shadow-sm transition-all duration-200 w-full min-w-0">
+
+                      {/* Logo de la escuela */}
+                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-card border border-border/80 flex items-center justify-center text-muted-foreground shrink-0 shadow-sm group-hover:scale-105 transition-transform overflow-hidden mt-0.5">
                         {s.logo_url ? (
                           <img src={s.logo_url} alt="" className="w-full h-full object-cover" />
                         ) : (
-                          <Users size={22} />
+                          <Users size={22} className="shrink-0" />
                         )}
                       </div>
+
+                      {/* Información central (Nombre y Descripción con límite de líneas) */}
                       <div className="flex-1 min-w-0">
                         <h4 className="font-extrabold capitalize text-sm sm:text-base text-foreground truncate group-hover:text-primary transition-colors">
                           {s.name}
                         </h4>
-                        <p className="text-[11px] sm:text-xs font-medium text-muted-foreground mt-0.5 truncate">
-                          {s.categories || 'Formación deportiva'}
+
+                        {/* Usamos line-clamp-2 para que soporte texto largo pero corte con puntos suspensivos a las 2 líneas */}
+                        <p className="text-[11px] sm:text-xs font-medium text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
+                          {s.description || s.categories || 'Formación deportiva'}
                         </p>
                       </div>
+
+                      {/* Insignia de Categorías a la derecha */}
+                      <div className="flex flex-col items-end justify-center bg-emerald-100/50 border border-emerald-200/60 px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl shrink-0 text-right shadow-xs group-hover:bg-emerald-100 transition-colors">
+                        <p className="text-[9px] sm:text-[10px] font-bold text-emerald-800/80 uppercase tracking-wider">Categorias</p>
+                        <p className="text-xs sm:text-sm font-black text-emerald-700 tracking-tight mt-0.5 whitespace-nowrap">
+                          {s.categories || 'General'}
+                        </p>
+                      </div>
+
                     </div>
                   </Link>
                 ))}
@@ -875,10 +905,35 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
         <aside className="order-1 md:order-2 w-full md:w-[45%] lg:w-[35%]">
           <div className="bg-card p-4 sm:p-6 rounded-[28px] md:rounded-2xl border-2 border-primary/15 md:border md:border-border shadow-xl md:shadow-2xl shadow-primary/10 md:shadow-black/10 space-y-4 sm:space-y-5 md:sticky md:top-24">
             <p className="eyebrow accent-label text-[11px] sm:text-xs font-bold text-primary uppercase tracking-wider">DISPONIBILIDAD</p>
-            <h2 className="text-base sm:text-lg font-bold">Consultar horarios</h2>
-            <p className="text-xs text-muted-foreground">
-              Selecciona una fecha en el calendario para ver los horarios disponibles en tiempo real.
-            </p>
+            <div className="space-y-2 p-4 rounded-2xl bg-card border border-border shadow-xs w-full max-w-full min-w-0">
+
+              {/* Encabezado y subtítulo de la sección */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 w-full min-w-0">
+                <h2 className="text-sm sm:text-base font-bold text-foreground tracking-tight">Consultar horarios</h2>
+                <span className="text-xs text-muted-foreground font-medium">
+                  Selecciona una fecha en el calendario
+                </span>
+              </div>
+
+              {/* Tarjeta compacta que unifica el Complejo y la Cancha elegantemente */}
+              <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-secondary/50 border border-border/60 w-full min-w-0">
+                <div className="w-2 h-2 rounded-full bg-primary shrink-0 animate-pulse" />
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0 flex-1">
+                  <span className="text-xs sm:text-sm font-black text-foreground truncate max-w-full">
+                    {complexInfo?.name}
+                  </span>
+                  {complexInfo?.name && complexInfo.name !== currentPitch.name && (
+                    <>
+                      <span className="text-muted-foreground font-light text-xs shrink-0"></span>
+                      <span className="text-xs sm:text-sm font-semibold text-primary truncate max-w-full">
+                        {currentPitch.name}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+            </div>
 
             {/* Selector de fecha con Calendario Custom */}
             <div>

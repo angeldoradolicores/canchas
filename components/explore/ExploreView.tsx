@@ -443,7 +443,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
           address: p.address || p.companies?.address || null,
           distance: '1.2 km',
           rating: '5.0',
-          reviews: 120,
+          reviews: 0,
           open: true,
           price: `$${p.price_per_hour?.toLocaleString('es-CO')}`,
           image: (Array.isArray(p.media_urls) && p.media_urls.length > 0)
