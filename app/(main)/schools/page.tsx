@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/client';
+import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
+import { AuthModal } from '@/components/auth/AuthModal';
 
 // ────────── Tipos ──────────
 interface School {
@@ -180,6 +182,13 @@ export default function SchoolsPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
+  const [alertState, setAlertState] = useState<AlertModalState>({
+    isOpen: false,
+    type: 'login_required',
+    title: '',
+    message: ''
+  });
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadSchools = () => {
@@ -211,6 +220,21 @@ export default function SchoolsPage() {
   );
 
   const handleOpenCreate = () => {
+    if (!user) {
+      setAlertState({
+        isOpen: true,
+        type: 'login_required',
+        title: 'Inicia sesión requerido',
+        message: 'Debes iniciar sesión para poder registrar una escuela deportiva.',
+        showCancel: true,
+        confirmText: 'Iniciar Sesión',
+        cancelText: 'Cerrar',
+        onConfirm: () => {
+          setShowAuth(true);
+        },
+      });
+      return;
+    }
     setForm(emptyForm);
     setPitchQuery('');
     setIsEditing(false);
@@ -1063,6 +1087,10 @@ export default function SchoolsPage() {
           </div>
         </div>
       )}
+
+      {/* Alerta personalizada y Modal de Autenticación */}
+      <CustomAlertModal alertState={alertState} onClose={() => setAlertState(s => ({ ...s, isOpen: false }))} />
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
     </div>
   );
 }

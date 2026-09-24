@@ -7,6 +7,8 @@ import {
   GraduationCap, Plus, Pencil, Trash2, Loader2,
   X, Save, MapPin, Phone, Globe, Users
 } from 'lucide-react';
+import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
+import { AuthModal } from '@/components/auth/AuthModal';
 
 interface School {
   id: string;
@@ -44,6 +46,13 @@ export default function OwnerSchoolsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState('');
+  const [showAuth, setShowAuth] = useState(false);
+  const [alertState, setAlertState] = useState<AlertModalState>({
+    isOpen: false,
+    type: 'login_required',
+    title: '',
+    message: ''
+  });
 
   const supabase = createClient();
 
@@ -86,6 +95,21 @@ export default function OwnerSchoolsPage() {
   useEffect(() => { loadData(); }, [loadData]);
 
   function openCreate() {
+    if (!user) {
+      setAlertState({
+        isOpen: true,
+        type: 'login_required',
+        title: 'Inicia sesión requerido',
+        message: 'Debes iniciar sesión para poder registrar una escuela deportiva.',
+        showCancel: true,
+        confirmText: 'Iniciar Sesión',
+        cancelText: 'Cerrar',
+        onConfirm: () => {
+          setShowAuth(true);
+        },
+      });
+      return;
+    }
     setEditingId(null);
     setForm(emptyForm);
     setError('');
@@ -197,7 +221,7 @@ export default function OwnerSchoolsPage() {
         </div>
         <button onClick={openCreate} className="btn-primary flex items-center gap-2 py-2.5 px-5">
           <Plus size={17} />
-          Nueva Escuela
+          Registrar Escuela
         </button>
       </div>
 
@@ -437,6 +461,9 @@ export default function OwnerSchoolsPage() {
           </div>
         </div>
       )}
+      {/* Alerta personalizada y Modal de Autenticación */}
+      <CustomAlertModal alertState={alertState} onClose={() => setAlertState(s => ({ ...s, isOpen: false }))} />
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
     </div>
   );
 }

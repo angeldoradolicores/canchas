@@ -110,7 +110,15 @@ function MobileNavLinks({ onClose }: { onClose: () => void }) {
           <Link
             key={path}
             href={path}
-            onClick={onClose}
+            onClick={() => {
+              onClose();
+              if (path === '/') {
+                window.dispatchEvent(new CustomEvent('reset-explore-view'));
+                if (typeof window !== 'undefined') {
+                  window.scrollTo({ top: 0, behavior: 'instant' });
+                }
+              }
+            }}
             className={`group flex items-center gap-3 px-3 py-2.5 rounded-2xl text-[13.5px] font-semibold transition-all duration-200 ${isActive
               ? 'bg-primary/12 text-primary font-bold shadow-sm'
               : 'text-muted-foreground hover:bg-secondary hover:text-foreground'

@@ -46,8 +46,19 @@ export default function ExplorePage() {
       handleLeaveBooking();
     };
 
+    const handleResetExplore = () => {
+      setBooking(null);
+      setDetail(null);
+      setPreselectedTimes([]);
+      setPreselectedDate('');
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      }
+    };
+
     window.addEventListener('resume-active-booking', handleResume);
     window.addEventListener('cancel-active-booking', handleCancel);
+    window.addEventListener('reset-explore-view', handleResetExplore);
 
     // Auto-resume if coming from another page via FloatingBookingTimer
     if (typeof window !== 'undefined' && localStorage.getItem('resume-booking') === 'true' && activeBooking) {
@@ -58,6 +69,7 @@ export default function ExplorePage() {
     return () => {
       window.removeEventListener('resume-active-booking', handleResume);
       window.removeEventListener('cancel-active-booking', handleCancel);
+      window.removeEventListener('reset-explore-view', handleResetExplore);
     };
   }, [activeBooking]);
 

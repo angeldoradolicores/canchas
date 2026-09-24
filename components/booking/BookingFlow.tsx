@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Upload, CheckCircle2, Loader2, Image as ImageIcon, CalendarDays, Clock3, XCircle, Copy, CheckCheck, X } from 'lucide-react';
+import { ArrowLeft, Check, Upload, CheckCircle2, Loader2, Image as ImageIcon, CalendarDays, Clock3, XCircle, Copy, CheckCheck, X, LandPlot, Lock } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/client';
@@ -101,13 +101,37 @@ interface BookingFlowProps {
   preselectedTimes?: string[];
   preselectedDate?: string;
   initialStep?: number;
+  onSelectPitch?: (pitch: Pitch) => void;
 }
 
-export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], preselectedDate = '', initialStep }: BookingFlowProps) {
+export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], preselectedDate = '', initialStep, onSelectPitch }: BookingFlowProps) {
   const today = useToday();
   const normalizeTime = (t: string) => t ? t.substring(0, 5) : '';
 
+  const [currentPitch, setCurrentPitch] = useState<Pitch>(pitch);
+  const [siblingPitches, setSiblingPitches] = useState<Pitch[]>([]);
+  const [complexInfo, setComplexInfo] = useState<{ id: string; name: string; address?: string; zone?: string } | null>(null);
+
+  useEffect(() => {
+    setCurrentPitch(pitch);
+  }, [pitch]);
+
+  // En móvil al entrar aquí, que salga siempre el inicio de la página (scroll to top)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, []);
+
   const [step, setStep] = useState(initialStep || 1);
+
+  // Al cambiar de paso también asegurar que la vista comience desde arriba
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [step]);
+
   const [selectedDate, setSelectedDate] = useState(preselectedDate || today || '');
   const [selectedTimes, setSelectedTimes] = useState<string[]>(
     preselectedTimes.map(normalizeTime)
@@ -131,8 +155,6 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     message: ''
   });
 
-
-
   const { user, profile } = useAuth();
   const supabase = createClient();
   const {
@@ -148,6 +170,56 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
 
   const [showCancelPrompt, setShowCancelPrompt] = useState(false);
 
+  // Cargar canchas asociadas al complejo deportivo
+  useEffect(() => {
+    const compId = currentPitch.company_id || (currentPitch as any)?.companies?.id || (currentPitch as any)?.company?.id;
+    if (!compId) return;
+
+    const loadSiblings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('pitches')
+          .select('*, companies(id, name, address, zone)')
+          .eq('company_id', compId)
+          .order('created_at', { ascending: true });
+
+        if (!error && data) {
+          setSiblingPitches(data);
+          if (data[0]?.companies) {
+            setComplexInfo(data[0].companies);
+          }
+        }
+      } catch (err) {
+        console.error('Error cargando canchas del complejo en BookingFlow:', err);
+      }
+    };
+
+    loadSiblings();
+  }, [currentPitch.company_id, supabase]);
+
+  // Cambiar cancha dentro del mismo complejo
+  const handleSwitchPitch = (newPitch: Pitch) => {
+    if (newPitch.id === currentPitch.id) return;
+
+    // Al subir el comprobante no se puede cambiar de cancha y sale aviso de reserva en curso
+    if (step === 2 || (activeBooking && secondsLeft > 0)) {
+      setAlertState({
+        isOpen: true,
+        type: 'warning',
+        title: 'Tienes una reserva en curso',
+        message: 'Tienes una reserva en proceso de pago para esta cancha. Para cambiar de cancha o elegir otra, primero debes completar o cancelar la reserva actual.',
+      });
+      return;
+    }
+
+    setCurrentPitch(newPitch);
+    setSelectedTimes([]);
+    setError('');
+    if (onSelectPitch) {
+      onSelectPitch(newPitch);
+    }
+  };
+
   // Control del temporizador flotante automático
   useEffect(() => {
     setIsFloating(false);
@@ -162,23 +234,23 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     if (
       preselectedTimes.length > 0 &&
       activeBooking &&
-      activeBooking.pitch.id === pitch.id &&
+      activeBooking.pitch.id === currentPitch.id &&
       activeBooking.selectedDate === (preselectedDate || today) &&
       Math.max(0, Math.floor((new Date(activeBooking.expiresAt).getTime() - Date.now()) / 1000)) > 0
     ) {
       setStep(2);
     }
-  }, [pitch.id, activeBooking, preselectedTimes, preselectedDate, today]);
+  }, [currentPitch.id, activeBooking, preselectedTimes, preselectedDate, today]);
 
   const isExpiredAlertRef = useRef(false);
   const hadActiveLockRef = useRef(false);
 
   // Registrar si hubo un bloqueo activo para esta cancha
   useEffect(() => {
-    if (activeBooking && activeBooking.pitch.id === pitch.id) {
+    if (activeBooking && activeBooking.pitch.id === currentPitch.id) {
       hadActiveLockRef.current = true;
     }
-  }, [activeBooking, pitch.id]);
+  }, [activeBooking, currentPitch.id]);
 
   // Auto-deseleccionar horas que mientras el usuario las tiene marcadas pasan a ser
   // bloqueadas por otra persona (draft activo, pendiente o confirmada).
@@ -207,7 +279,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   // }, [takenSlots]);
 
   useEffect(() => {
-    if (!selectedDate || !pitch.id) return;
+    if (!selectedDate || !currentPitch.id) return;
     setLoadingSlots(true);
 
     const fetchTaken = async (silent = false) => {
@@ -218,7 +290,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
       const { data } = await supabase
         .from('bookings')
         .select('start_time, status, expires_at')
-        .eq('pitch_id', pitch.id)
+        .eq('pitch_id', currentPitch.id)
         .gte('start_time', dayStart)
         .lte('start_time', dayEnd)
         .neq('status', 'cancelled');
@@ -249,10 +321,10 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     const pollInterval = setInterval(() => fetchTaken(true), 3500);
 
     const channel = supabase
-      .channel(`public:bookings:flow:pitch_id=eq.${pitch.id}`)
+      .channel(`public:bookings:flow:pitch_id=eq.${currentPitch.id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'bookings', filter: `pitch_id=eq.${pitch.id}` },
+        { event: '*', schema: 'public', table: 'bookings', filter: `pitch_id=eq.${currentPitch.id}` },
         () => {
           fetchTaken(true);
         }
@@ -263,14 +335,14 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
       clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
-  }, [selectedDate, pitch.id, supabase]);
+  }, [selectedDate, currentPitch.id, supabase]);
 
   const formattedDate = selectedDate
     ? new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })
     : '';
 
-  const pricePerHour = pitch.price_per_hour;
-  const customPricing = (pitch as any).custom_pricing || {};
+  const pricePerHour = currentPitch.price_per_hour;
+  const customPricing = (currentPitch as any).custom_pricing || {};
 
   const getSlotPrice = (time: string) => {
     return customPricing[time] || pricePerHour;
@@ -287,7 +359,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   if (customPricing.booking_type === 'fixed') {
     abonoPrice = (customPricing.booking_fixed || 0) * totalHours;
   } else {
-    abonoPrice = (totalPrice * Number((pitch as any).booking_percentage || 50)) / 100;
+    abonoPrice = (totalPrice * Number((currentPitch as any).booking_percentage || 50)) / 100;
   }
 
   // Manejo de expiración del temporizador con salida garantizada
@@ -332,7 +404,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   useEffect(() => {
     const handleExpiredEvent = (e: any) => {
       const pitchId = e.detail?.pitchId;
-      if (!pitchId || pitchId === pitch.id) {
+      if (!pitchId || pitchId === currentPitch.id) {
         triggerExpiredAlert();
       }
     };
@@ -341,7 +413,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     return () => {
       window.removeEventListener('active-booking-expired', handleExpiredEvent);
     };
-  }, [pitch.id, triggerExpiredAlert]);
+  }, [currentPitch.id, triggerExpiredAlert]);
 
   // Si estaba en el paso de confirmación y el tiempo llegó a 0
   useEffect(() => {
@@ -365,6 +437,11 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     }
   };
 
+  const complexDisplayName =
+    complexInfo?.name ||
+    currentPitch.companies?.name ||
+    (currentPitch as any)?.company?.name ||
+    'Complejo Deportivo';
 
   const handleLockBooking = async () => {
     if (selectedTimes.length === 0 || !selectedDate) {
@@ -377,16 +454,14 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         <p className="text-sm text-muted-foreground">Estás a punto de iniciar una reserva en:</p>
         <div className="w-full py-3 px-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex flex-col items-center justify-center gap-1">
           {/* Nombre del Complejo (Ahora es el elemento más grande y protagonista) */}
-          {((pitch as any).companies?.name || (pitch as any).company?.name) && (
-            <span className="text-base sm:text-lg font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300 text-center truncate max-w-full">
-              {((pitch as any).companies?.name || (pitch as any).company?.name)}
-            </span>
-          )}
+          <span className="text-base sm:text-lg font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300 text-center truncate max-w-full">
+            {complexDisplayName}
+          </span>
 
-          {/* Nombre de la Cancha (Ahora actúa como un subtítulo secundario más pequeño) */}
+          {/* Nombre de la Cancha */}
           <div className="flex items-center justify-center gap-2 max-w-full">
             <span className="text-xs sm:text-sm font-bold uppercase text-muted-foreground tracking-wider truncate">
-              {pitch.name}
+              {currentPitch.name}
             </span>
           </div>
         </div>
@@ -426,9 +501,9 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
               <p className="text-[11px] text-muted-foreground text-center mt-2">
                 Abono fijo de <strong>${Number(customPricing.booking_fixed || 0).toLocaleString('es-CO')}</strong> por hora para confirmar
               </p>
-            ) : (customPricing?.booking_percentage || (pitch as any).booking_percentage) ? (
+            ) : (customPricing?.booking_percentage || (currentPitch as any).booking_percentage) ? (
               <p className="text-[11px] text-muted-foreground text-center mt-2">
-                Abono del <strong>{customPricing?.booking_percentage || (pitch as any).booking_percentage || 50}%</strong> del valor total para confirmar
+                Abono del <strong>{customPricing?.booking_percentage || (currentPitch as any).booking_percentage || 50}%</strong> del valor total para confirmar
               </p>
             ) : null}
           </div>
@@ -452,7 +527,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         setAlertState(prev => ({ ...prev, isOpen: false }));
         setLoading(true);
         setError('');
-        const success = await startLock(pitch, selectedDate, selectedTimes);
+        const success = await startLock(currentPitch, selectedDate, selectedTimes);
         setLoading(false);
 
         if (success) {
@@ -499,7 +574,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         body: JSON.stringify({
           action: 'create_booking',
           payload: {
-            pitch_id: pitch.id,
+            pitch_id: currentPitch.id,
             user_id: user.id,
             booking_ids: activeBooking?.bookingIds || [],
             customer_name: profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Jugador',
@@ -545,7 +620,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         </h1>
 
         <p className="text-xs sm:text-sm text-muted-foreground mb-6 max-w-sm leading-relaxed">
-          Tu solicitud para <strong className="text-foreground uppercase">{pitch.name}</strong> ha sido enviada. El dueño validará tu abono y te confirmará pronto.
+          Tu solicitud para <strong className="text-foreground uppercase">{currentPitch.name}</strong> ha sido enviada. El dueño validará tu abono y te confirmará pronto.
         </p>
 
         {/* Tarjeta de Confirmación Limpia y Estilizada para Móvil */}
@@ -558,26 +633,26 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
 
           <div className="flex items-center gap-3.5 pr-16">
             <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex-shrink-0 overflow-hidden bg-muted border border-border/50 shadow-xs">
-              {((pitch as any).media_urls?.[0] || (pitch as any).image_url) ? (
+              {((currentPitch as any).media_urls?.[0] || (currentPitch as any).image_url) ? (
                 <img
-                  src={(pitch as any).media_urls?.[0] || (pitch as any).image_url}
-                  alt={pitch.name.toUpperCase()}
+                  src={(currentPitch as any).media_urls?.[0] || (currentPitch as any).image_url}
+                  alt={currentPitch.name.toUpperCase()}
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className={`w-full h-full ${(pitch as any).tone || 'field-emerald'}`} />
+                <div className={`w-full h-full ${(currentPitch as any).tone || 'field-emerald'}`} />
               )}
             </div>
 
             <div className="flex-1 min-w-0">
               {/* Nombre del Complejo con gran protagonismo */}
               <span className="block text-[11px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 truncate">
-                {pitch.companies?.name?.toUpperCase() || 'COMPLEJO DEPORTIVO'}
+                {complexDisplayName.toUpperCase()}
               </span>
 
               {/* Nombre de la Cancha */}
               <h3 className="text-sm sm:text-base font-black text-foreground uppercase truncate mt-0.5">
-                {pitch.name}
+                {currentPitch.name}
               </h3>
 
               <p className="text-xs text-muted-foreground font-medium capitalize mt-0.5">
@@ -615,7 +690,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     );
   }
 
-  const allowedTimeSlots: string[] = Array.from(new Set<string>((pitch as any).custom_pricing?.time_slots || DEFAULT_TIME_SLOTS));
+  const allowedTimeSlots: string[] = Array.from(new Set<string>((currentPitch as any).custom_pricing?.time_slots || DEFAULT_TIME_SLOTS));
   const currentCatSlots = allowedTimeSlots.filter((slot: string) => {
     const h = parseInt(slot.split(':')[0]);
     if (activeCategory === 'manana') return h >= 0 && h < 12;
@@ -625,7 +700,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   });
 
   return (
-    <div className="page-content fade-in max-w-5xl mx-auto px-4 sm:px-8 md:px-12 pb-24">
+    <div className="page-content fade-in max-w-5xl mx-auto pb-28 overflow-x-hidden">
       <CustomAlertModal
         alertState={alertState}
         onClose={() => {
@@ -644,39 +719,129 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
           if (activeBooking && secondsLeft > 0) {
             setShowCancelPrompt(true);
           } else {
-            // Redirige al perfil de la cancha
-            router.push(`/cancha/${pitch.id || (pitch as any).pitch_id}`);
+            router.push(`/cancha/${currentPitch.id || (currentPitch as any).pitch_id}`);
           }
         }}
-        className="back-link flex items-center gap-2 mb-6 cursor-pointer text-sm font-semibold hover:text-primary transition-colors"
+        className="back-link flex items-center gap-2 mb-4 cursor-pointer text-sm font-semibold hover:text-primary transition-colors py-1"
       >
-        <ArrowLeft size={15} /> Volver al perfil de la cancha
+        <ArrowLeft size={15} /> Volver
       </button>
 
       <div className="booking-layout">
         <div className="booking-main">
-          <div className="flex items-center gap-3 mb-6 bg-secondary/40 p-2.5 rounded-2xl border border-border/60 max-w-md">
+          {/* Indicador de pasos */}
+          <div className="flex items-center gap-2 mb-4 bg-secondary/40 p-2 rounded-xl border border-border/60">
             {[1, 2].map(s => (
-              <div key={s} className="flex items-center gap-2">
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black transition-all shadow-xs ${step >= s ? 'bg-primary text-white shadow-primary/20' : 'bg-secondary text-muted-foreground'}`}>{s}</div>
+              <div key={s} className="flex items-center gap-1.5">
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black transition-all shadow-xs ${step >= s ? 'bg-primary text-white shadow-primary/20' : 'bg-secondary text-muted-foreground'}`}>{s}</div>
                 <span className={`text-xs font-bold ${step === s ? 'text-foreground' : 'text-muted-foreground'}`}>
-                  {s === 1 ? 'Fecha y hora' : 'Confirmar pago'}
+                  {s === 1 ? 'Fecha y hora' : 'Pago'}
                 </span>
-                {s < 2 && <div className={`flex-1 h-px w-8 ${step > s ? 'bg-primary' : 'bg-border'}`} />}
+                {s < 2 && <div className={`flex-1 h-px w-6 ${step > s ? 'bg-primary' : 'bg-border'}`} />}
               </div>
             ))}
           </div>
 
-          <div className={`booking-hero ${(pitch as any).tone || 'field-emerald'}`}>
+          {/* Hero con Complejo y Cancha claramente destacados */}
+          <div className={`booking-hero ${(currentPitch as any).tone || 'field-emerald'}`}>
             <div className="pitch-lines" />
-            <span>
-              {pitch.companies?.name?.toUpperCase() || 'COMPLEJO DEPORTIVO'}
-            </span>
-            <span>{pitch.name.toUpperCase()}</span>
+            <div className="relative z-10 flex flex-col items-center justify-center text-center px-4 py-2">
+              <span className="text-xs sm:text-sm font-black tracking-widest text-emerald-100 uppercase mb-1 drop-shadow">
+                {complexDisplayName}
+              </span>
+              <span className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight drop-shadow-md">
+                {currentPitch.name}
+              </span>
+            </div>
           </div>
 
+          {/* Selector de Canchas Asociadas al Complejo */}
+          {siblingPitches.length > 1 && (
+            <div className="mt-4 mb-6 p-4 rounded-2xl bg-secondary/60 border border-border shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-3">
+                <div className="flex items-center gap-2">
+                  <LandPlot size={17} className="text-primary shrink-0" />
+                  <h3 className="text-xs sm:text-sm font-black text-foreground uppercase tracking-wide">
+                    Canchas de este complejo ({siblingPitches.length})
+                  </h3>
+                </div>
+                {step === 2 ? (
+                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20 flex items-center gap-1">
+                    <Lock size={11} /> Reserva en curso · Cancha bloqueada
+                  </span>
+                ) : (
+                  <span className="text-[10px] sm:text-[11px] text-muted-foreground font-medium">
+                    Toca para cambiar de cancha y ver sus horarios
+                  </span>
+                )}
+              </div>
+
+              {/* Contenedor con scroll horizontal */}
+              <div className="flex items-center gap-2.5 overflow-x-auto pb-2 pt-1 scrollbar-none [-webkit-overflow-scrolling:touch] snap-x snap-mandatory">
+                {siblingPitches.map((sp, idx: number) => {
+                  const isCurrent = sp.id === currentPitch.id;
+                  const spPrice = Number((sp as any).price_per_hour || (sp as any).price || 0);
+                  const spImg = (sp as any).media_urls?.[0] || (sp as any).image_url;
+
+                  return (
+                    <button
+                      key={sp.id || idx}
+                      type="button"
+                      onClick={() => handleSwitchPitch(sp)}
+                      className={`flex items-center gap-3 p-3 rounded-2xl sm:rounded-xl border text-left transition-all relative cursor-pointer shrink-0 snap-start w-[220px] sm:w-[250px] ${
+                        isCurrent
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/25 ring-2 ring-emerald-600/30'
+                          : step === 2
+                          ? 'bg-card/60 text-muted-foreground border-border/60 opacity-60'
+                          : 'bg-card text-foreground border-border hover:border-emerald-500/50 hover:bg-secondary/60'
+                      }`}
+                    >
+                      {/* Imagen miniatura de la cancha */}
+                      <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-lg overflow-hidden shrink-0 bg-secondary/50 border border-white/15 relative">
+                        {spImg ? (
+                          <img src={spImg} alt={sp.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className={`w-full h-full ${(sp as any).tone || 'field-emerald'} flex items-center justify-center text-xs opacity-60`}>
+                            ⚽
+                          </div>
+                        )}
+                        {isCurrent && (
+                          <div className="absolute inset-0 bg-emerald-950/50 flex items-center justify-center">
+                            <CheckCircle2 size={16} className="text-white drop-shadow" />
+                          </div>
+                        )}
+                        {step === 2 && !isCurrent && (
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                            <Lock size={14} className="text-white/80" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Información de la cancha */}
+                      <div className="min-w-0 flex-1 flex flex-col justify-center">
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                          <p className={`text-xs font-black uppercase truncate ${isCurrent ? 'text-white' : 'text-foreground'}`}>
+                            {sp.name}
+                          </p>
+                          {isCurrent && (
+                            <span className="text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded bg-white text-emerald-700 tracking-wider shrink-0 shadow-2xs">
+                              Viendo
+                            </span>
+                          )}
+                        </div>
+                        <p className={`text-[11px] truncate ${isCurrent ? 'text-emerald-100' : 'text-muted-foreground'}`}>
+                          {sp.type || 'Fútbol 5'} · ${spPrice.toLocaleString('es-CO')}/h
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Banner: ya hay una reserva activa de OTRA cancha */}
-          {activeBooking && activeBooking.pitch.id !== pitch.id && secondsLeft > 0 && (
+          {activeBooking && activeBooking.pitch.id !== currentPitch.id && secondsLeft > 0 && (
             <div className="mt-4 p-3.5 rounded-xl border border-amber-400/40 bg-amber-500/10 flex items-start gap-3">
               <span className="text-amber-500 text-lg flex-shrink-0">⚠️</span>
               <div className="flex-1 min-w-0">
@@ -714,14 +879,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
           )}
 
           {step === 1 && (
-            <div className="slide-up mt-6 space-y-5">
-              <div>
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-3">
-                  <CalendarDays size={12} /> Selecciona la fecha del partido
-                </label>
-
-
-              </div>
+            <div className="slide-up mt-4 space-y-4">
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between mb-3">
                   <span className="flex items-center gap-1"><CalendarDays size={12} /> Fecha</span>
@@ -928,12 +1086,12 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
               </p>
 
               {(() => {
-                const paymentMethods: Array<{ type: string; label: string; number: string; name: string }> = (pitch as any).payment_methods || [];
+                const paymentMethods: Array<{ type: string; label: string; number: string; name: string }> = (currentPitch as any).payment_methods || [];
                 if (paymentMethods.length === 0) {
                   return (
                     <div className="bg-secondary p-4 rounded-xl mb-5 border border-border">
                       <p className="text-xs text-muted-foreground mb-1">Cuenta autorizada</p>
-                      <strong className="text-sm block">{pitch.name.toUpperCase()}</strong>
+                      <strong className="text-sm block">{currentPitch.name.toUpperCase()}</strong>
                       <p className="text-xs text-muted-foreground mt-1">Consulta con el establecimiento el método de pago.</p>
                     </div>
                   );
@@ -984,29 +1142,30 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
           )}
         </div>
 
-        <aside className="booking-aside bg-white dark:bg-zinc-900 p-5 rounded-2xl shadow-sm border border-emerald-100 dark:border-zinc-800">
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-white pb-3 border-b border-zinc-100 dark:border-zinc-800">
+        <aside className="booking-aside">
+          {/* Título compacto en móvil */}
+          <h2 className="text-sm sm:text-base font-bold pb-3 border-b border-border">
             Resumen de Reserva
           </h2>
 
-          <div className="space-y-3.5 mt-4 text-sm">
+          <div className="space-y-0 mt-3 text-sm">
             <div className="summary-line flex justify-between items-center">
-              <span className="text-zinc-500 font-medium">Complejo</span>
-              <strong className="uppercase font-semibold text-zinc-800 dark:text-zinc-200">{pitch.companies?.name}</strong>
+              <span className="text-muted-foreground font-medium">Complejo</span>
+              <strong className="uppercase font-black text-foreground text-right max-w-[55%] truncate text-xs">{complexDisplayName}</strong>
             </div>
 
             <div className="summary-line flex justify-between items-center">
-              <span className="text-zinc-500 font-medium">Cancha</span>
-              <strong className="uppercase font-semibold text-zinc-800 dark:text-zinc-200">{pitch.name}</strong>
+              <span className="text-muted-foreground font-medium">Cancha</span>
+              <strong className="uppercase font-black text-emerald-600 dark:text-emerald-400 text-right text-xs">{currentPitch.name}</strong>
             </div>
 
             <div className="summary-line flex justify-between items-center">
-              <span className="text-zinc-500 font-medium">Fecha</span>
-              <strong className="font-semibold text-zinc-800 dark:text-zinc-200">{formattedDate || '-'}</strong>
+              <span className="text-muted-foreground font-medium">Fecha</span>
+              <strong className="font-semibold text-foreground text-right text-xs capitalize">{formattedDate || '-'}</strong>
             </div>
 
-            <div className="summary-line flex flex-col items-start gap-1.5 pt-1">
-              <span className="text-zinc-500 font-medium">Desglose de Horas</span>
+            <div className="summary-line flex flex-col items-start gap-1 pt-1">
+              <span className="text-muted-foreground font-medium">Horas ({totalHours}h)</span>
               {selectedTimes.length === 0 ? (
                 <strong className="text-zinc-400 font-normal">-</strong>
               ) : (
@@ -1022,35 +1181,29 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
             </div>
 
             <div className="summary-line flex justify-between items-center pt-1">
-              <span className="text-zinc-500 font-medium">Duración</span>
-              <strong className="font-semibold text-zinc-800 dark:text-zinc-200">
-                {totalHours > 0 ? `${totalHours} hora${totalHours > 1 ? 's' : ''}` : '-'}
+              <span className="text-muted-foreground font-medium">Duración</span>
+              <strong className="font-semibold text-foreground">
+                {totalHours > 0 ? `${totalHours}h` : '-'}
               </strong>
             </div>
 
-            <div className="summary-line flex justify-between items-center pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-800">
-              <span className="text-zinc-600 font-medium">Precio total</span>
-              <strong className="text-base font-bold text-zinc-900 dark:text-white">
+            <div className="summary-line flex justify-between items-center pt-2 border-t border-dashed border-border">
+              <span className="text-muted-foreground font-medium">Total</span>
+              <strong className="text-sm font-bold text-foreground">
                 ${totalPrice > 0 ? totalPrice.toLocaleString('es-CO') : '-'}
               </strong>
             </div>
 
-            {/* Sección de Abono Requerido estilizada y minimalista */}
-            <div className="mt-4 p-3.5 bg-emerald-500/10 border border-emerald-600/20 rounded-xl space-y-1">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-semibold text-emerald-950 dark:text-emerald-200">
-                  Abono requerido
-                </span>
-                <strong className="text-lg font-extrabold text-emerald-700 dark:text-emerald-400">
-                  ${totalPrice > 0 ? abonoPrice.toLocaleString('es-CO') : '-'}
-                </strong>
-              </div>
-
+            <div className="mt-3 p-3 bg-emerald-500/10 border border-emerald-600/20 rounded-xl flex justify-between items-center">
+              <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">Abono requerido</span>
+              <strong className="text-base font-extrabold text-emerald-700 dark:text-emerald-400">
+                ${totalPrice > 0 ? abonoPrice.toLocaleString('es-CO') : '-'}
+              </strong>
             </div>
           </div>
 
-          <p className="text-xs text-zinc-500 mt-3 text-center">
-            El valor restante se paga directamente en la cancha
+          <p className="text-[10px] text-muted-foreground mt-2 text-center leading-relaxed">
+            El valor restante se paga en la cancha
           </p>
         </aside>
       </div>

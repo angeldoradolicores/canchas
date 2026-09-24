@@ -75,10 +75,10 @@ export function CancelBookingModal({
           <div className="flex items-center justify-between gap-3">
             {/* Contenedor vertical: compañía arriba y nombre de la cancha abajo */}
             <div className="flex flex-col min-w-0">
-              <span className="font-bold text-xs text-muted-foreground truncate capitalize">
+              <span className="font-black text-sm text-foreground truncate capitalize">
                 {activeBooking.pitch.companies?.name || 'COMPLEJO DEPORTIVO'}
               </span>
-              <span className="font-black text-sm text-foreground truncate capitalize">
+              <span className="font-bold text-xs text-muted-foreground truncate capitalize">
                 {activeBooking.pitch.name}
               </span>
             </div>
@@ -154,32 +154,32 @@ export function CancelBookingModal({
         </div>
 
         {/* Botones de acción estilizados con la identidad del proyecto */}
-        <div className="flex flex-col gap-2.5">
-          {/* Opción 1: Seguir navegando con cronómetro flotante */}
+        <div className="flex flex-col gap-3">
+          {/* Opción 1: Seguir navegando con cronómetro flotante (Acción principal destacada) */}
           <button
             type="button"
             onClick={handleMinimize}
-            className="w-full py-3 px-4 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.99]"
+            className="w-full py-3.5 px-4 rounded-xl bg-primary hover:bg-primary/90 text-white font-extrabold text-sm flex items-center justify-center gap-2.5 transition-all shadow-md hover:shadow-lg active:scale-[0.98] cursor-pointer"
           >
-            <Compass size={17} />
-            <span>Seguir navegando (Cronómetro flotante)</span>
+            <Compass size={18} />
+            <span>Seguir navegando con cronómetro</span>
           </button>
 
-          {/* Opción 2: Cancelar reserva y liberar cancha */}
+          {/* Opción 2: Cancelar reserva y liberar cancha (Acción de alerta o secundaria) */}
           <button
             type="button"
             onClick={handleCancelAndRelease}
-            className="w-full py-3 px-4 rounded-xl bg-destructive/10 hover:bg-destructive/20 text-destructive font-bold text-sm border border-destructive/20 flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
+            className="w-full py-3 px-4 rounded-xl bg-destructive/10 hover:bg-destructive/20 text-destructive font-bold text-xs sm:text-sm border border-destructive/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
           >
             <Trash2 size={16} />
             <span>Cancelar reserva y liberar cancha</span>
           </button>
 
-          {/* Opción 3: Quedarse en la reserva */}
+          {/* Opción 3: Quedarse en la reserva (Enlace de retorno sutil) */}
           <button
             type="button"
             onClick={onStayInBooking}
-            className="w-full py-2.5 px-4 rounded-xl text-muted-foreground hover:text-foreground font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
+            className="w-full py-2.5 px-4 rounded-xl text-muted-foreground hover:text-foreground font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors hover:bg-secondary/50 cursor-pointer"
           >
             <ArrowLeft size={14} />
             <span>Volver a la pantalla de pago</span>

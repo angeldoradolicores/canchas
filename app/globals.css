@@ -1500,6 +1500,12 @@ button {
   margin-bottom: 27px;
 }
 
+/* Booking flow top-level wrapper (no page-content padding) */
+.booking-flow-wrap {
+  box-sizing: border-box;
+  width: 100%;
+}
+
 .booking-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 330px;
@@ -1538,10 +1544,11 @@ button {
 .booking-aside {
   border: 1px solid var(--border);
   background: var(--card);
-  border-radius: 12px;
-  padding: 23px;
+  border-radius: 16px;
+  padding: 20px;
   align-self: start;
   margin-top: 0;
+  box-shadow: 0 1px 3px oklch(0 0 0 / .06);
 }
 
 .booking-aside h2,
@@ -2146,11 +2153,15 @@ td {
   }
 
   .booking-aside {
-    order: -1;
+    order: 2;
+  }
+
+  .booking-main {
+    order: 1;
   }
 
   .booking-layout {
-    gap: 25px;
+    gap: 20px;
   }
 }
 
@@ -3080,45 +3091,64 @@ td {
     gap: 8px;
   }
 
-  /* ── BookingFlow: layout de pasos en móvil ── */
-  .booking-layout {
-    grid-template-columns: 1fr;
-    gap: 16px;
+
+  /* ── BookingFlow en móvil ── */
+
+  /* Contenedor principal sin overflow */
+  .page-content:has(.booking-layout) {
+    overflow-x: hidden;
   }
 
-  .booking-main {
-    order: 1;
+  /* Hero más compacto */
+  .booking-hero {
+    height: 90px;
+    border-radius: 1rem;
+    font-size: 0.85rem;
+    margin-top: 10px;
   }
 
+  /* Texto del héroe no debe desbordarse */
+  .booking-hero .relative {
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  /* Aside debajo del formulario, compacto */
   .booking-aside {
     order: 2;
-  }
-
-  .booking-hero {
-    height: 100px;
     border-radius: 1rem;
-    font-size: 1rem;
+    padding: 14px 16px;
   }
 
-  /* Time slots en móvil: grid compacto */
-  .time-slots-grid {
+  .booking-aside h2 {
+    font-size: 13px;
+    padding-bottom: 10px;
+  }
+
+  /* Resumen compacto en móvil */
+  .booking-aside .summary-line {
+    padding: 8px 0;
+    font-size: 11px;
+  }
+
+  /* Time slots: siempre 3 columnas en móvil */
+  .booking-layout .grid {
     grid-template-columns: repeat(3, 1fr) !important;
     gap: 6px;
   }
 
-  /* Paso 2 — formulario de pago */
-  .booking-step-2 .space-y-5>* {
-    margin-bottom: 14px;
-  }
-
-  /* Botón de confirmar en móvil: ancho completo */
+  /* Botón principal ancho completo */
   .booking-main .btn-primary {
     width: 100%;
     justify-content: center;
-    padding-top: 14px;
-    padding-bottom: 14px;
-    font-size: 1rem;
+    font-size: 0.9rem;
   }
+
+  /* Cards de canchas del complejo: ancho fijo manejable */
+  .booking-main [class*="snap-start"] {
+    width: 180px !important;
+  }
+
 
   /* ── Reserva Rápida en ExploreView ── */
   .explore-layout {

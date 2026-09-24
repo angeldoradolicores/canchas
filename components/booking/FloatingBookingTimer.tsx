@@ -173,8 +173,7 @@ export function FloatingBookingTimer() {
           confirmText: 'Sí, liberar cancha',
           confirmButtonClassName: 'bg-red-600 hover:bg-red-700 text-white font-bold text-xs sm:text-sm px-4 py-3 rounded-xl flex-1 shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center',
           cancelText: 'Continuar reserva',
-          cancelButtonClassName: 'bg-secondary hover:bg-secondary/80 text-foreground font-bold text-xs sm:text-sm px-4 py-3 rounded-xl flex-1 border border-border/60 transition-all active:scale-95 cursor-pointer flex items-center justify-center',
-          onConfirm: async () => {
+          cancelButtonClassName: 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm px-4 py-3 rounded-xl flex-1 border border-emerald-500/40 transition-all active:scale-95 cursor-pointer flex items-center justify-center', onConfirm: async () => {
             setConfirmCancelOpen(false);
             await cancelActiveBooking();
             if (typeof window !== 'undefined') {

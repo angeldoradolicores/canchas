@@ -533,13 +533,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
 
   const groupedSearchResults = useMemo(() => {
     if (!searchResults) return null;
-    const grouped = groupPitchesByComplex(searchResults);
-    // Orden aleatorio para que los resultados de disponibilidad sean equitativos
-    for (let i = grouped.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [grouped[i], grouped[j]] = [grouped[j], grouped[i]];
-    }
-    return grouped;
+    return groupPitchesByComplex(searchResults);
   }, [searchResults]);
 
   // ── Buscar disponibilidad (multi-hora) ────────────────────────────────────
@@ -555,7 +549,6 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
 
     if (!silent) {
       setSearching(true);
-      setSearchResults(null);
     }
 
     // Traer todas las reservas del día seleccionado (no canceladas)
@@ -615,9 +608,6 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
 
     // Canchas disponibles: NO tienen reservas confirmadas ni borradores activos en las horas seleccionadas
     let available = filteredByFormat.filter(p => !confirmedPitchIds.has(p.id) && !draftPitchMap.has(p.id));
-    if (!silent) {
-      available = available.sort(() => Math.random() - 0.5);
-    }
 
     // Canchas que están siendo reservadas con cronómetro activo
     let inProgress = filteredByFormat
@@ -629,35 +619,19 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
       }));
 
     if (!silent) {
-      inProgress = inProgress.sort(() => Math.random() - 0.5);
-    }
-
-    setSearchResults(available);
-    setInProgressResults(inProgress);
-
-    // Auto-remove selected hours that are now taken (slot being reserved)
-    // if (!silent) {
-    //   const takenSlots = new Set<string>();
-    //   (bookings || []).forEach((b: any) => {
-    //     let bHour: string;
-    //     try {
-    //       const d = new Date(b.start_time);
-    //       const localH = (d.getUTCHours() - 5 + 24) % 24;
-    //       bHour = `${String(localH).padStart(2, '0')}:00`;
-    //     } catch {
-    //       bHour = b.start_time?.substring(11, 16) || '';
-    //     }
-    //     if (b.status === 'confirmed' || b.status === 'pending') {
-    //       takenSlots.add(bHour);
-    //     } else if (b.status === 'draft' && b.expires_at && new Date(b.expires_at) > now) {
-    //       takenSlots.add(bHour);
-    //     }
-    //   });
-    //   setSelectedHours(prev => prev.filter(h => !takenSlots.has(h)));
-    // }
-
-    if (!silent) {
+      // Resultados iniciales aleatorios (shuffled una sola vez por búsqueda)
+      for (let i = available.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [available[i], available[j]] = [available[j], available[i]];
+      }
+      for (let i = inProgress.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [inProgress[i], inProgress[j]] = [inProgress[j], inProgress[i]];
+      }
+      setSearchResults(available);
+      setInProgressResults(inProgress);
       setSearching(false);
+
       if (available.length === 0 && inProgress.length === 0) {
         showAlert(
           'info',
@@ -669,6 +643,18 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
       setTimeout(() => {
         document.getElementById('search-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 100);
+    } else {
+      // En sincronización en segundo plano silenciosa (realtime), mantener el orden previo para evitar que las tarjetas salten
+      setSearchResults(prev => {
+        if (!prev) return available;
+        const prevOrder = new Map(prev.map((p, idx) => [p.id, idx]));
+        return [...available].sort((a, b) => {
+          const ordA = prevOrder.has(a.id) ? prevOrder.get(a.id)! : 9999;
+          const ordB = prevOrder.has(b.id) ? prevOrder.get(b.id)! : 9999;
+          return ordA - ordB;
+        });
+      });
+      setInProgressResults(inProgress);
     }
   }, [selectedDate, selectedHours, pitches, selectedFormats, supabase]);
 
@@ -676,12 +662,12 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
     handleSearchRef.current = handleSearch;
   }, [handleSearch]);
 
-  // Sincronización en TIEMPO REAL sin recargar la página
+  // Sincronización en TIEMPO REAL sin recargar la página ni bucle infinito
   const hasResults = searchResults !== null;
   useEffect(() => {
     if (!hasResults || !selectedDate || selectedHours.length === 0) return;
 
-    // Canal en tiempo real para escuchar cambios de reservas
+    // Canal en tiempo real para escuchar cambios de reservas únicamente cuando ocurren
     const channel = supabase
       .channel(`realtime:explore:bookings:${selectedDate}`)
       .on(
@@ -693,14 +679,8 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
       )
       .subscribe();
 
-    // Verificación continua cada 5 segundos para reflejar expiración de borradores
-    const interval = setInterval(() => {
-      handleSearchRef.current(true);
-    }, 2000);
-
     return () => {
       supabase.removeChannel(channel);
-      clearInterval(interval);
     };
     // searchResults is intentionally excluded from deps to avoid remounting on every update
     // eslint-disable-next-line react-hooks/exhaustive-deps
