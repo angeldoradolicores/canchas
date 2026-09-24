@@ -172,21 +172,49 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
 
   // Cargar canchas asociadas al complejo deportivo
   useEffect(() => {
-    const compId = currentPitch.company_id || (currentPitch as any)?.companies?.id || (currentPitch as any)?.company?.id;
-    if (!compId) return;
+    const compId =
+      currentPitch.company_id ||
+      (currentPitch as any)?.companies?.id ||
+      (currentPitch as any)?.company?.id;
 
     const loadSiblings = async () => {
       try {
-        const { data, error } = await supabase
+        // Si tenemos company_id, buscar directamente
+        if (compId) {
+          const { data, error } = await supabase
+            .from('pitches')
+            .select('*, companies(id, name, address, zone)')
+            .eq('company_id', compId)
+            .order('created_at', { ascending: true });
+
+          if (!error && data && data.length > 0) {
+            setSiblingPitches(data);
+            if (data[0]?.companies) setComplexInfo(data[0].companies);
+            return;
+          }
+        }
+
+        // Fallback: buscar por el id del pitch actual para obtener su company_id
+        const { data: selfData } = await supabase
           .from('pitches')
           .select('*, companies(id, name, address, zone)')
-          .eq('company_id', compId)
-          .order('created_at', { ascending: true });
+          .eq('id', currentPitch.id)
+          .single();
 
-        if (!error && data) {
-          setSiblingPitches(data);
-          if (data[0]?.companies) {
-            setComplexInfo(data[0].companies);
+        if (selfData?.company_id) {
+          const { data: siblings } = await supabase
+            .from('pitches')
+            .select('*, companies(id, name, address, zone)')
+            .eq('company_id', selfData.company_id)
+            .order('created_at', { ascending: true });
+
+          if (siblings && siblings.length > 0) {
+            setSiblingPitches(siblings);
+            if (siblings[0]?.companies) setComplexInfo(siblings[0].companies);
+          } else {
+            // Al menos mostrar la cancha actual
+            setSiblingPitches([{ ...currentPitch, companies: selfData.companies } as any]);
+            if (selfData.companies) setComplexInfo(selfData.companies);
           }
         }
       } catch (err) {
@@ -195,7 +223,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     };
 
     loadSiblings();
-  }, [currentPitch.company_id, supabase]);
+  }, [currentPitch.id, currentPitch.company_id, supabase]);
 
   // Cambiar cancha dentro del mismo complejo
   const handleSwitchPitch = (newPitch: Pitch) => {
@@ -700,7 +728,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   });
 
   return (
-    <div className="page-content fade-in max-w-5xl mx-auto pb-28 overflow-x-hidden">
+    <div className="page-content fade-in max-w-5xl mx-auto pb-28 px-3 sm:px-6 w-full max-w-full overflow-x-hidden min-w-0">
       <CustomAlertModal
         alertState={alertState}
         onClose={() => {
@@ -745,19 +773,19 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
           {/* Hero con Complejo y Cancha claramente destacados */}
           <div className={`booking-hero ${(currentPitch as any).tone || 'field-emerald'}`}>
             <div className="pitch-lines" />
-            <div className="relative z-10 flex flex-col items-center justify-center text-center px-4 py-2">
-              <span className="text-xs sm:text-sm font-black tracking-widest text-emerald-100 uppercase mb-1 drop-shadow">
+            <div className="relative z-10 flex flex-col items-center justify-center text-center px-3 py-1.5 w-full max-w-full min-w-0 overflow-hidden">
+              <span className="text-[11px] sm:text-xs font-black tracking-widest text-emerald-100 uppercase mb-0.5 drop-shadow truncate max-w-full block">
                 {complexDisplayName}
               </span>
-              <span className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight drop-shadow-md">
+              <span className="text-sm sm:text-2xl font-black text-white uppercase tracking-tight drop-shadow-md truncate max-w-full block">
                 {currentPitch.name}
               </span>
             </div>
           </div>
 
           {/* Selector de Canchas Asociadas al Complejo */}
-          {siblingPitches.length > 1 && (
-            <div className="mt-4 mb-6 p-4 rounded-2xl bg-secondary/60 border border-border shadow-xs">
+          {siblingPitches.length >= 1 && (
+            <div className="mt-4 mb-4 p-3.5 rounded-2xl bg-secondary/60 border border-border shadow-xs overflow-hidden">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-3">
                 <div className="flex items-center gap-2">
                   <LandPlot size={17} className="text-primary shrink-0" />
@@ -777,7 +805,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
               </div>
 
               {/* Contenedor con scroll horizontal */}
-              <div className="flex items-center gap-2.5 overflow-x-auto pb-2 pt-1 scrollbar-none [-webkit-overflow-scrolling:touch] snap-x snap-mandatory">
+              <div className="flex items-center gap-2.5 overflow-x-auto pb-2 pt-1 scrollbar-none [-webkit-overflow-scrolling:touch] snap-x snap-mandatory w-full max-w-full min-w-0">
                 {siblingPitches.map((sp, idx: number) => {
                   const isCurrent = sp.id === currentPitch.id;
                   const spPrice = Number((sp as any).price_per_hour || (sp as any).price || 0);
@@ -788,7 +816,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                       key={sp.id || idx}
                       type="button"
                       onClick={() => handleSwitchPitch(sp)}
-                      className={`flex items-center gap-3 p-3 rounded-2xl sm:rounded-xl border text-left transition-all relative cursor-pointer shrink-0 snap-start w-[220px] sm:w-[250px] ${
+                      className={`flex items-center gap-2.5 p-2.5 sm:p-3 rounded-2xl sm:rounded-xl border text-left transition-all relative cursor-pointer shrink-0 snap-start w-[190px] sm:w-[240px] ${
                         isCurrent
                           ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/25 ring-2 ring-emerald-600/30'
                           : step === 2
@@ -947,7 +975,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                   </div>
                 )}
 
-                <div className="flex bg-secondary/50 p-1 rounded-xl border border-border gap-1 mb-3">
+                <div className="grid grid-cols-3 bg-secondary/50 p-1 rounded-xl border border-border gap-1 mb-3 w-full max-w-full">
                   {TIME_CATEGORIES.map(cat => {
                     const isActive = activeCategory === cat.key;
                     return (
@@ -955,22 +983,21 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                         key={cat.key}
                         type="button"
                         onClick={() => setActiveCategory(cat.key)}
-                        className={`flex-1 py-2 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 ${isActive ? 'bg-card text-primary shadow-sm border border-border/60' : 'text-muted-foreground hover:text-foreground'}`}
+                        className={`py-2 px-1 rounded-lg text-xs font-bold transition-all flex items-center justify-center text-center truncate ${isActive ? 'bg-card text-primary shadow-sm border border-border/60' : 'text-muted-foreground hover:text-foreground'}`}
                       >
-                        <span>{cat.icon}</span>
-                        <span>{cat.label}</span>
+                        <span className="truncate">{cat.label}</span>
                       </button>
                     );
                   })}
                 </div>
 
-                <div className="rounded-xl border border-border bg-card p-3 shadow-inner">
+                <div className="rounded-xl border border-border bg-card p-2.5 sm:p-3 shadow-inner w-full max-w-full overflow-hidden">
                   {loadingSlots && takenSlots.size === 0 ? (
                     <div className="flex justify-center py-6">
                       <Loader2 size={24} className="animate-spin text-primary" />
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    <div className="time-slots-grid grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-2 w-full max-w-full">
                       {currentCatSlots.map((slot: string) => {
                         const slotData = takenSlots.get(slot);
                         let isTaken = !!slotData;
@@ -995,28 +1022,28 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                             disabled={isTaken}
                             type="button"
                             onClick={() => toggleTime(slot)}
-                            className={`p-2.5 rounded-xl border text-center transition-all select-none font-bold relative ${isTaken ? (isDraft ? 'bg-orange-50 text-orange-400 border-orange-200 cursor-not-allowed overflow-hidden' : 'bg-red-50 text-red-300 border-red-200 cursor-not-allowed overflow-hidden') : (isSel ? 'bg-primary text-white border-primary shadow-md ring-2 ring-primary/30 scale-105' : 'bg-card hover:bg-primary/10 border-border text-foreground hover:border-primary/40')}`}
+                            className={`p-2 sm:p-2.5 rounded-xl border text-center transition-all select-none font-bold relative min-w-0 flex flex-col items-center justify-center ${isTaken ? (isDraft ? 'bg-orange-50 text-orange-400 border-orange-200 cursor-not-allowed overflow-hidden' : 'bg-red-50 text-red-300 border-red-200 cursor-not-allowed overflow-hidden') : (isSel ? 'bg-primary text-white border-primary shadow-md ring-2 ring-primary/30 scale-105' : 'bg-card hover:bg-primary/10 border-border text-foreground hover:border-primary/40')}`}
                           >
                             {isTaken ? (
-                              <div className="flex flex-col items-center justify-center">
+                              <div className="flex flex-col items-center justify-center w-full">
                                 {isDraft ? (
                                   <>
-                                    <Clock3 size={16} className="mx-auto opacity-70 mb-1" />
-                                    <span className="text-[8px] leading-tight absolute bottom-1 w-full text-center">
+                                    <Clock3 size={15} className="mx-auto opacity-70 mb-0.5" />
+                                    <span className="text-[8px] leading-tight block w-full text-center">
                                       <TimeLeft expiresAt={slotData?.expires_at || ''} />
                                     </span>
                                   </>
                                 ) : (
-                                  <span className="text-[10px] font-black tracking-widest text-red-500 -rotate-6">
+                                  <span className="text-[9.5px] sm:text-[10px] font-black tracking-wide text-red-500 uppercase truncate max-w-full">
                                     OCUPADO
                                   </span>
                                 )}
                               </div>
                             ) : (
                               <>
-                                <span className="text-sm block leading-tight">{h12}:00</span>
-                                <span className="text-[9px] uppercase opacity-70">{ampm}</span>
-                                <span className="text-[9px] block text-primary mt-0.5 font-semibold">${slotPrice.toLocaleString('es-CO')}</span>
+                                <span className="text-xs sm:text-sm block leading-tight">{h12}:00</span>
+                                <span className="text-[8.5px] sm:text-[9px] uppercase opacity-70">{ampm}</span>
+                                <span className="text-[8.5px] sm:text-[9px] block text-primary mt-0.5 font-semibold">${slotPrice.toLocaleString('es-CO')}</span>
                               </>
                             )}
                           </button>

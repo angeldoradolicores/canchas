@@ -1511,6 +1511,8 @@ button {
   grid-template-columns: minmax(0, 1fr) 330px;
   gap: 42px;
   max-width: 1020px;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .booking-layout h1 {
@@ -1525,6 +1527,7 @@ button {
   border-radius: 12px;
   position: relative;
   overflow: hidden;
+  width: 100%;
   display: grid;
   place-items: center;
   color: white;
@@ -2138,30 +2141,34 @@ td {
   }
 
   .explore-layout,
-  .booking-layout,
   .community-grid,
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
 
-  .feature-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .map-panel {
-    min-height: 430px;
-  }
-
-  .booking-aside {
-    order: 2;
+  .booking-layout {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    gap: 16px;
+    overflow-x: hidden;
   }
 
   .booking-main {
     order: 1;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
   }
 
-  .booking-layout {
-    gap: 20px;
+  .booking-aside {
+    order: 2;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 }
 
@@ -3097,19 +3104,59 @@ td {
   /* Contenedor principal sin overflow */
   .page-content:has(.booking-layout) {
     overflow-x: hidden;
+    max-width: 100vw;
+    width: 100%;
+    padding-left: 12px;
+    padding-right: 12px;
   }
 
-  /* Hero más compacto */
+  .booking-layout {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    gap: 14px;
+    overflow-x: hidden;
+  }
+
+  .booking-main {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  /* Hero compacto y centrado */
   .booking-hero {
-    height: 90px;
+    height: auto;
+    min-height: 76px;
+    padding: 10px 12px;
     border-radius: 1rem;
     font-size: 0.85rem;
-    margin-top: 10px;
+    margin-top: 6px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .booking-hero .pitch-lines {
+    inset: 10px 14px;
+  }
+
+  .booking-hero .pitch-lines:after {
+    display: none;
   }
 
   /* Texto del héroe no debe desbordarse */
   .booking-hero .relative {
     max-width: 100%;
+    width: 100%;
+    min-width: 0;
     overflow: hidden;
   }
 
@@ -3118,6 +3165,9 @@ td {
     order: 2;
     border-radius: 1rem;
     padding: 14px 16px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .booking-aside h2 {
@@ -3131,10 +3181,13 @@ td {
     font-size: 11px;
   }
 
-  /* Time slots: siempre 3 columnas en móvil */
-  .booking-layout .grid {
-    grid-template-columns: repeat(3, 1fr) !important;
-    gap: 6px;
+  /* Time slots: cuadrícula de 3 columnas exacta */
+  .booking-main .time-slots-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   /* Botón principal ancho completo */
@@ -3144,9 +3197,10 @@ td {
     font-size: 0.9rem;
   }
 
-  /* Cards de canchas del complejo: ancho fijo manejable */
+  /* Cards de canchas del complejo: ancho horizontal manejable */
   .booking-main [class*="snap-start"] {
-    width: 180px !important;
+    width: 190px !important;
+    flex-shrink: 0 !important;
   }
 
 
