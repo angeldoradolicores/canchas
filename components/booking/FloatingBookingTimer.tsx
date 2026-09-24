@@ -170,7 +170,7 @@ export function FloatingBookingTimer() {
           message: '¿Seguro que deseas cancelar esta reserva y liberar la cancha para otros jugadores?',
           showCancel: true,
           confirmOnLeft: true,
-          confirmText: 'Sí, liberar cancha',
+          confirmText: 'Liberar cancha',
           confirmButtonClassName: 'bg-red-600 hover:bg-red-700 text-white font-bold text-xs sm:text-sm px-4 py-3 rounded-xl flex-1 shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center',
           cancelText: 'Continuar reserva',
           cancelButtonClassName: 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm px-4 py-3 rounded-xl flex-1 border border-emerald-500/40 transition-all active:scale-95 cursor-pointer flex items-center justify-center', onConfirm: async () => {

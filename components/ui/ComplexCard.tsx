@@ -221,7 +221,7 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
             }}
             className="w-full py-2 px-3 bg-secondary hover:bg-emerald-600 text-foreground hover:text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer group/btn"
           >
-            <span>Ver disponibilidad</span>
+            <span>Reservar</span>
             <ChevronRight size={14} className="transition-transform group-hover/btn:translate-x-0.5" />
           </button>
         </div>
