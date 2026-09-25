@@ -357,11 +357,11 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
               )}
 
               {/* Amenidades y Servicios del Complejo */}
-              {complex.amenities.length > 0 && (
+              {(currentPitch as any).amenities && Array.isArray((currentPitch as any).amenities) && (currentPitch as any).amenities.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Servicios del Complejo</h4>
                   <div className="flex flex-wrap gap-2">
-                    {complex.amenities.map((item, idx) => (
+                    {(currentPitch as any).amenities.map((item: any, idx: number) => (
                       <span
                         key={idx}
                         className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 px-3 py-1.5 rounded-xl"
@@ -409,12 +409,7 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
             </div>
 
             {/* Footer Fijo del Modal con Botón de Acción Claro */}
-            <div className="p-4 sm:p-5 border-t border-border bg-secondary/60 shrink-0 flex items-center justify-between gap-4">
-              <div className="hidden sm:block">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase block">Espacio seleccionado</span>
-                <span className="text-sm font-black text-foreground">{currentPitch.name}</span>
-              </div>
-
+            <div className="p-4 sm:p-5 border-t border-border bg-secondary/60 shrink-0 flex items-center justify-center gap-4">
               <button
                 type="button"
                 onClick={() => {
@@ -422,7 +417,7 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
                   if (onBook) onBook(currentPitch);
                   else onOpen(currentPitch);
                 }}
-                className="w-full sm:w-auto py-3 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm uppercase tracking-wider rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                className="w-full sm:w-auto py-3 px-8 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm uppercase tracking-wider rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
               >
                 <span>Reservar en {currentPitch.name}</span>
                 <ChevronRight size={16} />

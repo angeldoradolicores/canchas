@@ -9,8 +9,8 @@ import { toPng } from 'html-to-image';
 
 export default function UserReservationsPage() {
   const [bookings, setBookings] = useState<any[]>([]);
-  const [dateFilter, setDateFilter] = useState<'todas' | 'hoy' | 'pasados_3' | 'pasados_7' | 'historial'>('todas');
-  const [statusFilter, setStatusFilter] = useState<'todas' | 'confirmed' | 'pending' | 'cancelled'>('pending');
+  const [dateFilter, setDateFilter] = useState<'todas' | 'hoy' | 'pasados_3' | 'pasados_7' | 'historial'>('hoy');
+  const [statusFilter, setStatusFilter] = useState<'todas' | 'confirmed' | 'pending' | 'cancelled'>('todas');
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
@@ -207,7 +207,7 @@ export default function UserReservationsPage() {
         }).join(', ')
         : new Date(b.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
 
-      const text = `${statusHeader}\n\n${complexLine}⚽ Cancha: ${pitchTitle}\n📅 Fecha: ${new Date(b.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}\n⏰ Horarios: ${hoursList}\n\nVer cancha y ubicación: ${pitchUrl}\n\n¡Allá nos vemos!`;
+      const text = `${statusHeader}\n\n${complexLine} 📍${pitchTitle}\n📅 Fecha: ${new Date(b.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}\n⏰ Horarios: ${hoursList}\n\nVer cancha y ubicación: ${pitchUrl}`;
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
@@ -829,7 +829,7 @@ export default function UserReservationsPage() {
                 className="py-3.5 bg-[#25D366] hover:bg-[#20bd5a] disabled:opacity-50 text-white font-black rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg text-xs"
               >
                 {isSharing ? <Loader2 size={16} className="animate-spin" /> : <Share2 size={16} />}
-                {isSharing ? 'Preparando...' : 'WhatsApp'}
+                {isSharing ? 'Compartiendo...' : 'Compartir'}
               </button>
             </div>
           </div>
