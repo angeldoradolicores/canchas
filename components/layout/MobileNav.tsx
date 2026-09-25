@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarDays, Heart, Search, Users } from 'lucide-react';
+import { CalendarDays, Heart, Search, User } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
@@ -12,7 +12,7 @@ export function MobileNav() {
     ['Explorar', Search, '/'],
     ['Reservas', CalendarDays, '/reservations'],
     ['Favoritos', Heart, '/favorites'],
-    ['Perfil', Users, '/profile'],
+    ['Perfil', User, '/profile'],
   ] as const;
 
   const handleExplorarClick = (e: React.MouseEvent) => {

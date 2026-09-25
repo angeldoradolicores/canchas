@@ -116,6 +116,7 @@ export default function FavoritesPage() {
               key={complex.id}
               complex={complex}
               onOpen={handleOpen}
+              buttonText="Ver complejo" // <--- Aquí cambias el texto solo para favoritos
             />
           ))}
         </div>

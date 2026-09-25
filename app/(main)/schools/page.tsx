@@ -425,10 +425,10 @@ export default function SchoolsPage() {
               <h1 className="text-2xl sm:text-3xl font-black text-foreground uppercase tracking-tight">
                 Escuelas de Fútbol
               </h1>
-              <span className="inline-flex items-center gap-1 bg-[#CDE0D1] text-[#054D27] font-bold text-xs px-2.5 py-1 rounded-full border border-[#BACFC0]">
+              {/* <span className="inline-flex items-center gap-1 bg-[#CDE0D1] text-[#054D27] font-bold text-xs px-2.5 py-1 rounded-full border border-[#BACFC0]">
                 <MapPin size={12} className="text-[#007a3e]" />
                 <span>{selectedCity === 'Todas' ? 'Toda Colombia' : selectedCity}</span>
-              </span>
+              </span> */}
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-1 leading-relaxed">
               Conoce los mejores centros de formación y entrenamiento.
@@ -796,7 +796,7 @@ export default function SchoolsPage() {
               {selected.description && (
                 <div>
                   <p className="text-[10px] font-black uppercase text-[#1b5e39] tracking-wider mb-1.5">
-                    Descripción del Programa
+                    Descripción
                   </p>
                   <div className="bg-[#cde4d5]/60 p-4 rounded-2xl border border-[#b8dbc5]/60 text-xs sm:text-sm font-medium leading-relaxed text-[#0f3822] whitespace-pre-wrap break-words">
                     {selected.description}

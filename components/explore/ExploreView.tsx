@@ -1240,83 +1240,98 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
               )}
 
               {/* Canchas en proceso de reserva con Cronómetro */}
-              {inProgressResults.length > 0 && (
-                <div className="grid gap-3 mt-6">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="relative flex h-2.5 w-2.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
-                    </span>
-                    <h4 className="font-black text-xs sm:text-sm uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                      Canchas siendo reservadas ({inProgressResults.length})
-                    </h4>
-                  </div>
+              {inProgressResults.map(p => {
+                const formatSlotHour = (slot: any) => {
+                  if (!slot && slot !== 0) return '';
+                  const strSlot = String(slot).trim();
+                  if (/am|pm/i.test(strSlot)) return strSlot;
+                  const hourNum = parseInt(strSlot, 10);
+                  if (isNaN(hourNum)) return strSlot;
+                  const period = hourNum >= 12 ? 'pm' : 'am';
+                  const formattedHour = hourNum % 12 === 0 ? 12 : hourNum % 12;
+                  return `${formattedHour}${period}`;
+                };
 
-                  <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
-                    Estas canchas tienen un bloqueo temporal por otro usuario. Si no confirman el pago antes de finalizar el cronómetro, se liberarán:
-                  </p>
+                const complexName = (p as any).complex_name || (p as any).companies?.name || (complexes as any).name || 'Complejo Deportivo';
 
-                  <div className="grid gap-3">
-                    {inProgressResults.map(p => {
-                      const formatSlotHour = (slot: any) => {
-                        if (!slot && slot !== 0) return '';
-                        const strSlot = String(slot).trim();
-                        if (/am|pm/i.test(strSlot)) return strSlot;
-                        const hourNum = parseInt(strSlot, 10);
-                        if (isNaN(hourNum)) return strSlot;
-                        const period = hourNum >= 12 ? 'pm' : 'am';
-                        const formattedHour = hourNum % 12 === 0 ? 12 : hourNum % 12;
-                        return `${formattedHour}${period}`;
-                      };
+                // ── SOLUCIÓN: Buscamos tanto en 'slots' (array) como en 'slot' (string o array) ──
+                const rawSlots = (p as any).slots || (p as any).slot;
+                let slotsList: any[] = [];
 
-                      return (
-                        <div
-                          key={p.id}
-                          className="flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 bg-amber-500/5 border border-amber-500/30 rounded-2xl transition-all"
-                        >
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex-shrink-0 overflow-hidden bg-muted">
-                              {((p as any).media_urls?.[0] || (p as any).image_url) ? (
-                                <img
-                                  src={(p as any).media_urls?.[0] || (p as any).image_url}
-                                  alt={p.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className={`w-full h-full ${(p as any).tone || 'field-emerald'}`} />
-                              )}
-                            </div>
+                if (Array.isArray(rawSlots)) {
+                  slotsList = rawSlots;
+                } else if (typeof rawSlots === 'string') {
+                  slotsList = rawSlots.includes(',')
+                    ? rawSlots.split(',').map(s => s.trim())
+                    : [rawSlots.trim()];
+                } else if (rawSlots !== undefined && rawSlots !== null) {
+                  slotsList = [rawSlots];
+                }
 
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between sm:justify-start gap-1.5 flex-wrap mb-1">
-                                <h4 className="font-bold text-sm text-foreground truncate">{p.name}</h4>
-                                <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center gap-1 flex-shrink-0">
-                                  ⏱️ <QuickTimer expiresAt={p.expiresAt} />
-                                </span>
-                              </div>
+                return (
+                  <div
+                    key={p.id}
+                    className="flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 bg-amber-500/5 border border-amber-500/30 rounded-2xl transition-all"
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex-shrink-0 overflow-hidden bg-muted">
+                        {((p as any).media_urls?.[0] || (p as any).image_url) ? (
+                          <img
+                            src={(p as any).media_urls?.[0] || (p as any).image_url}
+                            alt={p.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className={`w-full h-full ${(p as any).tone || 'field-emerald'}`} />
+                        )}
+                      </div>
 
-                              <p className="text-xs text-muted-foreground truncate">
-                                Hora: <strong className="text-foreground">{formatSlotHour(p.slot)}</strong>
-                              </p>
-                              <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold block mt-0.5">
-                                Bloqueo de seguridad activo
-                              </span>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => onOpen(p)}
-                            className="w-full sm:w-auto px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold text-xs rounded-xl transition-colors cursor-pointer text-center flex-shrink-0 border border-amber-500/20"
-                          >
-                            Ver cancha
-                          </button>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between sm:justify-start gap-1.5 flex-wrap mb-1">
+                          <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                            {complexName}
+                          </span>
+                          <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center gap-1 flex-shrink-0 ml-auto">
+                            ⏱️ <QuickTimer expiresAt={p.expiresAt} />
+                          </span>
                         </div>
-                      );
-                    })}
+
+                        <h2 className="font-bold text-sm sm:text-base text-foreground truncate mb-1">
+                          {p.name}
+                        </h2>
+
+                        {/* Renderizado dinámico de todas las horas encontradas */}
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
+                          <span>Horas:</span>
+                          <div className="flex flex-wrap gap-1">
+                            {slotsList.length > 0 ? (
+                              slotsList.map((s, idx) => (
+                                <span key={idx} className="font-bold text-foreground bg-amber-500/10 px-1.5 py-0.5 rounded text-[11px]">
+                                  {formatSlotHour(s)}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="font-bold text-foreground">No especificada</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold block mt-1">
+                          Bloqueo de seguridad activo
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => onOpen(p)}
+                      className="w-full sm:w-auto px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold text-xs rounded-xl transition-colors cursor-pointer text-center flex-shrink-0 border border-amber-500/20"
+                    >
+                      Ver cancha
+                    </button>
                   </div>
-                </div>
-              )}
+                );
+              })}
             </div>
           )}
 

@@ -36,9 +36,10 @@ interface ComplexCardProps {
   complex: ComplexData;
   onOpen: (pitch: Pitch) => void;
   onBook?: (pitch: Pitch) => void;
+  buttonText?: string;
 }
 
-export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
+export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }: ComplexCardProps) {
   const { isFavoriteComplex, toggleFavoriteComplex } = useFavorites();
   const isFavorite = isFavoriteComplex(complex.id);
 
@@ -221,7 +222,7 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
             }}
             className="w-full py-2 px-3 bg-secondary hover:bg-emerald-600 text-foreground hover:text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer group/btn"
           >
-            <span>Reservar</span>
+            <span>{buttonText}</span>
             <ChevronRight size={14} className="transition-transform group-hover/btn:translate-x-0.5" />
           </button>
         </div>
@@ -356,22 +357,28 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
                 </div>
               )}
 
-              {/* Amenidades y Servicios del Complejo */}
-              {complex.amenities.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Servicios del Complejo</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {complex.amenities.map((item, idx) => (
-                      <span
-                        key={idx}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 px-3 py-1.5 rounded-xl"
-                      >
-                        <Check size={12} /> {item}
-                      </span>
-                    ))}
+              {/* Amenidades y Servicios (Basados en la Cancha Actual) */}
+              {(() => {
+                const pitchAmenities = Array.isArray((currentPitch as any).amenities) && (currentPitch as any).amenities.length > 0
+                  ? (currentPitch as any).amenities
+                  : complex.amenities;
+
+                return pitchAmenities && pitchAmenities.length > 0 ? (
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Servicios de la Cancha</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {pitchAmenities.map((item: string, idx: number) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 px-3 py-1.5 rounded-xl"
+                        >
+                          <Check size={12} /> {item}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                ) : null;
+              })()}
 
               {/* Métodos de Pago Disponibles */}
               {Array.isArray((currentPitch as any).payment_methods) && (currentPitch as any).payment_methods.length > 0 && (
@@ -417,7 +424,7 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
                   if (onBook) onBook(currentPitch);
                   else onOpen(currentPitch);
                 }}
-                className="w-full sm:w-auto py-3 px-8 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm uppercase tracking-wider rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                className="w-full sm:w-full py-3 px-8 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm uppercase tracking-wider rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
               >
                 <span>Reservar en {currentPitch.name}</span>
                 <ChevronRight size={16} />
