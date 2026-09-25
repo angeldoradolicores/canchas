@@ -357,11 +357,11 @@ export function ComplexCard({ complex, onOpen, onBook }: ComplexCardProps) {
               )}
 
               {/* Amenidades y Servicios del Complejo */}
-              {(currentPitch as any).amenities && Array.isArray((currentPitch as any).amenities) && (currentPitch as any).amenities.length > 0 && (
+              {complex.amenities.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Servicios del Complejo</h4>
                   <div className="flex flex-wrap gap-2">
-                    {(currentPitch as any).amenities.map((item: any, idx: number) => (
+                    {complex.amenities.map((item, idx) => (
                       <span
                         key={idx}
                         className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 px-3 py-1.5 rounded-xl"

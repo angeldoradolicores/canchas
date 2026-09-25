@@ -373,10 +373,10 @@ export default function TournamentsPage() {
               <h1 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
                 Campeonatos
               </h1>
-              <span className="inline-flex items-center gap-1 bg-[#CDE0D1] text-[#054D27] font-bold text-xs px-2.5 py-1 rounded-full border border-[#BACFC0]">
+              {/* <span className="inline-flex items-center gap-1 bg-[#CDE0D1] text-[#054D27] font-bold text-xs px-2.5 py-1 rounded-full border border-[#BACFC0]">
                 <MapPin size={12} className="text-[#008744]" />
                 <span>{selectedCity === 'Todas' ? 'Toda Colombia' : selectedCity}</span>
-              </span>
+              </span> */}
             </div>
             <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1">
               Explora y participa en los torneos y campeonatos organizados por centros deportivos y la comunidad de jugadores.            </p>
@@ -391,40 +391,27 @@ export default function TournamentsPage() {
         </div>
 
         {/* Barra de Filtros en una sola línea continua compacta */}
-        <div>
-          <h2 className="text-[10px] font-extrabold text-[#4D715B] uppercase tracking-wider mb-2 px-1">
-            Filtrar por estado
-          </h2>
-
-          <div className="bg-[#CDE0D1]/70 border border-[#BACFC0] rounded-2xl p-1 flex items-center gap-1 w-full">
-            {[
-              { key: 'all', label: 'Todos', showIcon: true },
-              { key: 'active', label: 'Abiertos', showIcon: false },
-              { key: 'closed', label: 'Llenos', showIcon: false },
-              { key: 'finished', label: 'Finalizados', showIcon: false },
-            ].map((f) => {
-              const isActive = statusFilter === f.key;
-              return (
-                <button
-                  key={f.key}
-                  onClick={() => setStatusFilter(f.key as any)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-black transition-all duration-200 select-none whitespace-nowrap ${isActive
-                    ? 'bg-[#DCE7DE] text-[#054D27] shadow-xs border border-[#BACFC0]'
-                    : 'text-[#4D715B] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
-                    }`}
-                >
-                  {f.showIcon && (
-                    <LayoutGrid
-                      size={13}
-                      strokeWidth={2.5}
-                      className={isActive ? 'text-[#008744]' : 'text-[#4D715B]'}
-                    />
-                  )}
-                  {f.label}
-                </button>
-              );
-            })}
-          </div>
+        <div className="bg-[#CDE0D1]/70 border border-[#BACFC0] rounded-2xl p-0.5 flex items-center justify-between gap-0 w-full">
+          {[
+            { key: 'all', label: 'Todos' },
+            { key: 'active', label: 'Abierto' },
+            { key: 'closed', label: 'Lleno' },
+            { key: 'finished', label: 'Finalizado' },
+          ].map((f) => {
+            const isActive = statusFilter === f.key;
+            return (
+              <button
+                key={f.key}
+                onClick={() => setStatusFilter(f.key as any)}
+                className={`flex-1 min-w-0 flex items-center justify-center px-0.5 py-1.5 rounded-xl text-[8.5px] sm:text-[11px] font-black transition-all duration-200 select-none whitespace-nowrap ${isActive
+                  ? 'bg-[#DCE7DE] text-[#054D27] shadow-xs border border-[#BACFC0]'
+                  : 'text-[#4D715B] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
+                  }`}
+              >
+                <span className="truncate">{f.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -450,8 +437,8 @@ export default function TournamentsPage() {
             {selectedCity !== 'Todas'
               ? `No hay campeonatos en ${selectedCity}`
               : (statusFilter !== 'all'
-                  ? `No hay campeonatos ${STATUS_LABELS[statusFilter]?.label || ''}`
-                  : 'No hay campeonatos aún')}
+                ? `No hay campeonatos ${STATUS_LABELS[statusFilter]?.label || ''}`
+                : 'No hay campeonatos aún')}
           </h3>
           <p className="text-[#4D715B] text-sm font-medium max-w-sm mx-auto mb-4">
             {selectedCity !== 'Todas'

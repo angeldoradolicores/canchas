@@ -172,7 +172,7 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
       if (phone) {
         const pitchName = challenge.pitches?.name || challenge.custom_pitch_name || 'una cancha';
         const dateStr = new Date(challenge.date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short' });
-        const text = `¡Hola ${challenge.profiles?.full_name || 'jugador'}! Vi tu convocatoria en Canchas Pasto para el ${dateStr} a las ${challenge.time} en ${pitchName} y quiero unirme.`;
+        const text = `¡Hola ${challenge.profiles?.full_name || 'jugador'}! Vi tu convocatoria en Cancheros para el ${dateStr} a las ${challenge.time} en ${pitchName} y quiero unirme.`;
 
         const cleanPhone = phone.replace(/\\D/g, '');
         const formattedPhone = cleanPhone.length === 10 ? `57${cleanPhone}` : cleanPhone;
@@ -628,7 +628,7 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
       if (phone) {
         const pitchName = c.pitches?.name || c.custom_pitch_name || 'una cancha';
         const dateStr = new Date(c.date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short' });
-        const text = `¡Hola ${c.profiles?.full_name || 'organizador'}! Vi tu convocatoria en Canchas Pasto para el ${dateStr} a las ${c.time} en ${pitchName} y quiero ofrecerme para jugar.`;
+        const text = `¡Hola ${c.profiles?.full_name || 'organizador'}! Vi tu convocatoria en Cancheros Pasto para el ${dateStr} a las ${c.time} en ${pitchName} y quiero ofrecerme para jugar.`;
 
         const cleanPhone = phone.replace(/\D/g, '');
         const formattedPhone = cleanPhone.length === 10 ? `57${cleanPhone}` : cleanPhone;
@@ -995,7 +995,7 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
                         onClick={() => handleOffer(c)}
                         className="btn-primary text-xs py-2.5 px-4 w-full sm:w-auto"
                       >
-                        Me ofrezco
+                        Contactar
                       </button>
                     )}
                   </div>

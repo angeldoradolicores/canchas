@@ -408,7 +408,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
 
             {/* Nombre de la Cancha (Directamente abajo, sin divisiones y compacto) */}
             {complexInfo?.name && complexInfo.name !== currentPitch.name && (
-              <p className="text-xs sm:text-sm md:text-base font-bold text-primary/90 tracking-wide truncate">
+              <p className="text-xs sm:text-sm md:text-base font-bold text-primary/90 tracking-wide truncate capitalize">
                 {currentPitch.name}
               </p>
             )}
