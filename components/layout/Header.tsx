@@ -169,24 +169,33 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
   };
 
   const handleGPS = () => {
-    if (typeof window === 'undefined' || !navigator.geolocation) return;
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      alert('La geolocalización no es compatible con tu navegador.');
+      return;
+    }
     setLocating(true);
-    try {
+
+    const tryLocation = (highAcc: boolean) => {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           setLocating(false);
           const { latitude: uLat, longitude: uLng } = pos.coords;
+          const coords = { lat: uLat, lng: uLng };
+
+          try {
+            localStorage.setItem('userCoords', JSON.stringify(coords));
+          } catch {}
 
           // Notificar coordenadas al resto de la app
-          window.dispatchEvent(new CustomEvent('gpsCoords', { detail: { lat: uLat, lng: uLng } }));
+          window.dispatchEvent(new CustomEvent('gpsCoords', { detail: coords }));
 
           // Encontrar ciudad más cercana
           let closestCity = 'Pasto';
           let minDistance = Infinity;
 
-          Object.entries(KNOWN_COORDS).forEach(([cityName, coords]) => {
-            const dLat = coords.lat - uLat;
-            const dLon = coords.lng - uLng;
+          Object.entries(KNOWN_COORDS).forEach(([cityName, c]) => {
+            const dLat = c.lat - uLat;
+            const dLon = c.lng - uLng;
             const dist = Math.sqrt(dLat * dLat + dLon * dLon);
             if (dist < minDistance) {
               minDistance = dist;
@@ -196,20 +205,29 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
 
           handleCitySelect(closestCity);
         },
-        () => setLocating(false),
-        { timeout: 8000 }
+        (err) => {
+          if (highAcc) {
+            // Reintentar sin alta precisión en caso de timeout en móvil
+            tryLocation(false);
+          } else {
+            console.warn('Geolocation error:', err);
+            setLocating(false);
+            alert('No pudimos acceder a tu ubicación. Verifica los permisos de ubicación en tu navegador o teléfono.');
+          }
+        },
+        { enableHighAccuracy: highAcc, timeout: highAcc ? 6000 : 12000, maximumAge: 120000 }
       );
-    } catch {
-      setLocating(false);
-    }
+    };
+
+    tryLocation(true);
   };
 
   return (
     <header
-      className={`topbar relative flex items-center justify-between px-4 py-3 bg-background border-b border-border transition-all ${isAnyMenuOpen ? 'z-[9999]' : 'z-10'
+      className={`topbar relative flex items-center justify-between px-3 sm:px-4 py-3 bg-background border-b border-border transition-all ${isAnyMenuOpen ? 'z-[9999]' : 'z-10'
         }`}
     >
-      <div className="flex lg:hidden items-center gap-3">
+      <div className="flex lg:hidden items-center gap-2">
         <button
           onClick={onMenu}
           className="icon-button p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
@@ -220,29 +238,30 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
       </div>
 
       {/* ── Centro: Selector de ubicación perfectamente centrado ── */}
-      <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center justify-center text-center pointer-events-auto z-9999 opacity-100">
-        <p className="eyebrow text-[10px] text-muted-foreground uppercase tracking-wider font-bold">Mi ubicación</p>
-        <div className="flex items-center gap-1.5 mt-0.5">
+      <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center justify-center text-center pointer-events-auto z-[9999] opacity-100 max-w-[55vw] sm:max-w-none">
+        <p className="eyebrow text-[9px] sm:text-[10px] text-muted-foreground uppercase tracking-wider font-bold">Mi ubicación</p>
+        <div className="flex items-center gap-1 sm:gap-1.5 mt-0.5">
           <button
-            className="location flex items-center gap-1 font-semibold text-sm hover:text-primary transition-colors"
+            className="location flex items-center gap-1 font-semibold text-xs sm:text-sm hover:text-primary transition-colors truncate max-w-[140px] sm:max-w-none"
             onClick={() => { setShowCityDropdown(v => !v); setShowDropdown(false); setShowNotifications(false); }}
           >
-            <MapPin size={15} className="text-primary" />
-            <span>{selectedCity}{CITY_DEPARTMENTS[selectedCity] ? `, ${CITY_DEPARTMENTS[selectedCity]}` : ''}</span>
-            <ChevronDown size={14} className={`transition-transform duration-200 ${showCityDropdown ? 'rotate-180' : ''}`} />
+            <MapPin size={14} className="text-primary shrink-0" />
+            <span className="truncate">{selectedCity}</span>
+            <span className="hidden sm:inline text-muted-foreground font-normal">{CITY_DEPARTMENTS[selectedCity] ? `, ${CITY_DEPARTMENTS[selectedCity]}` : ''}</span>
+            <ChevronDown size={13} className={`transition-transform duration-200 shrink-0 ${showCityDropdown ? 'rotate-180' : ''}`} />
           </button>
 
           {/* Botón GPS */}
           <button
             onClick={handleGPS}
             disabled={locating}
-            title="Detectar mi ciudad por GPS"
-            className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 hover:bg-primary/20 text-primary transition-all text-xs font-bold border border-primary/20 active:scale-95 cursor-pointer"
+            title="Detectar mi ubicación exacta por GPS"
+            className="flex items-center justify-center w-8 h-8 sm:w-7 sm:h-7 rounded-full bg-primary/10 hover:bg-primary/20 text-primary transition-all text-xs font-bold border border-primary/20 active:scale-95 cursor-pointer shrink-0"
           >
             {locating ? (
               <span className="animate-spin text-xs">⏳</span>
             ) : (
-              <Navigation size={12} className="fill-primary" />
+              <Navigation size={13} className="fill-primary" />
             )}
           </button>
         </div>

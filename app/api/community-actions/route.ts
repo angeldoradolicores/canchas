@@ -100,7 +100,22 @@ export async function POST(req: NextRequest) {
 
       // Sanitizar campos permitidos para actualizar
       const safeUpdateData: Record<string, any> = {};
-      const allowedFields = ['title', 'description', 'status', 'preferred_date', 'preferred_time', 'players_needed'];
+      const allowedFields = [
+        'date',
+        'time',
+        'level',
+        'pitch_id',
+        'custom_pitch_name',
+        'players_needed',
+        'is_urgent',
+        'location_zone',
+        'status',
+        'message',
+        'title',
+        'description',
+        'preferred_date',
+        'preferred_time',
+      ];
       for (const key of allowedFields) {
         if (key in updateData) {
           safeUpdateData[key] = updateData[key];

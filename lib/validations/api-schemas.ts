@@ -104,6 +104,9 @@ export const AdminCreatePitchSchema = z.object({
   city: z.string().max(100).optional().default('Pasto'),
   department: z.string().max(100).optional().default('Nariño'),
   address: z.string().max(300).optional().nullable(),
+  facebook_url: z.string().max(500).optional().nullable(),
+  instagram_url: z.string().max(500).optional().nullable(),
+  tiktok_url: z.string().max(500).optional().nullable(),
 }).transform((data) => ({
   ...data,
   price_per_hour: data.price_per_hour ?? data.price ?? 80000,

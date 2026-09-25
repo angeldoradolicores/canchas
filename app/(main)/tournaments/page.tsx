@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
+import { CustomMonthCalendar } from '@/components/explore/CustomMonthCalendar';
 
 interface Tournament {
   id: string;
@@ -155,10 +156,29 @@ export default function TournamentsPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
+  // Calendarios en modal
+  const [showStartCal, setShowStartCal] = useState(false);
+  const [showEndCal, setShowEndCal] = useState(false);
+  const [showFinalCal, setShowFinalCal] = useState(false);
+
   // Alert
   const [alertState, setAlertState] = useState<AlertModalState>({ isOpen: false, type: 'info', title: '', message: '' });
 
-  // Pitch autocomplete
+  const [selectedCity, setSelectedCity] = useState('Pasto');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('selectedCity');
+      if (saved) setSelectedCity(saved);
+    }
+    const handler = (e: any) => {
+      if (e.detail) setSelectedCity(e.detail);
+    };
+    window.addEventListener('cityChange', handler);
+    return () => window.removeEventListener('cityChange', handler);
+  }, []);
+
+  // Pitch/Complex autocomplete
   const [pitchQuery, setPitchQuery] = useState('');
   const [pitchResults, setPitchResults] = useState<any[]>([]);
   const [showPitchDropdown, setShowPitchDropdown] = useState(false);
@@ -186,21 +206,24 @@ export default function TournamentsPage() {
 
   useEffect(() => { fetchTournaments(); }, [fetchTournaments]);
 
-  // ── Pitch autocomplete ────────────────────────────────────────────────────
+  // ── Complex autocomplete (similitudes con complejos, no con canchas) ──────
   useEffect(() => {
     if (pitchQuery.trim().length < 2) { setPitchResults([]); return; }
-    const searchPitches = async () => {
-      const { data } = await supabase
-        .from('pitches')
-        .select('id, name, image_url, media_urls, type, companies(name)')
-        .ilike('name', `%${pitchQuery}%`)
-        .limit(6);
-      setPitchResults(data || []);
-      setShowPitchDropdown(true);
+    const searchCompanies = async () => {
+      try {
+        const cityParam = selectedCity && selectedCity !== 'Todas' ? `&city=${encodeURIComponent(selectedCity)}` : '';
+        const res = await fetch(`/api/search-companies?q=${encodeURIComponent(pitchQuery.trim())}${cityParam}`);
+        const data = await res.json();
+        setPitchResults(Array.isArray(data) ? data : []);
+        setShowPitchDropdown(true);
+      } catch (err) {
+        console.error('Error buscando complejos para campeonato:', err);
+        setPitchResults([]);
+      }
     };
-    const timer = setTimeout(searchPitches, 300);
+    const timer = setTimeout(searchCompanies, 300);
     return () => clearTimeout(timer);
-  }, [pitchQuery, supabase]);
+  }, [pitchQuery, selectedCity]);
   const [currentImageIdx, setCurrentImageIdx] = useState(0);
   // ── Image upload ──────────────────────────────────────────────────────────
   const handleImageUpload = async (files: FileList) => {
@@ -240,6 +263,7 @@ export default function TournamentsPage() {
 
   const openEdit = (t: Tournament) => {
     setEditingId(t.id);
+    const complexOrPitchName = (t.pitches?.companies as any)?.name || t.pitches?.name || '';
     setForm({
       name: t.name,
       description: t.description || '',
@@ -251,11 +275,11 @@ export default function TournamentsPage() {
       prize: t.prize || '',
       prize_value: t.prize_value?.toString() || '',
       pitch_id: t.pitch_id || '',
-      pitch_name: t.pitches?.name || '',
+      pitch_name: complexOrPitchName,
       status: t.status,
       media_urls: t.media_urls || [],
     });
-    setPitchQuery(t.pitches?.name || '');
+    setPitchQuery(complexOrPitchName || t.location || '');
     setFormError('');
     setSelectedTournament(null);
     setShowModal(true);
@@ -270,6 +294,16 @@ export default function TournamentsPage() {
     setSaving(true);
     setFormError('');
 
+    const cityTarget = selectedCity && selectedCity !== 'Todas' ? selectedCity : 'Pasto';
+    let effectiveLocation = (form.location || '').trim();
+    if (!effectiveLocation && pitchQuery.trim() && !form.pitch_id) {
+      effectiveLocation = pitchQuery.trim();
+    }
+    // Si no es un complejo registrado y tiene ubicación, asegurar que quede guardado con la ciudad del usuario
+    if (!form.pitch_id && effectiveLocation && !effectiveLocation.toLowerCase().includes(cityTarget.toLowerCase())) {
+      effectiveLocation = `${effectiveLocation}, ${cityTarget}`;
+    }
+
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token || '';
 
@@ -280,7 +314,7 @@ export default function TournamentsPage() {
       start_date: form.start_date,
       registration_end_date: form.registration_end_date || null,
       final_date: form.final_date || null,
-      location: form.location,
+      location: effectiveLocation || null,
       entry_fee: form.entry_fee,
       prize: form.prize,
       prize_value: form.prize_value,
@@ -333,30 +367,32 @@ export default function TournamentsPage() {
     });
   };
 
-  const [selectedCity, setSelectedCity] = useState('Pasto');
+  const filtered = (() => {
+    const base = tournaments.filter(t => {
+      const matchesStatus = statusFilter === 'all' || t.status === statusFilter;
+      if (!matchesStatus) return false;
+      if (selectedCity === 'Todas') return true;
+      const tCity = (t.pitches?.city || t.location || '').toLowerCase();
+      const cityTarget = selectedCity.toLowerCase();
+      return tCity.includes(cityTarget);
+    });
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('selectedCity');
-      if (saved) setSelectedCity(saved);
-    }
-    const handler = (e: any) => {
-      if (e.detail) setSelectedCity(e.detail);
+    // Oficiales primero (con rotación aleatoria entre ellos), luego el resto también mezclado
+    const officials = base.filter(t => t.created_by_owner);
+    const others = base.filter(t => !t.created_by_owner);
+
+    // Mezcla aleatoria (varía en cada render/recarga)
+    const shuffle = <T,>(arr: T[]): T[] => {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
     };
-    window.addEventListener('cityChange', handler);
-    return () => window.removeEventListener('cityChange', handler);
-  }, []);
 
-  const filtered = tournaments.filter(t => {
-    const matchesStatus = statusFilter === 'all' || t.status === statusFilter;
-    if (!matchesStatus) return false;
-
-    if (selectedCity === 'Todas') return true;
-
-    const tCity = (t.pitches?.city || t.location || '').toLowerCase();
-    const cityTarget = selectedCity.toLowerCase();
-    return tCity.includes(cityTarget);
-  });
+    return [...shuffle(officials), ...shuffle(others)];
+  })();
 
   return (
     <div className="page-content fade-in max-w-6xl mx-auto">
@@ -529,6 +565,15 @@ export default function TournamentsPage() {
 
                   {/* Sombra Degradada Inferior */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+
+                  {/* Badge Oficial */}
+                  {t.created_by_owner && (
+                    <div className="absolute top-3 left-3 z-10">
+                      <span className="inline-flex items-center gap-1 bg-amber-400 text-amber-900 text-[10px] font-black px-2.5 py-1 rounded-full shadow-md uppercase tracking-wide">
+                        ⭐ Oficial
+                      </span>
+                    </div>
+                  )}
 
                   {/* Acciones del Propietario */}
                   {isOwner && (
@@ -1121,34 +1166,110 @@ export default function TournamentsPage() {
                 </div>
 
                 {/* Fechas */}
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Fechas del Campeonato</label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-[11px] font-semibold text-foreground mb-1.5 flex items-center gap-1">
+
+                  {/* Fecha de inicio */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-[11px] font-semibold text-foreground flex items-center gap-1">
                         <CalendarDays size={12} className="text-primary" /> Fecha de inicio *
                       </p>
-                      <CustomDateInput value={form.start_date} onChange={val => setForm(f => ({ ...f, start_date: val }))} label="Inicio" required />
+                      <button
+                        type="button"
+                        onClick={() => { setShowStartCal(v => !v); setShowEndCal(false); setShowFinalCal(false); }}
+                        className={`flex items-center gap-1 text-[10px] font-bold border rounded-lg px-2.5 py-1 transition-all ${showStartCal ? 'bg-primary text-white border-primary' : 'text-primary bg-primary/10 border-primary/30 hover:bg-primary hover:text-white hover:border-primary'}`}
+                      >
+                        <CalendarDays size={11} /> {showStartCal ? 'Cerrar' : 'Ver calendario'}
+                      </button>
                     </div>
-                    <div>
-                      <p className="text-[11px] font-semibold text-foreground mb-1.5 flex items-center gap-1">
+                    {form.start_date && (
+                      <p className="text-xs font-bold text-primary mb-2 flex items-center gap-1">
+                        📅 {new Date(form.start_date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                      </p>
+                    )}
+                    {showStartCal ? (
+                      <div className="flex justify-center">
+                        <CustomMonthCalendar
+                          selectedDate={form.start_date}
+                          onSelectDate={val => { setForm(f => ({ ...f, start_date: val })); setShowStartCal(false); }}
+                          minDate={today}
+                        />
+                      </div>
+                    ) : (
+                      <CustomDateInput value={form.start_date} onChange={val => setForm(f => ({ ...f, start_date: val }))} label="Inicio" required min={today} />
+                    )}
+                  </div>
+
+                  {/* Fin de inscripciones */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-[11px] font-semibold text-foreground flex items-center gap-1">
                         <Clock size={12} className="text-amber-500" /> Fin de inscripciones
                       </p>
-                      <CustomDateInput value={form.registration_end_date} onChange={val => setForm(f => ({ ...f, registration_end_date: val }))} label="Fin inscripciones" min={form.start_date} />
+                      <button
+                        type="button"
+                        onClick={() => { setShowEndCal(v => !v); setShowStartCal(false); setShowFinalCal(false); }}
+                        className={`flex items-center gap-1 text-[10px] font-bold border rounded-lg px-2.5 py-1 transition-all ${showEndCal ? 'bg-primary text-white border-primary' : 'text-primary bg-primary/10 border-primary/30 hover:bg-primary hover:text-white hover:border-primary'}`}
+                      >
+                        <CalendarDays size={11} /> {showEndCal ? 'Cerrar' : 'Ver calendario'}
+                      </button>
                     </div>
+                    {form.registration_end_date && (
+                      <p className="text-xs font-bold text-amber-600 mb-2 flex items-center gap-1">
+                        📅 {new Date(form.registration_end_date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                      </p>
+                    )}
+                    {showEndCal ? (
+                      <div className="flex justify-center">
+                        <CustomMonthCalendar
+                          selectedDate={form.registration_end_date}
+                          onSelectDate={val => { setForm(f => ({ ...f, registration_end_date: val })); setShowEndCal(false); }}
+                          minDate={form.start_date || today}
+                        />
+                      </div>
+                    ) : (
+                      <CustomDateInput value={form.registration_end_date} onChange={val => setForm(f => ({ ...f, registration_end_date: val }))} label="Fin inscripciones" min={form.start_date || today} />
+                    )}
                   </div>
-                  <div className="max-w-sm">
-                    <p className="text-[11px] font-semibold text-foreground mb-1.5 flex items-center gap-1">
-                      <Trophy size={12} className="text-primary" /> Fecha de Gran Final <span className="text-muted-foreground font-normal">(opcional)</span>
-                    </p>
-                    <CustomDateInput value={form.final_date} onChange={val => setForm(f => ({ ...f, final_date: val }))} label="Gran Final" min={form.start_date} />
+
+                  {/* Gran Final */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-[11px] font-semibold text-foreground flex items-center gap-1">
+                        <Trophy size={12} className="text-primary" /> Fecha de Gran Final <span className="text-muted-foreground font-normal ml-1">(opcional)</span>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => { setShowFinalCal(v => !v); setShowStartCal(false); setShowEndCal(false); }}
+                        className={`flex items-center gap-1 text-[10px] font-bold border rounded-lg px-2.5 py-1 transition-all ${showFinalCal ? 'bg-primary text-white border-primary' : 'text-primary bg-primary/10 border-primary/30 hover:bg-primary hover:text-white hover:border-primary'}`}
+                      >
+                        <CalendarDays size={11} /> {showFinalCal ? 'Cerrar' : 'Ver calendario'}
+                      </button>
+                    </div>
+                    {form.final_date && (
+                      <p className="text-xs font-bold text-emerald-600 mb-2 flex items-center gap-1">
+                        🏆 {new Date(form.final_date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                      </p>
+                    )}
+                    {showFinalCal ? (
+                      <div className="flex justify-center">
+                        <CustomMonthCalendar
+                          selectedDate={form.final_date}
+                          onSelectDate={val => { setForm(f => ({ ...f, final_date: val })); setShowFinalCal(false); }}
+                          minDate={form.start_date || today}
+                        />
+                      </div>
+                    ) : (
+                      <CustomDateInput value={form.final_date} onChange={val => setForm(f => ({ ...f, final_date: val }))} label="Gran Final" min={form.start_date || today} />
+                    )}
                   </div>
                 </div>
 
-                {/* Pitch autocomplete */}
+                {/* Complex autocomplete */}
                 <div className="relative">
                   <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                    Cancha sede <span className="text-muted-foreground/60 normal-case font-normal">(opcional)</span>
+                    Complejo o Cancha sede <span className="text-muted-foreground/60 normal-case font-normal">(opcional)</span>
                   </label>
                   <div className="relative">
                     <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -1159,40 +1280,50 @@ export default function TournamentsPage() {
                         setPitchQuery(e.target.value);
                         if (!e.target.value) setForm(f => ({ ...f, pitch_id: '', pitch_name: '' }));
                       }}
-                      placeholder="Buscar cancha registrada"
+                      placeholder={`Buscar complejo en ${selectedCity !== 'Todas' ? selectedCity : 'tu ciudad'} o escribir sede`}
                       className="w-full h-11 pl-9 pr-3 border border-border rounded-xl bg-background text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-colors placeholder:text-muted-foreground"
                     />
                   </div>
                   {showPitchDropdown && pitchResults.length > 0 && (
-                    <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-card border border-border rounded-xl shadow-xl overflow-hidden">
-                      {pitchResults.map(p => (
+                    <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-card border border-border rounded-xl shadow-xl overflow-hidden max-h-60 overflow-y-auto">
+                      <div className="px-3 py-1.5 text-[11px] font-bold text-muted-foreground bg-secondary">
+                        Complejos registrados en {selectedCity !== 'Todas' ? selectedCity : 'el sistema'}
+                      </div>
+                      {pitchResults.map((c: any) => (
                         <button
-                          key={p.id}
+                          key={c.id}
                           type="button"
                           onClick={() => {
-                            setForm(f => ({ ...f, pitch_id: p.id, pitch_name: p.name }));
-                            setPitchQuery(p.name);
+                            setForm(f => ({
+                              ...f,
+                              pitch_id: c.pitch_id || c.id,
+                              pitch_name: c.name,
+                              location: c.address ? (c.address.toLowerCase().includes((selectedCity || '').toLowerCase()) ? c.address : `${c.address}, ${c.city || selectedCity}`) : f.location,
+                            }));
+                            setPitchQuery(c.name);
                             setPitchResults([]);
                             setShowPitchDropdown(false);
                           }}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-secondary text-left transition-colors"
+                          className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-secondary text-left transition-colors border-b border-border/40"
                         >
-                          <div className="w-8 h-8 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                            {(p.media_urls?.[0] || p.image_url) && (
-                              <img src={p.media_urls?.[0] || p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                          <div className="flex flex-col">
+                            <p className="font-bold text-sm text-foreground">🏟️ {c.name.toUpperCase()}</p>
+                            {(c.city || c.address) && (
+                              <p className="text-xs text-muted-foreground">{[c.city, c.address].filter(Boolean).join(' · ')}</p>
                             )}
                           </div>
-                          <div>
-                            <p className="font-bold text-sm">{p.name.toUpperCase()}</p>
-                            <p className="text-xs text-muted-foreground"> {p.type}</p>
-                          </div>
+                          {c.pitches_count > 0 && (
+                            <span className="text-[11px] text-emerald-600 font-semibold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md">
+                              {c.pitches_count} {c.pitches_count === 1 ? 'cancha' : 'canchas'}
+                            </span>
+                          )}
                         </button>
                       ))}
                     </div>
                   )}
                   {form.pitch_id && (
                     <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold mt-1 flex items-center gap-1">
-                      Cancha oficial: <strong>{form.pitch_name}</strong>
+                      Complejo oficial: <strong>{form.pitch_name}</strong>
                     </p>
                   )}
                 </div>

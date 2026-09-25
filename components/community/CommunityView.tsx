@@ -189,9 +189,14 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
   const deleteChallenge = async (id: string) => {
     showAlert('warning', 'Eliminar Reto', '¿Estás seguro de eliminar este reto?', async () => {
       try {
+        const { data: sessData } = await supabase.auth.getSession();
+        const token = sessData?.session?.access_token;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
         const res = await fetch('/api/community-actions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             action: 'delete_challenge',
             payload: { challenge_id: id, user_id: user?.id }
@@ -248,8 +253,12 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
     if (selectedCity && selectedCity !== 'Todas') {
       const cityTarget = selectedCity.toLowerCase().trim();
       const pitchCity = (c.pitches?.city || '').toLowerCase().trim();
+      const zoneCity = (c.location_zone || '').toLowerCase().trim();
+
       if (pitchCity) {
         if (!pitchCity.includes(cityTarget)) return false;
+      } else if (zoneCity && zoneCity !== 'todas') {
+        if (!zoneCity.includes(cityTarget)) return false;
       } else {
         const combined = `${c.location_zone || ''} ${c.custom_pitch_name || ''} ${c.message || ''}`.toLowerCase();
         const majorCities = ['pasto', 'cali', 'bogota', 'bogotá', 'medellin', 'medellín', 'barranquilla', 'ipiales', 'popayan', 'popayán'];
@@ -418,6 +427,7 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
           editingItem={editingChallenge}
           showAlert={showAlert}
           isConvocatoria={false}
+          selectedCity={selectedCity}
           onClose={() => {
             setShowForm(false);
             setEditingChallenge(null);
@@ -678,8 +688,12 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
     if (selectedCity && selectedCity !== 'Todas') {
       const cityTarget = selectedCity.toLowerCase().trim();
       const pitchCity = (c.pitches?.city || '').toLowerCase().trim();
+      const zoneCity = (c.location_zone || '').toLowerCase().trim();
+
       if (pitchCity) {
         if (!pitchCity.includes(cityTarget)) return false;
+      } else if (zoneCity && zoneCity !== 'todas') {
+        if (!zoneCity.includes(cityTarget)) return false;
       } else {
         const combined = `${c.location_zone || ''} ${c.custom_pitch_name || ''} ${c.message || ''}`.toLowerCase();
         const majorCities = ['pasto', 'cali', 'bogota', 'bogotá', 'medellin', 'medellín', 'barranquilla', 'ipiales', 'popayan', 'popayán'];
@@ -878,6 +892,7 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
           editingItem={editingItem}
           showAlert={showAlert}
           isConvocatoria={true}
+          selectedCity={selectedCity}
           onClose={() => {
             setShowForm(false);
             setEditingItem(null);
@@ -1016,12 +1031,14 @@ function ChallengeFormModal({
   onClose,
   onSuccess,
   showAlert,
+  selectedCity,
 }: {
   editingItem?: any;
   isConvocatoria: boolean;
   onClose: () => void;
   onSuccess: () => void;
   showAlert: (type: AlertModalState['type'], title: string, msg: string) => void;
+  selectedCity: string;
 }) {
   const today = useToday();
   const [date, setDate] = useState(editingItem?.date || '');
@@ -1038,7 +1055,9 @@ function ChallengeFormModal({
   const [openDropdown, setOpenDropdown] = useState<'zone' | 'level' | 'players' | null>(null);
 
   const [pitchId, setPitchId] = useState(editingItem?.pitch_id || '');
-  const [pitchQuery, setPitchQuery] = useState(editingItem?.pitches?.companies?.name || editingItem?.custom_pitch_name || '');
+  const [pitchQuery, setPitchQuery] = useState(
+    editingItem?.pitches?.companies?.name || editingItem?.pitches?.name || editingItem?.custom_pitch_name || ''
+  );
   const [pitchSuggestions, setPitchSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -1094,7 +1113,8 @@ function ChallengeFormModal({
     if (q.length < 2) { setShowSuggestions(false); return; }
 
     try {
-      const res = await fetch(`/api/search-companies?q=${encodeURIComponent(q)}`);
+      const cityParam = selectedCity && selectedCity !== 'Todas' ? `&city=${encodeURIComponent(selectedCity)}` : '';
+      const res = await fetch(`/api/search-companies?q=${encodeURIComponent(q)}${cityParam}`);
       const data = await res.json();
       setPitchSuggestions(data || []);
       setShowSuggestions(true);
@@ -1104,10 +1124,6 @@ function ChallengeFormModal({
     }
   };
 
-
-
-
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return showAlert('login_required', 'Iniciar Sesión', 'Debes iniciar sesión.');
@@ -1115,6 +1131,11 @@ function ChallengeFormModal({
 
     setLoading(true);
     await ensureProfile();
+
+    const effectiveCity = selectedCity && selectedCity !== 'Todas' ? selectedCity : 'Pasto';
+    const effectiveLocationZone = pitchId
+      ? (locationZone && locationZone !== 'Todas' ? locationZone : effectiveCity)
+      : effectiveCity;
 
     const updateData: Record<string, any> = {
       creator_id: user.id,
@@ -1125,16 +1146,21 @@ function ChallengeFormModal({
       level,
       players_needed: isConvocatoria ? Math.max(1, playersNeeded) : 0,
       is_urgent: isUrgent,
-      location_zone: locationZone,
+      location_zone: effectiveLocationZone,
       status: 'open',
       message: message.trim() || null,
     };
 
     try {
       if (editingItem?.id) {
+        const { data: sessData } = await supabase.auth.getSession();
+        const token = sessData?.session?.access_token;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
         const res = await fetch('/api/community-actions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             action: 'update_challenge',
             payload: { challenge_id: editingItem.id, user_id: user.id, updateData }

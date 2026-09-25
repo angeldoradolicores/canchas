@@ -31,7 +31,7 @@ interface School {
   custom_location?: string | null;
   created_by_owner: boolean;
   user_id?: string;
-  pitches?: { id: string; name: string; image_url: string | null } | null;
+  pitches?: { id: string; name: string; image_url: string | null; city?: string | null; companies?: { name: string; zone?: string } | null } | null;
 }
 
 const emptyForm = {
@@ -174,7 +174,21 @@ export default function SchoolsPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
 
-  const [pitches, setPitches] = useState<{ id: string; name: string }[]>([]);
+  const [selectedCity, setSelectedCity] = useState('Pasto');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('selectedCity');
+      if (saved) setSelectedCity(saved);
+    }
+    const handler = (e: any) => {
+      if (e.detail) setSelectedCity(e.detail);
+    };
+    window.addEventListener('cityChange', handler);
+    return () => window.removeEventListener('cityChange', handler);
+  }, []);
+
+  const [complexSuggestions, setComplexSuggestions] = useState<any[]>([]);
   const [pitchQuery, setPitchQuery] = useState('');
   const [showPitchDropdown, setShowPitchDropdown] = useState(false);
 
@@ -206,18 +220,27 @@ export default function SchoolsPage() {
     loadSchools();
   }, []);
 
+  // ── Autocompletado de complejos sede por ciudad ──
   useEffect(() => {
-    supabase
-      .from('pitches')
-      .select('id, name')
-      .then(({ data }) => {
-        if (data) setPitches(data);
-      });
-  }, []);
-
-  const filteredPitches = pitches.filter(p =>
-    p.name.toLowerCase().includes(pitchQuery.toLowerCase())
-  );
+    if (pitchQuery.trim().length < 2) {
+      setComplexSuggestions([]);
+      return;
+    }
+    const searchCompanies = async () => {
+      try {
+        const cityParam = selectedCity && selectedCity !== 'Todas' ? `&city=${encodeURIComponent(selectedCity)}` : '';
+        const res = await fetch(`/api/search-companies?q=${encodeURIComponent(pitchQuery.trim())}${cityParam}`);
+        const data = await res.json();
+        setComplexSuggestions(Array.isArray(data) ? data : []);
+        setShowPitchDropdown(true);
+      } catch (err) {
+        console.error('Error buscando complejos para escuela:', err);
+        setComplexSuggestions([]);
+      }
+    };
+    const timer = setTimeout(searchCompanies, 300);
+    return () => clearTimeout(timer);
+  }, [pitchQuery, selectedCity]);
 
   const handleOpenCreate = () => {
     if (!user) {
@@ -253,7 +276,7 @@ export default function SchoolsPage() {
       ? school.images
       : (school.logo_url ? [school.logo_url] : []);
 
-    const effectiveLocation = school.pitches?.name || school.custom_location || '';
+    const effectiveLocation = (school.pitches?.companies as any)?.name || school.pitches?.name || school.custom_location || '';
 
     setForm({
       id: school.id,
@@ -336,11 +359,19 @@ export default function SchoolsPage() {
     setFormError('');
     try {
       const trimmedQuery = pitchQuery.trim();
+      const cityTarget = selectedCity && selectedCity !== 'Todas' ? selectedCity : 'Pasto';
 
-      // Auto-detectar si el texto coincide con una cancha registrada en el sistema
-      const matchingPitch = pitches.find(p => p.name.toLowerCase().trim() === trimmedQuery.toLowerCase());
-      const effectivePitchId = form.pitch_id || matchingPitch?.id || null;
-      const effectiveCustomLocation = effectivePitchId ? null : (trimmedQuery || form.custom_location || null);
+      // Auto-detectar si el texto coincide con un complejo registrado en el sistema
+      const matchingComplex = complexSuggestions.find(
+        c => c.name.toLowerCase().trim() === trimmedQuery.toLowerCase()
+      );
+      const effectivePitchId = form.pitch_id || matchingComplex?.pitch_id || null;
+      let effectiveCustomLocation = effectivePitchId ? null : (trimmedQuery || form.custom_location || null);
+
+      // Si no es un complejo registrado y tiene ubicación, asegurar que incluya la ciudad del usuario
+      if (effectiveCustomLocation && !effectiveCustomLocation.toLowerCase().includes(cityTarget.toLowerCase())) {
+        effectiveCustomLocation = `${effectiveCustomLocation}, ${cityTarget}`;
+      }
 
       const payload = {
         ...(isEditing && form.id ? { id: form.id } : {}),
@@ -385,27 +416,30 @@ export default function SchoolsPage() {
     }
   }
 
-  const [selectedCity, setSelectedCity] = useState('Pasto');
+  const filteredSchools = (() => {
+    const base = schools.filter(s => {
+      if (selectedCity === 'Todas') return true;
+      const cityTarget = selectedCity.toLowerCase();
+      const pitchCity = ((s.pitches as any)?.city || '').toLowerCase();
+      const complexName = ((s.pitches as any)?.companies?.name || '').toLowerCase();
+      const locText = `${s.custom_location || ''} ${complexName} ${s.pitches?.name || ''} ${s.description || ''} ${s.name || ''}`.toLowerCase();
+      return pitchCity.includes(cityTarget) || locText.includes(cityTarget);
+    });
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('selectedCity');
-      if (saved) setSelectedCity(saved);
-    }
-    const handler = (e: any) => {
-      if (e.detail) setSelectedCity(e.detail);
+    const officials = base.filter(s => s.created_by_owner);
+    const others = base.filter(s => !s.created_by_owner);
+
+    const shuffle = <T,>(arr: T[]): T[] => {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
     };
-    window.addEventListener('cityChange', handler);
-    return () => window.removeEventListener('cityChange', handler);
-  }, []);
 
-  const filteredSchools = schools.filter(s => {
-    if (selectedCity === 'Todas') return true;
-    const cityTarget = selectedCity.toLowerCase();
-    const pitchCity = ((s.pitches as any)?.city || '').toLowerCase();
-    const locText = `${s.custom_location || ''} ${s.pitches?.name || ''} ${s.description || ''} ${s.name || ''}`.toLowerCase();
-    return pitchCity.includes(cityTarget) || locText.includes(cityTarget);
-  });
+    return [...shuffle(officials), ...shuffle(others)];
+  })();
 
   return (
     <div className="pb-28 pt-4 px-3 sm:px-6 max-w-7xl mx-auto min-h-screen">
@@ -498,7 +532,7 @@ export default function SchoolsPage() {
               : (school.logo_url ? [school.logo_url] : []);
 
             const registeredPitchId = school.pitch_id || school.pitches?.id;
-            const locationText = school.pitches?.name || school.custom_location;
+            const locationText = (school.pitches?.companies as any)?.name || school.pitches?.name || school.custom_location;
             const isOwner = user?.id && school.user_id === user.id;
 
             return (
@@ -753,13 +787,13 @@ export default function SchoolsPage() {
                       title="Ver perfil de la cancha"
                     >
                       <span className="group-hover:underline">
-                        {selected.pitches?.name || selected.custom_location}
+                        {(selected.pitches?.companies as any)?.name || selected.pitches?.name || selected.custom_location}
                       </span>
                       <ExternalLink size={14} className="shrink-0 text-[#007a3e]" />
                     </Link>
                   ) : (
                     <p className="text-sm font-black text-[#0f3822] mt-0.5 break-words whitespace-normal leading-snug">
-                      {selected.pitches?.name || selected.custom_location || 'Sin ubicación registrada'}
+                      {(selected.pitches?.companies as any)?.name || selected.pitches?.name || selected.custom_location || 'Sin ubicación registrada'}
                     </p>
                   )}
                 </div>
@@ -933,10 +967,10 @@ export default function SchoolsPage() {
                 />
               </div>
 
-              {/* Selector o Texto Libre de Cancha */}
+              {/* Selector o Texto Libre de Complejo / Cancha */}
               <div className="relative">
                 <label className="block text-xs font-black uppercase tracking-wider text-[#1b5e39] mb-1">
-                  Cancha / Sede de Entrenamiento
+                  Complejo / Sede de Entrenamiento
                 </label>
                 <input
                   type="text"
@@ -947,11 +981,11 @@ export default function SchoolsPage() {
                     setForm(f => ({ ...f, pitch_id: '', custom_location: e.target.value }));
                     setShowPitchDropdown(true);
                   }}
-                  placeholder="Escribe o selecciona la cancha..."
+                  placeholder={`Escribe o busca un complejo en ${selectedCity !== 'Todas' ? selectedCity : 'tu ciudad'}...`}
                   className="w-full bg-[#cde4d5]/60 border border-[#007a3e] rounded-2xl px-4 py-3 text-sm font-black text-[#0f3822] placeholder:text-[#1b5e39]/50 focus:outline-none focus:ring-2 focus:ring-[#007a3e]"
                 />
                 <p className="text-[10px] font-medium text-[#1b5e39] mt-1">
-                  💡 Si es una cancha registrada, enlazará al perfil de la cancha. Si escribes una cancha o lugar externo, se guardará el nombre tal cual.
+                  💡 Si seleccionas un complejo registrado, se enlazará a su perfil. Si escribes un lugar externo, se guardará con la ciudad en donde estás ({selectedCity !== 'Todas' ? selectedCity : 'Pasto'}).
                 </p>
 
                 {showPitchDropdown && (
@@ -962,30 +996,37 @@ export default function SchoolsPage() {
                     />
                     <div className="absolute top-full left-0 right-0 mt-1 bg-[#d0e6d7] border border-[#a4d4b4] rounded-2xl shadow-2xl z-50 overflow-hidden max-h-48 overflow-y-auto">
                       <div className="p-2 text-[10px] font-black uppercase tracking-wider text-[#1b5e39] border-b border-[#b8dbc5]">
-                        🏟️ Canchas del sistema (Opcional)
+                        🏟️ Complejos registrados en {selectedCity !== 'Todas' ? selectedCity : 'el sistema'} (Opcional)
                       </div>
-                      {filteredPitches.length > 0 ? (
-                        filteredPitches.map(p => (
+                      {complexSuggestions.length > 0 ? (
+                        complexSuggestions.map((c: any) => (
                           <div
-                            key={p.id}
+                            key={c.id}
                             onClick={() => {
-                              setPitchQuery(p.name);
-                              setForm(f => ({ ...f, pitch_id: p.id, custom_location: '' }));
+                              setPitchQuery(c.name);
+                              setForm(f => ({ ...f, pitch_id: c.pitch_id || c.id, custom_location: '' }));
                               setShowPitchDropdown(false);
                             }}
                             className="px-3 py-2.5 hover:bg-[#bce0ca] cursor-pointer flex items-center justify-between border-b border-[#b8dbc5]/40 last:border-0"
                           >
-                            <span className="text-xs font-black uppercase text-[#0f3822]">
-                              🏟️ {p.name}
-                            </span>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-black uppercase text-[#0f3822]">
+                                🏟️ {c.name}
+                              </span>
+                              {(c.city) && (
+                                <span className="text-[10px] text-[#1b5e39] font-medium">
+                                  {c.city},{c.address}
+                                </span>
+                              )}
+                            </div>
                             <span className="text-[10px] font-bold text-[#1b5e39] uppercase">
-                              Registrada ↗
+                              Registrado ↗
                             </span>
                           </div>
                         ))
                       ) : (
                         <div className="p-3 text-xs text-[#1b5e39] font-medium">
-                          Se guardará como: <span className="font-black text-[#0f3822]">"{pitchQuery}"</span>
+                          {/* Se guardará como: <span className="font-black text-[#0f3822]">"{pitchQuery}"</span> ({selectedCity !== 'Todas' ? selectedCity : 'Pasto'}) */}
                         </div>
                       )}
                     </div>

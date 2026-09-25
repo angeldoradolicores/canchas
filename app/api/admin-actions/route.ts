@@ -193,6 +193,22 @@ export async function POST(req: NextRequest) {
         (Array.isArray(data.media_urls) && data.media_urls[0]) ||
         'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800&auto=format&fit=crop';
 
+      const facebookUrl = typeof payload.facebook_url === 'string' ? payload.facebook_url.trim() : null;
+      const instagramUrl = typeof payload.instagram_url === 'string' ? payload.instagram_url.trim() : null;
+      const tiktokUrl = typeof payload.tiktok_url === 'string' ? payload.tiktok_url.trim() : null;
+
+      const mergedCustomPricing = {
+        ...(payload.custom_pricing || {}),
+        ...(facebookUrl ? { facebook_url: facebookUrl } : {}),
+        ...(instagramUrl ? { instagram_url: instagramUrl } : {}),
+        ...(tiktokUrl ? { tiktok_url: tiktokUrl } : {}),
+        social_links: {
+          facebook: facebookUrl || null,
+          instagram: instagramUrl || null,
+          tiktok: tiktokUrl || null,
+        },
+      };
+
       const { data: pitch, error } = await supabase
         .from('pitches')
         .insert({
@@ -205,7 +221,7 @@ export async function POST(req: NextRequest) {
           tone: typeof payload.tone === 'string' ? payload.tone : 'field-emerald',
           price_per_hour: data.price_per_hour,
           booking_percentage: Number(payload.booking_percentage) || 50,
-          custom_pricing: payload.custom_pricing || {},
+          custom_pricing: mergedCustomPricing,
           payment_methods: Array.isArray(payload.payment_methods) ? payload.payment_methods : [],
           amenities: amenitiesString,
           contact_phone: typeof payload.contact_phone === 'string' ? payload.contact_phone.slice(0, 25) : null,
@@ -265,6 +281,22 @@ export async function POST(req: NextRequest) {
         payload.image_url ||
         'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800&auto=format&fit=crop';
 
+      const facebookUrl = payload.facebook_url !== undefined ? (typeof payload.facebook_url === 'string' ? payload.facebook_url.trim() : null) : undefined;
+      const instagramUrl = payload.instagram_url !== undefined ? (typeof payload.instagram_url === 'string' ? payload.instagram_url.trim() : null) : undefined;
+      const tiktokUrl = payload.tiktok_url !== undefined ? (typeof payload.tiktok_url === 'string' ? payload.tiktok_url.trim() : null) : undefined;
+
+      const mergedCustomPricing = {
+        ...(payload.custom_pricing || {}),
+        ...(facebookUrl !== undefined ? { facebook_url: facebookUrl } : {}),
+        ...(instagramUrl !== undefined ? { instagram_url: instagramUrl } : {}),
+        ...(tiktokUrl !== undefined ? { tiktok_url: tiktokUrl } : {}),
+        social_links: {
+          facebook: facebookUrl !== undefined ? facebookUrl : payload.custom_pricing?.social_links?.facebook,
+          instagram: instagramUrl !== undefined ? instagramUrl : payload.custom_pricing?.social_links?.instagram,
+          tiktok: tiktokUrl !== undefined ? tiktokUrl : payload.custom_pricing?.social_links?.tiktok,
+        },
+      };
+
       const updateFields: any = {
         name: payload.name,
         description: payload.description ?? null,
@@ -274,7 +306,7 @@ export async function POST(req: NextRequest) {
         tone: payload.tone || 'field-emerald',
         price_per_hour: parseFloat(payload.price) || 80000,
         booking_percentage: payload.booking_percentage || 50,
-        custom_pricing: payload.custom_pricing || {},
+        custom_pricing: mergedCustomPricing,
         payment_methods: payload.payment_methods || [],
         amenities: amenitiesString,
         contact_phone: payload.contact_phone || null,

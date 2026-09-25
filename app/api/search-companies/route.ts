@@ -9,6 +9,7 @@ function getServiceSupabase() {
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q') || '';
+  const city = req.nextUrl.searchParams.get('city') || '';
   if (q.length < 2) return NextResponse.json([]);
 
   try {
@@ -18,14 +19,24 @@ export async function GET(req: NextRequest) {
       .from('companies')
       .select('id, name, zone, address, pitches(id, name, city)')
       .ilike('name', `%${q}%`)
-      .limit(8);
+      .limit(30);
 
     if (error) {
       console.error('search-companies error:', error);
       return NextResponse.json([], { status: 500 });
     }
 
-    const formatted = (data || []).map((company: any) => ({
+    let filtered = data || [];
+    if (city && city !== 'Todas') {
+      const cityTarget = city.toLowerCase().trim();
+      filtered = filtered.filter((company: any) => {
+        return (company.pitches || []).some((p: any) =>
+          (p.city || '').toLowerCase().trim().includes(cityTarget)
+        );
+      });
+    }
+
+    const formatted = filtered.slice(0, 10).map((company: any) => ({
       id: company.id,
       company_id: company.id,
       name: company.name,

@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useToday, BOOKING_HOURS } from '@/lib/use-today';
-import { CalendarDays, Grid2X2, ListFilter, Loader2, Search, Clock3, ChevronRight, ChevronDown, CheckCircle2, ShieldCheck, LandPlot } from 'lucide-react';
+import { CalendarDays, Grid2X2, ListFilter, Loader2, Search, Clock3, ChevronRight, ChevronDown, CheckCircle2, ShieldCheck, LandPlot, Navigation } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { pitches as mockPitches } from '@/lib/mock-data';
 import { DiscoverRail } from './DiscoverRail';
@@ -81,60 +81,87 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
   const requestGPS = () => {
     if (typeof window === 'undefined' || !navigator.geolocation) {
       setGpsError(true);
+      alert('La geolocalización no está disponible en este dispositivo.');
       return;
     }
     setGpsLoading(true);
     setGpsError(false);
-    try {
+
+    const applyCoords = (coords: { lat: number; lng: number }) => {
+      setUserCoords(coords);
+      setGpsLoading(false);
+
+      try {
+        localStorage.setItem('userCoords', JSON.stringify(coords));
+      } catch {}
+
+      // Notificar coordenadas al resto de la app
+      window.dispatchEvent(new CustomEvent('gpsCoords', { detail: coords }));
+
+      // Detectar ciudad colombiana más cercana si se activa GPS
+      const KNOWN_COORDS: Record<string, { lat: number; lng: number }> = {
+        'Pasto': { lat: 1.2136, lng: -77.2811 },
+        'Ipiales': { lat: 0.8294, lng: -77.6444 },
+        'Popayán': { lat: 2.4419, lng: -76.6063 },
+        'Cali': { lat: 3.4516, lng: -76.5320 },
+        'Bogotá': { lat: 4.7110, lng: -74.0721 },
+        'Medellín': { lat: 6.2442, lng: -75.5812 },
+        'Barranquilla': { lat: 10.9685, lng: -74.7813 },
+      };
+
+      let closest = 'Pasto';
+      let minDist = Infinity;
+      Object.entries(KNOWN_COORDS).forEach(([cityName, c]) => {
+        const dist = Math.sqrt(Math.pow(c.lat - coords.lat, 2) + Math.pow(c.lng - coords.lng, 2));
+        if (dist < minDist) {
+          minDist = dist;
+          closest = cityName;
+        }
+      });
+
+      if (minDist < 1.5) {
+        setSelectedCity(closest);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('selectedCity', closest);
+          window.dispatchEvent(new CustomEvent('cityChange', { detail: closest }));
+        }
+      }
+    };
+
+    const tryGetPosition = (highAcc: boolean) => {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          setUserCoords(coords);
-          setGpsLoading(false);
-
-          // Detectar ciudad colombiana más cercana si se activa GPS
-          const KNOWN_COORDS: Record<string, { lat: number; lng: number }> = {
-            'Pasto': { lat: 1.2136, lng: -77.2811 },
-            'Ipiales': { lat: 0.8294, lng: -77.6444 },
-            'Popayán': { lat: 2.4419, lng: -76.6063 },
-            'Cali': { lat: 3.4516, lng: -76.5320 },
-            'Bogotá': { lat: 4.7110, lng: -74.0721 },
-            'Medellín': { lat: 6.2442, lng: -75.5812 },
-            'Barranquilla': { lat: 10.9685, lng: -74.7813 },
-          };
-
-          let closest = 'Pasto';
-          let minDist = Infinity;
-          Object.entries(KNOWN_COORDS).forEach(([cityName, c]) => {
-            const dist = Math.sqrt(Math.pow(c.lat - coords.lat, 2) + Math.pow(c.lng - coords.lng, 2));
-            if (dist < minDist) {
-              minDist = dist;
-              closest = cityName;
-            }
-          });
-
-          if (minDist < 1.5) {
-            setSelectedCity(closest);
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('selectedCity', closest);
-              window.dispatchEvent(new CustomEvent('cityChange', { detail: closest }));
-            }
-          }
+          applyCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         },
         (err) => {
-          console.info('GPS permission denied or unavailable:', err.message);
-          setGpsError(true);
-          setGpsLoading(false);
+          if (highAcc) {
+            // Reintento sin alta precisión (común en redes móviles)
+            tryGetPosition(false);
+          } else {
+            console.info('GPS permission denied or unavailable:', err.message);
+            setGpsError(true);
+            setGpsLoading(false);
+          }
         },
-        { timeout: 8000 }
+        { enableHighAccuracy: highAcc, timeout: highAcc ? 6000 : 12000, maximumAge: 120000 }
       );
-    } catch {
-      setGpsError(true);
-      setGpsLoading(false);
-    }
+    };
+
+    tryGetPosition(true);
   };
 
   useEffect(() => {
+    // Cargar ubicación previa si ya existe
+    try {
+      const saved = localStorage.getItem('userCoords');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.lat && parsed?.lng) {
+          setUserCoords(parsed);
+        }
+      }
+    } catch {}
+
     // Escuchar coordenadas del header si se activa GPS allí
     const onGps = (e: any) => {
       if (e.detail?.lat && e.detail?.lng) {
@@ -804,6 +831,30 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
         <DiscoverRail
           title={userCoords ? '📍 Cerca de ti' : '📍 Cerca de ti'}
           subtitle={userCoords ? 'Complejos ordenados por distancia exacta a tu ubicación actual' : `Espacios deportivos en ${selectedCity === 'Todas' ? 'Colombia' : selectedCity}`}
+          badge={
+            userCoords ? (
+              <button
+                type="button"
+                onClick={requestGPS}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 active:scale-95 transition-all cursor-pointer"
+                title="Actualizar mi ubicación GPS"
+              >
+                <CheckCircle2 size={12} className="text-emerald-600" />
+                <span>Ubicación activa</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={requestGPS}
+                disabled={gpsLoading}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-primary text-white shadow-xs hover:bg-primary/90 active:scale-95 transition-all cursor-pointer"
+                title="Activar mi ubicación"
+              >
+                {gpsLoading ? <Loader2 size={12} className="animate-spin" /> : <Navigation size={11} className="fill-white" />}
+                <span>{gpsLoading ? 'Localizando...' : 'Activar mi ubicación'}</span>
+              </button>
+            )
+          }
           items={nearbyComplexes}
           onOpen={onOpen}
           onBook={handleBook}

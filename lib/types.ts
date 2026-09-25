@@ -10,6 +10,14 @@ export interface Pitch {
   image_url: string | null;
   amenities: string | null;
   contact_phone?: string | null; // Nuevo campo para teléfono de la cancha
+  facebook_url?: string | null;
+  instagram_url?: string | null;
+  tiktok_url?: string | null;
+  social_links?: {
+    facebook?: string | null;
+    instagram?: string | null;
+    tiktok?: string | null;
+  } | null;
   created_at: string;
   city?: string | null;
 

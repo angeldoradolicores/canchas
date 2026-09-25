@@ -181,11 +181,15 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
       if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
 
       const companyId = comp?.id || pitch.company_id || null;
-
-      // Si tiene company_id, agrupar solo por empresa (nunca mezclar empresas distintas)
-      // Si no tiene company_id, crear siempre un pin individual
+      const pitchAddress = (pitch.address || comp?.address || '').trim().toLowerCase();
       const existing = companyId
-        ? locationGroups.find(g => g.companyId === companyId)
+        ? locationGroups.find(g => {
+            if (g.companyId !== companyId) return false;
+            const sameCoords = Math.abs(g.lat - lat) < 0.0005 && Math.abs(g.lng - lng) < 0.0005;
+            const gAddress = (g.address || '').trim().toLowerCase();
+            const sameAddress = Boolean(pitchAddress && gAddress && pitchAddress === gAddress);
+            return sameCoords || sameAddress;
+          })
         : null;
 
       if (existing) {
@@ -206,7 +210,6 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
     // ── Renderizar un marcador por ubicación/complejo ──
     locationGroups.forEach((group) => {
       const pitchRows = group.pitches.map(p => {
-        const price = (p as any).price_per_hour;
         const type = (p as any).type || 'Fútbol 5';
         return `
           <div
@@ -227,7 +230,7 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
                 ${(p as any).name}
               </div>
               <div style="font-size:11px;color:#16a34a;font-weight:600;">
-                ${price ? `$${Number(price).toLocaleString('es-CO')}/h` : ''} · ${type}
+                ${type}
               </div>
             </div>
             <span style="font-size:14px;color:#16a34a;flex-shrink:0;">›</span>

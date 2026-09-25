@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
 
     let query = supabase
       .from('schools')
-      .select('*, pitches(id, name, image_url, city)');
+      .select('*, pitches(id, name, image_url, city, companies(name, zone))');
 
     if (pitch_id) query = query.eq('pitch_id', pitch_id);
 
