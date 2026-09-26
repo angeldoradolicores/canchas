@@ -183,8 +183,8 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
         mapRef.current = map;
 
         L.tileLayer(
-          'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-          { attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 20 }
+          'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          { attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 20 }
         ).addTo(map);
 
         if (lat && lng) {
