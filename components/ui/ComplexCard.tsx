@@ -175,10 +175,11 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
           <div className="p-4 space-y-2 flex-1 flex flex-col justify-between bg-card">
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span className="font-semibold tracking-tight uppercase flex items-center gap-1 truncate">
-                  <MapPin size={12} className="text-emerald-500 shrink-0" />
+                {/* Ubicación: Ciudad y Departamento con letra más pequeña */}
+                <p className="text-[11px] text-muted-foreground font-medium tracking-tight capitalize flex items-center gap-1 truncate">
+                  <MapPin size={11} className="text-emerald-500 shrink-0" />
                   {complex.city || 'Pasto'}, {complex.department}
-                </span>
+                </p>
 
                 <div className="flex items-center gap-1 text-foreground font-medium shrink-0">
                   <Star size={13} className="fill-amber-400 text-amber-400" />

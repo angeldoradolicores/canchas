@@ -429,11 +429,11 @@ export default function WhatsAppConnectionPage() {
                   </div>
                   <div>
                     <strong className="text-base block font-bold text-zinc-900">
-                      {formatDisplayPhone(connectedPhone) || 
-                       formatDisplayPhone(company?.whatsapp_connected_phone) || 
-                       formatDisplayPhone(company?.owner_phone) || 
-                       formatDisplayPhone(profile?.phone) || 
-                       'Número no registrado'}
+                      {formatDisplayPhone(connectedPhone) ||
+                        formatDisplayPhone(company?.whatsapp_connected_phone) ||
+                        formatDisplayPhone(company?.owner_phone) ||
+                        formatDisplayPhone(profile?.phone) ||
+                        'Número no registrado'}
                     </strong>
                     <p className="text-xs text-zinc-500">Sesión activa · Vinculado a <strong> {company?.name || 'Mi Complejo'}</strong></p>
                   </div>
@@ -499,6 +499,10 @@ export default function WhatsAppConnectionPage() {
                   <p className="text-xs text-zinc-500 max-w-sm">
                     Abre WhatsApp ➔ Menú ➔ Dispositivos vinculados ➔ Vincular dispositivo.
                   </p>
+                  <p className="text-xs text-zinc-500 max-w-sm">
+                    Si no se genera el QR, intenta volver a generar el QR.
+                  </p>
+
                   <button
                     onClick={() => handleGenerateQR(true)}
                     disabled={generating}

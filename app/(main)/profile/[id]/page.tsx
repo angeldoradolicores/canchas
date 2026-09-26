@@ -266,7 +266,7 @@ export default function PublicProfilePage() {
 
       // Fallback: descargar imagen y abrir WhatsApp
       download(dataUrl, fileName);
-      const text = `🏆 ¡Mira mi tarjeta de jugador en Canchas Pasto!\n\n⚽ ${stats.bookings} partidos jugados · 🎯 ${stats.challenges} retos\n⭐ Rango: ${rank.title}\n\nConoce mi perfil: ${window.location.href}`;
+      const text = `🏆 ¡Mira mi tarjeta de jugador en Cancheros!\n\n⚽ ${stats.bookings} partidos jugados · 🎯 ${stats.challenges} retos\n⭐ Rango: ${rank.title}\n\nConoce mi perfil: ${window.location.href}`;
       const waText = encodeURIComponent(`${text}\n\n(Tu tarjeta con foto se descargó y se copió al portapapeles. ¡Pégala aquí con Ctrl+V o adjúntala!)`);
       const waUrl = `https://api.whatsapp.com/send?text=${waText}`;
       window.open(waUrl, '_blank');
@@ -398,9 +398,9 @@ export default function PublicProfilePage() {
           {/* ── Header ── */}
           <div style={{ padding: '24px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 2 }}>
             <div>
-              <div style={{ fontSize: 10, fontWeight: 900, color: rank.accent, letterSpacing: '0.25em', textTransform: 'uppercase' }}>
+              {/* <div style={{ fontSize: 10, fontWeight: 900, color: rank.accent, letterSpacing: '0.25em', textTransform: 'uppercase' }}>
                 CANCHAS PASTO
-              </div>
+              </div> */}
               <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.4)', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', marginTop: 2 }}>
                 Tarjeta Oficial
               </div>
@@ -474,7 +474,7 @@ export default function PublicProfilePage() {
           <div style={{ margin: '20px 24px 24px', padding: '10px 16px', background: 'rgba(0,0,0,0.25)', borderRadius: 16, border: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             <div style={{ width: 7, height: 7, borderRadius: '50%', background: rank.accent, boxShadow: `0 0 8px ${rank.accent}` }} />
             <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', fontWeight: 800, letterSpacing: '0.2em', textTransform: 'uppercase' }}>
-              canchaspasto.app
+              cancheros
             </span>
           </div>
         </div>

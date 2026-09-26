@@ -150,6 +150,22 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
     }
   };
 
+  // Redes sociales de la cancha
+  const pitchAny = pitch as any;
+  const fbUrl = pitchAny.facebook_url || pitchAny.custom_pricing?.facebook_url || pitchAny.custom_pricing?.social_links?.facebook || null;
+  const igUrl = pitchAny.instagram_url || pitchAny.custom_pricing?.instagram_url || pitchAny.custom_pricing?.social_links?.instagram || null;
+  const ttUrl = pitchAny.tiktok_url || pitchAny.custom_pricing?.tiktok_url || pitchAny.custom_pricing?.social_links?.tiktok || null;
+  const formatSocialUrl = (url: string | null, platform: 'instagram' | 'tiktok' | 'facebook'): string => {
+    if (!url) return '#';
+    const trimmed = url.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+    const cleanHandle = trimmed.replace(/^@/, '');
+    if (platform === 'instagram') return `https://instagram.com/${cleanHandle}`;
+    if (platform === 'tiktok') return `https://tiktok.com/@${cleanHandle}`;
+    if (platform === 'facebook') return `https://facebook.com/${cleanHandle}`;
+    return `https://${trimmed}`;
+  };
+
   // Normalizar imágenes / media
   const allMedia: string[] = Array.isArray(pitch.media_urls) && pitch.media_urls.length > 0
     ? pitch.media_urls
@@ -170,6 +186,8 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
   const paymentMethods: PaymentMethod[] = Array.isArray(pitch.payment_methods)
     ? pitch.payment_methods
     : [];
+
+
 
   // Normalizar modalidades
   const modalities: string[] = Array.isArray(pitch.supported_types) && pitch.supported_types.length > 0
@@ -206,22 +224,34 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
           </div>
         )}
 
-        <div onClick={() => { if (onOpen) onOpen(pitch); else setShowDetailModal(true); }}>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => {
+            if (onOpen) onOpen(pitch);
+            else setShowDetailModal(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              if (onOpen) onOpen(pitch);
+              else setShowDetailModal(true);
+            }
+          }}
+          className="group relative flex flex-col h-full w-full bg-card border border-border/60 hover:border-border rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer select-none"
+        >
           {/* BANNER / FOTO DESTACADA */}
-          <div className="relative aspect-[4/3] w-full bg-secondary overflow-hidden">
+          <div className="relative aspect-[16/10] sm:aspect-[4/3] w-full bg-secondary overflow-hidden shrink-0">
             <img
               src={mainImage}
               alt={pitch.name}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/10" />
 
             {/* Badges de encabezado sobre la imagen */}
-            <div className="absolute top-3 left-3 right-16 flex items-center gap-2 z-10">
-              <div className="flex flex-wrap gap-1.5">
-                {/* <span className="bg-emerald-600/90 backdrop-blur-md text-white font-extrabold text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
-                  {complexName}
-                </span> */}
+            <div className="absolute top-3 left-3 right-3 flex items-start justify-between gap-2 z-10">
+              <div className="flex flex-wrap gap-1.5 items-center max-w-[80%]">
                 <span className="bg-emerald-600/90 backdrop-blur-md text-white font-extrabold text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
                   {modalities[0]}
                 </span>
@@ -237,7 +267,7 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
                 <Link
                   href={editUrl}
                   onClick={(e) => e.stopPropagation()}
-                  className="ml-auto p-2 bg-white/90 dark:bg-zinc-900/90 text-foreground rounded-full hover:bg-primary hover:text-white transition-colors shadow-md backdrop-blur-sm"
+                  className="p-2 bg-white/90 dark:bg-zinc-900/90 text-foreground rounded-full hover:bg-primary hover:text-white transition-colors shadow-md backdrop-blur-sm active:scale-95"
                   title="Editar Cancha"
                 >
                   <Edit3 size={14} />
@@ -246,30 +276,26 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
             </div>
 
             {/* Nombre sobre la parte inferior del Banner */}
-            <div className="absolute bottom-3 left-4 right-4 z-10">
-
-              <div className="flex flex-col gap-0.5 mb-2">
-                {/* Nombre del Complejo (Más pequeño pero manteniendo protagonismo) */}
-                <h3 className="text-base sm:text-lg font-black tracking-normal uppercase text-white leading-tight drop-shadow-md group-hover:text-green-300 transition-all duration-300">
+            <div className="absolute bottom-3 left-3.5 right-3.5 z-10 flex flex-col justify-end">
+              <div className="flex flex-col gap-0.5">
+                <h3 className="text-base sm:text-lg font-black tracking-tight uppercase text-white leading-tight drop-shadow-md group-hover:text-emerald-300 transition-colors duration-300">
                   {complexName}
                 </h3>
-
-                {/* Nombre de la Cancha (Más sutil y compacto abajo) */}
                 <span className="text-[11px] sm:text-xs font-bold tracking-wide uppercase text-white/80 drop-shadow">
                   {pitch.name}
                 </span>
               </div>
 
               {pitch.grass_color && (
-                <p className="text-[11px] text-emerald-200/90 font-medium flex items-center gap-1 mt-0.5">
-                  <Layers size={11} /> Grama: {pitch.grass_color}
+                <p className="text-[10px] sm:text-[11px] text-emerald-200/90 font-medium flex items-center gap-1 mt-1">
+                  <Layers size={11} className="shrink-0" /> Grama: {pitch.grass_color}
                 </p>
               )}
             </div>
           </div>
 
-          {/* CUERPO DE LA TARJETA */}
-          <div className="p-4 space-y-3.5">
+          {/* CUERPO DE LA TARJETA (Ocupa todo el espacio disponible) */}
+          <div className="flex flex-col flex-1 p-3.5 sm:p-4 space-y-3">
 
             {/* Descripción corta */}
             {pitch.description ? (
@@ -283,7 +309,7 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
             {/* Modalidades adicionales */}
             {modalities.length > 1 && (
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[10px] text-muted-foreground font-bold uppercase">Otras modalidades:</span>
+                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Otras:</span>
                 {modalities.slice(1).map((m, idx) => (
                   <span key={idx} className="text-[10px] bg-secondary px-2 py-0.5 rounded-md font-semibold text-foreground">
                     {m}
@@ -301,7 +327,7 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
 
             {/* Amenidades / Servicios */}
             {amenityList.length > 0 && (
-              <div className="space-y-1">
+              <div className="space-y-1.5 pt-1">
                 <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block">
                   Servicios Incluidos
                 </span>
@@ -315,7 +341,7 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
                     </span>
                   ))}
                   {amenityList.length > 4 && (
-                    <span className="text-[10px] text-muted-foreground font-bold px-1.5 py-1">
+                    <span className="text-[10px] text-muted-foreground font-bold px-1.5 py-1 flex items-center">
                       +{amenityList.length - 4} más
                     </span>
                   )}
@@ -325,9 +351,9 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
 
             {/* Métodos de Pago */}
             {paymentMethods.length > 0 && (
-              <div className="space-y-1 pt-1 border-t border-border/50">
+              <div className="space-y-1.5 pt-2 border-t border-border/50">
                 <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                  <CreditCard size={11} className="text-primary" /> Métodos de Pago
+                  <CreditCard size={11} className="text-primary shrink-0" /> Métodos de Pago
                 </span>
                 <div className="flex flex-wrap gap-1">
                   {paymentMethods.map((pm, idx) => (
@@ -339,7 +365,66 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
 
+            {/* REDES SOCIALES DE LA CANCHA */}
+            {(igUrl || ttUrl || fbUrl) && (
+              <div
+                className="pt-1 mt-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-3 bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/15 dark:border-emerald-500/20 rounded-2xl">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-[10px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider">
+                      Redes Sociales
+                    </h4>
+                  </div>
+
+                  <div className="flex items-center justify-start gap-2.5">
+                    {igUrl && (
+                      <a
+                        href={formatSocialUrl(igUrl, 'instagram')}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Instagram"
+                        className="w-10 h-10 rounded-xl border border-pink-500/20 bg-gradient-to-r from-pink-500/10 via-rose-500/5 to-amber-500/10 hover:border-pink-500/40 hover:shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center group shrink-0"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888] flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform">
+                          <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" /></svg>
+                        </div>
+                      </a>
+                    )}
+
+                    {ttUrl && (
+                      <a
+                        href={formatSocialUrl(ttUrl, 'tiktok')}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="TikTok"
+                        className="w-10 h-10 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-neutral-100/90 dark:bg-neutral-900/90 hover:border-black dark:hover:border-white hover:shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center group shrink-0"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-black flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform border border-neutral-800">
+                          <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.24 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z" /></svg>
+                        </div>
+                      </a>
+                    )}
+
+                    {fbUrl && (
+                      <a
+                        href={formatSocialUrl(fbUrl, 'facebook')}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Facebook"
+                        className="w-10 h-10 rounded-xl border border-blue-500/20 bg-blue-500/10 hover:border-[#1877F2]/50 hover:shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center group shrink-0"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-[#1877F2] flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform">
+                          <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
+                        </div>
+                      </a>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -384,66 +469,80 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
 
       {/* ── MODAL VISTA PREVIA DETALLADA DE LA CANCHA ── */}
       {showDetailModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200"
+          onClick={() => setShowDetailModal(false)}
+        >
           <div
-            className="bg-card border border-border w-full max-w-2xl max-h-[90vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col animate-in zoom-in-95 duration-200"
+            className="bg-card border border-border w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Encabezado del Modal */}
-            <div className="p-4 border-b border-border flex items-center justify-between bg-secondary/40">
-              <div className="space-y-1">
+            {/* Encabezado Fijo del Modal */}
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-secondary/40 shrink-0">
+              <div className="space-y-0.5 pr-3 min-w-0">
                 {complexName && (
-                  <h2 className="text-2xl sm:text-3xl font-black tracking-normal uppercase text-emerald-600 dark:text-emerald-400 font-sans drop-shadow-sm flex items-center gap-1.5">
-                    <span></span> {complexName}
+                  <h2 className="text-lg sm:text-2xl font-black tracking-tight uppercase text-emerald-600 dark:text-emerald-400 truncate">
+                    {complexName}
                   </h2>
                 )}
-                <p className="text-xs sm:text-sm font-bold tracking-wide uppercase text-muted-foreground">
+                <p className="text-xs sm:text-sm font-bold tracking-wide uppercase text-muted-foreground truncate">
                   {pitch.name}
                 </p>
               </div>
+
               <button
                 type="button"
                 onClick={() => setShowDetailModal(false)}
-                className="p-2 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                className="p-2.5 rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-all shrink-0 active:scale-95"
+                aria-label="Cerrar modal"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
             {/* Contenido Desplazable del Modal */}
-            <div className="p-6 overflow-y-auto space-y-6">
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1 custom-scrollbar">
+
               {/* Carrusel / Visor Multimedia */}
               {allMedia.length > 0 && (
-                <div className="relative rounded-2xl overflow-hidden bg-black aspect-[16/9] border border-border">
+                <div className="relative rounded-2xl overflow-hidden bg-black aspect-[16/9] border border-border shadow-inner shrink-0 group">
                   <img
                     src={allMedia[activeMediaIndex]}
-                    alt="Cancha media"
-                    className="w-full h-full object-cover"
+                    alt={`Imagen ${activeMediaIndex + 1} de la cancha`}
+                    className="w-full h-full object-cover transition-all duration-300"
                   />
+
                   {allMedia.length > 1 && (
                     <>
                       <button
                         type="button"
-                        onClick={() => setActiveMediaIndex(i => Math.max(0, i - 1))}
+                        onClick={() => setActiveMediaIndex((i) => Math.max(0, i - 1))}
                         disabled={activeMediaIndex === 0}
-                        className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/60 text-white rounded-full disabled:opacity-30 hover:bg-black/90 transition-all"
+                        className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center bg-black/60 text-white rounded-full disabled:opacity-20 hover:bg-black/90 transition-all active:scale-95"
+                        aria-label="Imagen anterior"
                       >
-                        <ChevronLeft size={16} />
+                        <ChevronLeft size={18} />
                       </button>
+
                       <button
                         type="button"
-                        onClick={() => setActiveMediaIndex(i => Math.min(allMedia.length - 1, i + 1))}
+                        onClick={() => setActiveMediaIndex((i) => Math.min(allMedia.length - 1, i + 1))}
                         disabled={activeMediaIndex === allMedia.length - 1}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/60 text-white rounded-full disabled:opacity-30 hover:bg-black/90 transition-all"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center bg-black/60 text-white rounded-full disabled:opacity-20 hover:bg-black/90 transition-all active:scale-95"
+                        aria-label="Imagen siguiente"
                       >
-                        <ChevronRight size={16} />
+                        <ChevronRight size={18} />
                       </button>
-                      <div className="absolute bottom-2 inset-x-0 flex justify-center gap-1.5">
+
+                      {/* Indicadores flotantes interactivos */}
+                      <div className="absolute bottom-3 inset-x-0 flex justify-center gap-1.5 px-4">
                         {allMedia.map((_, idx) => (
-                          <span
+                          <button
                             key={idx}
-                            className={`w-2 h-2 rounded-full transition-all ${idx === activeMediaIndex ? 'bg-white w-4' : 'bg-white/50'
+                            onClick={() => setActiveMediaIndex(idx)}
+                            className={`h-1.5 rounded-full transition-all duration-300 ${idx === activeMediaIndex ? 'bg-white w-5' : 'bg-white/40 w-1.5 hover:bg-white/70'
                               }`}
+                            aria-label={`Ir a imagen ${idx + 1}`}
                           />
                         ))}
                       </div>
@@ -453,36 +552,52 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
               )}
 
               {/* Modalidades y Superficie */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-secondary/50 rounded-2xl border border-border">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Modalidad Principal</span>
-                  <span className="text-sm font-extrabold text-foreground">{modalities.join(', ')}</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-3.5 bg-secondary/40 rounded-2xl border border-border/80 flex flex-col justify-center">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
+                    Modalidad Principal
+                  </span>
+                  <span className="text-xs sm:text-sm font-extrabold text-foreground">
+                    {modalities.join(', ')}
+                  </span>
                 </div>
-                <div className="p-3 bg-secondary/50 rounded-2xl border border-border">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Superficie & Grama</span>
-                  <span className="text-sm font-extrabold text-foreground">
-                    {pitch.surface} {pitch.grass_color ? `(${pitch.grass_color})` : ''}
+
+                <div className="p-3.5 bg-secondary/40 rounded-2xl border border-border/80 flex flex-col justify-center">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
+                    Superficie & Grama
+                  </span>
+                  <span className="text-xs sm:text-sm font-extrabold text-foreground">
+                    {pitch.surface || 'No especificada'} {pitch.grass_color ? `(${pitch.grass_color})` : ''}
                   </span>
                 </div>
               </div>
 
               {/* Descripción */}
-              {pitch.description && (
+              {pitch.description ? (
                 <div className="space-y-1.5">
-                  <h4 className="text-xs font-bold text-muted-foreground uppercase">Descripción</h4>
-                  <p className="text-sm text-foreground/90 leading-relaxed bg-secondary/20 p-4 rounded-2xl border border-border">
+                  <h4 className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-wider">
+                    Descripción
+                  </h4>
+                  <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed bg-secondary/20 p-3.5 sm:p-4 rounded-2xl border border-border/70">
                     {pitch.description}
                   </p>
                 </div>
+              ) : (
+                <p className="text-xs text-muted-foreground/60 italic">Sin descripción registrada.</p>
               )}
 
               {/* Servicios / Amenidades completas */}
               {amenityList.length > 0 && (
                 <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-muted-foreground uppercase">Servicios y Amenidades</h4>
+                  <h4 className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-wider">
+                    Servicios y Amenidades
+                  </h4>
                   <div className="flex flex-wrap gap-2">
                     {amenityList.map((item, idx) => (
-                      <span key={idx} className="px-3 py-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 text-xs font-semibold rounded-xl flex items-center gap-1.5">
+                      <span
+                        key={idx}
+                        className="px-3 py-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 text-xs font-bold rounded-xl flex items-center gap-1.5"
+                      >
                         {item}
                       </span>
                     ))}
@@ -493,17 +608,86 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
               {/* Detalles de Métodos de Pago */}
               {paymentMethods.length > 0 && (
                 <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-muted-foreground uppercase">Métodos de Pago Aceptados</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <h4 className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-wider">
+                    Métodos de Pago Aceptados
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {paymentMethods.map((pm, idx) => (
-                      <div key={idx} className="p-3 bg-secondary/40 rounded-xl border border-border text-xs flex justify-between items-center">
-                        <div>
-                          <p className="font-extrabold text-foreground">{pm.label}</p>
-                          {pm.number && <p className="font-mono text-muted-foreground text-[11px]">{pm.number}</p>}
+                      <div
+                        key={idx}
+                        className="p-3 bg-secondary/30 rounded-xl border border-border/70 text-xs flex justify-between items-center gap-2"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-extrabold text-foreground truncate">{pm.label}</p>
+                          {pm.number && (
+                            <p className="font-mono text-muted-foreground text-[11px] truncate mt-0.5">
+                              {pm.number}
+                            </p>
+                          )}
                         </div>
-                        {pm.name && <span className="text-[10px] bg-background px-2 py-1 rounded-md border text-muted-foreground">{pm.name}</span>}
+                        {pm.name && (
+                          <span className="text-[10px] font-semibold bg-background px-2 py-1 rounded-md border border-border text-muted-foreground shrink-0">
+                            {pm.name}
+                          </span>
+                        )}
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* REDES SOCIALES EN EL MODAL */}
+              {(igUrl || ttUrl || fbUrl) && (
+                <div className="p-3.5 bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/15 dark:border-emerald-500/20 rounded-2xl space-y-2.5">
+                  <h4 className="text-[10px] sm:text-xs font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider">
+                    Redes Sociales
+                  </h4>
+
+                  <div className="flex items-center gap-3">
+                    {/* Instagram */}
+                    {igUrl && (
+                      <a
+                        href={formatSocialUrl(igUrl, 'instagram')}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Instagram"
+                        className="w-11 h-11 rounded-2xl border border-pink-500/20 bg-gradient-to-r from-pink-500/10 via-rose-500/5 to-amber-500/10 hover:border-pink-500/40 hover:shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center group shrink-0"
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888] flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform">
+                          <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" /></svg>
+                        </div>
+                      </a>
+                    )}
+
+                    {/* TikTok */}
+                    {ttUrl && (
+                      <a
+                        href={formatSocialUrl(ttUrl, 'tiktok')}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="TikTok"
+                        className="w-11 h-11 rounded-2xl border border-neutral-300 dark:border-neutral-700 bg-neutral-100/90 dark:bg-neutral-900/90 hover:border-black dark:hover:border-white hover:shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center group shrink-0"
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-black flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform border border-neutral-800">
+                          <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.24 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z" /></svg>
+                        </div>
+                      </a>
+                    )}
+
+                    {/* Facebook */}
+                    {fbUrl && (
+                      <a
+                        href={formatSocialUrl(fbUrl, 'facebook')}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Facebook"
+                        className="w-11 h-11 rounded-2xl border border-blue-500/20 bg-blue-500/10 hover:border-[#1877F2]/50 hover:shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center group shrink-0"
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-[#1877F2] flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform">
+                          <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
+                        </div>
+                      </a>
+                    )}
                   </div>
                 </div>
               )}
@@ -511,10 +695,10 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
               {/* Mapa si hay coordenadas */}
               {pitch.lat && pitch.lng && (
                 <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1">
+                  <h4 className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                     <MapPin size={14} className="text-primary" /> Ubicación en Mapa
                   </h4>
-                  <div className="w-full h-40 rounded-2xl overflow-hidden border border-border">
+                  <div className="w-full h-44 sm:h-52 rounded-2xl overflow-hidden border border-border shadow-xs">
                     <iframe
                       title="map-preview"
                       width="100%"
@@ -527,41 +711,24 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
               )}
             </div>
 
-            {/* Pie del Modal */}
-            <div className="p-4 border-t border-border bg-secondary/40 flex items-center justify-between">
-              <div>
-                <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">
-                  <button
-                    onClick={() => {
-                      router.push(`/cancha/${pitch.id}`);
-                    }}
-                    className="px-5 py-2.5 bg-primary text-white font-bold text-xs rounded-xl hover:bg-primary/90 transition-colors flex items-center gap-2 shadow-sm"
-                  >
-                    Ver Cancha
-                  </button>
-                </span>
-              </div>
-
-
+            {/* Pie Fijo del Modal */}
+            <div className="p-4 border-t border-border bg-secondary/40 flex items-center justify-between gap-3 shrink-0">
+              <button
+                onClick={() => router.push(`/cancha/${pitch.id}`)}
+                className="px-4 sm:px-5 py-2.5 bg-primary text-white font-bold text-xs sm:text-sm rounded-xl hover:bg-primary/90 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-sm"
+              >
+                Ver Cancha
+              </button>
 
               <div className="flex items-center gap-2">
                 {isAdmin && editUrl && (
                   <Link
                     href={editUrl}
-                    className="px-4 py-2.5 bg-primary text-white font-bold text-xs rounded-xl hover:bg-primary/90 transition-colors flex items-center gap-2 shadow-sm"
+                    className="px-4 py-2.5 bg-emerald-600 text-white font-bold text-xs sm:text-sm rounded-xl hover:bg-emerald-700 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm"
                   >
-                    <Edit3 size={14} /> Editar
+                    <Edit3 size={14} /> <span className="hidden sm:inline">Editar</span>
                   </Link>
                 )}
-                {/* {isAdmin && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
-                    className="px-4 py-2.5 bg-red-600 text-white font-bold text-xs rounded-xl hover:bg-red-700 transition-colors flex items-center gap-2 shadow-sm"
-                    title="Eliminar cancha"
-                  >
-                    <Trash2 size={14} /> Eliminar
-                  </button>
-                )} */}
               </div>
             </div>
           </div>
