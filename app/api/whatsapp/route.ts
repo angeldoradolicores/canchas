@@ -24,6 +24,30 @@ async function fetchWithTimeout(url: string, options: any = {}, timeoutMs = 1200
   }
 }
 
+// Configura automáticamente el webhook de n8n en una instancia de Evolution
+// Se llama cada vez que se crea o conecta una instancia nueva
+async function setupInstanceWebhook(evoUrl: string, evoHeaders: Record<string, string>, instanceName: string) {
+  const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL || 'http://n8n:5678/webhook/whatsapp';
+  try {
+    await fetchWithTimeout(`${evoUrl}/webhook/set/${instanceName}`, {
+      method: 'POST',
+      headers: { ...evoHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        webhook: {
+          enabled: true,
+          url: n8nWebhookUrl,
+          webhookByEvents: false,
+          webhookBase64: false,
+          events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE'],
+        },
+      }),
+    }, 5000);
+    console.log(`[WhatsApp API] Webhook n8n configurado para instancia: ${instanceName}`);
+  } catch (e) {
+    console.warn(`[WhatsApp API] No se pudo configurar webhook para ${instanceName}:`, e);
+  }
+}
+
 function cleanPhoneNumber(raw: any): string {
   if (!raw || typeof raw !== 'string') return '';
   const noDomain = raw.split('@')[0].split(':')[0];
@@ -239,6 +263,8 @@ export async function POST(req: NextRequest) {
             const createData = await createRes.json();
             rawBase64 = createData?.qrcode?.base64 || createData?.base64;
             rawCode = createData?.qrcode?.code || createData?.code;
+            // Configurar webhook automáticamente al crear la instancia
+            await setupInstanceWebhook(evoUrl, evoHeaders, instanceName);
           }
         } catch (e) {
           console.warn('[WhatsApp API] Error al crear la instancia:', e);
