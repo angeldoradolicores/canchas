@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import {
   MapPin, Phone, ArrowLeft, Loader2, Users, Plus, X,
@@ -25,6 +25,7 @@ interface School {
   contact_phone: string | null;
   instagram_url: string | null;
   facebook_url: string | null;
+  tiktok_url: string | null;
   description: string | null;
   categories: string | null;
   pitch_id: string | null;
@@ -42,6 +43,7 @@ const emptyForm = {
   contact_phone: '',
   instagram_url: '',
   facebook_url: '',
+  tiktok_url: '',
   description: '',
   categories: '',
   pitch_id: '',
@@ -286,6 +288,7 @@ export default function SchoolsPage() {
       contact_phone: school.contact_phone || '',
       instagram_url: school.instagram_url || '',
       facebook_url: school.facebook_url || '',
+      tiktok_url: school.tiktok_url || '',
       description: school.description || '',
       categories: school.categories || '',
       pitch_id: school.pitch_id || '',
@@ -347,11 +350,25 @@ export default function SchoolsPage() {
   async function handleSave() {
     if (!form.name.trim()) {
       setFormError('El nombre de la escuela es obligatorio.');
+      setAlertState({
+        isOpen: true,
+        type: 'warning',
+        title: 'Campo obligatorio',
+        message: 'Por favor ingresa el nombre de la escuela de fútbol.',
+        confirmText: 'Entendido',
+      });
       return;
     }
 
     if (form.contact_phone && !/^\d+$/.test(form.contact_phone.trim())) {
       setFormError('El número de celular debe contener únicamente números.');
+      setAlertState({
+        isOpen: true,
+        type: 'warning',
+        title: 'Número inválido',
+        message: 'El número de WhatsApp o celular debe contener únicamente números.',
+        confirmText: 'Entendido',
+      });
       return;
     }
 
@@ -373,14 +390,26 @@ export default function SchoolsPage() {
         effectiveCustomLocation = `${effectiveCustomLocation}, ${cityTarget}`;
       }
 
+      // Formatear enlaces de redes sociales (soporta handle @ o URL directa)
+      const formatSocial = (url: string, platform: 'tiktok' | 'instagram' | 'facebook') => {
+        const val = url.trim();
+        if (!val) return null;
+        if (val.startsWith('http://') || val.startsWith('https://')) return val;
+        const clean = val.replace(/^@/, '');
+        if (platform === 'tiktok') return `https://tiktok.com/@${clean}`;
+        if (platform === 'instagram') return `https://instagram.com/${clean}`;
+        return `https://facebook.com/${clean}`;
+      };
+
       const payload = {
         ...(isEditing && form.id ? { id: form.id } : {}),
         name: form.name.trim(),
         pitch_id: effectivePitchId,
         custom_location: effectiveCustomLocation,
         contact_phone: form.contact_phone ? form.contact_phone.trim() : null,
-        instagram_url: form.instagram_url ? form.instagram_url.trim() : null,
-        facebook_url: form.facebook_url ? form.facebook_url.trim() : null,
+        instagram_url: formatSocial(form.instagram_url, 'instagram'),
+        facebook_url: formatSocial(form.facebook_url, 'facebook'),
+        tiktok_url: formatSocial(form.tiktok_url, 'tiktok'),
         description: form.description ? form.description.trim() : null,
         categories: form.categories ? form.categories.trim() : null,
         logo_url: form.images[0] || form.logo_url || null,
@@ -411,12 +440,20 @@ export default function SchoolsPage() {
       loadSchools();
     } catch (err: any) {
       setFormError(err.message || 'Error al guardar');
+      setAlertState({
+        isOpen: true,
+        type: 'error',
+        title: 'Error al guardar',
+        message: err.message || 'Ocurrió un error al guardar la escuela de fútbol.',
+        confirmText: 'Aceptar',
+      });
     } finally {
       setSaving(false);
     }
   }
 
-  const filteredSchools = (() => {
+  // Memorizado: solo se mezcla en recarga de página o al cambiar lista de escuelas o ciudad
+  const filteredSchools = useMemo(() => {
     const base = schools.filter(s => {
       if (selectedCity === 'Todas') return true;
       const cityTarget = selectedCity.toLowerCase();
@@ -439,7 +476,7 @@ export default function SchoolsPage() {
     };
 
     return [...shuffle(officials), ...shuffle(others)];
-  })();
+  }, [schools, selectedCity]);
 
   return (
     <div className="pb-28 pt-4 px-3 sm:px-6 max-w-7xl mx-auto min-h-screen">
@@ -464,12 +501,14 @@ export default function SchoolsPage() {
                 <span>{selectedCity === 'Todas' ? 'Toda Colombia' : selectedCity}</span>
               </span> */}
             </div>
-            <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-1 leading-relaxed">
-              Conoce los mejores centros de formación y entrenamiento.
-              <span className="block sm:inline sm:ml-1 font-bold text-[#007a3e]">
-                Las escuelas con ⭐  son administradas por  los complejos verificados.
+            <div className="flex flex-col gap-1 mt-1 text-xs sm:text-sm text-[#4D715B]">
+              <p className="font-medium">
+                Conoce los mejores centros de formación y entrenamiento.
+              </p>
+              <span className="font-bold">
+                Las escuelas con ⭐ son administradas por los complejos verificados.
               </span>
-            </p>
+            </div>
           </div>
 
           <button
@@ -557,8 +596,8 @@ export default function SchoolsPage() {
                       {school.name}
                     </h3>
                     {school.created_by_owner && (
-                      <span className="shrink-0 bg-amber-500/20 text-amber-900 border border-amber-500/30 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider">
-                        ⭐ Oficial
+                      <span className="inline-flex items-center gap-1 bg-amber-500/20 dark:bg-amber-500/30 backdrop-blur-md border border-amber-500/30 text-amber-600 dark:text-amber-300 text-[10px] font-black px-2.5 py-1 rounded-full shadow-md uppercase tracking-wide">
+                        ⭐
                       </span>
                     )}
                   </div>
@@ -617,8 +656,8 @@ export default function SchoolsPage() {
                   )}
 
                   {/* Contacto WhatsApp y Redes Sociales */}
-                  {(school.contact_phone || school.instagram_url || school.facebook_url) && (
-                    <div className="mt-3 pt-2.5 border-t border-[#c5e2d0]/60 flex items-center justify-between gap-2">
+                  {(school.contact_phone || school.instagram_url || school.facebook_url || school.tiktok_url) && (
+                    <div className="mt-3 pt-2.5 border-t border-[#c5e2d0]/60 flex items-center justify-between gap-2 flex-wrap">
                       {school.contact_phone ? (
                         <a
                           href={`https://wa.me/57${school.contact_phone.replace(/\D/g, '')}`}
@@ -632,30 +671,51 @@ export default function SchoolsPage() {
                       ) : <span />}
 
                       <div className="flex items-center gap-1.5">
+                        {/* Instagram */}
                         {school.instagram_url && (
                           <a
                             href={school.instagram_url}
                             target="_blank"
                             rel="noreferrer"
                             onClick={e => e.stopPropagation()}
-                            className="bg-[#cde4d5] hover:bg-[#bce0ca] text-[#007a3e] p-1.5 rounded-lg transition text-xs font-bold flex items-center gap-1"
+                            className="bg-pink-500/10 hover:bg-pink-500/20 text-pink-600 dark:text-pink-400 p-2 rounded-xl transition flex items-center justify-center"
                             title="Instagram"
                           >
-                            <Globe size={13} />
-                            <span className="text-[10px] font-black">IG</span>
+                            <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                              <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+                            </svg>
                           </a>
                         )}
+
+                        {/* Facebook */}
                         {school.facebook_url && (
                           <a
                             href={school.facebook_url}
                             target="_blank"
                             rel="noreferrer"
                             onClick={e => e.stopPropagation()}
-                            className="bg-[#cde4d5] hover:bg-[#bce0ca] text-[#007a3e] p-1.5 rounded-lg transition text-xs font-bold flex items-center gap-1"
+                            className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 p-2 rounded-xl transition flex items-center justify-center"
                             title="Facebook"
                           >
-                            <Globe size={13} />
-                            <span className="text-[10px] font-black">FB</span>
+                            <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                              <path d="M9 8H6v4h3v12h5V12h3.642L18 8h-4V6.333C14 5.378 14.5 5 15.5 5H18V0h-3.808C10.59 0 9 1.581 9 4.75V8z" />
+                            </svg>
+                          </a>
+                        )}
+
+                        {/* TikTok */}
+                        {school.tiktok_url && (
+                          <a
+                            href={school.tiktok_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="bg-zinc-500/10 hover:bg-zinc-500/20 text-foreground p-2 rounded-xl transition flex items-center justify-center"
+                            title="TikTok"
+                          >
+                            <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                              <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
+                            </svg>
                           </a>
                         )}
                       </div>
@@ -800,32 +860,60 @@ export default function SchoolsPage() {
               </div>
 
               {/* Redes Sociales si existen */}
-              {(selected.instagram_url || selected.facebook_url) && (
-                <div className="bg-[#cde4d5]/50 p-3 rounded-2xl border border-[#b8dbc5]/60 flex items-center gap-3">
-                  <span className="text-[10px] font-black uppercase text-[#1b5e39]">Redes:</span>
-                  {selected.instagram_url && (
-                    <a
-                      href={selected.instagram_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs font-bold text-[#007a3e] hover:underline flex items-center gap-1"
-                    >
-                      <ExternalLink size={12} /> Instagram
-                    </a>
-                  )}
-                  {selected.facebook_url && (
-                    <a
-                      href={selected.facebook_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs font-bold text-[#007a3e] hover:underline flex items-center gap-1"
-                    >
-                      <ExternalLink size={12} /> Facebook
-                    </a>
-                  )}
+              {(selected.instagram_url || selected.facebook_url || selected.tiktok_url) && (
+                <div className="bg-[#cde4d5]/40 dark:bg-card/60 p-3.5 rounded-2xl border border-[#b8dbc5]/60 dark:border-border flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-[11px] font-black uppercase text-[#1b5e39] dark:text-emerald-400 tracking-wider">
+                    Redes sociales:
+                  </span>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Instagram */}
+                    {selected.instagram_url && (
+                      <a
+                        href={selected.instagram_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 bg-pink-500/10 hover:bg-pink-500/20 text-pink-600 dark:text-pink-400 text-xs font-bold px-3 py-1.5 rounded-xl transition-all"
+                      >
+                        <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                          <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+                        </svg>
+                        Instagram
+                      </a>
+                    )}
+
+                    {/* Facebook */}
+                    {selected.facebook_url && (
+                      <a
+                        href={selected.facebook_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold px-3 py-1.5 rounded-xl transition-all"
+                      >
+                        <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                          <path d="M9 8H6v4h3v12h5V12h3.642L18 8h-4V6.333C14 5.378 14.5 5 15.5 5H18V0h-3.808C10.59 0 9 1.581 9 4.75V8z" />
+                        </svg>
+                        Facebook
+                      </a>
+                    )}
+
+                    {/* TikTok */}
+                    {selected.tiktok_url && (
+                      <a
+                        href={selected.tiktok_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 bg-zinc-500/10 hover:bg-zinc-500/20 text-foreground text-xs font-bold px-3 py-1.5 rounded-xl transition-all"
+                      >
+                        <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                          <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
+                        </svg>
+                        TikTok
+                      </a>
+                    )}
+                  </div>
                 </div>
               )}
-
               {/* Descripción Completa */}
               {selected.description && (
                 <div>
@@ -902,7 +990,7 @@ export default function SchoolsPage() {
               )}
 
               {/* Subida Múltiple de Fotos */}
-              <div>
+              {/* <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-black uppercase tracking-wider text-[#1b5e39]">
                     Fotos / Galería de la Escuela
@@ -951,7 +1039,7 @@ export default function SchoolsPage() {
                     )}
                   </button>
                 </div>
-              </div>
+              </div> */}
 
               {/* Nombre de la Escuela */}
               <div>
@@ -1013,11 +1101,11 @@ export default function SchoolsPage() {
                               <span className="text-xs font-black uppercase text-[#0f3822]">
                                 🏟️ {c.name}
                               </span>
-                              {(c.city) && (
-                                <span className="text-[10px] text-[#1b5e39] font-medium">
-                                  {c.city},{c.address}
-                                </span>
-                              )}
+
+                              <span className="text-[10px] text-[#1b5e39] font-medium">
+                                {c.address}
+                              </span>
+
                             </div>
                             <span className="text-[10px] font-bold text-[#1b5e39] uppercase">
                               Registrado ↗
@@ -1070,10 +1158,10 @@ export default function SchoolsPage() {
                     Instagram URL
                   </label>
                   <input
-                    type="url"
+                    type="text"
                     value={form.instagram_url}
                     onChange={e => setForm(f => ({ ...f, instagram_url: e.target.value }))}
-                    placeholder="https://instagram.com/..."
+                    placeholder="@micuenta o enlace"
                     className="w-full bg-[#cde4d5]/60 border border-[#a4d4b4] rounded-xl px-3 py-2.5 text-xs font-bold text-[#0f3822] placeholder:text-[#1b5e39]/50 focus:outline-none focus:ring-2 focus:ring-[#007a3e]"
                   />
                 </div>
@@ -1082,10 +1170,22 @@ export default function SchoolsPage() {
                     Facebook URL
                   </label>
                   <input
-                    type="url"
+                    type="text"
                     value={form.facebook_url}
                     onChange={e => setForm(f => ({ ...f, facebook_url: e.target.value }))}
-                    placeholder="https://facebook.com/..."
+                    placeholder="@micuenta o enlace"
+                    className="w-full bg-[#cde4d5]/60 border border-[#a4d4b4] rounded-xl px-3 py-2.5 text-xs font-bold text-[#0f3822] placeholder:text-[#1b5e39]/50 focus:outline-none focus:ring-2 focus:ring-[#007a3e]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-black uppercase tracking-wider text-[#1b5e39] mb-1">
+                    TikTok URL
+                  </label>
+                  <input
+                    type="text"
+                    value={form.tiktok_url}
+                    onChange={e => setForm(f => ({ ...f, tiktok_url: e.target.value }))}
+                    placeholder="@micuenta o enlace"
                     className="w-full bg-[#cde4d5]/60 border border-[#a4d4b4] rounded-xl px-3 py-2.5 text-xs font-bold text-[#0f3822] placeholder:text-[#1b5e39]/50 focus:outline-none focus:ring-2 focus:ring-[#007a3e]"
                   />
                 </div>
@@ -1103,6 +1203,57 @@ export default function SchoolsPage() {
                   rows={3}
                   className="w-full bg-[#cde4d5]/60 border border-[#a4d4b4] rounded-2xl px-4 py-3 text-sm font-bold text-[#0f3822] placeholder:text-[#1b5e39]/50 focus:outline-none focus:ring-2 focus:ring-[#007a3e] resize-none"
                 />
+              </div>
+              {/* Subida Múltiple de Fotos */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-black uppercase tracking-wider text-[#1b5e39]">
+                    Fotos / Galería de la Escuela
+                  </label>
+                  <span className="text-[10px] font-bold text-[#1b5e39]/70 uppercase">
+                    {form.images.length} seleccionada{form.images.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+
+                <input
+                  type="file"
+                  ref={fileRef}
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleFilesChange}
+                />
+
+                <div className="grid grid-cols-3 gap-2">
+                  {form.images.map((imgUrl, idx) => (
+                    <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border border-[#b8dbc5] shadow-xs">
+                      <img src={imgUrl} alt="" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(idx)}
+                        className="absolute top-1 right-1 w-5 h-5 bg-black/70 hover:bg-black text-white rounded-full flex items-center justify-center cursor-pointer transition"
+                        title="Eliminar foto"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={uploading}
+                    className="aspect-video rounded-xl border-2 border-dashed border-[#a4d4b4] bg-[#cde4d5]/50 hover:bg-[#cde4d5] flex flex-col items-center justify-center text-[#1b5e39] font-bold text-xs cursor-pointer transition disabled:opacity-50"
+                  >
+                    {uploading ? (
+                      <Loader2 size={18} className="animate-spin text-[#007a3e]" />
+                    ) : (
+                      <>
+                        <Plus size={18} className="text-[#007a3e]" />
+                        <span className="text-[11px] font-black uppercase mt-0.5">+ Foto</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
 

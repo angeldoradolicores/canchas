@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Loader2, Share2, CalendarCheck, Target, Download, ChevronLeft, Star, Camera } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
 import * as htmlToImage from 'html-to-image';
 import download from 'downloadjs';
 
@@ -18,7 +19,7 @@ const FOOT_LABELS: Record<string, string> = {
 export default function PublicProfilePage() {
   const { id } = useParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const supabase = createClient();
   const cardRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -28,6 +29,12 @@ export default function PublicProfilePage() {
   const [sharingWhatsApp, setSharingWhatsApp] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [profile, setProfile] = useState<any>(null);
+  const [alertState, setAlertState] = useState<AlertModalState>({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: '',
+  });
   const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
   const [stats, setStats] = useState({ bookings: 0, challenges: 0, reviews: 0 });
 
@@ -170,9 +177,23 @@ export default function PublicProfilePage() {
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
       await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', user.id);
       setProfile((prev: any) => ({ ...prev, avatar_url: publicUrl }));
+      await refreshProfile();
+      setAlertState({
+        isOpen: true,
+        type: 'success',
+        title: 'Foto actualizada',
+        message: 'Tu foto de perfil se actualizó correctamente.',
+        confirmText: 'Entendido',
+      });
     } catch (err) {
       console.error('Error subiendo avatar', err);
-      alert('No se pudo actualizar la foto de perfil.');
+      setAlertState({
+        isOpen: true,
+        type: 'error',
+        title: 'Error',
+        message: 'No se pudo actualizar la foto de perfil.',
+        confirmText: 'Aceptar',
+      });
     } finally {
       setUploadingAvatar(false);
     }
@@ -192,7 +213,13 @@ export default function PublicProfilePage() {
       download(dataUrl, `tarjeta-${profile?.full_name?.replace(/\s+/g, '-') || 'jugador'}.png`);
     } catch (err) {
       console.error('Error generando la imagen', err);
-      alert('Hubo un error al generar la imagen. Intenta de nuevo.');
+      setAlertState({
+        isOpen: true,
+        type: 'error',
+        title: 'Error al generar imagen',
+        message: 'Hubo un error al generar la imagen. Intenta de nuevo.',
+        confirmText: 'Aceptar',
+      });
     } finally {
       setDownloading(false);
     }
@@ -245,7 +272,13 @@ export default function PublicProfilePage() {
       window.open(waUrl, '_blank');
     } catch (err) {
       console.error('Error compartiendo en WhatsApp', err);
-      alert('Hubo un error al generar la tarjeta para WhatsApp. Puedes usar el botón Descargar.');
+      setAlertState({
+        isOpen: true,
+        type: 'warning',
+        title: 'Aviso',
+        message: 'Hubo un error al generar la tarjeta para WhatsApp. Puedes usar el botón Descargar.',
+        confirmText: 'Aceptar',
+      });
     } finally {
       setSharingWhatsApp(false);
     }
@@ -500,6 +533,7 @@ export default function PublicProfilePage() {
           ))}
         </div>
       </div>
+      <CustomAlertModal alertState={alertState} onClose={() => setAlertState(s => ({ ...s, isOpen: false }))} />
     </div>
   );
 }

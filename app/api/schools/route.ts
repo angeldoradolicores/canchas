@@ -47,8 +47,19 @@ function enrichSchoolRow(school: any) {
     }
   }
 
+  // 3. Extraer tiktok_url si vino en metadata en description como fallback
+  let tiktokUrl: string | null = school.tiktok_url || null;
+  if (!tiktokUrl && cleanDescription && cleanDescription.includes('[TikTok:')) {
+    const match = cleanDescription.match(/\[TikTok:\s*([^\]]+)\]/);
+    if (match) {
+      tiktokUrl = match[1].trim();
+      cleanDescription = cleanDescription.replace(/\[TikTok:\s*[^\]]+\]/, '').trim();
+    }
+  }
+
   return {
     ...school,
+    tiktok_url: tiktokUrl,
     images: allImages,
     logo_url: allImages[0] || school.logo_url || null,
     custom_location: customLocation,
@@ -150,6 +161,7 @@ export async function POST(req: NextRequest) {
       contact_phone: validData.contact_phone || null,
       instagram_url: validData.instagram_url || null,
       facebook_url: validData.facebook_url || null,
+      tiktok_url: validData.tiktok_url || null,
       description: finalDescription,
       categories: categoriesStr,
       pitch_id: validData.pitch_id || null,
@@ -167,11 +179,19 @@ export async function POST(req: NextRequest) {
       .select('*, pitches(id, name, image_url)')
       .single();
 
-    // Si las columnas nativas aún no existen en DB (error PGRST204), insertar usando basePayload
+    // Si las columnas nativas aún no existen en DB (error PGRST204), insertar usando basePayload con fallback
     if (insertResult.error && (insertResult.error.code === 'PGRST204' || insertResult.error.message.includes('column'))) {
+      let fallbackDesc = finalDescription;
+      if (validData.tiktok_url) {
+        const ttTag = `[TikTok: ${validData.tiktok_url.trim()}]`;
+        fallbackDesc = fallbackDesc ? `${fallbackDesc}\n\n${ttTag}` : ttTag;
+      }
+      const safePayload = { ...basePayload, description: fallbackDesc };
+      delete safePayload.tiktok_url;
+
       insertResult = await service
         .from('schools')
-        .insert(basePayload)
+        .insert(safePayload)
         .select('*, pitches(id, name, image_url)')
         .single();
     }
@@ -233,10 +253,10 @@ async function handleUpdate(req: NextRequest) {
       : (updates.logo_url ? [updates.logo_url] : []);
     const serializedImages = imagesList.join('|||');
 
-    // Manejar ubicación personalizada en description
+    // Manejar ubicación personalizada y tiktok en description
     let finalDescription = updates.description !== undefined ? updates.description : school.description;
     if (finalDescription) {
-      finalDescription = finalDescription.replace(/\[Ubicación:\s*[^\]]+\]/, '').trim();
+      finalDescription = finalDescription.replace(/\[Ubicación:\s*[^\]]+\]/, '').replace(/\[TikTok:\s*[^\]]+\]/, '').trim();
     }
     if (updates.custom_location && !updates.pitch_id) {
       const locTag = `[Ubicación: ${updates.custom_location.trim()}]`;
@@ -253,6 +273,7 @@ async function handleUpdate(req: NextRequest) {
       ...(updates.contact_phone !== undefined ? { contact_phone: updates.contact_phone || null } : {}),
       ...(updates.instagram_url !== undefined ? { instagram_url: updates.instagram_url || null } : {}),
       ...(updates.facebook_url !== undefined ? { facebook_url: updates.facebook_url || null } : {}),
+      ...(updates.tiktok_url !== undefined ? { tiktok_url: updates.tiktok_url || null } : {}),
       ...(finalDescription !== undefined ? { description: finalDescription || null } : {}),
       ...(categoriesStr !== undefined ? { categories: categoriesStr || null } : {}),
       ...(updates.pitch_id !== undefined ? { pitch_id: updates.pitch_id || null } : {}),
@@ -272,9 +293,17 @@ async function handleUpdate(req: NextRequest) {
 
     // Fallback si no existen las columnas opcionales en Postgres
     if (updateResult.error && (updateResult.error.code === 'PGRST204' || updateResult.error.message.includes('column'))) {
+      let fallbackDesc = finalDescription !== undefined ? finalDescription : school.description;
+      if (updates.tiktok_url) {
+        const ttTag = `[TikTok: ${updates.tiktok_url.trim()}]`;
+        fallbackDesc = fallbackDesc ? `${fallbackDesc}\n\n${ttTag}` : ttTag;
+      }
+      const safeUpdatePayload = { ...updatePayload, ...(fallbackDesc !== undefined ? { description: fallbackDesc } : {}) };
+      delete safeUpdatePayload.tiktok_url;
+
       updateResult = await service
         .from('schools')
-        .update(updatePayload)
+        .update(safeUpdatePayload)
         .eq('id', id)
         .select('*, pitches(id, name, image_url)')
         .single();

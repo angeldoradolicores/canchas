@@ -1457,7 +1457,7 @@ function ChallengeFormModal({
             {showSuggestions && pitchSuggestions.length > 0 && (
               <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-card border border-border rounded-xl shadow-xl overflow-hidden">
                 <div className="px-3 py-1.5 text-[11px] font-bold text-muted-foreground bg-secondary">
-                  Complejos registrados en el sistema
+                  Complejos registrados en {selectedCity !== 'Todas' ? selectedCity : 'el sistema'}
                 </div>
                 {pitchSuggestions.map((c: any) => (
                   <button
@@ -1473,8 +1473,8 @@ function ChallengeFormModal({
                   >
                     <div className="flex flex-col">
                       <span className="font-semibold text-foreground">🏟️ {c.name.toUpperCase()}</span>
-                      {(c.city || c.address) && (
-                        <span className="text-xs text-muted-foreground">{[c.city || c.address].filter(Boolean).join(' · ')}</span>
+                      {(c.address) && (
+                        <span className="text-xs text-muted-foreground">{c.address}</span>
                       )}
                     </div>
                     {c.pitches_count > 0 && (

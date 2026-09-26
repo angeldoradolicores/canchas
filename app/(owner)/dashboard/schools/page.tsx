@@ -30,6 +30,7 @@ const emptyForm = {
   contact_phone: '',
   instagram_url: '',
   facebook_url: '',
+  tiktok_url: '',
   description: '',
   categories: '',
   pitch_id: '',
@@ -124,6 +125,7 @@ export default function OwnerSchoolsPage() {
       contact_phone: school.contact_phone || '',
       instagram_url: school.instagram_url || '',
       facebook_url: school.facebook_url || '',
+      tiktok_url: (school as any).tiktok_url || '',
       description: school.description || '',
       categories: school.categories || '',
       pitch_id: school.pitch_id || '',
@@ -144,6 +146,7 @@ export default function OwnerSchoolsPage() {
         contact_phone: form.contact_phone || null,
         instagram_url: form.instagram_url || null,
         facebook_url: form.facebook_url || null,
+        tiktok_url: form.tiktok_url || null,
         description: form.description || null,
         categories: form.categories || null,
       };
@@ -180,26 +183,44 @@ export default function OwnerSchoolsPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('¿Seguro que quieres eliminar esta escuela?')) return;
-    setDeleting(id);
-    try {
-      const { data: sessData } = await supabase.auth.getSession();
-      const token = sessData?.session?.access_token;
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+    setAlertState({
+      isOpen: true,
+      type: 'warning',
+      title: '¿Eliminar escuela?',
+      message: '¿Estás seguro de que deseas eliminar esta escuela de fútbol? Esta acción no se puede deshacer.',
+      showCancel: true,
+      confirmText: 'Sí, eliminar',
+      confirmButtonClassName: 'bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2.5 rounded-xl flex-1 shadow-sm transition-colors text-center text-sm cursor-pointer',
+      cancelText: 'Cancelar',
+      cancelButtonClassName: 'btn-primary bg-secondary hover:bg-secondary/80 text-foreground flex-1',
+      onConfirm: async () => {
+        setDeleting(id);
+        try {
+          const { data: sessData } = await supabase.auth.getSession();
+          const token = sessData?.session?.access_token;
+          const headers: Record<string, string> = {};
+          if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`/api/schools?id=${id}`, {
-        method: 'DELETE',
-        headers,
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-      await loadData();
-    } catch (e: any) {
-      alert('Error al eliminar: ' + e.message);
-    } finally {
-      setDeleting(null);
-    }
+          const res = await fetch(`/api/schools?id=${id}`, {
+            method: 'DELETE',
+            headers,
+          });
+          const data = await res.json();
+          if (!data.success) throw new Error(data.error);
+          await loadData();
+        } catch (e: any) {
+          setAlertState({
+            isOpen: true,
+            type: 'error',
+            title: 'Error',
+            message: 'Error al eliminar: ' + (e.message || 'No se pudo eliminar'),
+            confirmText: 'Aceptar',
+          });
+        } finally {
+          setDeleting(null);
+        }
+      }
+    });
   }
 
   function field(key: keyof typeof form, value: string) {
@@ -419,26 +440,40 @@ export default function OwnerSchoolsPage() {
                     <Globe size={12} className="inline mr-1" />Instagram URL
                   </label>
                   <input
-                    type="url"
+                    type="text"
                     value={form.instagram_url}
                     onChange={e => field('instagram_url', e.target.value)}
-                    placeholder="https://instagram.com/..."
+                    placeholder="https://instagram.com/... o @usuario"
                     className="w-full border border-border rounded-xl px-4 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/40"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-foreground mb-1.5">
-                  <Globe size={12} className="inline mr-1" />Facebook URL
-                </label>
-                <input
-                  type="url"
-                  value={form.facebook_url}
-                  onChange={e => field('facebook_url', e.target.value)}
-                  placeholder="https://facebook.com/..."
-                  className="w-full border border-border rounded-xl px-4 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/40"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-foreground mb-1.5">
+                    <Globe size={12} className="inline mr-1" />Facebook URL
+                  </label>
+                  <input
+                    type="text"
+                    value={form.facebook_url}
+                    onChange={e => field('facebook_url', e.target.value)}
+                    placeholder="https://facebook.com/... o @usuario"
+                    className="w-full border border-border rounded-xl px-4 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-foreground mb-1.5">
+                    <Globe size={12} className="inline mr-1" />TikTok URL
+                  </label>
+                  <input
+                    type="text"
+                    value={form.tiktok_url}
+                    onChange={e => field('tiktok_url', e.target.value)}
+                    placeholder="https://tiktok.com/@... o @usuario"
+                    className="w-full border border-border rounded-xl px-4 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </div>
               </div>
             </div>
 

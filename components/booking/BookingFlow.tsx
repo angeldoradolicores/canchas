@@ -248,6 +248,19 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     }
   };
 
+  // Si la cancha es liberada o cancelada desde otra pestaña, otro dispositivo o el timer flotante, salir inmediatamente
+  useEffect(() => {
+    const handleCancelled = () => {
+      onBack();
+    };
+    window.addEventListener('cancel-active-booking', handleCancelled);
+    window.addEventListener('active-booking-expired', handleCancelled);
+    return () => {
+      window.removeEventListener('cancel-active-booking', handleCancelled);
+      window.removeEventListener('active-booking-expired', handleCancelled);
+    };
+  }, [onBack]);
+
   // Control del temporizador flotante automático
   useEffect(() => {
     setIsFloating(false);

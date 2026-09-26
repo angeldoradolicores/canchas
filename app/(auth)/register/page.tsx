@@ -7,10 +7,10 @@ export default function RegisterPage() {
       <AuthForm
         mode="register"
         forcedRole="player"
-        title="Únete a Canchas Pasto"
+        title="Únete a Cancheros"
         subtitle="Crea tu cuenta de Jugador para empezar a reservar y armar tus partidos."
       />
-      
+
       <p className="auth-switch">
         ¿Ya tienes cuenta? <Link href="/login">Inicia sesión</Link>
       </p>

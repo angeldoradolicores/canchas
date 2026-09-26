@@ -153,6 +153,7 @@ export const SchoolCreateSchema = z.object({
   contact_phone: z.string().max(25).optional().nullable().or(z.literal('')),
   instagram_url: z.string().max(300).optional().nullable().or(z.literal('')),
   facebook_url: z.string().max(300).optional().nullable().or(z.literal('')),
+  tiktok_url: z.string().max(300).optional().nullable().or(z.literal('')),
   description: z.string().max(4000, 'La descripción no puede superar 4000 caracteres').optional().nullable().or(z.literal('')),
   categories: z.union([
     z.string().max(300),

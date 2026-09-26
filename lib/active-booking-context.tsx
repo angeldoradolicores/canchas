@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { Pitch } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
+import { createClient } from '@/lib/supabase/client';
 
 export interface ActiveBookingData {
   pitch: Pitch;
@@ -41,9 +42,11 @@ const ActiveBookingContext = createContext<ActiveBookingContextType>({
 });
 
 const STORAGE_KEY = 'canchas_active_draft_booking';
+const BROADCAST_CHANNEL_NAME = 'canchas_active_booking_channel';
 
 export function ActiveBookingProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const supabase = createClient();
   const [activeBooking, setActiveBooking] = useState<ActiveBookingData | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [isFloating, setIsFloating] = useState(false);
@@ -51,8 +54,62 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
   const [lockLoading, setLockLoading] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
 
-  // Restaurar desde sessionStorage al cargar
+  // Inicializar BroadcastChannel para sincronización inmediata entre pestañas
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      const bc = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+      broadcastChannelRef.current = bc;
+
+      bc.onmessage = (event) => {
+        if (event.data?.type === 'CANCEL_OR_RELEASE') {
+          setActiveBooking(null);
+          setIsFloating(false);
+          setShowCancelModal(false);
+          setSecondsLeft(0);
+          sessionStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(STORAGE_KEY);
+          window.dispatchEvent(new CustomEvent('cancel-active-booking'));
+        } else if (event.data?.type === 'SET_ACTIVE' && event.data?.payload) {
+          setActiveBooking(event.data.payload);
+        }
+      };
+
+      return () => {
+        bc.close();
+      };
+    }
+  }, []);
+
+  // Sincronización entre pestañas mediante evento 'storage' nativo
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY) {
+        if (!e.newValue) {
+          // Fue liberado o eliminado en otra pestaña del mismo navegador
+          setActiveBooking(null);
+          setIsFloating(false);
+          setShowCancelModal(false);
+          setSecondsLeft(0);
+          sessionStorage.removeItem(STORAGE_KEY);
+          window.dispatchEvent(new CustomEvent('cancel-active-booking'));
+        } else {
+          try {
+            const parsed: ActiveBookingData = JSON.parse(e.newValue);
+            setActiveBooking(parsed);
+          } catch {}
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // Restaurar desde sessionStorage / localStorage al cargar
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -65,7 +122,7 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
         if (diff > 0) {
           setActiveBooking(parsed);
           setSecondsLeft(diff);
-          setIsFloating(true); // Si se recargó la página, mantener como flotante
+          setIsFloating(true);
         } else {
           sessionStorage.removeItem(STORAGE_KEY);
           localStorage.removeItem(STORAGE_KEY);
@@ -73,6 +130,76 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
       }
     } catch {}
   }, []);
+
+  // Sincronización entre diferentes dispositivos / pestañas mediante Supabase Realtime y verificación en DB
+  useEffect(() => {
+    if (!activeBooking || !activeBooking.bookingIds || activeBooking.bookingIds.length === 0) return;
+
+    const bookingIds = activeBooking.bookingIds;
+
+    // 1. Suscripción a Realtime para detectar eliminación inmediata (DELETE) en la tabla 'bookings'
+    const channel = supabase
+      .channel(`draft-lock-sync:${activeBooking.pitch.id}:${bookingIds[0] || 'all'}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'bookings',
+        },
+        (payload) => {
+          const deletedId = (payload.old as any)?.id;
+          if (!deletedId || bookingIds.includes(deletedId)) {
+            // Se liberó la cancha desde otro dispositivo o pestaña
+            clearActiveBooking();
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('cancel-active-booking'));
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // 2. Verificación periódica (cada 3.5 segundos y al volver a enfocar la ventana)
+    // Garantiza que si el usuario liberó la cancha en su teléfono u otra sesión, se salga en este dispositivo
+    const checkStillLockedInDb = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('bookings')
+          .select('id, status')
+          .in('id', bookingIds)
+          .eq('status', 'draft');
+
+        if (error) return;
+
+        // Si ya no existe ninguno de los registros en DB (fueron borrados/liberados)
+        if (!data || data.length === 0) {
+          clearActiveBooking();
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('cancel-active-booking'));
+          }
+        }
+      } catch (err) {
+        console.warn('Error verificando estado del bloqueo:', err);
+      }
+    };
+
+    const interval = setInterval(checkStillLockedInDb, 3500);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkStillLockedInDb();
+      }
+    };
+    window.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', checkStillLockedInDb);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+      window.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', checkStillLockedInDb);
+    };
+  }, [activeBooking?.bookingIds, activeBooking?.pitch?.id, supabase]);
 
   // Timer de cuenta regresiva
   useEffect(() => {
@@ -123,6 +250,9 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
       sessionStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(STORAGE_KEY);
     }
+    try {
+      broadcastChannelRef.current?.postMessage({ type: 'CANCEL_OR_RELEASE' });
+    } catch {}
   }, []);
 
   const cancelActiveBooking = useCallback(async () => {
@@ -153,6 +283,9 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
       console.error('[cancel draft error]', e);
     } finally {
       clearActiveBooking();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('cancel-active-booking'));
+      }
     }
   }, [activeBooking, user, clearActiveBooking]);
 

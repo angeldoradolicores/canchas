@@ -48,6 +48,22 @@ export default function PublicPitchPage({ params }: { params: Promise<{ id: stri
     fetchPitch();
   }, [id, supabase]);
 
+  // Si se libera la cancha desde el timer flotante, otra pestaña o dispositivo, salir del BookingFlow
+  useEffect(() => {
+    const handleCancelled = () => {
+      setBooking(false);
+      savedTimesRef.current = [];
+      savedDateRef.current = '';
+    };
+
+    window.addEventListener('cancel-active-booking', handleCancelled);
+    window.addEventListener('active-booking-expired', handleCancelled);
+    return () => {
+      window.removeEventListener('cancel-active-booking', handleCancelled);
+      window.removeEventListener('active-booking-expired', handleCancelled);
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">

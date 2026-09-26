@@ -58,7 +58,7 @@ export function CustomSelect({ value, onChange, options }: {
 }
 
 export default function ProfilePage() {
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, refreshProfile } = useAuth();
   const router = useRouter();
   const supabase = createClient();
 
@@ -107,19 +107,21 @@ export default function ProfilePage() {
     const { error } = await supabase
       .from('profiles')
       .update({
-        full_name: fullName,
-        phone,
+        full_name: fullName.trim(),
+        phone: phone.trim(),
         position: position || null,
         preferred_foot: preferredFoot || null,
         skill_level: skillLevel || null,
         looking_for_team: lookingForTeam,
       })
       .eq('id', user.id);
-    setLoading(false);
+    
     if (!error) {
+      await refreshProfile();
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     }
+    setLoading(false);
   };
 
   const handleLogout = async () => {
@@ -192,7 +194,7 @@ export default function ProfilePage() {
                 <Shield size={12} /> Ir a mi Dashboard
               </Link>
             )}
-            {(profile as any)?.looking_for_team && (
+            {lookingForTeam && (
               <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-lg">🔍 Buscando equipo</span>
             )}
           </div>

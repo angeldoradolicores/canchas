@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
 import {
   QrCode,
   Smartphone,
@@ -47,6 +48,12 @@ export default function WhatsAppConnectionPage() {
   const [sendingTest, setSendingTest] = useState(false);
   const [testResult, setTestResult] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [alertState, setAlertState] = useState<AlertModalState>({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: '',
+  });
 
   // 1. Cargar datos iniciales del complejo
   useEffect(() => {
@@ -234,34 +241,84 @@ export default function WhatsAppConnectionPage() {
   // Desconectar
   const handleDisconnect = async () => {
     if (!company?.id) return;
-    if (!confirm('¿Estás seguro de desconectar tu WhatsApp?')) return;
-
-    setGenerating(true);
-    try {
-      const res = await fetch('/api/whatsapp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'disconnect', companyId: company.id }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setStatus('disconnected');
-        setQrCode(null);
-        setConnectedPhone('');
+    setAlertState({
+      isOpen: true,
+      type: 'warning',
+      title: '¿Desconectar WhatsApp?',
+      message: '¿Estás seguro de desconectar tu WhatsApp? Las notificaciones automáticas y tickets de reservas dejarán de enviarse hasta que vuelvas a vincularte.',
+      showCancel: true,
+      confirmText: 'Sí, desconectar',
+      confirmButtonClassName: 'bg-red-600 hover:bg-red-700 text-white font-bold text-xs sm:text-sm px-4 py-3 rounded-xl flex-1 shadow-md transition-all active:scale-95 cursor-pointer',
+      cancelText: 'Cancelar',
+      cancelButtonClassName: 'btn-primary bg-secondary hover:bg-secondary/80 text-foreground flex-1',
+      onConfirm: async () => {
+        setGenerating(true);
+        try {
+          const res = await fetch('/api/whatsapp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'disconnect', companyId: company.id }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            setStatus('disconnected');
+            setQrCode(null);
+            setConnectedPhone('');
+            setAlertState({
+              isOpen: true,
+              type: 'info',
+              title: 'WhatsApp desconectado',
+              message: 'Tu WhatsApp ha sido desvinculado exitosamente.',
+              confirmText: 'Entendido',
+            });
+          } else {
+            setAlertState({
+              isOpen: true,
+              type: 'error',
+              title: 'Error al desconectar',
+              message: data.error || 'No se pudo desconectar WhatsApp.',
+              confirmText: 'Aceptar',
+            });
+          }
+        } catch (err: any) {
+          setAlertState({
+            isOpen: true,
+            type: 'error',
+            title: 'Error',
+            message: 'Error al desconectar: ' + err.message,
+            confirmText: 'Aceptar',
+          });
+        } finally {
+          setGenerating(false);
+        }
       }
-    } catch (err: any) {
-      setErrorMsg('Error al desconectar: ' + err.message);
-    } finally {
-      setGenerating(false);
-    }
+    });
   };
 
   // Probar envío de mensaje
   const handleSendTestMessage = async () => {
-    if (!testPhone) {
-      alert('Ingresa un número para enviar el mensaje de prueba');
+    if (!testPhone.trim()) {
+      setAlertState({
+        isOpen: true,
+        type: 'warning',
+        title: 'Número requerido',
+        message: 'Por favor ingresa un número de teléfono o WhatsApp para enviar el mensaje de prueba.',
+        confirmText: 'Entendido',
+      });
       return;
     }
+    const cleanPhone = testPhone.replace(/\D/g, '');
+    if (cleanPhone.length < 10) {
+      setAlertState({
+        isOpen: true,
+        type: 'warning',
+        title: 'Número inválido',
+        message: 'Ingresa un número válido de 10 dígitos (Ej: 3001234567).',
+        confirmText: 'Entendido',
+      });
+      return;
+    }
+
     setSendingTest(true);
     setTestResult('');
     try {
@@ -271,17 +328,38 @@ export default function WhatsAppConnectionPage() {
         body: JSON.stringify({
           action: 'send_test',
           companyId: company?.id,
-          phone: testPhone,
+          phone: cleanPhone,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        setTestResult(`✅ Mensaje enviado exitosamente a +57 ${testPhone}`);
+        setTestResult(`✅ Mensaje enviado exitosamente a +57 ${cleanPhone}`);
+        setAlertState({
+          isOpen: true,
+          type: 'success',
+          title: '¡Mensaje enviado!',
+          message: `El mensaje de prueba se envió correctamente a +57 ${cleanPhone}.`,
+          confirmText: 'Excelente',
+        });
       } else {
         setTestResult(`❌ Error: ${data.error || 'No se pudo enviar'}`);
+        setAlertState({
+          isOpen: true,
+          type: 'error',
+          title: 'Error al enviar',
+          message: data.error || 'No se pudo enviar el mensaje de prueba.',
+          confirmText: 'Aceptar',
+        });
       }
     } catch (err: any) {
       setTestResult('❌ Error al enviar mensaje: ' + err.message);
+      setAlertState({
+        isOpen: true,
+        type: 'error',
+        title: 'Error de conexión',
+        message: 'Error al enviar mensaje: ' + err.message,
+        confirmText: 'Aceptar',
+      });
     } finally {
       setSendingTest(false);
     }
@@ -512,6 +590,7 @@ export default function WhatsAppConnectionPage() {
           </div>
         </div>
       </div>
+      <CustomAlertModal alertState={alertState} onClose={() => setAlertState(prev => ({ ...prev, isOpen: false }))} />
     </div>
   );
 }

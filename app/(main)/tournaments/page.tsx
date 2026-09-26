@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -126,7 +126,6 @@ function CustomDateInput({ value, onChange, label, required, min }: {
       <CalendarDays size={15} className={`absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none ${value ? 'text-primary' : 'text-muted-foreground'}`} />
       <input
         type="date"
-        required={required}
         min={min}
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -288,8 +287,26 @@ export default function TournamentsPage() {
   // ── Save ──────────────────────────────────────────────────────────────────
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) { setFormError('Debes iniciar sesión.'); return; }
-    if (!form.name || !form.start_date) { setFormError('El nombre y fecha de inicio son obligatorios.'); return; }
+    if (!user) {
+      setAlertState({
+        isOpen: true,
+        type: 'login_required',
+        title: 'Inicia sesión',
+        message: 'Debes iniciar sesión para crear o editar un campeonato.',
+      });
+      return;
+    }
+    if (!form.name.trim() || !form.start_date) {
+      setFormError('El nombre y fecha de inicio son obligatorios.');
+      setAlertState({
+        isOpen: true,
+        type: 'warning',
+        title: 'Campos requeridos',
+        message: 'Por favor ingresa el nombre del campeonato y la fecha de inicio.',
+        confirmText: 'Entendido',
+      });
+      return;
+    }
 
     setSaving(true);
     setFormError('');
@@ -309,8 +326,8 @@ export default function TournamentsPage() {
 
     const payload = {
       user_id: user.id,
-      name: form.name,
-      description: form.description,
+      name: form.name.trim(),
+      description: form.description ? form.description.trim() : null,
       start_date: form.start_date,
       registration_end_date: form.registration_end_date || null,
       final_date: form.final_date || null,
@@ -324,17 +341,39 @@ export default function TournamentsPage() {
       ...(editingId ? { tournament_id: editingId } : {}),
     };
 
-    const res = await fetch('/api/tournaments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ action: editingId ? 'update_tournament' : 'create_tournament', payload }),
-    });
-    const data = await res.json();
-    setSaving(false);
+    try {
+      const res = await fetch('/api/tournaments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ action: editingId ? 'update_tournament' : 'create_tournament', payload }),
+      });
+      const data = await res.json();
+      setSaving(false);
 
-    if (!data.success) { setFormError(data.error || 'Error al guardar'); return; }
-    setShowModal(false);
-    fetchTournaments();
+      if (!data.success) {
+        setFormError(data.error || 'Error al guardar');
+        setAlertState({
+          isOpen: true,
+          type: 'error',
+          title: 'Error al guardar',
+          message: data.error || 'No se pudo guardar el campeonato.',
+          confirmText: 'Aceptar',
+        });
+        return;
+      }
+      setShowModal(false);
+      fetchTournaments();
+    } catch (err: any) {
+      setSaving(false);
+      setFormError(err.message || 'Error al guardar');
+      setAlertState({
+        isOpen: true,
+        type: 'error',
+        title: 'Error',
+        message: err.message || 'No se pudo conectar con el servidor.',
+        confirmText: 'Aceptar',
+      });
+    }
   };
 
   // ── Delete ────────────────────────────────────────────────────────────────
@@ -352,7 +391,7 @@ export default function TournamentsPage() {
 
       // Botón Derecho: Acción de cancelar en estilo secundario
       cancelText: 'Cancelar',
-      cancelButtonClassName: 'btn-primary bg-red-600 hover:bg-red-700 text-white flex-1 shadow-sm',
+      cancelButtonClassName: 'btn-primary bg-secondary hover:bg-secondary/80 text-foreground flex-1 shadow-sm',
       onConfirm: async () => {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token || '';
@@ -367,7 +406,7 @@ export default function TournamentsPage() {
     });
   };
 
-  const filtered = (() => {
+  const filtered = useMemo(() => {
     const base = tournaments.filter(t => {
       const matchesStatus = statusFilter === 'all' || t.status === statusFilter;
       if (!matchesStatus) return false;
@@ -392,7 +431,7 @@ export default function TournamentsPage() {
     };
 
     return [...shuffle(officials), ...shuffle(others)];
-  })();
+  }, [tournaments, statusFilter, selectedCity]);
 
   return (
     <div className="page-content fade-in max-w-6xl mx-auto">
@@ -414,8 +453,14 @@ export default function TournamentsPage() {
                 <span>{selectedCity === 'Todas' ? 'Toda Colombia' : selectedCity}</span>
               </span> */}
             </div>
-            <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1">
-              Explora y participa en los torneos y campeonatos organizados por centros deportivos y la comunidad de jugadores.            </p>
+            <div className="flex flex-col gap-1 mt-1 text-xs sm:text-sm text-[#4D715B]">
+              <p className="font-medium">
+                Explora y participa en los torneos y campeonatos organizados por centros deportivos y la comunidad de jugadores.
+              </p>
+              <span className="font-bold">
+                Los torneos con ⭐ son administrados por los complejos verificados.
+              </span>
+            </div>
           </div>
 
           <button
@@ -569,8 +614,8 @@ export default function TournamentsPage() {
                   {/* Badge Oficial */}
                   {t.created_by_owner && (
                     <div className="absolute top-3 left-3 z-10">
-                      <span className="inline-flex items-center gap-1 bg-amber-400 text-amber-900 text-[10px] font-black px-2.5 py-1 rounded-full shadow-md uppercase tracking-wide">
-                        ⭐ Oficial
+                      <span className="inline-flex items-center gap-1 bg-amber-500/20 dark:bg-amber-500/30 backdrop-blur-md border border-amber-500/30 text-amber-600 dark:text-amber-300 text-[10px] font-black px-2.5 py-1 rounded-full shadow-md uppercase tracking-wide">
+                        ⭐
                       </span>
                     </div>
                   )}
@@ -1118,7 +1163,7 @@ export default function TournamentsPage() {
 
             {/* Scrollable body */}
             <div className="overflow-y-auto flex-1 p-6">
-              <form id="tournament-form" onSubmit={handleSave} className="space-y-5">
+              <form id="tournament-form" noValidate onSubmit={handleSave} className="space-y-5">
 
                 {formError && (
                   <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2">
@@ -1131,7 +1176,6 @@ export default function TournamentsPage() {
                   <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Nombre del Campeonato *</label>
                   <input
                     type="text"
-                    required
                     value={form.name}
                     onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                     placeholder="Copa Nariño 2026"
@@ -1167,70 +1211,102 @@ export default function TournamentsPage() {
 
                 {/* Fechas */}
                 <div className="space-y-4">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Fechas del Campeonato</label>
 
-                  {/* Fecha de inicio */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <p className="text-[11px] font-semibold text-foreground flex items-center gap-1">
-                        <CalendarDays size={12} className="text-primary" /> Fecha de inicio *
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => { setShowStartCal(v => !v); setShowEndCal(false); setShowFinalCal(false); }}
-                        className={`flex items-center gap-1 text-[10px] font-bold border rounded-lg px-2.5 py-1 transition-all ${showStartCal ? 'bg-primary text-white border-primary' : 'text-primary bg-primary/10 border-primary/30 hover:bg-primary hover:text-white hover:border-primary'}`}
-                      >
-                        <CalendarDays size={11} /> {showStartCal ? 'Cerrar' : 'Ver calendario'}
-                      </button>
-                    </div>
-                    {form.start_date && (
-                      <p className="text-xs font-bold text-primary mb-2 flex items-center gap-1">
-                        📅 {new Date(form.start_date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                      </p>
-                    )}
-                    {showStartCal ? (
-                      <div className="flex justify-center">
-                        <CustomMonthCalendar
-                          selectedDate={form.start_date}
-                          onSelectDate={val => { setForm(f => ({ ...f, start_date: val })); setShowStartCal(false); }}
-                          minDate={today}
-                        />
-                      </div>
-                    ) : (
-                      <CustomDateInput value={form.start_date} onChange={val => setForm(f => ({ ...f, start_date: val }))} label="Inicio" required min={today} />
-                    )}
-                  </div>
+                  {/* Fechas */}
+                  <div className="space-y-4">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Fechas del Campeonato</label>
 
-                  {/* Fin de inscripciones */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <p className="text-[11px] font-semibold text-foreground flex items-center gap-1">
-                        <Clock size={12} className="text-amber-500" /> Fin de inscripciones
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => { setShowEndCal(v => !v); setShowStartCal(false); setShowFinalCal(false); }}
-                        className={`flex items-center gap-1 text-[10px] font-bold border rounded-lg px-2.5 py-1 transition-all ${showEndCal ? 'bg-primary text-white border-primary' : 'text-primary bg-primary/10 border-primary/30 hover:bg-primary hover:text-white hover:border-primary'}`}
-                      >
-                        <CalendarDays size={11} /> {showEndCal ? 'Cerrar' : 'Ver calendario'}
-                      </button>
-                    </div>
-                    {form.registration_end_date && (
-                      <p className="text-xs font-bold text-amber-600 mb-2 flex items-center gap-1">
-                        📅 {new Date(form.registration_end_date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                      </p>
-                    )}
-                    {showEndCal ? (
-                      <div className="flex justify-center">
-                        <CustomMonthCalendar
-                          selectedDate={form.registration_end_date}
-                          onSelectDate={val => { setForm(f => ({ ...f, registration_end_date: val })); setShowEndCal(false); }}
-                          minDate={form.start_date || today}
-                        />
+                    {/* Fecha de inicio */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-[11px] font-semibold text-foreground flex items-center gap-1">
+                          <CalendarDays size={12} className="text-primary" /> Fecha de inicio *
+                        </p>
                       </div>
-                    ) : (
-                      <CustomDateInput value={form.registration_end_date} onChange={val => setForm(f => ({ ...f, registration_end_date: val }))} label="Fin inscripciones" min={form.start_date || today} />
-                    )}
+
+                      <div
+                        onClick={() => {
+                          if (!showStartCal && !form.start_date) {
+                            setForm(f => ({ ...f, start_date: today }));
+                          }
+                          setShowStartCal(v => !v);
+                          setShowEndCal(false);
+                          setShowFinalCal(false);
+                        }}
+                        className="w-full p-3 bg-card border border-border rounded-xl cursor-pointer hover:border-primary/50 transition-all flex items-center justify-between shadow-2xs"
+                      >
+                        <div className="flex items-center gap-2">
+                          <CalendarDays size={16} className="text-primary" />
+                          <span className="text-xs font-bold text-foreground">
+                            {form.start_date
+                              ? new Date(form.start_date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                              : 'Seleccionar fecha'
+                            }
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground font-semibold">
+                          {showStartCal ? 'Ocultar' : 'Cambiar'}
+                        </span>
+                      </div>
+
+                      {showStartCal && (
+                        <div className="w-full flex justify-center mt-2 p-3 bg-card border border-border rounded-2xl shadow-md overflow-x-auto animate-in fade-in zoom-in-95 duration-150">
+                          <div className="w-full max-w-xs sm:max-w-sm flex justify-center">
+                            <CustomMonthCalendar
+                              selectedDate={form.start_date}
+                              onSelectDate={val => { setForm(f => ({ ...f, start_date: val })); setShowStartCal(false); }}
+                              minDate={today}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Fin de inscripciones */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-[11px] font-semibold text-foreground flex items-center gap-1">
+                          <Trophy size={12} className="text-primary" /> Fin inscripciones <span className="text-muted-foreground font-normal ml-1">(opcional)</span>
+                        </p>
+                      </div>
+
+                      <div
+                        onClick={() => {
+                          if (!showEndCal && !form.registration_end_date) {
+                            setForm(f => ({ ...f, registration_end_date: form.start_date || today }));
+                          }
+                          setShowEndCal(v => !v);
+                          setShowStartCal(false);
+                          setShowFinalCal(false);
+                        }}
+                        className="w-full p-3 bg-card border border-border rounded-xl cursor-pointer hover:border-primary/50 transition-all flex items-center justify-between shadow-2xs"
+                      >
+                        <div className="flex items-center gap-2">
+                          <CalendarDays size={16} className="text-amber-500" />
+                          <span className="text-xs font-bold text-foreground">
+                            {form.registration_end_date
+                              ? new Date(form.registration_end_date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                              : 'Seleccionar fecha'
+                            }
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground font-semibold">
+                          {showEndCal ? 'Ocultar' : 'Cambiar'}
+                        </span>
+                      </div>
+
+                      {showEndCal && (
+                        <div className="w-full flex justify-center mt-2 p-3 bg-card border border-border rounded-2xl shadow-md overflow-x-auto animate-in fade-in zoom-in-95 duration-150">
+                          <div className="w-full max-w-xs sm:max-w-sm flex justify-center">
+                            <CustomMonthCalendar
+                              selectedDate={form.registration_end_date}
+                              onSelectDate={val => { setForm(f => ({ ...f, registration_end_date: val })); setShowEndCal(false); }}
+                              minDate={form.start_date || today}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Gran Final */}
@@ -1239,29 +1315,46 @@ export default function TournamentsPage() {
                       <p className="text-[11px] font-semibold text-foreground flex items-center gap-1">
                         <Trophy size={12} className="text-primary" /> Fecha de Gran Final <span className="text-muted-foreground font-normal ml-1">(opcional)</span>
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => { setShowFinalCal(v => !v); setShowStartCal(false); setShowEndCal(false); }}
-                        className={`flex items-center gap-1 text-[10px] font-bold border rounded-lg px-2.5 py-1 transition-all ${showFinalCal ? 'bg-primary text-white border-primary' : 'text-primary bg-primary/10 border-primary/30 hover:bg-primary hover:text-white hover:border-primary'}`}
-                      >
-                        <CalendarDays size={11} /> {showFinalCal ? 'Cerrar' : 'Ver calendario'}
-                      </button>
                     </div>
-                    {form.final_date && (
-                      <p className="text-xs font-bold text-emerald-600 mb-2 flex items-center gap-1">
-                        🏆 {new Date(form.final_date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                      </p>
-                    )}
-                    {showFinalCal ? (
-                      <div className="flex justify-center">
-                        <CustomMonthCalendar
-                          selectedDate={form.final_date}
-                          onSelectDate={val => { setForm(f => ({ ...f, final_date: val })); setShowFinalCal(false); }}
-                          minDate={form.start_date || today}
-                        />
+
+                    {/* Contenedor interactivo que despliega el calendario y selecciona 'today' si está vacío */}
+                    <div
+                      onClick={() => {
+                        if (!showFinalCal && !form.final_date) {
+                          // Opcional: si quieres que al abrirse por primera vez marque hoy por defecto
+                          setForm(f => ({ ...f, final_date: today }));
+                        }
+                        setShowFinalCal(v => !v);
+                        setShowStartCal(false);
+                        setShowEndCal(false);
+                      }}
+                      className="w-full p-3 bg-card border border-border rounded-xl cursor-pointer hover:border-primary/50 transition-all flex items-center justify-between shadow-2xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <CalendarDays size={16} className="text-primary" />
+                        <span className="text-xs font-bold text-foreground">
+                          {form.final_date
+                            ? new Date(form.final_date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                            : 'Seleccionar fecha'
+                          }
+                        </span>
                       </div>
-                    ) : (
-                      <CustomDateInput value={form.final_date} onChange={val => setForm(f => ({ ...f, final_date: val }))} label="Gran Final" min={form.start_date || today} />
+                      <span className="text-[10px] text-muted-foreground font-semibold">
+                        {showFinalCal ? 'Ocultar' : 'Cambiar'}
+                      </span>
+                    </div>
+
+                    {/* Tu calendario personalizado */}
+                    {showFinalCal && (
+                      <div className="w-full flex justify-center mt-2 p-3 bg-card border border-border rounded-2xl shadow-md overflow-x-auto animate-in fade-in zoom-in-95 duration-150">
+                        <div className="w-full max-w-xs sm:max-w-sm flex justify-center">
+                          <CustomMonthCalendar
+                            selectedDate={form.final_date}
+                            onSelectDate={val => { setForm(f => ({ ...f, final_date: val })); setShowFinalCal(false); }}
+                            minDate={form.start_date || today}
+                          />
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1308,9 +1401,8 @@ export default function TournamentsPage() {
                         >
                           <div className="flex flex-col">
                             <p className="font-bold text-sm text-foreground">🏟️ {c.name.toUpperCase()}</p>
-                            {(c.city || c.address) && (
-                              <p className="text-xs text-muted-foreground">{[c.city, c.address].filter(Boolean).join(' · ')}</p>
-                            )}
+                            <p className="text-xs text-muted-foreground">{[c.address]}</p>
+
                           </div>
                           {c.pitches_count > 0 && (
                             <span className="text-[11px] text-emerald-600 font-semibold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md">
@@ -1472,7 +1564,7 @@ export default function TournamentsPage() {
                 disabled={saving}
                 className="flex-1 py-3 rounded-xl bg-primary text-white font-bold text-sm hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                {saving ? <Loader2 size={16} className="animate-spin" /> : <Trophy size={16} />}
+                {saving ? <Loader2 size={16} className="animate-spin" /> : null}
                 {editingId ? 'Guardar cambios' : 'Crear Campeonato'}
               </button>
             </div>
