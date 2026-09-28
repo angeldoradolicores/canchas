@@ -11,7 +11,7 @@ function getAdminSupabase() {
 
 export async function GET(req: NextRequest) {
   const rateLimit = checkRateLimit(req, {
-    limit: 60,
+    limit: 180,
     windowSeconds: 60,
     keyPrefix: 'api:favorites:get',
   });

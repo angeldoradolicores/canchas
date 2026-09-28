@@ -829,13 +829,12 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                       key={sp.id || idx}
                       type="button"
                       onClick={() => handleSwitchPitch(sp)}
-                      className={`flex items-center gap-2.5 p-2.5 sm:p-3 rounded-2xl sm:rounded-xl border text-left transition-all relative cursor-pointer shrink-0 snap-start w-[190px] sm:w-[240px] ${
-                        isCurrent
+                      className={`flex items-center gap-2.5 p-2.5 sm:p-3 rounded-2xl sm:rounded-xl border text-left transition-all relative cursor-pointer shrink-0 snap-start w-[190px] sm:w-[240px] ${isCurrent
                           ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/25 ring-2 ring-emerald-600/30'
                           : step === 2
-                          ? 'bg-card/60 text-muted-foreground border-border/60 opacity-60'
-                          : 'bg-card text-foreground border-border hover:border-emerald-500/50 hover:bg-secondary/60'
-                      }`}
+                            ? 'bg-card/60 text-muted-foreground border-border/60 opacity-60'
+                            : 'bg-card text-foreground border-border hover:border-emerald-500/50 hover:bg-secondary/60'
+                        }`}
                     >
                       {/* Imagen miniatura de la cancha */}
                       <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-lg overflow-hidden shrink-0 bg-secondary/50 border border-white/15 relative">
@@ -871,7 +870,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                           )}
                         </div>
                         <p className={`text-[11px] truncate ${isCurrent ? 'text-emerald-100' : 'text-muted-foreground'}`}>
-                          {sp.type || 'Fútbol 5'} · ${spPrice.toLocaleString('es-CO')}/h
+                          {sp.type || 'Fútbol 5'}
                         </p>
                       </div>
                     </button>

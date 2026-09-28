@@ -63,6 +63,9 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
 
+  const userId = user?.id;
+  const fetchedUserRef = React.useRef<string | null>(null);
+
   // Cargar favoritos al inicio
   useEffect(() => {
     const localComplexes = getStored(LOCAL_COMPLEX_KEY);
@@ -70,16 +73,22 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
     setFavoriteComplexIds(new Set(localComplexes));
     setFavoriteIds(new Set(localPitches));
 
-    if (!user) return;
+    if (!userId) {
+      fetchedUserRef.current = null;
+      return;
+    }
+
+    if (fetchedUserRef.current === userId) return;
 
     let cancelled = false;
     const fetchBackendFavs = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/favorites?user_id=${user.id}`);
+        const res = await fetch(`/api/favorites?user_id=${userId}`);
         if (!res.ok) return;
         const data = await res.json();
         if (!cancelled && Array.isArray(data.favorites)) {
+          fetchedUserRef.current = userId;
           // All saved IDs from backend (can be pitch IDs or complex keys)
           const backendIds: string[] = data.favorites;
 
@@ -96,7 +105,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
           // Sync any local entries not yet in backend
           const toSync = [...localComplexes, ...localPitches].filter(id => !backendIds.includes(id));
           for (const id of toSync) {
-            syncToBackend(id, 'add', user.id);
+            syncToBackend(id, 'add', userId);
           }
         }
       } catch (err) {
@@ -108,7 +117,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
 
     fetchBackendFavs();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [userId]);
 
   // ── Complex-level favorites ──
   const isFavoriteComplex = useCallback(

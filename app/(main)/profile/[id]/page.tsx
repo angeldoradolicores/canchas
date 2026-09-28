@@ -271,12 +271,12 @@ export default function PublicProfilePage() {
       const waUrl = `https://api.whatsapp.com/send?text=${waText}`;
       window.open(waUrl, '_blank');
     } catch (err) {
-      console.error('Error compartiendo en WhatsApp', err);
+      console.error('Error compartiendo ', err);
       setAlertState({
         isOpen: true,
         type: 'warning',
         title: 'Aviso',
-        message: 'Hubo un error al generar la tarjeta para WhatsApp. Puedes usar el botón Descargar.',
+        message: 'Hubo un error al generar la tarjeta para Compartir. Puedes usar el botón Descargar.',
         confirmText: 'Aceptar',
       });
     } finally {
@@ -514,7 +514,7 @@ export default function PublicProfilePage() {
             className="flex flex-col items-center justify-center gap-2 py-4 bg-[#25D366] hover:bg-[#20bd5a] text-white rounded-2xl transition-all font-bold text-sm shadow-md shadow-emerald-600/20 disabled:opacity-50"
           >
             {sharingWhatsApp ? <Loader2 size={22} className="animate-spin" /> : <Share2 size={22} />}
-            {sharingWhatsApp ? 'Preparando...' : 'WhatsApp'}
+            {sharingWhatsApp ? 'Preparando...' : 'Compartir'}
           </button>
         </div>
 

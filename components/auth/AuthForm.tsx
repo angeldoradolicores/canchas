@@ -348,7 +348,7 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder={forcedRole === 'owner' ? 'Ej: Complejo Deportivo San Juan' : 'Ej: Juan Pérez'}
+              placeholder={forcedRole === 'owner' ? 'Ej: Complejo Deportivo...' : 'Tu Nombre'}
               required
               autoComplete="name"
               className="w-full px-4 py-3 bg-secondary/30 border border-border focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-2xl text-sm outline-none transition-all placeholder:text-muted-foreground/50"

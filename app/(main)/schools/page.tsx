@@ -1083,9 +1083,9 @@ export default function SchoolsPage() {
                       onClick={() => setShowPitchDropdown(false)}
                     />
                     <div className="absolute top-full left-0 right-0 mt-1 bg-[#d0e6d7] border border-[#a4d4b4] rounded-2xl shadow-2xl z-50 overflow-hidden max-h-48 overflow-y-auto">
-                      <div className="p-2 text-[10px] font-black uppercase tracking-wider text-[#1b5e39] border-b border-[#b8dbc5]">
+                      {/* <div className="p-2 text-[10px] font-black uppercase tracking-wider text-[#1b5e39] border-b border-[#b8dbc5]">
                         🏟️ Complejos registrados en {selectedCity !== 'Todas' ? selectedCity : 'el sistema'} (Opcional)
-                      </div>
+                      </div> */}
                       {complexSuggestions.length > 0 ? (
                         complexSuggestions.map((c: any) => (
                           <div

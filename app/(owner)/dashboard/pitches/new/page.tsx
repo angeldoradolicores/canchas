@@ -1420,7 +1420,7 @@ function NewPitchForm() {
             </div>
 
             {/* Badge de Coordenadas */}
-            {lat && lng && (
+            {/* {lat && lng && (
               <div className="p-3 bg-secondary/50 border border-border/80 rounded-xl text-xs space-y-1">
                 <p className="font-bold text-foreground">Coordenadas Seleccionadas:</p>
                 <p className="text-muted-foreground font-mono text-[11px] sm:text-xs">
@@ -1428,7 +1428,7 @@ function NewPitchForm() {
                   <span className="text-foreground font-semibold">{lng.toFixed(6)}</span>
                 </p>
               </div>
-            )}
+            )} */}
           </div>
 
           {/* Botones de Navegación de Paso */}

@@ -1404,11 +1404,11 @@ export default function TournamentsPage() {
                             <p className="text-xs text-muted-foreground">{[c.address]}</p>
 
                           </div>
-                          {c.pitches_count > 0 && (
+                          {/* {c.pitches_count > 0 && (
                             <span className="text-[11px] text-emerald-600 font-semibold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md">
                               {c.pitches_count} {c.pitches_count === 1 ? 'cancha' : 'canchas'}
                             </span>
-                          )}
+                          )} */}
                         </button>
                       ))}
                     </div>

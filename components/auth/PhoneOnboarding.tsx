@@ -136,7 +136,6 @@ export function PhoneOnboarding() {
               </>
             ) : (
               <>
-                <Phone size={16} />
                 <span>Guardar y Continuar</span>
               </>
             )}
