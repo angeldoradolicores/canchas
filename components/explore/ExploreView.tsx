@@ -457,7 +457,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
     const fetchPitches = async () => {
       const { data, error } = await supabase
         .from('pitches')
-        .select('*, companies(id, name, zone, address)');
+        .select('*, companies(id, name, zone, address, lat, lng)');
       if (error) {
         console.error('Error fetching pitches:', error.message || error);
       }
@@ -467,7 +467,9 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
           zone: p.companies?.zone || p.zone || null,
           city: p.city || 'Pasto',
           department: p.department || 'Nariño',
-          address: p.address || p.companies?.address || null,
+          address: p.address || p.custom_pricing?.address || p.companies?.address || null,
+          lat: p.lat !== null && p.lat !== undefined ? Number(p.lat) : (p.companies?.lat ? Number(p.companies.lat) : null),
+          lng: p.lng !== null && p.lng !== undefined ? Number(p.lng) : (p.companies?.lng ? Number(p.companies.lng) : null),
           distance: '1.2 km',
           rating: '5.0',
           reviews: 0,

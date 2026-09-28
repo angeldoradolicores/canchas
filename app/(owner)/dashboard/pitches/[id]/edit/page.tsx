@@ -214,6 +214,7 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
         setGrassColor(data.grass_color || '');
         setCustomSurface(data.custom_surface || '');
         setContactPhone(data.contact_phone || '');
+        setAddress(data.address || data.custom_pricing?.address || (data as any)?.companies?.address || '');
         setFacebookUrl(data.facebook_url || data.custom_pricing?.facebook_url || data.custom_pricing?.social_links?.facebook || '');
         setInstagramUrl(data.instagram_url || data.custom_pricing?.instagram_url || data.custom_pricing?.social_links?.instagram || '');
         setTiktokUrl(data.tiktok_url || data.custom_pricing?.tiktok_url || data.custom_pricing?.social_links?.tiktok || '');

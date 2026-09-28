@@ -158,10 +158,9 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
       popupAnchor: [0, -44],
     });
 
-    // ── Agrupar pitches por company_id (complejo) ──
-    // Cada empresa/complejo tiene SIEMPRE un pin separado en el mapa,
-    // independientemente de qué tan cerca estén físicamente de otro complejo.
-    // Solo se agrupan canchas del MISMO complejo.
+    // ── Agrupar pitches por ubicación (complejo y sede física) ──
+    // Si dos canchas del mismo complejo están en la MISMA dirección/coordenadas, se agrupan juntas.
+    // Si una cancha está en DIFERENTE dirección/ubicación, tiene su propio pin independiente en el mapa.
     interface LocationGroup {
       companyId: string | null;
       lat: number;
@@ -180,14 +179,31 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
       if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
 
       const companyId = comp?.id || pitch.company_id || null;
-      const pitchAddress = (pitch.address || comp?.address || '').trim().toLowerCase();
+      const resolvedAddress = (pitch.address || pitch.custom_pricing?.address || comp?.address || '').trim();
+      const normAddress = resolvedAddress.toLowerCase();
+
+      // Buscar si ya existe un grupo para esta misma empresa en la misma ubicación
       const existing = companyId
         ? locationGroups.find(g => {
             if (g.companyId !== companyId) return false;
-            const sameCoords = Math.abs(g.lat - lat) < 0.0005 && Math.abs(g.lng - lng) < 0.0005;
-            const gAddress = (g.address || '').trim().toLowerCase();
-            const sameAddress = Boolean(pitchAddress && gAddress && pitchAddress === gAddress);
-            return sameCoords || sameAddress;
+
+            const gNormAddress = (g.address || '').trim().toLowerCase();
+            const bothHaveAddresses = normAddress.length > 3 && gNormAddress.length > 3;
+
+            // 1. Si ambas tienen direcciones explícitas escritas:
+            if (bothHaveAddresses) {
+              if (normAddress !== gNormAddress) {
+                // Direcciones distintas -> ubicaciones distintas
+                return false;
+              }
+              // Direcciones iguales -> misma ubicación
+              return true;
+            }
+
+            // 2. Si no hay direcciones explícitas distintas, comparar cercanía geográfica (~150 metros)
+            const diffLat = Math.abs(g.lat - lat);
+            const diffLng = Math.abs(g.lng - lng);
+            return diffLat < 0.0015 && diffLng < 0.0015;
           })
         : null;
 
@@ -199,15 +215,18 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
           lat,
           lng,
           name: comp?.name || pitch.name || 'Complejo Deportivo',
-          address: pitch.address || comp?.address,
+          address: resolvedAddress,
           city: pitch.city || comp?.city,
           pitches: [pitch],
         });
       }
     });
 
-    // ── Renderizar un marcador por ubicación/complejo ──
+    // ── Renderizar un marcador por ubicación física ──
     locationGroups.forEach((group) => {
+      const isSinglePitch = group.pitches.length === 1;
+      const firstPitch = group.pitches[0] as any;
+
       const pitchRows = group.pitches.map(p => {
         const type = (p as any).type || 'Fútbol 5';
         return `
@@ -238,13 +257,18 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
       }).join('');
 
       const popupContent = `
-        <div style="font-family:Inter,sans-serif;min-width:210px;padding:4px;">
-          <div style="font-size:14px;font-weight:900;color:#064e3b;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.03em;">
+        <div style="font-family:Inter,sans-serif;min-width:220px;padding:4px;">
+          <div style="font-size:14px;font-weight:900;color:#064e3b;margin-bottom:${isSinglePitch ? '2px' : '4px'};text-transform:uppercase;letter-spacing:0.02em;">
             🏟️ ${group.name}
           </div>
-          ${group.address ? `<div style="font-size:11px;color:#6b7280;margin-bottom:8px;">📍 ${group.address}</div>` : ''}
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#9ca3af;letter-spacing:0.05em;margin-bottom:6px;">
-            ${group.pitches.length > 1 ? `Canchas en este lugar (${group.pitches.length})` : 'Cancha disponible'}
+          ${isSinglePitch ? `
+            <div style="font-size:12px;font-weight:800;color:#059669;margin-bottom:4px;text-transform:uppercase;">
+              ⚽ ${firstPitch.name}
+            </div>
+          ` : ''}
+          ${group.address ? `<div style="font-size:11px;color:#4b5563;margin-bottom:8px;display:flex;align-items:center;gap:3px;">📍 <span>${group.address}</span></div>` : ''}
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#059669;letter-spacing:0.04em;margin-bottom:6px;">
+            ${isSinglePitch ? 'Toca para ver disponibilidad' : `Canchas en esta sede (${group.pitches.length})`}
           </div>
           ${pitchRows}
         </div>

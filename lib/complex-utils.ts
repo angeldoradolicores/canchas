@@ -32,10 +32,11 @@ export function groupPitchesByComplex(
 
   const map = new Map<string, {
     id: string;
+    baseId: string;
     name: string;
     address?: string | null;
     zone?: string | null;
-    city?: string | null;
+    city: string;
     department?: string | null;
     lat?: number;
     lng?: number;
@@ -46,13 +47,11 @@ export function groupPitchesByComplex(
     const pAny = pitch as any;
     const comp = pAny.companies || pAny.company;
     const pitchCity = (pAny.city || pitch.city || comp?.city || 'Pasto').trim();
-    // Agrupar canchas por empresa y ciudad: complejos en ciudades diferentes son complejos distintos
     const baseId = comp?.id || pitch.company_id || pitch.id;
-    const groupKey = `${baseId}_${pitchCity.toLowerCase()}`;
     const compName = (comp?.name || pitch.name || 'Complejo Deportivo').trim();
 
-    // Priorizar la dirección real de la cancha sobre el placeholder por defecto de la empresa
-    let initialAddress = pAny.address;
+    // Priorizar la dirección real de la cancha (incluyendo custom_pricing.address)
+    let initialAddress = (pAny.address || pAny.custom_pricing?.address || '').trim();
     if (!initialAddress || (initialAddress.toLowerCase().includes('pasto') && pitchCity.toLowerCase() !== 'pasto')) {
       if (comp?.address && (!comp.address.toLowerCase().includes('pasto') || pitchCity.toLowerCase() === 'pasto')) {
         initialAddress = comp.address;
@@ -62,21 +61,58 @@ export function groupPitchesByComplex(
       }
     }
 
-    if (!map.has(groupKey)) {
-      map.set(groupKey, {
-        id: groupKey,
+    const pLat = Number(pAny.lat ?? comp?.lat);
+    const pLng = Number(pAny.lng ?? comp?.lng);
+    const normPitchAddr = initialAddress.toLowerCase();
+
+    // Buscar si ya existe una sede para esta empresa en la misma ubicación física
+    let targetKey: string | null = null;
+    for (const [key, grp] of map.entries()) {
+      if (grp.baseId !== baseId) continue;
+      if (grp.city.toLowerCase() !== pitchCity.toLowerCase()) continue;
+
+      const normGrpAddr = (grp.address || '').toLowerCase();
+      const bothHaveExplicit = normPitchAddr.length > 3 && normGrpAddr.length > 3;
+
+      if (bothHaveExplicit) {
+        if (normPitchAddr === normGrpAddr) {
+          targetKey = key;
+          break;
+        } else {
+          // Direcciones explícitas distintas -> sedes físicas distintas
+          continue;
+        }
+      }
+
+      // Si no hay direcciones escritas distintas, comparar proximidad de coordenadas (~150m)
+      if (pLat && pLng && grp.lat && grp.lng) {
+        if (Math.abs(grp.lat - pLat) < 0.0015 && Math.abs(grp.lng - pLng) < 0.0015) {
+          targetKey = key;
+          break;
+        }
+      } else {
+        targetKey = key;
+        break;
+      }
+    }
+
+    if (!targetKey) {
+      targetKey = `${baseId}_${pitchCity.toLowerCase()}_loc_${map.size + 1}`;
+      map.set(targetKey, {
+        id: targetKey,
+        baseId,
         name: compName,
         address: initialAddress,
         zone: comp?.zone || pAny.zone || null,
         city: pitchCity,
         department: comp?.department || (pitch as any).department || pAny.department || (pitchCity.toLowerCase() === 'cali' ? 'Valle del Cauca' : 'Nariño'),
-        lat: comp?.lat ?? pAny.lat,
-        lng: comp?.lng ?? pAny.lng,
+        lat: pLat || comp?.lat,
+        lng: pLng || comp?.lng,
         pitches: [],
       });
     }
 
-    map.get(groupKey)!.pitches.push(pitch);
+    map.get(targetKey)!.pitches.push(pitch);
   }
 
   const complexes: ComplexData[] = [];

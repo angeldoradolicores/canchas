@@ -84,12 +84,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, isFavorite: action === 'add', localOnly: true });
     }
 
+    let targetPitchId = pitch_id;
     const supabase = getAdminSupabase();
+
+    // 1. Verificar si targetPitchId existe directamente en la tabla pitches
+    const { data: pitchRow } = await supabase
+      .from('pitches')
+      .select('id')
+      .eq('id', targetPitchId)
+      .maybeSingle();
+
+    if (!pitchRow) {
+      // 2. Si no es un ID de cancha, verificar si es el ID de un complejo/empresa
+      const { data: compPitch } = await supabase
+        .from('pitches')
+        .select('id')
+        .eq('company_id', targetPitchId)
+        .limit(1)
+        .maybeSingle();
+
+      if (compPitch?.id) {
+        targetPitchId = compPitch.id;
+      } else {
+        // No existe en la base de datos (es un identificador local o cancha borrada)
+        return NextResponse.json({ success: true, isFavorite: action === 'add', localOnly: true });
+      }
+    }
 
     const { data: existing, error: checkError } = await supabase
       .from('pitch_favorites')
       .select('id')
-      .eq('pitch_id', pitch_id)
+      .eq('pitch_id', targetPitchId)
       .eq('user_id', effectiveUserId)
       .maybeSingle();
 
@@ -103,7 +128,7 @@ export async function POST(req: NextRequest) {
       const { error: delError } = await supabase
         .from('pitch_favorites')
         .delete()
-        .eq('pitch_id', pitch_id)
+        .eq('pitch_id', targetPitchId)
         .eq('user_id', effectiveUserId);
 
       if (delError) {
@@ -115,7 +140,7 @@ export async function POST(req: NextRequest) {
     } else {
       const { error: insError } = await supabase
         .from('pitch_favorites')
-        .upsert({ pitch_id, user_id: effectiveUserId }, { onConflict: 'pitch_id,user_id' });
+        .upsert({ pitch_id: targetPitchId, user_id: effectiveUserId }, { onConflict: 'pitch_id,user_id' });
 
       if (insError) {
         console.warn('[Favorites insert warning]', insError.message);

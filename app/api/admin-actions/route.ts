@@ -197,8 +197,11 @@ export async function POST(req: NextRequest) {
       const instagramUrl = typeof payload.instagram_url === 'string' ? payload.instagram_url.trim() : null;
       const tiktokUrl = typeof payload.tiktok_url === 'string' ? payload.tiktok_url.trim() : null;
 
+      const pitchAddress = typeof payload.address === 'string' ? payload.address.trim() : (typeof data.address === 'string' ? data.address.trim() : null);
+
       const mergedCustomPricing = {
         ...(payload.custom_pricing || {}),
+        ...(pitchAddress ? { address: pitchAddress } : {}),
         ...(facebookUrl ? { facebook_url: facebookUrl } : {}),
         ...(instagramUrl ? { instagram_url: instagramUrl } : {}),
         ...(tiktokUrl ? { tiktok_url: tiktokUrl } : {}),
@@ -238,13 +241,16 @@ export async function POST(req: NextRequest) {
       if (company && (payload.address || payload.city)) {
         const finalCompanyAddress = payload.address || `${payload.city || 'Pasto'}${payload.department ? ', ' + payload.department : ''}`;
         try {
-          await supabase
-            .from('companies')
-            .update({
-              address: finalCompanyAddress,
-              zone: payload.zone || undefined,
-            })
-            .eq('id', company.id);
+          const { data: curComp } = await supabase.from('companies').select('address').eq('id', company.id).single();
+          if (!curComp?.address) {
+            await supabase
+              .from('companies')
+              .update({
+                address: finalCompanyAddress,
+                zone: payload.zone || undefined,
+              })
+              .eq('id', company.id);
+          }
         } catch (e) {
           console.error('Error updating company address:', e);
         }
@@ -285,8 +291,11 @@ export async function POST(req: NextRequest) {
       const instagramUrl = payload.instagram_url !== undefined ? (typeof payload.instagram_url === 'string' ? payload.instagram_url.trim() : null) : undefined;
       const tiktokUrl = payload.tiktok_url !== undefined ? (typeof payload.tiktok_url === 'string' ? payload.tiktok_url.trim() : null) : undefined;
 
+      const pitchAddress = payload.address !== undefined ? (typeof payload.address === 'string' ? payload.address.trim() : null) : undefined;
+
       const mergedCustomPricing = {
         ...(payload.custom_pricing || {}),
+        ...(pitchAddress !== undefined ? { address: pitchAddress } : {}),
         ...(facebookUrl !== undefined ? { facebook_url: facebookUrl } : {}),
         ...(instagramUrl !== undefined ? { instagram_url: instagramUrl } : {}),
         ...(tiktokUrl !== undefined ? { tiktok_url: tiktokUrl } : {}),
@@ -333,7 +342,10 @@ export async function POST(req: NextRequest) {
           const { data: pitchRow } = await supabase.from('pitches').select('company_id').eq('id', pitch_id).single();
           if (pitchRow?.company_id) {
             const finalCompanyAddress = payload.address || `${payload.city || 'Pasto'}${payload.department ? ', ' + payload.department : ''}`;
-            await supabase.from('companies').update({ address: finalCompanyAddress }).eq('id', pitchRow.company_id);
+            const { data: curComp } = await supabase.from('companies').select('address').eq('id', pitchRow.company_id).single();
+            if (!curComp?.address) {
+              await supabase.from('companies').update({ address: finalCompanyAddress }).eq('id', pitchRow.company_id);
+            }
           }
         } catch (e) {}
       }
