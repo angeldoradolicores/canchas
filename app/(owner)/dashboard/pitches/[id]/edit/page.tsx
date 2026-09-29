@@ -402,6 +402,20 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
 
   };
 
+  const geocodeAddress = async (text: string) => {
+    if (!text || text.trim().length < 4) return;
+    try {
+      const q = text.toLowerCase().includes(city.toLowerCase()) ? text : `${text}, ${city}, Colombia`;
+      const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=1`);
+      const data = await res.json();
+      if (data?.features?.[0]?.geometry?.coordinates) {
+        const [gLng, gLat] = data.features[0].geometry.coordinates;
+        setLat(gLat);
+        setLng(gLng);
+      }
+    } catch {}
+  };
+
   const handleLocationChange = (newLat: number, newLng: number, geocodedAddress?: string) => {
     setLat(newLat);
     setLng(newLng);
@@ -1343,6 +1357,7 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
                   placeholder="Ej: Calle 5 # 24-10, Barrio San Fernando"
                   value={address}
                   onChange={e => setAddress(e.target.value)}
+                  onBlur={() => geocodeAddress(address)}
                   className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium"
                 />
               </div>

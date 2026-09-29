@@ -167,6 +167,7 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
       lng: number;
       name: string;
       address?: string;
+      explicitAddress?: string;
       city?: string;
       pitches: Pitch[];
     }
@@ -180,27 +181,23 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
 
       const companyId = comp?.id || pitch.company_id || null;
       const resolvedAddress = (pitch.address || pitch.custom_pricing?.address || comp?.address || '').trim();
-      const normAddress = resolvedAddress.toLowerCase();
+      const explicitAddress = (pitch.address || pitch.custom_pricing?.address || '').trim();
 
       // Buscar si ya existe un grupo para esta misma empresa en la misma ubicación
       const existing = companyId
         ? locationGroups.find(g => {
             if (g.companyId !== companyId) return false;
 
-            const gNormAddress = (g.address || '').trim().toLowerCase();
-            const bothHaveAddresses = normAddress.length > 3 && gNormAddress.length > 3;
+            const explicitA = explicitAddress.toLowerCase();
+            const explicitB = (g.explicitAddress || '').toLowerCase();
 
-            // 1. Si ambas tienen direcciones explícitas escritas:
-            if (bothHaveAddresses) {
-              if (normAddress !== gNormAddress) {
-                // Direcciones distintas -> ubicaciones distintas
-                return false;
-              }
-              // Direcciones iguales -> misma ubicación
-              return true;
+            // 1. Si ambas tienen direcciones explícitas:
+            if (explicitA && explicitB) {
+              if (explicitA !== explicitB) return false; // Direcciones distintas -> sedes físicas distintas
+              return true; // Misma dirección -> misma sede
             }
 
-            // 2. Si no hay direcciones explícitas distintas, comparar cercanía geográfica (~150 metros)
+            // 2. Si no hay direcciones explícitas distintas, comparar cercanía geográfica (< ~150m)
             const diffLat = Math.abs(g.lat - lat);
             const diffLng = Math.abs(g.lng - lng);
             return diffLat < 0.0015 && diffLng < 0.0015;
@@ -216,69 +213,93 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
           lng,
           name: comp?.name || pitch.name || 'Complejo Deportivo',
           address: resolvedAddress,
+          explicitAddress,
           city: pitch.city || comp?.city,
           pitches: [pitch],
         });
       }
     });
 
-    // ── Renderizar un marcador por ubicación física ──
-    locationGroups.forEach((group) => {
-      const isSinglePitch = group.pitches.length === 1;
-      const firstPitch = group.pitches[0] as any;
+    // ── Renderizar marcadores con dispersión inteligente (spiderfy) para coordenadas solapadas ──
+    const coordClusters = new Map<string, LocationGroup[]>();
+    locationGroups.forEach(g => {
+      // Clave redondeada para agrupar marcadores que estén a menos de ~40m o en el mismo punto exacto
+      const key = `${g.lat.toFixed(4)}_${g.lng.toFixed(4)}`;
+      if (!coordClusters.has(key)) coordClusters.set(key, []);
+      coordClusters.get(key)!.push(g);
+    });
 
-      const pitchRows = group.pitches.map(p => {
-        const type = (p as any).type || 'Fútbol 5';
-        return `
-          <div
-            onclick="window._mapSelectPitch('${p.id}')"
-            style="
-              display:flex;align-items:center;gap:8px;
-              padding:8px 10px;border-radius:10px;margin-bottom:5px;
-              background:#f0fdf4;cursor:pointer;
-              border:1px solid #bbf7d0;
-              transition:background 0.15s;
-            "
-            onmouseover="this.style.background='#dcfce7'"
-            onmouseout="this.style.background='#f0fdf4'"
-          >
-            <span style="font-size:16px">⚽</span>
-            <div style="min-width:0;flex:1;">
-              <div style="font-size:12px;font-weight:800;color:#065f46;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                ${(p as any).name}
+    coordClusters.forEach(cluster => {
+      const count = cluster.length;
+      cluster.forEach((group, idx) => {
+        let renderLat = group.lat;
+        let renderLng = group.lng;
+
+        if (count > 1) {
+          // Desplazar ligeramente en círculo para que ambos pines se vean perfectamente y nunca se tapen
+          const angle = (idx / count) * 2 * Math.PI;
+          const radiusLat = 0.00035; // ~35 metros
+          const radiusLng = 0.00035 / Math.cos(group.lat * Math.PI / 180);
+          renderLat += radiusLat * Math.sin(angle);
+          renderLng += radiusLng * Math.cos(angle);
+        }
+
+        const isSinglePitch = group.pitches.length === 1;
+        const firstPitch = group.pitches[0] as any;
+
+        const pitchRows = group.pitches.map(p => {
+          const type = (p as any).type || 'Fútbol 5';
+          return `
+            <div
+              onclick="window._mapSelectPitch('${p.id}')"
+              style="
+                display:flex;align-items:center;gap:8px;
+                padding:8px 10px;border-radius:10px;margin-bottom:5px;
+                background:#f0fdf4;cursor:pointer;
+                border:1px solid #bbf7d0;
+                transition:background 0.15s;
+              "
+              onmouseover="this.style.background='#dcfce7'"
+              onmouseout="this.style.background='#f0fdf4'"
+            >
+              <span style="font-size:16px">⚽</span>
+              <div style="min-width:0;flex:1;">
+                <div style="font-size:12px;font-weight:800;color:#065f46;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                  ${(p as any).name}
+                </div>
+                <div style="font-size:11px;color:#16a34a;font-weight:600;">
+                  ${type}
+                </div>
               </div>
-              <div style="font-size:11px;color:#16a34a;font-weight:600;">
-                ${type}
-              </div>
+              <span style="font-size:14px;color:#16a34a;flex-shrink:0;">›</span>
             </div>
-            <span style="font-size:14px;color:#16a34a;flex-shrink:0;">›</span>
+          `;
+        }).join('');
+
+        const popupContent = `
+          <div style="font-family:Inter,sans-serif;min-width:220px;padding:4px;">
+            <div style="font-size:14px;font-weight:900;color:#064e3b;margin-bottom:${isSinglePitch ? '2px' : '4px'};text-transform:uppercase;letter-spacing:0.02em;">
+              🏟️ ${group.name}
+            </div>
+            ${isSinglePitch ? `
+              <div style="font-size:12px;font-weight:800;color:#059669;margin-bottom:4px;text-transform:uppercase;">
+                ⚽ ${firstPitch.name}
+              </div>
+            ` : ''}
+            ${group.address ? `<div style="font-size:11px;color:#4b5563;margin-bottom:8px;display:flex;align-items:center;gap:3px;">📍 <span>${group.address}</span></div>` : ''}
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#059669;letter-spacing:0.04em;margin-bottom:6px;">
+              ${isSinglePitch ? 'Toca para ver disponibilidad' : `Canchas en esta sede (${group.pitches.length})`}
+            </div>
+            ${pitchRows}
           </div>
         `;
-      }).join('');
 
-      const popupContent = `
-        <div style="font-family:Inter,sans-serif;min-width:220px;padding:4px;">
-          <div style="font-size:14px;font-weight:900;color:#064e3b;margin-bottom:${isSinglePitch ? '2px' : '4px'};text-transform:uppercase;letter-spacing:0.02em;">
-            🏟️ ${group.name}
-          </div>
-          ${isSinglePitch ? `
-            <div style="font-size:12px;font-weight:800;color:#059669;margin-bottom:4px;text-transform:uppercase;">
-              ⚽ ${firstPitch.name}
-            </div>
-          ` : ''}
-          ${group.address ? `<div style="font-size:11px;color:#4b5563;margin-bottom:8px;display:flex;align-items:center;gap:3px;">📍 <span>${group.address}</span></div>` : ''}
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#059669;letter-spacing:0.04em;margin-bottom:6px;">
-            ${isSinglePitch ? 'Toca para ver disponibilidad' : `Canchas en esta sede (${group.pitches.length})`}
-          </div>
-          ${pitchRows}
-        </div>
-      `;
+        const marker = L.marker([renderLat, renderLng], { icon: complexIcon })
+          .addTo(mapRef.current)
+          .bindPopup(popupContent, { maxWidth: 280, className: 'complex-popup' });
 
-      const marker = L.marker([group.lat, group.lng], { icon: complexIcon })
-        .addTo(mapRef.current)
-        .bindPopup(popupContent, { maxWidth: 280, className: 'complex-popup' });
-
-      markersRef.current.push(marker);
+        markersRef.current.push(marker);
+      });
     });
 
     // ── Handler global para clicks en popup ──
