@@ -12,6 +12,7 @@ import { useFavorites } from '@/lib/favorites-context';
 import { useActiveBooking } from '@/lib/active-booking-context';
 import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
 import { Copy, Check } from "lucide-react";
+import { isCombinedPitch, getLinkedPitchIds, getCombinedPitchNames } from '@/lib/combined-pitch-utils';
 
 
 interface PitchDetailProps {
@@ -201,17 +202,50 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
       .catch(err => console.error("Error fetching schools", err));
   }, [currentPitch.id]);
 
-  // Función para obtener los slots ocupados (llamada por useEffect y por botón de reserva)
+  // Función para obtener los slots ocupados – bidireccional: hija ↔ combinada
   const fetchTakenSlots = useCallback(async (silent = false) => {
     if (!selectedDate || !currentPitch.id) return;
     if (!silent) setLoadingSlots(true);
     const dayStart = `${selectedDate}T00:00:00-05:00`;
     const dayEnd = `${selectedDate}T23:59:59-05:00`;
 
+    // ── Paso 1: hijas directas (dirección combinada→hija) ──
+    const directLinkedIds = getLinkedPitchIds(currentPitch as any); // funciona si es cancha combinada
+
+    // ── Paso 2: padres combinados que contienen a esta cancha (dirección hija→combinada) ──
+    // Solo buscamos padres si esta cancha NO es ya una combinada (evitar doble consulta)
+    const compId =
+      currentPitch.company_id ||
+      (currentPitch as any)?.companies?.id ||
+      (currentPitch as any)?.company?.id;
+
+    let parentIds: string[] = [];
+    if (compId && directLinkedIds.length === 0) {
+      // Esta cancha es individual (no combinada): buscar si alguna combinada del mismo complejo la contiene
+      const { data: siblings } = await supabase
+        .from('pitches')
+        .select('id, custom_pricing')
+        .eq('company_id', compId);
+
+      if (siblings) {
+        parentIds = siblings
+          .filter((p: any) => {
+            const linked: string[] = Array.isArray(p.custom_pricing?.linked_pitch_ids)
+              ? p.custom_pricing.linked_pitch_ids
+              : [];
+            return linked.includes(currentPitch.id);
+          })
+          .map((p: any) => p.id);
+      }
+    }
+
+    // Unión completa: cancha actual + sus hijas (si es combinada) + sus padres (si es hija)
+    const pitchIds = Array.from(new Set([currentPitch.id, ...directLinkedIds, ...parentIds]));
+
     const { data, error } = await supabase
       .from('bookings')
-      .select('start_time, status, expires_at')
-      .eq('pitch_id', currentPitch.id)
+      .select('start_time, status, expires_at, pitch_id')
+      .in('pitch_id', pitchIds)
       .gte('start_time', dayStart)
       .lte('start_time', dayEnd)
       .neq('status', 'cancelled');
@@ -219,6 +253,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
     if (!error && data) {
       const taken = new Map<string, { status: string, expires_at: string | null }>();
       data.forEach((b: any) => {
+        // Ignorar drafts expirados
         if (b.status === 'draft' && b.expires_at && new Date(b.expires_at) < new Date()) {
           return;
         }
@@ -226,7 +261,16 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
           const d = new Date(b.start_time);
           const localH = (d.getUTCHours() - 5 + 24) % 24;
           const h = `${String(localH).padStart(2, '0')}:00`;
-          taken.set(h, { status: b.status, expires_at: b.expires_at });
+          // Priorizar: confirmada > pendiente > draft
+          if (!taken.has(h)) {
+            taken.set(h, { status: b.status, expires_at: b.expires_at });
+          } else {
+            const existing = taken.get(h)!;
+            const priority: Record<string, number> = { confirmed: 3, pending: 2, draft: 1 };
+            if ((priority[b.status] || 0) > (priority[existing.status] || 0)) {
+              taken.set(h, { status: b.status, expires_at: b.expires_at });
+            }
+          }
         } catch (e) {
           if (b.start_time) taken.set(b.start_time.substring(11, 16), { status: b.status, expires_at: b.expires_at });
         }
@@ -234,7 +278,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
       setTakenSlots(taken);
     }
     if (!silent) setLoadingSlots(false);
-  }, [selectedDate, currentPitch.id, supabase]);
+  }, [selectedDate, currentPitch.id, currentPitch.company_id, supabase]);
 
   // Cargar slots ocupados cuando cambia la fecha y escuchar en tiempo real
   useEffect(() => {
@@ -248,11 +292,14 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
     // Polling continuo cada 3.5s silencioso sin parpadear la pantalla
     const pollInterval = setInterval(() => fetchTakenSlots(true), 3500);
 
+    // Canal realtime: escuchar CUALQUIER cambio de bookings (no solo del pitch actual)
+    // Esto es crítico para detectar cuando se reserva la cancha combinada padre
+    // (o las hijas) y bloquear los slots en tiempo real sin recargar.
     const channel = supabase
-      .channel(`public:bookings:pitch_id=eq.${currentPitch.id}`)
+      .channel(`public:bookings:detail:${currentPitch.id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'bookings', filter: `pitch_id=eq.${currentPitch.id}` },
+        { event: '*', schema: 'public', table: 'bookings' },
         () => {
           fetchTakenSlots(true);
         }
@@ -495,21 +542,22 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
             <div className="flex items-center gap-2.5 overflow-x-auto pb-2 pt-1 scrollbar-none [-webkit-overflow-scrolling:touch] snap-x snap-mandatory">
               {siblingPitches.map((sp, idx: number) => {
                 const isCurrent = sp.id === currentPitch.id;
-                const spPrice = Number((sp as any).price_per_hour || (sp as any).price || 0);
                 const spImg = (sp as any).media_urls?.[0] || (sp as any).image_url;
+                const spIsCombined = isCombinedPitch(sp);
+                const spPrice = Number((sp as any).price_per_hour || (sp as any).price || 0);
 
                 return (
                   <button
                     key={sp.id || idx}
                     type="button"
                     onClick={() => handleSwitchPitch(sp)}
-                    className={`flex items-center gap-3 p-3 rounded-2xl sm:rounded-xl border text-left transition-all relative cursor-pointer shrink-0 snap-start w-[220px] sm:w-[260px] ${isCurrent
+                    className={`flex items-center gap-3 p-3 rounded-2xl sm:rounded-xl border text-left transition-all relative cursor-pointer shrink-0 snap-start w-[220px] sm:w-[270px] ${isCurrent
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/25 ring-2 ring-emerald-600/30'
                       : 'bg-card text-foreground border-border hover:border-emerald-500/50 hover:bg-secondary/60'
                       }`}
                   >
-                    {/* Imagen miniatura de la cancha */}
-                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-lg overflow-hidden shrink-0 bg-secondary/50 border border-white/15 relative">
+                    {/* Imagen miniatura */}
+                    <div className="w-12 h-12 sm:w-13 sm:h-13 rounded-xl overflow-hidden shrink-0 bg-secondary/50 border border-white/15 relative">
                       {spImg ? (
                         <img src={spImg} alt={sp.name} className="w-full h-full object-cover" />
                       ) : (
@@ -522,9 +570,15 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                           <CheckCircle2 size={16} className="text-white drop-shadow" />
                         </div>
                       )}
+                      {/* Combined badge */}
+                      {spIsCombined && !isCurrent && (
+                        <div className="absolute top-0 right-0 bg-amber-500 text-white text-[7px] font-black px-1 py-0.5 rounded-bl-lg rounded-tr-xl leading-none">
+                          ⚡
+                        </div>
+                      )}
                     </div>
 
-                    {/* Información de la cancha */}
+                    {/* Info */}
                     <div className="min-w-0 flex-1 flex flex-col justify-center">
                       <div className="flex items-center justify-between gap-1 mb-0.5">
                         <p className={`text-xs font-black uppercase truncate ${isCurrent ? 'text-white' : 'text-foreground'}`}>
@@ -535,10 +589,20 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                             Viendo
                           </span>
                         )}
+                        {spIsCombined && !isCurrent && (
+                          <span className="text-[8px] font-black uppercase px-1 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-400 shrink-0">
+                            COMB.
+                          </span>
+                        )}
                       </div>
                       <p className={`text-[11px] truncate ${isCurrent ? 'text-emerald-100' : 'text-muted-foreground'}`}>
                         {sp.type || 'Fútbol 5'}
                       </p>
+                      {spPrice > 0 && (
+                        <p className={`text-[10px] font-bold mt-0.5 ${isCurrent ? 'text-emerald-100/80' : 'text-muted-foreground/70'}`}>
+                          ${spPrice.toLocaleString('es-CO')}/h
+                        </p>
+                      )}
                     </div>
                   </button>
                 );
@@ -733,6 +797,35 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                 </div>
               ))}
             </div>
+
+            {/* Banner: Cancha Combinada */}
+            {isCombinedPitch(currentPitch as any) && (() => {
+              const linkedIdsList = getLinkedPitchIds(currentPitch as any);
+              const linkedPitchNames = linkedIdsList
+                .map(id => siblingPitches.find(p => p.id === id)?.name)
+                .filter(Boolean);
+              return (
+                <div className="mt-3 sm:mt-4 p-4 bg-amber-500/8 dark:bg-amber-500/10 border border-amber-500/20 rounded-2xl sm:rounded-xl">
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0">
+                      <Layers size={16} className="text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                        ⚡ Cancha Combinada / Modular
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                        Esta cancha une {linkedPitchNames.length > 0 ? (
+                          <><strong className="text-foreground">{linkedPitchNames.join(' + ')}</strong> para{' '}</>
+                        ) : ''}
+                        ofrecer un espacio mayor. Al reservarla, se bloquea automáticamente la disponibilidad de las canchas individuales que la forman.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
 
             {/* CONTENEDOR DEL TELÉFONO CENTRADO */}
             {pitchAny.contact_phone && (

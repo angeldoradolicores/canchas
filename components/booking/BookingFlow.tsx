@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Upload, CheckCircle2, Loader2, Image as ImageIcon, CalendarDays, Clock3, XCircle, Copy, CheckCheck, X, LandPlot, Lock, Percent } from 'lucide-react';
+import { ArrowLeft, Check, Upload, CheckCircle2, Loader2, Image as ImageIcon, CalendarDays, Clock3, XCircle, Copy, CheckCheck, X, LandPlot, Lock, Percent, Layers, Zap } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/client';
@@ -11,6 +11,7 @@ import { CustomMonthCalendar } from '../explore/CustomMonthCalendar';
 import { useActiveBooking } from '@/lib/active-booking-context';
 import { CancelBookingModal } from '@/components/booking/CancelBookingModal';
 import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
+import { isCombinedPitch, getLinkedPitchIds, getConflictingPitchIds } from '@/lib/combined-pitch-utils';
 
 
 const DEFAULT_TIME_SLOTS = [
@@ -328,10 +329,46 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
       const dayStart = `${selectedDate}T00:00:00-05:00`;
       const dayEnd = `${selectedDate}T23:59:59-05:00`;
 
+      // ── Obtener TODOS los IDs en conflicto (bidireccional: hija↔combinada) ──
+      // Paso 1: IDs hijas directas desde custom_pricing (dirección combinada→hija)
+      const directLinkedIds: string[] = Array.isArray((currentPitch as any).custom_pricing?.linked_pitch_ids)
+        ? (currentPitch as any).custom_pricing.linked_pitch_ids
+        : [];
+
+      // Paso 2: Buscar canchas padre que nos contengan (dirección hija→combinada)
+      // Solo si tenemos company_id para limitar la búsqueda
+      const compId =
+        currentPitch.company_id ||
+        (currentPitch as any)?.companies?.id ||
+        (currentPitch as any)?.company?.id;
+
+      let parentIds: string[] = [];
+      if (compId && directLinkedIds.length === 0) {
+        // Solo buscar padres si no somos ya una cancha combinada
+        const { data: siblings } = await supabase
+          .from('pitches')
+          .select('id, custom_pricing')
+          .eq('company_id', compId);
+
+        if (siblings) {
+          parentIds = siblings
+            .filter((p: any) => {
+              const linkedList: string[] = Array.isArray(p.custom_pricing?.linked_pitch_ids)
+                ? p.custom_pricing.linked_pitch_ids
+                : [];
+              return linkedList.includes(currentPitch.id);
+            })
+            .map((p: any) => p.id);
+        }
+      }
+
+      // Unión: cancha actual + hijas + padres combinados
+      const pitchIds = Array.from(new Set([currentPitch.id, ...directLinkedIds, ...parentIds]));
+
       const { data } = await supabase
         .from('bookings')
-        .select('start_time, status, expires_at')
-        .eq('pitch_id', currentPitch.id)
+        .select('start_time, status, expires_at, pitch_id')
+        .in('pitch_id', pitchIds)
         .gte('start_time', dayStart)
         .lte('start_time', dayEnd)
         .neq('status', 'cancelled');
@@ -345,7 +382,15 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
           const d = new Date(b.start_time);
           const localH = (d.getUTCHours() - 5 + 24) % 24;
           const h = `${String(localH).padStart(2, '0')}:00`;
-          taken.set(h, { status: b.status, expires_at: b.expires_at });
+          if (!taken.has(h)) {
+            taken.set(h, { status: b.status, expires_at: b.expires_at });
+          } else {
+            const existing = taken.get(h)!;
+            const priority: Record<string, number> = { confirmed: 3, pending: 2, draft: 1 };
+            if ((priority[b.status] || 0) > (priority[existing.status] || 0)) {
+              taken.set(h, { status: b.status, expires_at: b.expires_at });
+            }
+          }
         } catch (e) {
           if (b.start_time) {
             taken.set(b.start_time.substring(11, 16), { status: b.status, expires_at: b.expires_at });
@@ -361,12 +406,14 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     // Polling continuo cada 3.5s silencioso en segundo plano sin interrumpir ni mostrar loaders
     const pollInterval = setInterval(() => fetchTaken(true), 3500);
 
+    // Canal realtime: escuchar cambios en cualquier pitch vinculado
     const channel = supabase
-      .channel(`public:bookings:flow:pitch_id=eq.${currentPitch.id}`)
+      .channel(`public:bookings:flow:${currentPitch.id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'bookings', filter: `pitch_id=eq.${currentPitch.id}` },
-        () => {
+        { event: '*', schema: 'public', table: 'bookings' },
+        (payload: any) => {
+          // Solo refrescar si el cambio afecta a alguna cancha relacionada
           fetchTaken(true);
         }
       )
@@ -376,7 +423,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
       clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
-  }, [selectedDate, currentPitch.id, supabase]);
+  }, [selectedDate, currentPitch.id, currentPitch.company_id, supabase]);
 
   const formattedDate = selectedDate
     ? new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -696,6 +743,13 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                 {currentPitch.name}
               </h3>
 
+              {isCombinedPitch(currentPitch as any) && (
+                <div className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] font-extrabold uppercase tracking-wide">
+                  <Zap size={10} className="fill-amber-500 text-amber-500" />
+                  Cancha Combinada / Modular
+                </div>
+              )}
+
               <p className="text-xs text-muted-foreground font-medium capitalize mt-0.5">
                 📅 {formattedDate}
               </p>
@@ -823,6 +877,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                   const isCurrent = sp.id === currentPitch.id;
                   const spPrice = Number((sp as any).price_per_hour || (sp as any).price || 0);
                   const spImg = (sp as any).media_urls?.[0] || (sp as any).image_url;
+                  const spIsCombined = isCombinedPitch(sp);
 
                   return (
                     <button
@@ -855,9 +910,14 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                             <Lock size={14} className="text-white/80" />
                           </div>
                         )}
+                        {spIsCombined && !isCurrent && (
+                          <div className="absolute top-0 right-0 bg-amber-500 text-white text-[7px] font-black px-1 py-0.5 rounded-bl-lg rounded-tr-lg leading-none">
+                            ⚡
+                          </div>
+                        )}
                       </div>
 
-                      {/* Información de la cancha */}
+                      {/* Info */}
                       <div className="min-w-0 flex-1 flex flex-col justify-center">
                         <div className="flex items-center justify-between gap-1 mb-0.5">
                           <p className={`text-xs font-black uppercase truncate ${isCurrent ? 'text-white' : 'text-foreground'}`}>
@@ -868,10 +928,20 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                               Viendo
                             </span>
                           )}
+                          {spIsCombined && !isCurrent && (
+                            <span className="text-[8px] font-black uppercase px-1 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-400 shrink-0">
+                              COMB.
+                            </span>
+                          )}
                         </div>
                         <p className={`text-[11px] truncate ${isCurrent ? 'text-emerald-100' : 'text-muted-foreground'}`}>
                           {sp.type || 'Fútbol 5'}
                         </p>
+                        {spPrice > 0 && (
+                          <p className={`text-[10px] font-bold mt-0.5 ${isCurrent ? 'text-emerald-100/80' : 'text-muted-foreground/70'}`}>
+                            ${spPrice.toLocaleString('es-CO')}/h
+                          </p>
+                        )}
                       </div>
                     </button>
                   );
@@ -879,6 +949,27 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
               </div>
             </div>
           )}
+
+          {/* Banner: Cancha Combinada seleccionada */}
+          {isCombinedPitch(currentPitch as any) && (() => {
+            const linkedIds = getLinkedPitchIds(currentPitch as any);
+            const linkedNames = linkedIds
+              .map(id => siblingPitches.find(p => p.id === id)?.name)
+              .filter(Boolean);
+            return (
+              <div className="mt-3 mb-2 flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                <Layers size={15} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-black text-amber-800 dark:text-amber-300">⚡ Cancha Combinada / Modular</p>
+                  {linkedNames.length > 0 && (
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Une <strong className="text-foreground">{linkedNames.join(' + ')}</strong>. Las horas ocupadas en esas canchas también se bloquean aquí.
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Banner: ya hay una reserva activa de OTRA cancha */}
           {activeBooking && activeBooking.pitch.id !== currentPitch.id && secondsLeft > 0 && (

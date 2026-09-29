@@ -8,6 +8,7 @@ import {
   BookingCreateSchema,
 } from '@/lib/validations/api-schemas';
 import { notifyBookingSubmitted } from '@/lib/whatsapp-notifications';
+import { fetchConflictingPitchIds } from '@/lib/combined-pitch-utils';
 
 function getAdminSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -108,18 +109,33 @@ export async function POST(req: NextRequest) {
         };
       });
 
+      const conflictingPitchIds = await fetchConflictingPitchIds(supabase, pitch_id);
       const now = new Date();
       const lockedBookingIds: string[] = [];
 
       for (const item of inserts) {
-        const { data: existingRows } = await supabase
+        const { data: conflictRows } = await supabase
           .from('bookings')
-          .select('id, user_id, status, expires_at')
-          .eq('pitch_id', pitch_id)
+          .select('id, pitch_id, user_id, status, expires_at')
+          .in('pitch_id', conflictingPitchIds)
           .eq('start_time', item.start_time)
           .order('created_at', { ascending: false });
 
-        const existing = existingRows?.[0] || null;
+        // Verificar si existe conflicto en canchas combinadas o hijas vinculadas
+        const linkedConflict = (conflictRows || []).find((b: any) => {
+          if (b.pitch_id === pitch_id) return false;
+          if (b.status === 'confirmed' || b.status === 'pending') return true;
+          if (b.status === 'draft' && b.expires_at && new Date(b.expires_at) > now) return true;
+          return false;
+        });
+
+        if (linkedConflict) {
+          return NextResponse.json({
+            error: 'Esta hora no está disponible: la cancha vinculada (individual o combinada) ya está reservada o en proceso de reserva.',
+          }, { status: 400 });
+        }
+
+        const existing = (conflictRows || []).find((b: any) => b.pitch_id === pitch_id) || null;
 
         if (existing) {
           if (existing.status === 'confirmed' || existing.status === 'pending') {
@@ -403,6 +419,7 @@ export async function POST(req: NextRequest) {
         );
 
         const remainingSlots = sortedTimes.filter(s => !alreadyUpdatedSlots.has(s));
+        const conflictingPitchIds = await fetchConflictingPitchIds(supabase, validPitchId);
 
         for (const slot of remainingSlots) {
           const hourNum = parseInt(slot.split(':')[0], 10);
@@ -411,13 +428,26 @@ export async function POST(req: NextRequest) {
           const startTimeIso = `${selected_date}T${slot}:00-05:00`;
           const endTimeIso = `${selected_date}T${endSlot}:00-05:00`;
 
-          // Verificar si existe algún registro para esta hora
-          const { data: existing } = await supabase
+          // Verificar si existe conflicto en la cancha o canchas combinadas/hijas vinculadas
+          const { data: conflictRows } = await supabase
             .from('bookings')
-            .select('id, user_id, status, expires_at')
-            .eq('pitch_id', validPitchId)
-            .eq('start_time', startTimeIso)
-            .maybeSingle();
+            .select('id, pitch_id, user_id, status, expires_at')
+            .in('pitch_id', conflictingPitchIds)
+            .eq('start_time', startTimeIso);
+
+          const linkedConflict = (conflictRows || []).find((b: any) => {
+            if (b.pitch_id === validPitchId) return false;
+            return b.status === 'confirmed' || b.status === 'pending';
+          });
+
+          if (linkedConflict) {
+            return NextResponse.json(
+              { error: `La hora ${slot} no está disponible: cancha combinada o individual vinculada ya reservada.` },
+              { status: 400 }
+            );
+          }
+
+          const existing = (conflictRows || []).find((b: any) => b.pitch_id === validPitchId) || null;
 
           if (existing) {
             // Si ya está confirmada por alguien o pendiente por otro usuario

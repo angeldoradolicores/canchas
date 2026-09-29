@@ -342,10 +342,43 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
             const dayStartISO = `${preselectedDate}T00:00:00-05:00`;
             const dayEndISO = `${preselectedDate}T23:59:59-05:00`;
 
+            // ── Obtener todos los IDs vinculados bidireccional (hija ↔ combinada) ──
+            // 1. Obtener la cancha + sus hijas directas
+            const directLinkedIds: string[] = Array.isArray((pitch as any).custom_pricing?.linked_pitch_ids)
+              ? (pitch as any).custom_pricing.linked_pitch_ids
+              : [];
+
+            // 2. Buscar canchas padre que contengan a esta cancha
+            const compId = (pitch as any).company_id ||
+              (pitch as any).companies?.id ||
+              (pitch as any).company?.id;
+
+            let parentIds: string[] = [];
+            if (compId && directLinkedIds.length === 0) {
+              const { data: siblings } = await supabase
+                .from('pitches')
+                .select('id, custom_pricing')
+                .eq('company_id', compId);
+
+              if (siblings) {
+                parentIds = siblings
+                  .filter((p: any) => {
+                    const ll: string[] = Array.isArray(p.custom_pricing?.linked_pitch_ids)
+                      ? p.custom_pricing.linked_pitch_ids
+                      : [];
+                    return ll.includes(pitch.id);
+                  })
+                  .map((p: any) => p.id);
+              }
+            }
+
+            // Unión completa de IDs a verificar
+            const pitchIdsToCheck = Array.from(new Set([pitch.id, ...directLinkedIds, ...parentIds]));
+
             const { data: conflicts } = await supabase
               .from('bookings')
-              .select('start_time, status, expires_at')
-              .eq('pitch_id', pitch.id)
+              .select('start_time, status, expires_at, pitch_id')
+              .in('pitch_id', pitchIdsToCheck)
               .gte('start_time', dayStartISO)
               .lte('start_time', dayEndISO)
               .neq('status', 'cancelled');
@@ -581,7 +614,6 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
     }
 
     // Traer todas las reservas del día seleccionado (no canceladas)
-    // Usar rango amplio del día completo para evitar problemas con offset horario
     const dayStartISO = `${selectedDate}T00:00:00-05:00`;
     const dayEndISO = `${selectedDate}T23:59:59-05:00`;
 
@@ -593,8 +625,11 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
       .neq('status', 'cancelled');
 
     const now = new Date();
-    const confirmedPitchIds = new Set<string>();
-    const draftPitchMap = new Map<string, { expiresAt: string; slot: string }>();
+
+    // Mapas keyed por pitch_id: qué horas están tomadas
+    // pitchHourStatus[pitchId][hora] = { confirmed|pending|draft_active }
+    const pitchHourConfirmed = new Map<string, Set<string>>(); // pitch_id -> horas confirmadas/pendientes
+    const pitchHourDraft = new Map<string, Map<string, { expiresAt: string; slot: string }>>();
 
     (bookings || []).forEach((b: any) => {
       let bHour: string;
@@ -606,19 +641,85 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
         bHour = b.start_time?.substring(11, 16) || '';
       }
 
-      if (selectedHours.includes(bHour)) {
-        if (b.status === 'confirmed' || b.status === 'pending') {
-          confirmedPitchIds.add(b.pitch_id);
-        } else if (b.status === 'draft') {
-          if (b.expires_at && new Date(b.expires_at) > now) {
-            draftPitchMap.set(b.pitch_id, { expiresAt: b.expires_at, slot: bHour });
-          }
+      if (!selectedHours.includes(bHour)) return;
+
+      if (b.status === 'confirmed' || b.status === 'pending') {
+        if (!pitchHourConfirmed.has(b.pitch_id)) pitchHourConfirmed.set(b.pitch_id, new Set());
+        pitchHourConfirmed.get(b.pitch_id)!.add(bHour);
+      } else if (b.status === 'draft' && b.expires_at && new Date(b.expires_at) > now) {
+        if (!pitchHourDraft.has(b.pitch_id)) pitchHourDraft.set(b.pitch_id, new Map());
+        pitchHourDraft.get(b.pitch_id)!.set(bHour, { expiresAt: b.expires_at, slot: bHour });
+      }
+    });
+
+    // ── Propagación bidireccional de conflictos hija↔combinada ──
+    // Para cada cancha con reservas activas, marcar también sus vinculadas
+    const propagateConflicts = (sourcePitchId: string, pitch: Pitch) => {
+      // Hijas directas (si sourcePitch es combinada)
+      const childIds: string[] = Array.isArray((pitch as any).custom_pricing?.linked_pitch_ids)
+        ? (pitch as any).custom_pricing.linked_pitch_ids
+        : [];
+
+      // Padres combinados (si sourcePitch es hija)
+      const parentIds: string[] = pitches
+        .filter((p) => {
+          const ll: string[] = Array.isArray((p as any).custom_pricing?.linked_pitch_ids)
+            ? (p as any).custom_pricing.linked_pitch_ids
+            : [];
+          return ll.includes(sourcePitchId);
+        })
+        .map((p) => p.id);
+
+      return [...childIds, ...parentIds];
+    };
+
+    // Conjunto de pitch IDs que tienen AL MENOS UNA hora bloqueada en las horas buscadas
+    const confirmedPitchIds = new Set<string>();
+    const draftPitchMap = new Map<string, { expiresAt: string; slot: string }>();
+
+    // Primero consolidar por pitch propio
+    const pitchById = new Map(pitches.map(p => [p.id, p]));
+
+    pitchHourConfirmed.forEach((hours, pitchId) => {
+      // Verificar que la cancha tiene reserva para TODAS las horas seleccionadas
+      const hasAllHours = selectedHours.every(h => hours.has(h));
+      if (hasAllHours) {
+        confirmedPitchIds.add(pitchId);
+        // Propagar a vinculadas
+        const srcPitch = pitchById.get(pitchId);
+        if (srcPitch) {
+          propagateConflicts(pitchId, srcPitch).forEach(id => confirmedPitchIds.add(id));
+        }
+      }
+    });
+
+    pitchHourDraft.forEach((hourMap, pitchId) => {
+      if (confirmedPitchIds.has(pitchId)) return; // ya marcada como confirmada
+      // Verificar que tiene TODAS las horas seleccionadas en draft
+      const hasAllHours = selectedHours.every(h => hourMap.has(h));
+      if (hasAllHours) {
+        // Tomar el expires_at más corto (más conservador)
+        let minExpiry = '';
+        let firstSlot = '';
+        hourMap.forEach((v, h) => {
+          if (!firstSlot) { firstSlot = h; minExpiry = v.expiresAt; }
+          if (v.expiresAt < minExpiry) minExpiry = v.expiresAt;
+        });
+        draftPitchMap.set(pitchId, { expiresAt: minExpiry, slot: firstSlot });
+        // Propagar a vinculadas
+        const srcPitch = pitchById.get(pitchId);
+        if (srcPitch) {
+          propagateConflicts(pitchId, srcPitch).forEach(id => {
+            if (!confirmedPitchIds.has(id) && !draftPitchMap.has(id)) {
+              draftPitchMap.set(id, { expiresAt: minExpiry, slot: firstSlot });
+            }
+          });
         }
       }
     });
 
     const filteredByFormat = pitches.filter(p => {
-      // Filtro multi-modalidad en reserva rápida: la cancha soporta al menos uno de los formatos elegidos
+      // Filtro multi-modalidad en reserva rápida
       if (selectedFormats.length > 0) {
         const pitchTypes: string[] = Array.isArray((p as any).supported_types)
           ? (p as any).supported_types
@@ -673,7 +774,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
         document.getElementById('search-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 100);
     } else {
-      // En sincronización en segundo plano silenciosa (realtime), mantener el orden previo para evitar que las tarjetas salten
+      // En sincronización en segundo plano silenciosa, mantener el orden previo
       setSearchResults(prev => {
         if (!prev) return available;
         const prevOrder = new Map(prev.map((p, idx) => [p.id, idx]));

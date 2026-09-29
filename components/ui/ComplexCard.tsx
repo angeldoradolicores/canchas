@@ -2,9 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { MapPin, Heart, ChevronRight, ChevronLeft, Check, Star, CreditCard, Sparkles, X, Layers, Navigation } from 'lucide-react';
+import { MapPin, Heart, ChevronRight, ChevronLeft, Check, Star, CreditCard, Sparkles, X, Layers, Navigation, Zap } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { useFavorites } from '@/lib/favorites-context';
+import { isCombinedPitch } from '@/lib/combined-pitch-utils';
 
 export interface ComplexData {
   id: string;
@@ -271,22 +272,26 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
                 <span className="text-[10px] font-extrabold text-muted-foreground uppercase shrink-0 flex items-center gap-1">
                   Canchas:
                 </span>
-                {sortedPitches.map((p, idx) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedPitchIdx(idx);
-                      setActiveMediaIdx(0);
-                    }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${idx === selectedPitchIdx
-                      ? 'bg-emerald-600 text-white shadow-sm'
-                      : 'bg-secondary hover:bg-secondary/80 text-muted-foreground'
-                      }`}
-                  >
-                    {p.name}
-                  </button>
-                ))}
+                {sortedPitches.map((p, idx) => {
+                  const combined = isCombinedPitch(p);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPitchIdx(idx);
+                        setActiveMediaIdx(0);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 flex items-center gap-1.5 ${idx === selectedPitchIdx
+                        ? (combined ? 'bg-amber-500 text-slate-950 font-black shadow-sm' : 'bg-emerald-600 text-white shadow-sm')
+                        : (combined ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25' : 'bg-secondary hover:bg-secondary/80 text-muted-foreground')
+                        }`}
+                    >
+                      {combined && <Zap size={11} className={idx === selectedPitchIdx ? 'fill-slate-950 text-slate-950' : 'fill-amber-500 text-amber-500'} />}
+                      {p.name}
+                    </button>
+                  );
+                })}
               </div>
             )}
 
@@ -329,6 +334,23 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
                       </div>
                     </>
                   )}
+                </div>
+              )}
+
+              {/* Banner Cancha Combinada */}
+              {isCombinedPitch(currentPitch) && (
+                <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-start gap-2.5">
+                  <div className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                    <Zap size={14} className="fill-amber-500 text-amber-500" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-black uppercase text-amber-700 dark:text-amber-300">
+                      Cancha Combinada / Modular
+                    </h5>
+                    <p className="text-[11px] text-amber-800/80 dark:text-amber-200/80 mt-0.5 leading-snug">
+                      Esta cancha unifica espacios individuales contiguos para permitir partidos de mayor formato.
+                    </p>
+                  </div>
                 </div>
               )}
 

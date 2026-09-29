@@ -11,6 +11,7 @@ import {
 import { useToday } from '@/lib/use-today';
 import { ManualBookingModal } from '@/components/booking/ManualBookingModal';
 import { CustomMonthCalendar } from '@/components/explore/CustomMonthCalendar';
+import { isCombinedPitch, getConflictingPitchIds } from '@/lib/combined-pitch-utils';
 
 const TIME_SLOTS = [
   '06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00',
@@ -626,6 +627,11 @@ export default function BookingsPage() {
                         <div className="min-w-0">
                           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Cancha</p>
                           <p className="font-bold text-xs sm:text-sm text-foreground break-words leading-tight">{group.pitches?.name?.toUpperCase() || '—'}</p>
+                          {group.pitches?.custom_pricing?.is_combined && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 mt-1 rounded bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300">
+                              ⚡ Combinada
+                            </span>
+                          )}
                         </div>
 
                         {/* Fecha y Duración */}
@@ -794,6 +800,7 @@ export default function BookingsPage() {
                     pitch={pitch}
                     selectedDate={selectedDate}
                     supabase={supabase}
+                    allPitches={pitches}
                     onCancel={updateStatus}
                     onCancelRequest={handleCancelRequest}
                     onViewProof={(url: string) => setProofUrl(url)}
@@ -804,6 +811,7 @@ export default function BookingsPage() {
                     pitch={pitch}
                     dates={getDaysRange(selectedDate, calView)}
                     supabase={supabase}
+                    allPitches={pitches}
                     onDayClick={(dateStr: string) => { setSelectedDate(dateStr); setCalView('day'); }}
                     onViewProof={(url: string) => setProofUrl(url)}
                   />
@@ -967,11 +975,15 @@ function SlotCountdown({ expiresAt, onExpire }: { expiresAt: string; onExpire: (
   );
 }
 
-function PitchScheduleCard({ pitch, selectedDate, supabase, onCancel, onCancelRequest, onViewProof }: any) {
+function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel, onCancelRequest, onViewProof }: any) {
   const [slots, setSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [realtimeOk, setRealtimeOk] = useState(false);
+
+  const conflictingIds = useMemo(() => {
+    return getConflictingPitchIds(pitch.id, allPitches || [pitch]);
+  }, [pitch.id, allPitches]);
 
   const fetchSlots = useCallback(async () => {
     if (!selectedDate) return;
@@ -979,14 +991,14 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, onCancel, onCancelRe
     const { data } = await supabase
       .from('bookings')
       .select('*')
-      .eq('pitch_id', pitch.id)
+      .in('pitch_id', conflictingIds)
       .gte('start_time', `${selectedDate}T00:00:00-05:00`)
       .lte('start_time', `${selectedDate}T23:59:59-05:00`)
       .neq('status', 'cancelled');
     setSlots(data || []);
     setLastRefresh(new Date());
     setLoading(false);
-  }, [selectedDate, pitch.id, supabase]);
+  }, [selectedDate, conflictingIds, supabase]);
 
   // Carga inicial
   useEffect(() => { fetchSlots(); }, [fetchSlots]);
@@ -1003,7 +1015,7 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, onCancel, onCancelRe
       .channel(`schedule:${pitch.id}:${selectedDate}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'bookings', filter: `pitch_id=eq.${pitch.id}` },
+        { event: '*', schema: 'public', table: 'bookings' },
         () => { fetchSlots(); }
       )
       .subscribe((status: string) => {
@@ -1017,6 +1029,11 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, onCancel, onCancelRe
       <div className="flex items-center justify-between mb-3 border-b border-border pb-2.5">
         <h3 className="font-bold text-sm flex items-center gap-2">
           <div className="w-2 h-4 bg-primary rounded-full" /> {pitch.name}
+          {isCombinedPitch(pitch) && (
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300">
+              ⚡ Cancha Combinada / Modular
+            </span>
+          )}
         </h3>
         <div className="flex items-center gap-2">
           {loading && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
@@ -1106,7 +1123,11 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, onCancel, onCancelRe
                   <div className="truncate text-foreground font-bold text-[9px]" title={effectiveBooking.customer_name}>
                     {effectiveBooking.customer_name || '—'}
                   </div>
-                  {isManual ? (
+                  {effectiveBooking.pitch_id !== pitch.id ? (
+                    <div className="rounded px-1 py-0.5 inline-block text-[8px] font-black uppercase bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300">
+                      ⚡ Vinculada
+                    </div>
+                  ) : isManual ? (
                     <div className="flex items-center gap-0.5 text-purple-600 dark:text-purple-400 justify-center text-[9px]">
                       <Wrench size={8} /> Manual
                     </div>
@@ -1155,7 +1176,7 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, onCancel, onCancelRe
 
 
 /* Matriz de Horarios en Grilla: Filas = Horas | Columnas = Días */
-function PitchGridMatrixCard({ pitch, dates, supabase, onDayClick, onViewProof }: any) {
+function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, onDayClick, onViewProof }: any) {
   const [allSlots, setAllSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -1166,10 +1187,12 @@ function PitchGridMatrixCard({ pitch, dates, supabase, onDayClick, onViewProof }
       const startDate = dates[0];
       const endDate = dates[dates.length - 1];
 
+      const conflictingIds = getConflictingPitchIds(pitch.id, allPitches || [pitch]);
+
       const { data } = await supabase
         .from('bookings')
         .select('*')
-        .eq('pitch_id', pitch.id)
+        .in('pitch_id', conflictingIds)
         .gte('start_time', `${startDate}T00:00:00-05:00`)
         .lte('start_time', `${endDate}T23:59:59-05:00`)
         .neq('status', 'cancelled');
@@ -1178,13 +1201,18 @@ function PitchGridMatrixCard({ pitch, dates, supabase, onDayClick, onViewProof }
       setLoading(false);
     };
     fetch();
-  }, [dates, pitch.id, supabase]);
+  }, [dates, pitch.id, supabase, allPitches]);
 
   return (
     <div className="bg-card p-4 rounded-2xl border border-border shadow-sm">
       <div className="flex items-center justify-between mb-3 border-b border-border pb-2.5">
         <h3 className="font-bold text-sm flex items-center gap-2">
           <div className="w-2 h-4 bg-primary rounded-full" /> {pitch.name}
+          {isCombinedPitch(pitch) && (
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300">
+              ⚡ Cancha Combinada / Modular
+            </span>
+          )}
         </h3>
         {loading && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
       </div>
@@ -1270,6 +1298,11 @@ function PitchGridMatrixCard({ pitch, dates, supabase, onDayClick, onViewProof }
                             <div className="text-[10px] font-bold leading-tight truncate w-full" title={slotBooking.customer_name}>
                               {slotBooking.customer_name || 'Reservado'}
                             </div>
+                            {slotBooking.pitch_id !== pitch.id && (
+                              <span className="text-[8px] font-black text-amber-600 dark:text-amber-400 uppercase leading-none mt-0.5">
+                                ⚡ Vinculada
+                              </span>
+                            )}
                             {slotBooking.payment_proof_url && (
                               <button
                                 type="button"

@@ -189,6 +189,11 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
+  // Cancha Combinada / Modular
+  const [existingPitches, setExistingPitches] = useState<any[]>([]);
+  const [isCombined, setIsCombined] = useState(false);
+  const [linkedPitchIds, setLinkedPitchIds] = useState<string[]>([]);
+
   useEffect(() => {
     if (!user) return;
     const fetchPitch = async () => {
@@ -206,6 +211,10 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
           if (data.custom_pricing.booking_type) setBookingType(data.custom_pricing.booking_type);
           if (data.custom_pricing.booking_fixed) setBookingFixedAmount(data.custom_pricing.booking_fixed.toString());
           if (data.custom_pricing.time_slots) setTimeSlots(data.custom_pricing.time_slots);
+          if (data.custom_pricing.is_combined) {
+            setIsCombined(true);
+            setLinkedPitchIds(data.custom_pricing.linked_pitch_ids || []);
+          }
         }
         setPaymentMethods(data.payment_methods || []);
         setAmenityChips(data.amenities ? data.amenities.split(' · ') : []);
@@ -221,6 +230,15 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
         if (data.city) setCity(data.city);
         if (data.department) setDepartment(data.department);
 
+        if (data.company_id) {
+          const { data: siblingPitches } = await supabase
+            .from('pitches')
+            .select('id, name, type, price_per_hour, surface, lat, lng, image_url, media_urls, custom_pricing, supported_types, companies(address)')
+            .eq('company_id', data.company_id)
+            .neq('id', pitchId);
+          setExistingPitches((siblingPitches || []).filter((p: any) => !p.custom_pricing?.is_combined));
+        }
+
         const mUrls = data.media_urls || (data.image_url ? [data.image_url] : []);
         setMediaItems(mUrls.map((u: string, i: number) => ({ type: u.includes('video') ? 'video' : 'photo', url: u, isMain: i === 0 })));
       }
@@ -228,6 +246,33 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
     };
     fetchPitch();
   }, [user, pitchId, supabase]);
+
+  const handleToggleLinkedPitch = (pId: string) => {
+    setLinkedPitchIds(prev =>
+      prev.includes(pId) ? prev.filter(id => id !== pId) : [...prev, pId]
+    );
+  };
+
+  const handleApplyCombinedSuggestions = () => {
+    const selected = existingPitches.filter(p => linkedPitchIds.includes(p.id));
+    if (selected.length === 0) return;
+
+    const names = selected.map(p => p.name).join(' + ');
+    setName(`Cancha Combinada (${names})`);
+    setTypes(['Fútbol 8', 'Fútbol 9']);
+    const totalPrice = selected.reduce((sum, p) => sum + (Number(p.price_per_hour) || 80000), 0);
+    setPrice(String(totalPrice));
+    setDescription(`Cancha combinada para partidos de mayor formato (Fútbol 8 / 9) que unifica ${selected.map(p => p.name).join(' y ')}. Espacio amplio al retirar la división intermedia.`);
+
+    const first = selected[0];
+    if (first) {
+      const firstAddr = first.custom_pricing?.address || (first as any).companies?.address;
+      if (firstAddr) setAddress(firstAddr);
+      if (first.lat) setLat(first.lat);
+      if (first.lng) setLng(first.lng);
+      if (first.surface) setSurface(first.surface);
+    }
+  };
 
   const [showCustomType, setShowCustomType] = useState(false);
   const [customTypeInput, setCustomTypeInput] = useState('');
@@ -477,7 +522,16 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
             price: parsedPrice,
             price_per_hour: parsedPrice,
             booking_percentage: bookingType === 'percentage' ? bookingPct : 0,
-            custom_pricing: { ...customPricing, booking_type: bookingType, booking_fixed: Number(bookingFixedAmount) || 40000, time_slots: timeSlots },
+            is_combined: isCombined,
+            linked_pitch_ids: isCombined ? linkedPitchIds : [],
+            custom_pricing: {
+              ...customPricing,
+              booking_type: bookingType,
+              booking_fixed: Number(bookingFixedAmount) || 40000,
+              time_slots: timeSlots,
+              is_combined: isCombined,
+              linked_pitch_ids: isCombined ? linkedPitchIds : [],
+            },
             amenities: amenityChips.join(' · '),
             contact_phone: contactPhone,
             facebook_url: facebookUrl.trim() || null,
@@ -636,6 +690,95 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
       {/* ─── SECCIÓN 1: INFORMACIÓN BÁSICA ─── */}
       {activeSection === 'basic' && (
         <div className="space-y-6 animate-in fade-in">
+          {/* Tarjeta de Cancha Combinada / Modular */}
+          {(existingPitches.length >= 1 || isCombined) && (
+            <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-2xl p-5 space-y-4 shadow-xs">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shrink-0">
+                    <Layers size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-foreground uppercase tracking-tight flex items-center gap-2">
+                      ¿Es una Cancha Combinada / Modular?
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                        Fútbol 8 / 9
+                      </span>
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Une dos canchas individuales (ej: dos canchas Fútbol 5) para ofrecerlas también como una cancha grande. El sistema bloqueará automáticamente la disponibilidad mutua para evitar reservas dobles.
+                    </p>
+                  </div>
+                </div>
+
+                <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
+                  <input
+                    type="checkbox"
+                    checked={isCombined}
+                    onChange={(e) => {
+                      setIsCombined(e.target.checked);
+                      if (e.target.checked && linkedPitchIds.length === 0) {
+                        const firstTwo = existingPitches.slice(0, 2).map(p => p.id);
+                        setLinkedPitchIds(firstTwo);
+                      }
+                    }}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                </label>
+              </div>
+
+              {isCombined && (
+                <div className="pt-3 border-t border-amber-500/20 space-y-3 animate-in fade-in">
+                  <label className="text-xs font-bold text-foreground block">
+                    Canchas vinculadas que se unen para formar esta cancha:
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {existingPitches.map((p) => {
+                      const isSelected = linkedPitchIds.includes(p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => handleToggleLinkedPitch(p.id)}
+                          className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-amber-500/15 border-amber-500 text-foreground font-bold shadow-xs'
+                              : 'bg-card border-border hover:bg-secondary/60 text-muted-foreground'
+                          }`}
+                        >
+                          <div className="min-w-0 pr-2">
+                            <p className="text-xs font-black truncate">{p.name}</p>
+                            <p className="text-[11px] opacity-75">{p.type || 'Fútbol 5'} · ${(Number(p.price_per_hour) || 0).toLocaleString()} / h</p>
+                          </div>
+                          <div className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all ${
+                            isSelected ? 'bg-amber-600 border-amber-600 text-white' : 'border-border'
+                          }`}>
+                            {isSelected && <Check size={12} strokeWidth={3} />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                    <span className="text-[11px] text-muted-foreground font-medium">
+                      {linkedPitchIds.length} canchas seleccionadas
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleApplyCombinedSuggestions}
+                      disabled={linkedPitchIds.length < 2}
+                      className="text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 px-3 py-1.5 rounded-xl transition-all cursor-pointer disabled:opacity-40"
+                    >
+                      🪄 Autocompletar sugerencias (Nombre, Formato, Precio)
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="bg-card border border-border rounded-2xl p-6 space-y-5">
             <h2 className="font-bold text-base border-b border-border pb-3">Información General</h2>
 

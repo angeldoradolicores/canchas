@@ -8,6 +8,7 @@ import {
   AdminDeletePitchSchema,
   AdminManualBookingSchema,
 } from '@/lib/validations/api-schemas';
+import { fetchConflictingPitchIds } from '@/lib/combined-pitch-utils';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -205,6 +206,8 @@ export async function POST(req: NextRequest) {
         ...(facebookUrl ? { facebook_url: facebookUrl } : {}),
         ...(instagramUrl ? { instagram_url: instagramUrl } : {}),
         ...(tiktokUrl ? { tiktok_url: tiktokUrl } : {}),
+        ...(payload.is_combined !== undefined ? { is_combined: Boolean(payload.is_combined) } : {}),
+        ...(Array.isArray(payload.linked_pitch_ids) ? { linked_pitch_ids: payload.linked_pitch_ids } : {}),
         social_links: {
           facebook: facebookUrl || null,
           instagram: instagramUrl || null,
@@ -299,6 +302,8 @@ export async function POST(req: NextRequest) {
         ...(facebookUrl !== undefined ? { facebook_url: facebookUrl } : {}),
         ...(instagramUrl !== undefined ? { instagram_url: instagramUrl } : {}),
         ...(tiktokUrl !== undefined ? { tiktok_url: tiktokUrl } : {}),
+        ...(payload.is_combined !== undefined ? { is_combined: Boolean(payload.is_combined) } : {}),
+        ...(Array.isArray(payload.linked_pitch_ids) ? { linked_pitch_ids: payload.linked_pitch_ids } : {}),
         social_links: {
           facebook: facebookUrl !== undefined ? facebookUrl : payload.custom_pricing?.social_links?.facebook,
           instagram: instagramUrl !== undefined ? instagramUrl : payload.custom_pricing?.social_links?.instagram,
@@ -456,24 +461,40 @@ export async function POST(req: NextRequest) {
         };
       });
 
+      const conflictingPitchIds = await fetchConflictingPitchIds(supabase, pitch_id);
       const createdBookings: any[] = [];
 
       for (const item of inserts) {
-        const { data: existing } = await supabase
+        // Verificar conflictos en la cancha actual y canchas combinadas/hijas vinculadas
+        const { data: conflictRows } = await supabase
           .from('bookings')
-          .select('id, status')
-          .eq('pitch_id', pitch_id)
-          .eq('start_time', item.start_time)
-          .maybeSingle();
+          .select('id, pitch_id, status, expires_at')
+          .in('pitch_id', conflictingPitchIds)
+          .eq('start_time', item.start_time);
+
+        const activeConflict = (conflictRows || []).find((b: any) => {
+          if (['confirmed', 'pending'].includes(b.status)) return true;
+          if (b.status === 'draft' && b.expires_at && new Date(b.expires_at) > new Date()) return true;
+          return false;
+        });
+
+        if (activeConflict) {
+          const isLinked = activeConflict.pitch_id !== pitch_id;
+          return NextResponse.json(
+            {
+              error: isLinked
+                ? `La hora ${item.start_time.substring(11, 16)} no está disponible: cancha combinada o individual vinculada ya reservada.`
+                : `La hora ${item.start_time.substring(11, 16)} ya está ocupada.`
+            },
+            { status: 400 }
+          );
+        }
+
+        // Buscar si ya hay un registro para reutilizar (sólo de la cancha principal, no linked)
+        const existing = (conflictRows || []).find((b: any) => b.pitch_id === pitch_id) || null;
 
         if (existing) {
-          if (['confirmed', 'pending'].includes(existing.status)) {
-            return NextResponse.json(
-              { error: `La hora ${item.start_time.substring(11, 16)} ya está ocupada.` },
-              { status: 400 }
-            );
-          }
-
+          // Solo llegamos aquí si no estaba en activeConflict (es cancelled o draft expirado)
           if (existing.status === 'draft') {
             const { data: draftRow } = await supabase
               .from('bookings')
@@ -483,7 +504,7 @@ export async function POST(req: NextRequest) {
 
             if (draftRow?.expires_at && new Date(draftRow.expires_at) > new Date()) {
               return NextResponse.json(
-                { error: `La hora ${item.start_time.substring(11, 16)} está siendo reservada por otro usuario en este momento.` },
+                { error: `La hora ${item.start_time.substring(11, 16)} está siendo reservada por otro usuario.` },
                 { status: 400 }
               );
             }
@@ -512,6 +533,7 @@ export async function POST(req: NextRequest) {
           }
           if (updated) createdBookings.push(updated);
         } else {
+          // Insertar nueva reserva
           const { data: inserted, error: insertErr } = await supabase
             .from('bookings')
             .insert(item)

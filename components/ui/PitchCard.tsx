@@ -4,13 +4,14 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   MapPin, Star, Layers, ShieldCheck, CreditCard,
-  ChevronLeft, ChevronRight, Edit3, Eye, Sparkles, X, Share2, DollarSign, Heart, Trash2, AlertTriangle, Loader2, Copy
+  ChevronLeft, ChevronRight, Edit3, Eye, Sparkles, X, Share2, DollarSign, Heart, Trash2, AlertTriangle, Loader2, Copy, Zap
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/client';
 import { useFavorites } from '@/lib/favorites-context';
 import { useRouter } from 'next/navigation';
+import { isCombinedPitch } from '@/lib/combined-pitch-utils';
 
 export interface PaymentMethod {
   type: string;
@@ -37,6 +38,9 @@ export interface PitchData {
   media_urls?: string[];
   amenities?: string | string[];
   payment_methods?: PaymentMethod[] | any;
+  custom_pricing?: any;
+  is_combined?: boolean;
+  linked_pitch_ids?: string[];
   lat?: number;
   lng?: number;
   company?: { id?: string; name: string; address?: string | null; zone?: string | null };
@@ -252,6 +256,12 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
             {/* Badges de encabezado sobre la imagen */}
             <div className="absolute top-3 left-3 right-3 flex items-start justify-between gap-2 z-10">
               <div className="flex flex-wrap gap-1.5 items-center max-w-[80%]">
+                {isCombinedPitch(pitch as any) && (
+                  <span className="bg-amber-500/95 backdrop-blur-md text-slate-950 font-black text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1">
+                    <Zap size={10} className="fill-slate-950 text-slate-950" />
+                    Modular
+                  </span>
+                )}
                 <span className="bg-emerald-600/90 backdrop-blur-md text-white font-extrabold text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
                   {modalities[0]}
                 </span>
@@ -548,6 +558,23 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
                       </div>
                     </>
                   )}
+                </div>
+              )}
+
+              {/* Modalidad y Cancha Combinada */}
+              {isCombinedPitch(pitch as any) && (
+                <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-start gap-2.5">
+                  <div className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                    <Zap size={14} className="fill-amber-500 text-amber-500" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-black uppercase text-amber-700 dark:text-amber-300">
+                      Cancha Combinada / Modular
+                    </h5>
+                    <p className="text-[11px] text-amber-800/80 dark:text-amber-200/80 mt-0.5 leading-snug">
+                      Esta cancha unifica espacios individuales contiguos para permitir partidos de mayor formato. Al reservarla se reservan automáticamente sus espacios componentes.
+                    </p>
+                  </div>
                 </div>
               )}
 

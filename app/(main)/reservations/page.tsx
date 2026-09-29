@@ -121,6 +121,7 @@ export default function UserReservationsPage() {
             media_urls,
             tone,
             type,
+            custom_pricing,
             companies (name, zone, address)
           )
         `)
@@ -404,9 +405,16 @@ export default function UserReservationsPage() {
               {/* Título y Estado: flex-wrap permite que si el nombre es largo, el estado baje elegantemente sin cortarse */}
               <div className="flex flex-wrap items-start justify-between gap-2 mb-1.5">
                 {/* CORRECCIÓN: Quitamos 'truncate' para que el nombre se lea completo en varias líneas si es largo */}
-                <h3 className="font-bold text-sm sm:text-base leading-tight text-foreground flex-1 min-w-[120px]">
-                  {(b.displayPitchName || b.pitches?.name)?.toUpperCase()}
-                </h3>
+                <div className="flex-1 min-w-[120px] flex flex-col gap-1">
+                  <h3 className="font-bold text-sm sm:text-base leading-tight text-foreground">
+                    {(b.displayPitchName || b.pitches?.name)?.toUpperCase()}
+                  </h3>
+                  {(b.pitches?.custom_pricing?.is_combined || b.bookings?.[0]?.pitches?.custom_pricing?.is_combined) && (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 w-fit">
+                      ⚡ Modular / Combinada
+                    </span>
+                  )}
+                </div>
 
 
                 {/* CORRECCIÓN: Quitamos los cortes ocultos, el texto "Aprobado" o "En revisión" se verá 100% completo siempre */}
@@ -719,6 +727,26 @@ export default function UserReservationsPage() {
                 <h4 style={{ fontSize: 15, fontWeight: 900, lineHeight: 1.1, marginBottom: 8 }}>
                   {(selectedTicket.displayPitchName || selectedTicket.pitches?.name || 'CANCHA').toUpperCase()}
                 </h4>
+
+                {(selectedTicket.pitches?.custom_pricing?.is_combined || selectedTicket.bookings?.[0]?.pitches?.custom_pricing?.is_combined) && (
+                  <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    background: 'rgba(245, 158, 11, 0.25)',
+                    border: '1px solid rgba(245, 158, 11, 0.5)',
+                    color: selectedTicket.status === 'pending' ? '#78350F' : '#FDE68A',
+                    borderRadius: 6,
+                    padding: '3px 8px',
+                    fontSize: 10,
+                    fontWeight: 900,
+                    letterSpacing: '0.08em',
+                    marginBottom: 10,
+                    textTransform: 'uppercase'
+                  }}>
+                    ⚡ CANCHA COMBINADA / MODULAR
+                  </div>
+                )}
 
                 <p style={{ fontSize: 13, fontWeight: 600, opacity: 0.9, marginBottom: 16 }}>⚽ {selectedTicket.pitches?.type || 'Fútbol 11'}</p>
 
