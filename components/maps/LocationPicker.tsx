@@ -49,6 +49,14 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
+  // Sync initialAddress prop when it changes (e.g. duplicating pitch or combining)
+  useEffect(() => {
+    if (initialAddress && initialAddress !== selectedAddress) {
+      setSearchQuery(initialAddress);
+      setSelectedAddress(initialAddress);
+    }
+  }, [initialAddress]);
+
   // Load Google Maps Places API script if API key is provided
   useEffect(() => {
     if (!googleApiKey || typeof window === 'undefined') return;
@@ -80,10 +88,35 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Reverse geocoding: lat/lng → dirección legible (Photon primero, Nominatim como fallback)
+  // Reverse geocoding: lat/lng → dirección legible (Google Maps primero para máxima precisión en Colombia, Photon/Nominatim como fallback)
   const reverseGeocode = async (lat: number, lng: number): Promise<string | null> => {
+    // 1. Google Maps Geocoder (máxima precisión en Colombia)
+    if (typeof window !== 'undefined' && (window as any).google?.maps?.Geocoder) {
+      try {
+        const geocoder = new (window as any).google.maps.Geocoder();
+        const googleAddr = await new Promise<string | null>((resolve) => {
+          geocoder.geocode({ location: { lat, lng } }, (results: any[], status: any) => {
+            if (status === 'OK' && results && results.length > 0) {
+              const streetMatch = results.find((r: any) =>
+                r.types?.includes('street_address') ||
+                r.types?.includes('premise') ||
+                r.types?.includes('establishment') ||
+                r.types?.includes('route')
+              ) || results[0];
+              resolve(streetMatch.formatted_address || results[0].formatted_address);
+            } else {
+              resolve(null);
+            }
+          });
+        });
+        if (googleAddr) return googleAddr;
+      } catch (err) {
+        console.warn('Google reverse geocode error:', err);
+      }
+    }
+
     try {
-      // 1. Photon reverse
+      // 2. Photon reverse
       const photonRes = await fetch(
         `https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}&lang=es`,
         { signal: AbortSignal.timeout(4000) }
@@ -102,12 +135,20 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
     } catch {}
 
     try {
-      // 2. Nominatim fallback
+      // 3. Nominatim fallback con formato colombiano limpio
       const nomRes = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=es`,
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=es&addressdetails=1`,
         { headers: { 'Accept-Language': 'es' }, signal: AbortSignal.timeout(4000) }
       );
       const nomData = await nomRes.json();
+      if (nomData?.address) {
+        const a = nomData.address;
+        const parts: string[] = [];
+        if (a.road) parts.push(a.house_number ? `${a.road} #${a.house_number}` : a.road);
+        if (a.neighbourhood || a.suburb) parts.push(a.neighbourhood || a.suburb);
+        if (a.city || a.town || a.village) parts.push(a.city || a.town || a.village);
+        if (parts.length >= 2) return parts.join(', ');
+      }
       if (nomData?.display_name) return nomData.display_name;
     } catch {}
 
@@ -607,13 +648,13 @@ export default function LocationPicker({ lat, lng, onChange, initialAddress = ''
 
         {/* Status / Helper indicator */}
         <div className="mt-1.5 flex items-center justify-between text-[11px] px-1">
-          {googleApiKey && googleLoaded ? (
-            <span className="text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1">
-              🟢 Google Places activo: búsqueda de canchas y complejos habilitada
-            </span>
-          ) : (
-            <span className="text-muted-foreground flex items-center gap-1 text-[10px] leading-normal">
-              ℹ️ Búsqueda en OpenStreetMap. Para buscar cualquier cancha registrada en Google Maps, puedes agregar <span className="font-mono bg-secondary px-1 rounded text-[9px] text-foreground">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</span> en tu archivo <code className="text-emerald-600 font-mono">.env.local</code>.
+          <span className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
+            <MapPin size={12} className="text-emerald-500 shrink-0" />
+            <span>Busca por barrio, calle o complejo, o arrastra el marcador verde.</span>
+          </span>
+          {googleApiKey && googleLoaded && (
+            <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-[10px] hidden sm:flex items-center gap-1 shrink-0">
+              ✓ Google Maps activo
             </span>
           )}
         </div>

@@ -200,6 +200,8 @@ function NewPitchForm() {
   const [isCombined, setIsCombined] = useState(false);
   const [linkedPitchIds, setLinkedPitchIds] = useState<string[]>([]);
 
+  const [autocompleteSuccess, setAutocompleteSuccess] = useState(false);
+
   useEffect(() => {
     if (!user?.id) return;
     const fetchExisting = async () => {
@@ -213,7 +215,7 @@ function NewPitchForm() {
         const compIds = comps.map(c => c.id);
         const { data: pList } = await supabase
           .from('pitches')
-          .select('id, name, type, price_per_hour, surface, lat, lng, image_url, media_urls, custom_pricing, supported_types, companies(address)')
+          .select('*, companies(*)')
           .in('company_id', compIds);
 
         const validPitches = (pList || []).filter((p: any) => !p.custom_pricing?.is_combined);
@@ -242,19 +244,146 @@ function NewPitchForm() {
 
     const names = selected.map(p => p.name).join(' + ');
     setName(`Cancha Combinada (${names})`);
-    setTypes(['Fútbol 8', 'Fútbol 9']);
-    const totalPrice = selected.reduce((sum, p) => sum + (Number(p.price_per_hour) || 80000), 0);
-    setPrice(String(totalPrice));
-    setDescription(`Cancha combinada para partidos de mayor formato (Fútbol 8 / 9) que unifica ${selected.map(p => p.name).join(' y ')}. Espacio amplio al retirar la división intermedia.`);
 
+    // 1. Tipos / Formatos sugeridos
+    const count = selected.length;
+    let suggestedTypes = ['Fútbol 8', 'Fútbol 9'];
+    if (count >= 3) suggestedTypes = ['Fútbol 11', 'Fútbol 9'];
+    setTypes(suggestedTypes);
+
+    // 2. Precios base (suma de los valores base de las canchas hijas)
+    const totalPrice = selected.reduce((sum, p) => sum + (Number(p.price_per_hour || p.price) || 80000), 0);
+    setPrice(String(totalPrice));
+
+    // 3. Horarios que opera (time_slots)
+    const combinedSlots = Array.from(
+      new Set(
+        selected.flatMap(p =>
+          Array.isArray(p.custom_pricing?.time_slots) && p.custom_pricing.time_slots.length > 0
+            ? p.custom_pricing.time_slots
+            : DEFAULT_TIME_SLOTS
+        )
+      )
+    ).sort();
+    if (combinedSlots.length > 0) {
+      setTimeSlots(combinedSlots);
+    }
+
+    // 4. Precios personalizados por hora (suma hora a hora de las canchas que se unen)
+    const slotPricing: Record<string, number> = {};
+    combinedSlots.forEach(slot => {
+      let slotTotal = 0;
+      let hasCustom = false;
+      selected.forEach(p => {
+        const cp = p.custom_pricing || {};
+        if (cp[slot] && Number(cp[slot]) > 0) {
+          slotTotal += Number(cp[slot]);
+          hasCustom = true;
+        } else {
+          slotTotal += Number(p.price_per_hour || p.price || 80000);
+        }
+      });
+      if (hasCustom) {
+        slotPricing[slot] = slotTotal;
+      }
+    });
+    setCustomPricing(slotPricing);
+
+    // 5. Ubicación, dirección, superficie y configuración de la cancha
     const first = selected[0];
     if (first) {
-      const firstAddr = first.custom_pricing?.address || (first as any).companies?.address;
-      if (firstAddr) setAddress(firstAddr);
-      if (first.lat) setLat(first.lat);
-      if (first.lng) setLng(first.lng);
+      const cpFirst = first.custom_pricing || {};
+      if (cpFirst.booking_type) setBookingType(cpFirst.booking_type);
+      if (first.booking_percentage !== undefined) setBookingPct(Number(first.booking_percentage));
+      if (cpFirst.booking_fixed) setBookingFixedAmount(String(cpFirst.booking_fixed));
+
       if (first.surface) setSurface(first.surface);
+      if (first.grass_color) setGrassColor(first.grass_color);
+      if (first.custom_surface) setCustomSurface(first.custom_surface);
+      if (first.tone) setTone(first.tone);
+
+      const firstAddr = first.address || first.custom_pricing?.address || (first as any)?.companies?.address;
+      if (firstAddr) setAddress(firstAddr);
+      const firstCity = first.city || (first as any)?.companies?.city;
+      if (firstCity) setCity(firstCity);
+      const firstDept = first.department || (first as any)?.companies?.department;
+      if (firstDept) setDepartment(firstDept);
+
+      const pLat = (typeof first.lat === 'number' && !isNaN(first.lat)) ? first.lat : (Number(first.custom_pricing?.lat) || Number((first as any)?.companies?.lat));
+      const pLng = (typeof first.lng === 'number' && !isNaN(first.lng)) ? first.lng : (Number(first.custom_pricing?.lng) || Number((first as any)?.companies?.lng));
+      if (pLat && pLng) {
+        setLat(pLat);
+        setLng(pLng);
+      }
     }
+
+    // 6. Número de teléfono de contacto
+    const foundPhone = selected.find(p => p.contact_phone)?.contact_phone || (first as any)?.companies?.phone;
+    if (foundPhone) setContactPhone(foundPhone);
+
+    // 7. Métodos de pago (combinados y deduplicados de todas las canchas que se unen)
+    const pmMap = new Map<string, any>();
+    selected.forEach(p => {
+      if (Array.isArray(p.payment_methods)) {
+        p.payment_methods.forEach((pm: any) => {
+          const key = `${pm.type || pm.label}-${pm.number || ''}`;
+          if (!pmMap.has(key)) pmMap.set(key, pm);
+        });
+      }
+    });
+    const combinedPaymentMethods = Array.from(pmMap.values());
+    if (combinedPaymentMethods.length > 0) {
+      setPaymentMethods(combinedPaymentMethods);
+    }
+
+    // 8. Redes sociales
+    const fb = selected.find(p => p.facebook_url || p.custom_pricing?.facebook_url || p.custom_pricing?.social_links?.facebook);
+    const ig = selected.find(p => p.instagram_url || p.custom_pricing?.instagram_url || p.custom_pricing?.social_links?.instagram);
+    const tk = selected.find(p => p.tiktok_url || p.custom_pricing?.tiktok_url || p.custom_pricing?.social_links?.tiktok);
+    if (fb) setFacebookUrl(fb.facebook_url || fb.custom_pricing?.facebook_url || fb.custom_pricing?.social_links?.facebook || '');
+    if (ig) setInstagramUrl(ig.instagram_url || ig.custom_pricing?.instagram_url || ig.custom_pricing?.social_links?.instagram || '');
+    if (tk) setTiktokUrl(tk.tiktok_url || tk.custom_pricing?.tiktok_url || tk.custom_pricing?.social_links?.tiktok || '');
+
+    // 9. Fotos (traer todas las fotos de las canchas seleccionadas para que no tenga que subirlas de nuevo)
+    const allPhotoUrls: string[] = [];
+    selected.forEach(p => {
+      if (Array.isArray(p.media_urls) && p.media_urls.length > 0) {
+        p.media_urls.forEach((u: string) => {
+          if (u && !allPhotoUrls.includes(u)) allPhotoUrls.push(u);
+        });
+      } else if (p.image_url && !allPhotoUrls.includes(p.image_url)) {
+        allPhotoUrls.push(p.image_url);
+      }
+    });
+    if (allPhotoUrls.length > 0) {
+      setMediaItems(allPhotoUrls.map((url, idx) => ({
+        type: url.includes('.mp4') || url.includes('video') ? 'video' : 'photo',
+        url,
+        isMain: idx === 0,
+      })));
+    }
+
+    // 10. Servicios / Amenities
+    const amenSet = new Set<string>();
+    selected.forEach(p => {
+      if (Array.isArray(p.amenities)) {
+        p.amenities.forEach((a: string) => amenSet.add(a));
+      } else if (typeof p.amenities === 'string') {
+        p.amenities.split('·').forEach((a: string) => {
+          const trimmed = a.trim();
+          if (trimmed) amenSet.add(trimmed);
+        });
+      }
+    });
+    if (amenSet.size > 0) {
+      setAmenityChips(Array.from(amenSet));
+    }
+
+    // 11. Descripción atractiva
+    setDescription(`Cancha combinada modular de gran formato (${suggestedTypes.join(' / ')}) que unifica ${selected.map(p => p.name).join(' y ')}. Espacio amplio ideal para partidos de mayor cantidad de jugadores.`);
+
+    setAutocompleteSuccess(true);
+    setTimeout(() => setAutocompleteSuccess(false), 5000);
   };
 
   // Load duplicate pitch data from URL params
@@ -265,7 +394,7 @@ function NewPitchForm() {
     const loadDuplicate = async () => {
       const { data, error } = await supabase
         .from('pitches')
-        .select('*')
+        .select('*, companies(*)')
         .eq('id', duplicateId)
         .maybeSingle();
 
@@ -284,14 +413,21 @@ function NewPitchForm() {
       }
       setSurface(data.surface || 'Sintética');
       setTone(data.tone || 'field-emerald');
-      setAddress(data.address || 'Pasto, Nariño');
-      setCity(data.city || 'Pasto');
-      setDepartment(data.department || 'Nariño');
-      setLat(data.lat ?? 1.2136);
-      setLng(data.lng ?? -77.2811);
+
+      // Dirección exacta y coordenadas intactas
+      const dupAddress = data.address || data.custom_pricing?.address || (data as any)?.companies?.address || 'Pasto, Nariño';
+      setAddress(dupAddress);
+      setCity(data.city || (data as any)?.companies?.city || 'Pasto');
+      setDepartment(data.department || (data as any)?.companies?.department || 'Nariño');
+
+      const dupLat = (typeof data.lat === 'number' && !isNaN(data.lat)) ? data.lat : (Number(data.custom_pricing?.lat) || Number((data as any)?.companies?.lat) || 1.2136);
+      const dupLng = (typeof data.lng === 'number' && !isNaN(data.lng)) ? data.lng : (Number(data.custom_pricing?.lng) || Number((data as any)?.companies?.lng) || -77.2811);
+      setLat(dupLat);
+      setLng(dupLng);
+
       setGrassColor(data.grass_color || '');
       setCustomSurface(data.custom_surface || '');
-      setContactPhone(data.contact_phone || '');
+      setContactPhone(data.contact_phone || (data as any)?.companies?.phone || '');
       setFacebookUrl(data.facebook_url || data.custom_pricing?.facebook_url || data.custom_pricing?.social_links?.facebook || '');
       setInstagramUrl(data.instagram_url || data.custom_pricing?.instagram_url || data.custom_pricing?.social_links?.instagram || '');
       setTiktokUrl(data.tiktok_url || data.custom_pricing?.tiktok_url || data.custom_pricing?.social_links?.tiktok || '');
@@ -830,11 +966,17 @@ function NewPitchForm() {
                       type="button"
                       onClick={handleApplyCombinedSuggestions}
                       disabled={linkedPitchIds.length < 2}
-                      className="text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 px-3 py-1.5 rounded-xl transition-all cursor-pointer disabled:opacity-40"
+                      className="text-xs font-bold text-amber-800 dark:text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 px-3.5 py-2 rounded-xl transition-all cursor-pointer disabled:opacity-40 flex items-center gap-1.5 shadow-xs active:scale-95"
                     >
-                      🪄 Autocompletar sugerencias (Nombre, Formato, Precio)
+                      🪄 Autocompletar todo (Precios, Horarios, Teléfono, Pagos, Fotos, Ubicación)
                     </button>
                   </div>
+                  {autocompleteSuccess && (
+                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-700 dark:text-emerald-400 text-xs font-semibold flex items-center gap-2 mt-2">
+                      <Check size={14} className="shrink-0 text-emerald-600" />
+                      <span>¡Cancha combinada autocompletada! Se calcularon precios, horarios, métodos de pago, teléfono, fotos y ubicación exacta.</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1571,7 +1713,6 @@ function NewPitchForm() {
                   placeholder="Ej: Calle 5 # 24-10, Barrio San Fernando"
                   value={address}
                   onChange={e => setAddress(e.target.value)}
-                  onBlur={() => geocodeAddress(address)}
                   className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium"
                 />
               </div>
