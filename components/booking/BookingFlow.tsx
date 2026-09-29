@@ -713,59 +713,69 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
 
         {/* Tarjeta de Confirmación Limpia y Estilizada para Móvil */}
         <div className="confirmation-card w-full bg-card border border-border/80 rounded-2xl p-4 sm:p-5 shadow-sm text-left flex flex-col gap-4 mb-6 relative overflow-hidden">
-          <div className="absolute top-3 right-3">
-            <span className="status pending text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
-              Pendiente
-            </span>
-          </div>
 
-          <div className="flex items-center gap-3.5 pr-16">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex-shrink-0 overflow-hidden bg-muted border border-border/50 shadow-xs">
-              {((currentPitch as any).media_urls?.[0] || (currentPitch as any).image_url) ? (
-                <img
-                  src={(currentPitch as any).media_urls?.[0] || (currentPitch as any).image_url}
-                  alt={currentPitch.name.toUpperCase()}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className={`w-full h-full ${(currentPitch as any).tone || 'field-emerald'}`} />
-              )}
+          {/* Fila Superior: Info Principal + Badge Pendiente */}
+          <div className="flex items-start justify-between gap-3 min-w-0">
+
+            {/* Contenedor Imagen + Textos */}
+            <div className="flex items-start gap-3 min-w-0 flex-1">
+              {/* Imagen */}
+              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl shrink-0 overflow-hidden bg-muted border border-border/50 shadow-xs">
+                {((currentPitch as any).media_urls?.[0] || (currentPitch as any).image_url) ? (
+                  <img
+                    src={(currentPitch as any).media_urls?.[0] || (currentPitch as any).image_url}
+                    alt={currentPitch.name.toUpperCase()}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className={`w-full h-full ${(currentPitch as any).tone || 'field-emerald'}`} />
+                )}
+              </div>
+
+              {/* Textos del Complejo y Cancha */}
+              <div className="flex-1 min-w-0">
+                {/* Nombre del Complejo */}
+                <span className="block text-[11px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 truncate">
+                  {complexDisplayName.toUpperCase()}
+                </span>
+
+                {/* Nombre de la Cancha Completo (Sin cortar) */}
+                <h3 className="text-sm sm:text-base font-black text-foreground uppercase leading-snug break-words mt-0.5">
+                  {currentPitch.name}
+                </h3>
+
+                {/* Badge Cancha Combinada */}
+                {isCombinedPitch(currentPitch as any) && (
+                  <div className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] font-extrabold uppercase tracking-wide">
+                    Cancha Combinada
+                  </div>
+                )}
+
+                {/* Fecha */}
+                <p className="text-xs text-muted-foreground font-semibold capitalize mt-1 flex items-center gap-1">
+                  <span>📅</span> {formattedDate}
+                </p>
+              </div>
             </div>
 
-            <div className="flex-1 min-w-0">
-              {/* Nombre del Complejo con gran protagonismo */}
-              <span className="block text-[11px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 truncate">
-                {complexDisplayName.toUpperCase()}
+            {/* Badge de Estado "Pendiente" en la esquina superior derecha */}
+            <div className="shrink-0 pt-0.5">
+              <span className="text-[10px] sm:text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap">
+                Pendiente
               </span>
-
-              {/* Nombre de la Cancha */}
-              <h3 className="text-sm sm:text-base font-black text-foreground uppercase truncate mt-0.5">
-                {currentPitch.name}
-              </h3>
-
-              {isCombinedPitch(currentPitch as any) && (
-                <div className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] font-extrabold uppercase tracking-wide">
-                  {/* <Zap size={10} className="fill-amber-500 text-amber-500" /> */}
-                  Cancha Combinada
-                </div>
-              )}
-
-              <p className="text-xs text-muted-foreground font-medium capitalize mt-0.5">
-                📅 {formattedDate}
-              </p>
             </div>
           </div>
 
           <hr className="border-border/60 my-0" />
 
           {/* Horas y Precios */}
-          <div>
-            <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+          <div className="min-w-0">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
               Horas seleccionadas:
             </span>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {sortedTimes.map(t => (
-                <span key={t} className="text-xs bg-primary/10 text-primary font-bold px-2.5 py-1 rounded-lg border border-primary/20 flex items-center gap-1">
+                <span key={t} className="text-xs bg-primary/10 text-primary font-bold px-3 py-1.5 rounded-xl border border-primary/20 flex items-center gap-1.5">
                   <span>{fmtSlot(t)}</span>
                   <span className="text-[10px] opacity-80 font-normal">(${getSlotPrice(t).toLocaleString('es-co')})</span>
                 </span>
@@ -919,29 +929,30 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
 
                       {/* Info */}
                       <div className="min-w-0 flex-1 flex flex-col justify-center">
-                        <div className="flex items-center justify-between gap-1 mb-0.5">
-                          <p className={`text-xs font-black uppercase  ${isCurrent ? 'text-white' : 'text-foreground'}`}>
-                            {sp.name}
+                        {/* Fila superior: Badge arriba para dejar todo el ancho al título */}
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <p className={`text-[11px] truncate ${isCurrent ? 'text-emerald-100' : 'text-muted-foreground'}`}>
+                            {sp.type || 'Fútbol 5'}
                           </p>
-                          {isCurrent && (
-                            <span className="text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded bg-white text-emerald-700 tracking-wider shrink-0 shadow-2xs">
-                              Viendo
-                            </span>
-                          )}
-                          {spIsCombined && !isCurrent && (
-                            <span className="text-[8px] font-black uppercase px-1 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-400 shrink-0">
-                              COMBINADA
-                            </span>
-                          )}
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            {isCurrent && (
+                              <span className="text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded bg-white text-emerald-700 tracking-wider shrink-0 shadow-2xs whitespace-nowrap">
+                                Viendo
+                              </span>
+                            )}
+                            {spIsCombined && !isCurrent && (
+                              <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-400 shrink-0 whitespace-nowrap">
+                                COMBINADA
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <p className={`text-[11px] truncate ${isCurrent ? 'text-emerald-100' : 'text-muted-foreground'}`}>
-                          {sp.type || 'Fútbol 5'}
+
+                        {/* Nombre de la cancha con ancho completo y sin partir palabras por la mitad */}
+                        <p className={`text-xs sm:text-sm font-black uppercase leading-snug break-normal min-w-0 w-full ${isCurrent ? 'text-white' : 'text-foreground'}`}>
+                          {sp.name}
                         </p>
-                        {/* {spPrice > 0 && (
-                          <p className={`text-[10px] font-bold mt-0.5 ${isCurrent ? 'text-emerald-100/80' : 'text-muted-foreground/70'}`}>
-                            ${spPrice.toLocaleString('es-CO')}/h
-                          </p>
-                        )} */}
                       </div>
                     </button>
                   );

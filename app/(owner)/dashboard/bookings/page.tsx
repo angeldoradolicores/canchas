@@ -624,13 +624,24 @@ export default function BookingsPage() {
                         </div>
 
                         {/* Cancha */}
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Cancha</p>
-                          <p className="font-bold text-xs sm:text-sm text-foreground break-words leading-tight">{group.pitches?.name?.toUpperCase() || '—'}</p>
+                        <div className="min-w-0 w-full">
+                          {/* Etiqueta de título */}
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
+                            Cancha
+                          </p>
+
+                          {/* Nombre completo sin romper palabras a la mitad */}
+                          <p className="font-bold text-xs sm:text-sm text-foreground break-normal leading-snug hyphens-none">
+                            {group.pitches?.name?.toUpperCase() || '—'}
+                          </p>
+
+                          {/* Badge Combinada */}
                           {group.pitches?.custom_pricing?.is_combined && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 mt-1 rounded bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300">
-                              Combinada
-                            </span>
+                            <div className="mt-1">
+                              <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 whitespace-nowrap">
+                                Combinada
+                              </span>
+                            </div>
                           )}
                         </div>
 
@@ -1028,21 +1039,21 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
     <div className="bg-card p-4 rounded-2xl border border-border shadow-sm">
       <div className="flex items-center justify-between mb-3 border-b border-border pb-2.5">
         <h3 className="font-bold text-sm flex items-center gap-2">
-          <div className="w-2 h-4 bg-primary rounded-full" /> {pitch.name}
+          <div className="w-2 h-4 bg-primary rounded-full" /> {pitch.name.toUpperCase()}
           {isCombinedPitch(pitch) && (
             <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300">
-              ⚡ Cancha Combinada / Modular
+              Cancha Combinada
             </span>
           )}
         </h3>
         <div className="flex items-center gap-2">
-          {loading && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
+          {/* {loading && <Loader2 size={14} className="animate-spin text-muted-foreground" />} */}
           <button
             onClick={fetchSlots}
             title="Actualizar disponibilidad"
             className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-primary transition-colors"
           >
-            <Clock size={13} />
+            {/* <Clock size={13} /> */}
           </button>
           <div className="flex items-center gap-1.5">
             <span
@@ -1125,7 +1136,7 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
                   </div>
                   {effectiveBooking.pitch_id !== pitch.id ? (
                     <div className="rounded px-1 py-0.5 inline-block text-[8px] font-black uppercase bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300">
-                      ⚡ Vinculada
+                      Vinculada
                     </div>
                   ) : isManual ? (
                     <div className="flex items-center gap-0.5 text-purple-600 dark:text-purple-400 justify-center text-[9px]">

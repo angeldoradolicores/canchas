@@ -441,12 +441,22 @@ export default function UserReservationsPage() {
                 <div className="flex items-start gap-1 text-[11px] sm:text-xs text-muted-foreground min-w-0">
                   <Clock size={12} className="text-primary flex-shrink-0 mt-0.5" />
                   <span className="font-bold text-primary break-words leading-tight">
-                    {b.bookings ? b.bookings.map((xb: any) => {
-                      const timeStr = new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-                      return b.displayPitchName?.includes('+') && xb.pitches?.name
-                        ? `${xb.pitches.name} (${timeStr})`
-                        : timeStr;
-                    }).join(', ') : date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                    {(() => {
+                      if (!b.bookings || b.bookings.length === 0) {
+                        return date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+                      }
+
+                      // Obtener el nombre de la cancha una sola vez
+                      const pitchName = b.bookings[0]?.pitches?.name || b.displayPitchName;
+
+                      // Extraer solo las horas formateadas
+                      const formattedTimes = b.bookings.map((xb: any) =>
+                        new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+                      ).join(', ');
+
+                      // Si existe un nombre de cancha, mostrarlo primero seguido de las horas entre paréntesis
+                      return pitchName ? `${pitchName} (${formattedTimes})` : formattedTimes;
+                    })()}
                   </span>
                 </div>
               </div>
@@ -806,23 +816,38 @@ export default function UserReservationsPage() {
                       HORARIOS
                     </p>
 
-                    {/* Adaptación dinámica: Ajuste automático a la cantidad y largo del texto */}
+                    {/* Adaptación dinámica con agrupación de nombre de cancha y horas */}
                     <div className="flex flex-wrap gap-1.5">
                       {selectedTicket.bookings && selectedTicket.bookings.length > 0 ? (
-                        selectedTicket.bookings.map((xb: any, index: number) => {
-                          const timeStr = new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-                          const label = selectedTicket.displayPitchName?.includes('+') && xb.pitches?.name
-                            ? `${xb.pitches.name}: ${timeStr}`
-                            : timeStr;
-                          return (
+                        (() => {
+                          // Si no hay diferenciación por sub-canchas, listamos directamente cada hora
+                          const pitchName = selectedTicket.displayPitchName?.includes('+')
+                            ? selectedTicket.bookings[0]?.pitches?.name
+                            : null;
+
+                          if (pitchName) {
+                            // Extraer todas las horas para esta cancha
+                            const timesStr = selectedTicket.bookings
+                              .map((xb: any) => new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }))
+                              .join(', ');
+
+                            return (
+                              <span className="bg-white/10 text-white text-[10px] sm:text-[11px] font-bold px-2.5 py-1 rounded-md border border-white/15 text-center leading-tight max-w-full break-words">
+                                {pitchName}: {timesStr}
+                              </span>
+                            );
+                          }
+
+                          // Si son horas individuales normales de una sola cancha
+                          return selectedTicket.bookings.map((xb: any, index: number) => (
                             <span
                               key={index}
-                              className="bg-white/10 text-white text-[10px] sm:text-[11px] font-bold px-2 py-1 rounded-md border border-white/15 text-center leading-tight max-w-full break-words"
+                              className="bg-white/10 text-white text-[10px] sm:text-[11px] font-bold px-2 py-1 rounded-md border border-white/15 text-center leading-tight"
                             >
-                              {label}
+                              {new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
                             </span>
-                          );
-                        })
+                          ));
+                        })()
                       ) : (
                         <span className="bg-white/10 text-white text-[10px] sm:text-[11px] font-bold px-2 py-1 rounded-md border border-white/15 text-center leading-tight">
                           {new Date(selectedTicket.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}

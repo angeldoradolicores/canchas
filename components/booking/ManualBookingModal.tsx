@@ -8,9 +8,9 @@ import { useToday } from '@/lib/use-today';
 import { isCombinedPitch, getLinkedPitchIds } from '@/lib/combined-pitch-utils';
 
 const TIME_CATEGORIES = [
-  { key: 'manana', icon: '🌅', label: 'Mañana', slots: ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00'] },
-  { key: 'tarde', icon: '☀️', label: 'Tarde', slots: ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00'] },
-  { key: 'noche', icon: '🌙', label: 'Noche', slots: ['18:00', '19:00', '20:00', '21:00', '22:00', '23:00'] },
+  { key: 'manana', icon: '', label: 'Mañana', slots: ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00'] },
+  { key: 'tarde', icon: '', label: 'Tarde', slots: ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00'] },
+  { key: 'noche', icon: '', label: 'Noche', slots: ['18:00', '19:00', '20:00', '21:00', '22:00', '23:00'] },
 ] as const;
 
 function TimeLeft({ expiresAt }: { expiresAt: string }) {
@@ -39,11 +39,10 @@ function PitchMiniCard({ pitch, selected, onClick }: { pitch: any; selected: boo
     <button
       type="button"
       onClick={onClick}
-      className={`relative flex items-center gap-3 p-3 rounded-2xl border-2 text-left transition-all cursor-pointer w-full ${
-        selected
-          ? 'bg-primary/10 border-primary shadow-md shadow-primary/10'
-          : 'bg-card border-border hover:border-primary/40 hover:bg-secondary/50'
-      }`}
+      className={`relative flex items-center gap-3 p-3 rounded-2xl border-2 text-left transition-all cursor-pointer w-full ${selected
+        ? 'bg-primary/10 border-primary shadow-md shadow-primary/10'
+        : 'bg-card border-border hover:border-primary/40 hover:bg-secondary/50'
+        }`}
     >
       {/* Thumbnail */}
       <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-secondary border border-border relative">
@@ -54,30 +53,38 @@ function PitchMiniCard({ pitch, selected, onClick }: { pitch: any; selected: boo
             ⚽
           </div>
         )}
-        {isCombined && (
+        {/* {isCombined && (
           <div className="absolute top-0 right-0 bg-amber-500 text-white text-[7px] font-black px-1 py-0.5 rounded-bl-lg rounded-tr-xl">
             ⚡
           </div>
-        )}
+        )} */}
       </div>
 
       {/* Info */}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 mb-0.5">
-          <p className={`text-xs font-black truncate ${selected ? 'text-primary' : 'text-foreground'}`}>
-            {pitch.name}
+      <div className="min-w-0 flex-1 w-full">
+        {/* Fila superior: Tipo de cancha + Badge Combinada */}
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <p className="text-[11px] font-medium text-muted-foreground truncate">
+            {pitch.type || 'Fútbol 5'}
           </p>
+
           {isCombined && (
-            <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/25">
+            <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/25 whitespace-nowrap">
               COMBINADA
             </span>
           )}
         </div>
-        <p className="text-[11px] text-muted-foreground truncate">
-          {pitch.type || 'Fútbol 5'} · ${(Number(pitch.price_per_hour) || 0).toLocaleString('es-CO')}/h
+
+        {/* Nombre de la cancha completo sin cortar ni romper palabras por la mitad */}
+        <p className={`text-xs font-black uppercase leading-snug break-normal hyphens-none ${selected ? 'text-primary' : 'text-foreground'}`}>
+          {pitch.name.toUpperCase()}
         </p>
+
+        {/* Superficie */}
         {pitch.surface && (
-          <p className="text-[10px] text-muted-foreground/70 mt-0.5">{pitch.surface}</p>
+          <p className="text-[10px] text-muted-foreground/70 mt-0.5 break-words">
+            {pitch.surface}
+          </p>
         )}
       </div>
 
@@ -284,7 +291,7 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
           {/* ── Selector de Cancha ── */}
           <div>
             <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2 block">
-              Cancha
+              Canchas
             </label>
             <div className="space-y-2">
               {pitches.map(p => (
@@ -300,9 +307,9 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
             {/* Banner cancha combinada */}
             {isCombined && linkedNames.length > 0 && (
               <div className="mt-2.5 flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25">
-                <Layers size={15} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                {/* <Layers size={15} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" /> */}
                 <div>
-                  <p className="text-xs font-black text-amber-800 dark:text-amber-300">Cancha Combinada ⚡</p>
+                  <p className="text-xs font-black text-amber-800 dark:text-amber-300">Cancha Combinada</p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
                     Al reservar esta cancha, también se bloquearán: <strong>{linkedNames.join(' y ')}</strong>. Las horas ya ocupadas en esas canchas aparecerán aquí como no disponibles.
                   </p>
@@ -566,7 +573,7 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
             <div className="mb-3 p-3 rounded-xl bg-secondary/60 border border-border text-[11px] space-y-1">
               <div className="flex justify-between">
                 <span className="text-muted-foreground font-medium">Cancha</span>
-                <span className="font-black text-foreground truncate max-w-[60%] text-right">{selectedPitch?.name}</span>
+                <span className="font-black text-foreground  max-w-[60%] text-right">{selectedPitch?.name.toUpperCase()}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground font-medium">Fecha</span>
@@ -584,7 +591,7 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
               {isCombined && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground font-medium">Bloquea también</span>
-                  <span className="font-bold text-amber-700 dark:text-amber-400">{linkedNames.join(', ')}</span>
+                  <span className="font-bold text-amber-700 dark:text-amber-400">{linkedNames.join(', ').toUpperCase()}</span>
                 </div>
               )}
             </div>

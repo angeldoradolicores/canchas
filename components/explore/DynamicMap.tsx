@@ -186,22 +186,22 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
       // Buscar si ya existe un grupo para esta misma empresa en la misma ubicación
       const existing = companyId
         ? locationGroups.find(g => {
-            if (g.companyId !== companyId) return false;
+          if (g.companyId !== companyId) return false;
 
-            const explicitA = explicitAddress.toLowerCase();
-            const explicitB = (g.explicitAddress || '').toLowerCase();
+          const explicitA = explicitAddress.toLowerCase();
+          const explicitB = (g.explicitAddress || '').toLowerCase();
 
-            // 1. Si ambas tienen direcciones explícitas:
-            if (explicitA && explicitB) {
-              if (explicitA !== explicitB) return false; // Direcciones distintas -> sedes físicas distintas
-              return true; // Misma dirección -> misma sede
-            }
+          // 1. Si ambas tienen direcciones explícitas:
+          if (explicitA && explicitB) {
+            if (explicitA !== explicitB) return false; // Direcciones distintas -> sedes físicas distintas
+            return true; // Misma dirección -> misma sede
+          }
 
-            // 2. Si no hay direcciones explícitas distintas, comparar cercanía geográfica (< ~150m)
-            const diffLat = Math.abs(g.lat - lat);
-            const diffLng = Math.abs(g.lng - lng);
-            return diffLat < 0.0015 && diffLng < 0.0015;
-          })
+          // 2. Si no hay direcciones explícitas distintas, comparar cercanía geográfica (< ~150m)
+          const diffLat = Math.abs(g.lat - lat);
+          const diffLng = Math.abs(g.lng - lng);
+          return diffLat < 0.0015 && diffLng < 0.0015;
+        })
         : null;
 
       if (existing) {
@@ -250,53 +250,58 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
         const pitchRows = group.pitches.map(p => {
           const type = (p as any).type || 'Fútbol 5';
           return `
-            <div
-              onclick="window._mapSelectPitch('${p.id}')"
-              style="
-                display:flex;align-items:center;gap:8px;
-                padding:8px 10px;border-radius:10px;margin-bottom:5px;
-                background:#f0fdf4;cursor:pointer;
-                border:1px solid #bbf7d0;
-                transition:background 0.15s;
-              "
-              onmouseover="this.style.background='#dcfce7'"
-              onmouseout="this.style.background='#f0fdf4'"
-            >
-              <span style="font-size:16px">⚽</span>
-              <div style="min-width:0;flex:1;">
-                <div style="font-size:12px;font-weight:800;color:#065f46;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                  ${(p as any).name}
-                </div>
-                <div style="font-size:11px;color:#16a34a;font-weight:600;">
-                  ${type}
-                </div>
-              </div>
-              <span style="font-size:14px;color:#16a34a;flex-shrink:0;">›</span>
+        <div
+          onclick="window._mapSelectPitch('${p.id}')"
+          style="
+            display:flex;align-items:center;gap:8px;
+            padding:8px 10px;border-radius:10px;margin-bottom:6px;
+            background:#f0fdf4;cursor:pointer;
+            border:1px solid #bbf7d0;
+            transition:background 0.15s;
+          "
+          onmouseover="this.style.background='#dcfce7'"
+          onmouseout="this.style.background='#f0fdf4'"
+        >
+          <span style="font-size:16px;flex-shrink:0;">⚽</span>
+          <div style="min-width:0;flex:1;word-break:break-word;">
+            <div style="font-size:12px;font-weight:800;color:#065f46;text-transform:uppercase;line-height:1.25;white-space:normal;">
+              ${(p as any).name}
             </div>
-          `;
+            <div style="font-size:11px;color:#16a34a;font-weight:600;margin-top:2px;">
+              ${type}
+            </div>
+          </div>
+          <span style="font-size:14px;color:#16a34a;flex-shrink:0;">›</span>
+        </div>
+      `;
         }).join('');
 
         const popupContent = `
-          <div style="font-family:Inter,sans-serif;min-width:220px;padding:4px;">
-            <div style="font-size:14px;font-weight:900;color:#064e3b;margin-bottom:${isSinglePitch ? '2px' : '4px'};text-transform:uppercase;letter-spacing:0.02em;">
-              🏟️ ${group.name}
-            </div>
-            ${isSinglePitch ? `
-              <div style="font-size:12px;font-weight:800;color:#059669;margin-bottom:4px;text-transform:uppercase;">
-                ⚽ ${firstPitch.name}
-              </div>
-            ` : ''}
-            ${group.address ? `<div style="font-size:11px;color:#4b5563;margin-bottom:8px;display:flex;align-items:center;gap:3px;">📍 <span>${group.address}</span></div>` : ''}
-            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#059669;letter-spacing:0.04em;margin-bottom:6px;">
-              ${isSinglePitch ? 'Toca para ver disponibilidad' : `Canchas en esta sede (${group.pitches.length})`}
-            </div>
-            ${pitchRows}
+      <div style="font-family:Inter,sans-serif;width:100%;max-width:280px;box-sizing:border-box;padding:2px 0;">
+        <div style="font-size:14px;font-weight:900;color:#064e3b;margin-bottom:${isSinglePitch ? '2px' : '4px'};text-transform:uppercase;letter-spacing:0.02em;line-height:1.25;word-break:break-word;white-space:normal;">
+          🏟️ ${group.name}
+        </div>
+        ${isSinglePitch ? `
+          <div style="font-size:12px;font-weight:800;color:#059669;margin-bottom:6px;text-transform:uppercase;line-height:1.25;word-break:break-word;white-space:normal;">
+            ⚽ ${firstPitch.name}
           </div>
-        `;
+        ` : ''}
+        ${group.address ? `<div style="font-size:11px;color:#4b5563;margin-bottom:8px;display:flex;align-items:flex-start;gap:4px;line-height:1.3;word-break:break-word;"><span style="flex-shrink:0;">📍</span><span style="white-space:normal;">${group.address}</span></div>` : ''}
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#059669;letter-spacing:0.04em;margin-bottom:6px;">
+          ${isSinglePitch ? 'Toca para ver disponibilidad' : `Canchas en esta sede (${group.pitches.length})`}
+        </div>
+        ${pitchRows}
+      </div>
+    `;
 
         const marker = L.marker([renderLat, renderLng], { icon: complexIcon })
           .addTo(mapRef.current)
-          .bindPopup(popupContent, { maxWidth: 280, className: 'complex-popup' });
+          .bindPopup(popupContent, {
+            minWidth: 220,
+            maxWidth: 300,
+            autoPanPadding: [20, 20],
+            className: 'complex-popup'
+          });
 
         markersRef.current.push(marker);
       });

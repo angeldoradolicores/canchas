@@ -1477,11 +1477,11 @@ function ChallengeFormModal({
                         <span className="text-xs text-muted-foreground">{c.address}</span>
                       )}
                     </div>
-                    {c.pitches_count > 0 && (
+                    {/* {c.pitches_count > 0 && (
                       <span className="text-[11px] text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-md">
                         {c.pitches_count} {c.pitches_count === 1 ? 'cancha' : 'canchas'}
                       </span>
-                    )}
+                    )} */}
                   </button>
                 ))}
               </div>
