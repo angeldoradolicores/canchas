@@ -9,7 +9,8 @@ import {
   PhoneCallIcon,
   Smartphone,
   SmartphoneNfcIcon,
-  PhoneCall
+  PhoneCall,
+  Search
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/client';
@@ -1057,66 +1058,107 @@ export default function SchoolsPage() {
 
               {/* Selector o Texto Libre de Complejo / Cancha */}
               <div className="relative">
+                {/* Label */}
                 <label className="block text-xs font-black uppercase tracking-wider text-[#1b5e39] mb-1">
                   Complejo / Sede de Entrenamiento
                 </label>
-                <input
-                  type="text"
-                  value={pitchQuery}
-                  onFocus={() => setShowPitchDropdown(true)}
-                  onChange={e => {
-                    setPitchQuery(e.target.value);
-                    setForm(f => ({ ...f, pitch_id: '', custom_location: e.target.value }));
-                    setShowPitchDropdown(true);
-                  }}
-                  placeholder={`Escribe o busca un complejo en ${selectedCity !== 'Todas' ? selectedCity : 'tu ciudad'}...`}
-                  className="w-full bg-[#cde4d5]/60 border border-[#007a3e] rounded-2xl px-4 py-3 text-sm font-black text-[#0f3822] placeholder:text-[#1b5e39]/50 focus:outline-none focus:ring-2 focus:ring-[#007a3e]"
-                />
+
+                {/* Input con icono de búsqueda */}
+                <div className="relative">
+                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#1b5e39]/60 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={pitchQuery}
+                    onFocus={() => {
+                      if (pitchQuery && complexSuggestions.length > 0) {
+                        setShowPitchDropdown(true);
+                      }
+                    }}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPitchQuery(val);
+                      setForm((f) => ({ ...f, pitch_id: '', custom_location: val }));
+
+                      if (!val) {
+                        setShowPitchDropdown(false);
+                      } else {
+                        setShowPitchDropdown(true);
+                      }
+                    }}
+                    placeholder={`Escribe o busca un complejo en ${selectedCity !== 'Todas' ? selectedCity : 'tu ciudad'}...`}
+                    className="w-full bg-[#cde4d5]/60 border border-[#007a3e] rounded-2xl pl-10 pr-4 py-3 text-sm font-black text-[#0f3822] placeholder:text-[#1b5e39]/50 focus:outline-none focus:ring-2 focus:ring-[#007a3e] transition-all"
+                  />
+                </div>
+
+                {/* Ayuda / Leyenda inferior */}
                 <p className="text-[10px] font-medium text-[#1b5e39] mt-1">
                   💡 Si seleccionas un complejo registrado, se enlazará a su perfil. Si escribes un lugar externo, se guardará con la ciudad en donde estás ({selectedCity !== 'Todas' ? selectedCity : 'Pasto'}).
                 </p>
 
-                {showPitchDropdown && (
+                {/* Confirmación visual si hay un complejo enlazado */}
+                {form.pitch_id && (
+                  <p className="text-xs text-[#007a3e] font-extrabold mt-1.5 flex items-center gap-1">
+                    ✓ Complejo oficial enlazado: <span className="underline">{pitchQuery}</span>
+                  </p>
+                )}
+
+                {/* Dropdown de sugerencias (Solo si está activo Y hay resultados) */}
+                {showPitchDropdown && complexSuggestions.length > 0 && (
                   <>
+                    {/* Overlay para cerrar al hacer clic fuera */}
                     <div
                       className="fixed inset-0 z-30"
                       onClick={() => setShowPitchDropdown(false)}
                     />
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-[#d0e6d7] border border-[#a4d4b4] rounded-2xl shadow-2xl z-50 overflow-hidden max-h-48 overflow-y-auto">
-                      {/* <div className="p-2 text-[10px] font-black uppercase tracking-wider text-[#1b5e39] border-b border-[#b8dbc5]">
-                        🏟️ Complejos registrados en {selectedCity !== 'Todas' ? selectedCity : 'el sistema'} (Opcional)
-                      </div> */}
-                      {complexSuggestions.length > 0 ? (
-                        complexSuggestions.map((c: any) => (
-                          <div
-                            key={c.id}
-                            onClick={() => {
-                              setPitchQuery(c.name);
-                              setForm(f => ({ ...f, pitch_id: c.pitch_id || c.id, custom_location: '' }));
-                              setShowPitchDropdown(false);
-                            }}
-                            className="px-3 py-2.5 hover:bg-[#bce0ca] cursor-pointer flex items-center justify-between border-b border-[#b8dbc5]/40 last:border-0"
-                          >
-                            <div className="flex flex-col">
-                              <span className="text-xs font-black uppercase text-[#0f3822]">
-                                🏟️ {c.name}
-                              </span>
 
-                              <span className="text-[10px] text-[#1b5e39] font-medium">
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-[#d0e6d7] border border-[#a4d4b4] rounded-2xl shadow-2xl z-50 overflow-hidden max-h-56 overflow-y-auto divide-y divide-[#b8dbc5]/40 touch-pan-y">
+
+                      {/* Encabezado del Dropdown */}
+                      <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-[#1b5e39] bg-[#bce0ca]/60 sticky top-0 backdrop-blur-sm border-b border-[#b8dbc5]">
+                        Complejos registrados en {selectedCity !== 'Todas' ? selectedCity : 'el sistema'}
+                      </div>
+
+                      {/* Lista de resultados */}
+                      {complexSuggestions.map((c: any) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setPitchQuery(c.name);
+                            setForm((f) => ({
+                              ...f,
+                              pitch_id: c.pitch_id || c.id,
+                              custom_location: '',
+                              pitch_name: c.name,
+                              location: c.address
+                                ? c.address.toLowerCase().includes((selectedCity || '').toLowerCase())
+                                  ? c.address
+                                  : `${c.address}, ${c.city || selectedCity}`
+                                : c.location || location,
+                            }));
+                            setShowPitchDropdown(false);
+                          }}
+                          className="w-full px-3.5 py-2.5 hover:bg-[#bce0ca] active:bg-[#a8d6b8] cursor-pointer flex items-center justify-between gap-2 text-left transition-colors"
+                        >
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className="text-xs font-black uppercase text-[#0f3822] truncate flex items-center gap-1">
+                              <span className="shrink-0">🏟️</span>
+                              <span className="truncate">{c.name}</span>
+                            </span>
+
+                            {c.address && (
+                              <span className="text-[10px] text-[#1b5e39] font-semibold truncate pl-5 mt-0.5">
                                 {c.address}
                               </span>
-
-                            </div>
-                            <span className="text-[10px] font-bold text-[#1b5e39] uppercase">
-                              Registrado ↗
-                            </span>
+                            )}
                           </div>
-                        ))
-                      ) : (
-                        <div className="p-3 text-xs text-[#1b5e39] font-medium">
-                          {/* Se guardará como: <span className="font-black text-[#0f3822]">"{pitchQuery}"</span> ({selectedCity !== 'Todas' ? selectedCity : 'Pasto'}) */}
-                        </div>
-                      )}
+
+                          {/* Badge de estado registrado */}
+                          {/* <span className="shrink-0 text-[10px] font-black text-[#1b5e39] bg-[#a4d4b4]/50 border border-[#1b5e39]/20 px-2 py-0.5 rounded-lg uppercase whitespace-nowrap">
+                            Registrado ↗
+                          </span> */}
+                        </button>
+                      ))}
                     </div>
                   </>
                 )}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Upload, CheckCircle2, Loader2, Image as ImageIcon, CalendarDays, Clock3, XCircle, Copy, CheckCheck, X, LandPlot, Lock } from 'lucide-react';
+import { ArrowLeft, Check, Upload, CheckCircle2, Loader2, Image as ImageIcon, CalendarDays, Clock3, XCircle, Copy, CheckCheck, X, LandPlot, Lock, Percent } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/client';
@@ -830,10 +830,10 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                       type="button"
                       onClick={() => handleSwitchPitch(sp)}
                       className={`flex items-center gap-2.5 p-2.5 sm:p-3 rounded-2xl sm:rounded-xl border text-left transition-all relative cursor-pointer shrink-0 snap-start w-[190px] sm:w-[240px] ${isCurrent
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/25 ring-2 ring-emerald-600/30'
-                          : step === 2
-                            ? 'bg-card/60 text-muted-foreground border-border/60 opacity-60'
-                            : 'bg-card text-foreground border-border hover:border-emerald-500/50 hover:bg-secondary/60'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/25 ring-2 ring-emerald-600/30'
+                        : step === 2
+                          ? 'bg-card/60 text-muted-foreground border-border/60 opacity-60'
+                          : 'bg-card text-foreground border-border hover:border-emerald-500/50 hover:bg-secondary/60'
                         }`}
                     >
                       {/* Imagen miniatura de la cancha */}
@@ -1055,8 +1055,9 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                               <>
                                 <span className="text-xs sm:text-sm block leading-tight">{h12}:00</span>
                                 <span className="text-[8.5px] sm:text-[9px] uppercase opacity-70">{ampm}</span>
-                                <span className="text-[8.5px] sm:text-[9px] block text-primary mt-0.5 font-semibold">${slotPrice.toLocaleString('es-CO')}</span>
-                              </>
+                                <span className={`text-[8.5px] sm:text-[9px] block mt-0.5 font-semibold ${isSel ? 'text-white/90 font-bold' : 'text-primary'}`}>
+                                  ${slotPrice.toLocaleString('es-CO')}
+                                </span>                              </>
                             )}
                           </button>
                         );
@@ -1083,7 +1084,10 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                 <p className="text-[11px] text-muted-foreground text-center mt-2">
                   Abono del <strong>{pitch.custom_pricing.booking_percentage}%</strong> del valor total para confirmar
                 </p>
+  
               ) : null} */}
+              {/* Lógica de Abono Fijo o Porcentaje Blindada */}
+
             </div>
           )}
 
@@ -1239,6 +1243,15 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                 ${totalPrice > 0 ? abonoPrice.toLocaleString('es-CO') : '-'}
               </strong>
             </div>
+            {customPricing?.booking_type === 'fixed' ? (
+              <p className="text-[11px] text-muted-foreground text-center mt-2">
+                Abono fijo de <strong>${Number(customPricing.booking_fixed || 0).toLocaleString('es-CO')}</strong> por hora para confirmar
+              </p>
+            ) : (customPricing?.booking_percentage || (currentPitch as any).booking_percentage) ? (
+              <p className="text-[11px] text-muted-foreground text-center mt-2">
+                Abono del <strong>{customPricing?.booking_percentage || (currentPitch as any).booking_percentage || 50}%</strong> del valor total para confirmar
+              </p>
+            ) : null}
           </div>
 
           <p className="text-[10px] text-muted-foreground mt-2 text-center leading-relaxed">

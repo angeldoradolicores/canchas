@@ -1347,7 +1347,12 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                           <p className="text-[11px] text-muted-foreground text-center mt-2">
                             Abono del <strong>{pitchAny.booking_percentage || 50}%</strong> del valor total para confirmar
                           </p>
-                        ) : null}
+                        ) : null
+
+                        }
+                        {/* <p className="text-[10px] text-muted-foreground mt-2 text-center leading-relaxed">
+                          El valor restante se paga en la cancha
+                        </p> */}
                       </div>
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">

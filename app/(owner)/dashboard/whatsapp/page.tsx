@@ -512,7 +512,7 @@ export default function WhatsAppConnectionPage() {
                   </button>
                 </div>
 
-                <div className="pt-2 w-full max-w-xs space-y-2 border-t border-zinc-100 mt-4">
+                {/* <div className="pt-2 w-full max-w-xs space-y-2 border-t border-zinc-100 mt-4">
                   <span className="text-[10px] font-bold text-zinc-400 uppercase block">¿Modo de prueba rápida?</span>
                   <input
                     type="text"
@@ -529,7 +529,7 @@ export default function WhatsAppConnectionPage() {
                     {generating ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                     Confirmar / Vincular número
                   </button>
-                </div>
+                </div> */}
               </div>
             )}
 

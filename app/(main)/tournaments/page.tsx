@@ -741,9 +741,10 @@ export default function TournamentsPage() {
                         <Link
                           href={`/cancha/${t.pitch_id}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="font-black text-xs text-[#054D27] hover:underline uppercase leading-tight line-clamp-2"
+                          className="font-black text-xs text-[#054D27]  uppercase leading-tight line-clamp-2"
                         >
-                          {t.pitches?.name}
+                          {t.pitches?.companies?.name}
+                          <ExternalLink size={11} className="shrink-0 mt-0.5" />
                         </Link>
                       ) : (
                         <p className="font-black text-xs text-[#054D27] uppercase leading-tight line-clamp-2">
@@ -940,10 +941,11 @@ export default function TournamentsPage() {
                       <Link
                         href={`/cancha/${selectedTournament.pitch_id}`}
                         title={selectedTournament.pitches.name}
-                        className="group font-black text-xs sm:text-sm text-[#054D27] hover:underline flex items-start gap-1 uppercase leading-snug break-words"
+                        className="group font-black text-xs sm:text-sm text-[#054D27]  flex items-start gap-1 uppercase leading-snug break-words"
                       >
                         <span className="line-clamp-2 transition-colors group-hover:text-[#008744]">
-                          {selectedTournament.pitches.name}
+                          {selectedTournament.pitches.companies?.name}
+
                         </span>
                         <ExternalLink size={11} className="shrink-0 mt-0.5" />
                       </Link>
