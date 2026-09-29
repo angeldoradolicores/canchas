@@ -645,7 +645,7 @@ function NewPitchForm() {
         setLat(gLat);
         setLng(gLng);
       }
-    } catch {}
+    } catch { }
   };
 
   const handleLocationChange = (newLat: number, newLng: number, geocodedAddress?: string) => {
@@ -840,7 +840,7 @@ function NewPitchForm() {
             <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
               Complejo
             </p>
-            <p className="text-sm font-black text-foreground">
+            <p className="text-sm font-black text-foreground capitalize">
               {ownerCompanyName}
             </p>
           </div>
@@ -887,15 +887,15 @@ function NewPitchForm() {
             <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-2xl p-5 space-y-4 shadow-xs">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shrink-0">
+                  {/* <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shrink-0">
                     <Layers size={20} />
-                  </div>
+                  </div> */}
                   <div>
                     <h3 className="text-sm font-black text-foreground uppercase tracking-tight flex items-center gap-2">
                       ¿Es una Cancha Combinada / Modular?
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                      {/* <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-700 dark:text-amber-300">
                         Fútbol 8 / 9
-                      </span>
+                      </span> */}
                     </h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Une dos canchas individuales (ej: dos canchas Fútbol 5) para ofrecerlas también como una cancha grande. El sistema bloqueará automáticamente la disponibilidad mutua para evitar reservas dobles.
@@ -938,19 +938,17 @@ function NewPitchForm() {
                           key={p.id}
                           type="button"
                           onClick={() => handleToggleLinkedPitch(p.id)}
-                          className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-amber-500/15 border-amber-500 text-foreground font-bold shadow-xs'
-                              : 'bg-card border-border hover:bg-secondary/60 text-muted-foreground'
-                          }`}
+                          className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${isSelected
+                            ? 'bg-amber-500/15 border-amber-500 text-foreground font-bold shadow-xs'
+                            : 'bg-card border-border hover:bg-secondary/60 text-muted-foreground'
+                            }`}
                         >
                           <div className="min-w-0 pr-2">
-                            <p className="text-xs font-black truncate">{p.name}</p>
-                            <p className="text-[11px] opacity-75">{p.type || 'Fútbol 5'} · ${(Number(p.price_per_hour) || 0).toLocaleString()} / h</p>
+                            <p className="text-xs font-black truncate">{p.name.toUpperCase()}</p>
+                            <p className="text-[11px] opacity-75">{p.type || 'Fútbol 5'}</p>
                           </div>
-                          <div className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all ${
-                            isSelected ? 'bg-amber-600 border-amber-600 text-white' : 'border-border'
-                          }`}>
+                          <div className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all ${isSelected ? 'bg-amber-600 border-amber-600 text-white' : 'border-border'
+                            }`}>
                             {isSelected && <Check size={12} strokeWidth={3} />}
                           </div>
                         </button>
@@ -1121,7 +1119,7 @@ function NewPitchForm() {
             <div className="space-y-3 border-t border-border pt-4">
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1.5">
-                  <CreditCard size={12} /> Métodos de Pago y Orden
+                  <CreditCard size={12} /> Métodos de Pago y Orden *
                 </label>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
                   Agrega métodos de pago y usa las flechas para definir el orden en que se mostrarán.
@@ -1703,7 +1701,7 @@ function NewPitchForm() {
                   className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium"
                 />
               </div>
-              <div className="space-y-1.5 sm:col-span-2">
+              {/* <div className="space-y-1.5 sm:col-span-2">
                 <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1">
                   <MapPin size={12} className="text-emerald-500" />
                   <span>Dirección o Barrio (se autocompleta con el mapa) *</span>
@@ -1715,7 +1713,7 @@ function NewPitchForm() {
                   onChange={e => setAddress(e.target.value)}
                   className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium"
                 />
-              </div>
+              </div> */}
             </div>
 
             {/* Contenedor del Mapa Adaptable */}

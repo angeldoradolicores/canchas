@@ -629,7 +629,7 @@ export default function BookingsPage() {
                           <p className="font-bold text-xs sm:text-sm text-foreground break-words leading-tight">{group.pitches?.name?.toUpperCase() || '—'}</p>
                           {group.pitches?.custom_pricing?.is_combined && (
                             <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 mt-1 rounded bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300">
-                              ⚡ Combinada
+                              Combinada
                             </span>
                           )}
                         </div>

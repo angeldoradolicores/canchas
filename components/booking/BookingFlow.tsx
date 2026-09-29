@@ -745,8 +745,8 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
 
               {isCombinedPitch(currentPitch as any) && (
                 <div className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] font-extrabold uppercase tracking-wide">
-                  <Zap size={10} className="fill-amber-500 text-amber-500" />
-                  Cancha Combinada / Modular
+                  {/* <Zap size={10} className="fill-amber-500 text-amber-500" /> */}
+                  Cancha Combinada
                 </div>
               )}
 
@@ -910,17 +910,17 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                             <Lock size={14} className="text-white/80" />
                           </div>
                         )}
-                        {spIsCombined && !isCurrent && (
+                        {/* {spIsCombined && !isCurrent && (
                           <div className="absolute top-0 right-0 bg-amber-500 text-white text-[7px] font-black px-1 py-0.5 rounded-bl-lg rounded-tr-lg leading-none">
                             ⚡
                           </div>
-                        )}
+                        )} */}
                       </div>
 
                       {/* Info */}
                       <div className="min-w-0 flex-1 flex flex-col justify-center">
                         <div className="flex items-center justify-between gap-1 mb-0.5">
-                          <p className={`text-xs font-black uppercase truncate ${isCurrent ? 'text-white' : 'text-foreground'}`}>
+                          <p className={`text-xs font-black uppercase  ${isCurrent ? 'text-white' : 'text-foreground'}`}>
                             {sp.name}
                           </p>
                           {isCurrent && (
@@ -930,18 +930,18 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                           )}
                           {spIsCombined && !isCurrent && (
                             <span className="text-[8px] font-black uppercase px-1 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-400 shrink-0">
-                              COMB.
+                              COMBINADA
                             </span>
                           )}
                         </div>
                         <p className={`text-[11px] truncate ${isCurrent ? 'text-emerald-100' : 'text-muted-foreground'}`}>
                           {sp.type || 'Fútbol 5'}
                         </p>
-                        {spPrice > 0 && (
+                        {/* {spPrice > 0 && (
                           <p className={`text-[10px] font-bold mt-0.5 ${isCurrent ? 'text-emerald-100/80' : 'text-muted-foreground/70'}`}>
                             ${spPrice.toLocaleString('es-CO')}/h
                           </p>
-                        )}
+                        )} */}
                       </div>
                     </button>
                   );
@@ -960,10 +960,10 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
               <div className="mt-3 mb-2 flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
                 <Layers size={15} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-xs font-black text-amber-800 dark:text-amber-300">⚡ Cancha Combinada / Modular</p>
+                  <p className="text-xs font-black text-amber-800 dark:text-amber-300"> Cancha Combinada / Modular</p>
                   {linkedNames.length > 0 && (
                     <p className="text-[11px] text-muted-foreground mt-0.5">
-                      Une <strong className="text-foreground">{linkedNames.join(' + ')}</strong>. Las horas ocupadas en esas canchas también se bloquean aquí.
+                      Une <strong className="text-foreground">{linkedNames.join(' + ')}</strong>. Puedes reservar el espacio completo.
                     </p>
                   )}
                 </div>

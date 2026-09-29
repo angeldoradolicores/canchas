@@ -581,7 +581,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                     {/* Info */}
                     <div className="min-w-0 flex-1 flex flex-col justify-center">
                       <div className="flex items-center justify-between gap-1 mb-0.5">
-                        <p className={`text-xs font-black uppercase truncate ${isCurrent ? 'text-white' : 'text-foreground'}`}>
+                        <p className={`text-xs font-black uppercase  ${isCurrent ? 'text-white' : 'text-foreground'}`}>
                           {sp.name}
                         </p>
                         {isCurrent && (
@@ -591,18 +591,18 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                         )}
                         {spIsCombined && !isCurrent && (
                           <span className="text-[8px] font-black uppercase px-1 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-400 shrink-0">
-                            COMB.
+                            COMBINADA
                           </span>
                         )}
                       </div>
                       <p className={`text-[11px] truncate ${isCurrent ? 'text-emerald-100' : 'text-muted-foreground'}`}>
                         {sp.type || 'Fútbol 5'}
                       </p>
-                      {spPrice > 0 && (
+                      {/* {spPrice > 0 && (
                         <p className={`text-[10px] font-bold mt-0.5 ${isCurrent ? 'text-emerald-100/80' : 'text-muted-foreground/70'}`}>
                           ${spPrice.toLocaleString('es-CO')}/h
                         </p>
-                      )}
+                      )} */}
                     </div>
                   </button>
                 );
@@ -812,7 +812,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                     </div>
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">
-                        ⚡ Cancha Combinada / Modular
+                        Cancha Combinada / Modular
                       </p>
                       <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                         Esta cancha une {linkedPitchNames.length > 0 ? (
@@ -1089,13 +1089,13 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
               <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-secondary/50 border border-border/60 w-full min-w-0">
                 <div className="w-2 h-2 rounded-full bg-primary shrink-0 animate-pulse" />
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0 flex-1">
-                  <span className="text-xs sm:text-sm font-black text-foreground truncate max-w-full">
+                  <span className="text-xs sm:text-sm font-black text-foreground truncate max-w-full capitalize">
                     {complexInfo?.name}
                   </span>
                   {complexInfo?.name && complexInfo.name !== currentPitch.name && (
                     <>
                       <span className="text-muted-foreground font-light text-xs shrink-0"></span>
-                      <span className="text-xs sm:text-sm font-semibold text-primary truncate max-w-full">
+                      <span className="text-xs sm:text-sm font-semibold text-primary  max-w-full">
                         {currentPitch.name}
                       </span>
                     </>
@@ -1390,7 +1390,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                     <div className="w-full py-3 px-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex flex-col items-center justify-center gap-1">
                       {/* Nombre del Complejo (Ahora es el elemento más grande y protagonista) */}
                       {((pitch as any).companies?.name || (pitch as any).company?.name) && (
-                        <span className="text-base sm:text-lg font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300 text-center truncate max-w-full">
+                        <span className="text-base sm:text-lg font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300 text-center  max-w-full">
                           {((pitch as any).companies?.name || (pitch as any).company?.name)}
                         </span>
                       )}

@@ -411,7 +411,7 @@ export default function UserReservationsPage() {
                   </h3>
                   {(b.pitches?.custom_pricing?.is_combined || b.bookings?.[0]?.pitches?.custom_pricing?.is_combined) && (
                     <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 w-fit">
-                      ⚡ Modular / Combinada
+                      Combinada
                     </span>
                   )}
                 </div>
@@ -438,9 +438,9 @@ export default function UserReservationsPage() {
                     {date.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}
                   </span>
                 </div>
-                <div className="flex items-center gap-1 text-[11px] sm:text-xs text-muted-foreground">
-                  <Clock size={12} className="text-primary flex-shrink-0" />
-                  <span className="font-bold text-primary whitespace-nowrap">
+                <div className="flex items-start gap-1 text-[11px] sm:text-xs text-muted-foreground min-w-0">
+                  <Clock size={12} className="text-primary flex-shrink-0 mt-0.5" />
+                  <span className="font-bold text-primary break-words leading-tight">
                     {b.bookings ? b.bookings.map((xb: any) => {
                       const timeStr = new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
                       return b.displayPitchName?.includes('+') && xb.pitches?.name
@@ -728,7 +728,7 @@ export default function UserReservationsPage() {
                   {(selectedTicket.displayPitchName || selectedTicket.pitches?.name || 'CANCHA').toUpperCase()}
                 </h4>
 
-                {(selectedTicket.pitches?.custom_pricing?.is_combined || selectedTicket.bookings?.[0]?.pitches?.custom_pricing?.is_combined) && (
+                {/* {(selectedTicket.pitches?.custom_pricing?.is_combined || selectedTicket.bookings?.[0]?.pitches?.custom_pricing?.is_combined) && (
                   <div style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -744,9 +744,9 @@ export default function UserReservationsPage() {
                     marginBottom: 10,
                     textTransform: 'uppercase'
                   }}>
-                    ⚡ CANCHA COMBINADA / MODULAR
+
                   </div>
-                )}
+                )} */}
 
                 <p style={{ fontSize: 13, fontWeight: 600, opacity: 0.9, marginBottom: 16 }}>⚽ {selectedTicket.pitches?.type || 'Fútbol 11'}</p>
 
@@ -766,33 +766,48 @@ export default function UserReservationsPage() {
               </div>
 
               {/* Body */}
-              <div style={{ background: '#1A1F26', padding: '16px 24px 24px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px 16px', marginBottom: 20 }}>
-                  <div>
-                    <p style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.1em', marginBottom: 4 }}>JUGADOR</p>
-                    <p style={{ fontWeight: 700, color: '#fff', textTransform: 'capitalize' }}>{selectedTicket.customer_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Jugador'}</p>
+              <div className="p-4 sm:p-6 bg-[#1A1F26] text-white rounded-b-2xl">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 mb-5">
+
+                  {/* JUGADOR */}
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-extrabold text-gray-400 tracking-wider mb-1 uppercase">
+                      JUGADOR
+                    </p>
+                    <p className="font-bold text-sm sm:text-base text-white capitalize break-words">
+                      {selectedTicket.customer_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Jugador'}
+                    </p>
                   </div>
-                  <div>
-                    <p style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.1em', marginBottom: 4 }}>ESTADO</p>
-                    <p style={{ fontWeight: 700, color: selectedTicket.status === 'confirmed' ? '#34D399' : selectedTicket.status === 'pending' ? '#FBBF24' : '#F87171' }}>
+
+                  {/* ESTADO */}
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-extrabold text-gray-400 tracking-wider mb-1 uppercase">
+                      ESTADO
+                    </p>
+                    <p className={`font-bold text-sm sm:text-base ${selectedTicket.status === 'confirmed' ? 'text-emerald-400' : selectedTicket.status === 'pending' ? 'text-amber-400' : 'text-red-400'
+                      }`}>
                       {selectedTicket.status === 'pending' ? 'REVISIÓN' : selectedTicket.status === 'confirmed' ? 'CONFIRMADA ✓' : 'CANCELADA'}
                     </p>
                   </div>
-                  <div>
-                    <p style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.1em', marginBottom: 4 }}>FECHA</p>
-                    <p style={{ fontWeight: 700, color: '#fff', fontSize: 13, textTransform: 'capitalize' }}>
+
+                  {/* FECHA */}
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-extrabold text-gray-400 tracking-wider mb-1 uppercase">
+                      FECHA
+                    </p>
+                    <p className="font-bold text-xs sm:text-sm text-white capitalize break-words">
                       {new Date(selectedTicket.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}
                     </p>
                   </div>
-                  <div>
-                    <p style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.1em', marginBottom: 6 }}>
+
+                  {/* HORARIOS */}
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-extrabold text-gray-400 tracking-wider mb-1.5 uppercase">
                       HORARIOS
                     </p>
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(2, 1fr)',
-                      gap: '6px 8px'
-                    }}>
+
+                    {/* Adaptación dinámica: Ajuste automático a la cantidad y largo del texto */}
+                    <div className="flex flex-wrap gap-1.5">
                       {selectedTicket.bookings && selectedTicket.bookings.length > 0 ? (
                         selectedTicket.bookings.map((xb: any, index: number) => {
                           const timeStr = new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
@@ -802,41 +817,20 @@ export default function UserReservationsPage() {
                           return (
                             <span
                               key={index}
-                              style={{
-                                background: 'rgba(255, 255, 255, 0.08)',
-                                color: '#fff',
-                                fontSize: 11,
-                                fontWeight: 700,
-                                padding: '3px 6px',
-                                borderRadius: 6,
-                                border: '1px solid rgba(255, 255, 255, 0.12)',
-                                textAlign: 'center',
-                                whiteSpace: 'nowrap'
-                              }}
+                              className="bg-white/10 text-white text-[10px] sm:text-[11px] font-bold px-2 py-1 rounded-md border border-white/15 text-center leading-tight max-w-full break-words"
                             >
                               {label}
                             </span>
                           );
                         })
                       ) : (
-                        <span
-                          style={{
-                            background: 'rgba(255, 255, 255, 0.08)',
-                            color: '#fff',
-                            fontSize: 11,
-                            fontWeight: 700,
-                            padding: '3px 6px',
-                            borderRadius: 6,
-                            border: '1px solid rgba(255, 255, 255, 0.12)',
-                            textAlign: 'center',
-                            whiteSpace: 'nowrap'
-                          }}
-                        >
+                        <span className="bg-white/10 text-white text-[10px] sm:text-[11px] font-bold px-2 py-1 rounded-md border border-white/15 text-center leading-tight">
                           {new Date(selectedTicket.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       )}
                     </div>
                   </div>
+
                 </div>
               </div>
             </div>

@@ -159,14 +159,14 @@ export default function PitchesPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {pitches.filter(p => !(p as any).custom_pricing?.is_combined).length >= 2 && (
+          {/* {pitches.filter(p => !(p as any).custom_pricing?.is_combined).length >= 2 && (
             <Link
               href="/dashboard/pitches/new?combined=true"
               className="flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-black rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25 transition-all text-center cursor-pointer shadow-xs"
             >
               <Zap size={15} className="fill-amber-500 text-amber-500" /> Crear Cancha Combinada
             </Link>
-          )}
+          )} */}
           <Link
             href="/dashboard/pitches/new"
             className="btn-primary w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-bold rounded-xl shrink-0 text-center cursor-pointer"
@@ -180,12 +180,12 @@ export default function PitchesPage() {
       {pitches.filter(p => !(p as any).custom_pricing?.is_combined).length >= 2 && (
         <div className="mb-6 p-4 sm:p-5 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
           <div className="flex items-start gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shrink-0 mt-0.5">
+            {/* <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shrink-0 mt-0.5">
               <Zap size={22} className="fill-amber-500 text-amber-500" />
-            </div>
+            </div> */}
             <div>
               <h3 className="text-sm sm:text-base font-black text-foreground flex items-center gap-2">
-                ¿Tus canchas se pueden juntar? (Fútbol 8 / Fútbol 9)
+                ¿Tus canchas se pueden juntar?
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-700 dark:text-amber-300 uppercase">
                   Modular
                 </span>
@@ -199,8 +199,8 @@ export default function PitchesPage() {
             href="/dashboard/pitches/new?combined=true"
             className="px-4 py-2.5 bg-amber-500 text-slate-950 font-black text-xs sm:text-sm rounded-xl hover:bg-amber-400 transition-all shrink-0 text-center shadow-sm flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
           >
-            <Zap size={14} className="fill-slate-950 text-slate-950" />
-            Combinar Canchas Ahora
+            {/* <Zap size={14} className="fill-slate-950 text-slate-950" /> */}
+            Combinar Canchas
           </Link>
         </div>
       )}

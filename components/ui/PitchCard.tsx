@@ -258,8 +258,8 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
               <div className="flex flex-wrap gap-1.5 items-center max-w-[80%]">
                 {isCombinedPitch(pitch as any) && (
                   <span className="bg-amber-500/95 backdrop-blur-md text-slate-950 font-black text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1">
-                    <Zap size={10} className="fill-slate-950 text-slate-950" />
-                    Modular
+                    {/* <Zap size={10} className="fill-slate-950 text-slate-950" /> */}
+                    COMBINADA
                   </span>
                 )}
                 <span className="bg-emerald-600/90 backdrop-blur-md text-white font-extrabold text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
@@ -564,15 +564,15 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
               {/* Modalidad y Cancha Combinada */}
               {isCombinedPitch(pitch as any) && (
                 <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-start gap-2.5">
-                  <div className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                  {/* <div className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
                     <Zap size={14} className="fill-amber-500 text-amber-500" />
-                  </div>
+                  </div> */}
                   <div>
                     <h5 className="text-xs font-black uppercase text-amber-700 dark:text-amber-300">
-                      Cancha Combinada / Modular
+                      Cancha Combinada
                     </h5>
                     <p className="text-[11px] text-amber-800/80 dark:text-amber-200/80 mt-0.5 leading-snug">
-                      Esta cancha unifica espacios individuales contiguos para permitir partidos de mayor formato. Al reservarla se reservan automáticamente sus espacios componentes.
+                      Esta cancha unifica espacios individuales para permitir partidos de mayor formato.
                     </p>
                   </div>
                 </div>

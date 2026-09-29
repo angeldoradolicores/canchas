@@ -287,7 +287,7 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
                         : (combined ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25' : 'bg-secondary hover:bg-secondary/80 text-muted-foreground')
                         }`}
                     >
-                      {combined && <Zap size={11} className={idx === selectedPitchIdx ? 'fill-slate-950 text-slate-950' : 'fill-amber-500 text-amber-500'} />}
+                      {/* {combined && <Zap size={11} className={idx === selectedPitchIdx ? 'fill-slate-950 text-slate-950' : 'fill-amber-500 text-amber-500'} />} */}
                       {p.name}
                     </button>
                   );
@@ -340,15 +340,15 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
               {/* Banner Cancha Combinada */}
               {isCombinedPitch(currentPitch) && (
                 <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-start gap-2.5">
-                  <div className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                  {/* <div className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
                     <Zap size={14} className="fill-amber-500 text-amber-500" />
-                  </div>
+                  </div> */}
                   <div>
                     <h5 className="text-xs font-black uppercase text-amber-700 dark:text-amber-300">
                       Cancha Combinada / Modular
                     </h5>
                     <p className="text-[11px] text-amber-800/80 dark:text-amber-200/80 mt-0.5 leading-snug">
-                      Esta cancha unifica espacios individuales contiguos para permitir partidos de mayor formato.
+                      Esta cancha unifica espacios individuales  para permitir partidos de mayor formato.
                     </p>
                   </div>
                 </div>
