@@ -1,0 +1,281 @@
+{
+  "name": "Canchas Pasto - Notificaciones WhatsApp v4.2",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "booking-notifications",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        11584,
+        1360
+      ],
+      "id": "07b3eda1-2883-4820-9851-a7608535082c",
+      "name": "Booking Notifications Webhook",
+      "webhookId": "booking-notifications"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\n\n// Soporte para payload directo (Supabase webhook) o anidado\nif (!body) return [];\n\nconst record = body.record || body;\nconst oldRecord = body.old_record || null;\nconst oldStatus = oldRecord ? oldRecord.status : null;\nconst newStatus = record.status;\nconst bookingId = record.id;\nconst proof = record.payment_proof_url || null;\n\nif (!bookingId || !newStatus) return [];\n\n// Reserva que acaba de subir comprobante (draft → pending o null → pending)\nif (newStatus === 'pending' && oldStatus !== 'pending') {\n  return [{ json: { booking_id: bookingId, payment_proof_url: proof, kind: 'nueva_pendiente', new_status: newStatus } }];\n}\n\n// Reserva resuelta (confirmada o cancelada desde pending)\nif ((oldStatus === 'pending' || !oldStatus) && (newStatus === 'confirmed' || newStatus === 'cancelled')) {\n  return [{ json: { booking_id: bookingId, payment_proof_url: proof, kind: 'resuelta', new_status: newStatus } }];\n}\n\nreturn [];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        11808,
+        1360
+      ],
+      "id": "267cd8f7-c336-46d3-be61-9a7ece434253",
+      "name": "Clasificar Evento de Reserva"
+    },
+    {
+      "parameters": {
+        "amount": 15
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        12032,
+        1360
+      ],
+      "id": "ff134498-feaf-4ac1-8934-e04c0ad5a023",
+      "name": "Esperar horas hermanas",
+      "webhookId": "0786c61f-3c36-4496-b972-5c21d582ff09"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://rxykieyrzaqnfasouwke.supabase.co/rest/v1/rpc/get_booking_notification_info",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4eWtpZXlyemFxbmZhc291d2tlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NzI3MzcxNSwiZXhwIjoyMTAyODQ5NzE1fQ.VbPPy9ZRm9sbzQ9NPbq3oGKZvFR0O7LazYv7KGSxK48"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4eWtpZXlyemFxbmZhc291d2tlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NzI3MzcxNSwiZXhwIjoyMTAyODQ5NzE1fQ.VbPPy9ZRm9sbzQ9NPbq3oGKZvFR0O7LazYv7KGSxK48"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"p_booking_id\": $json.booking_id } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        12256,
+        1360
+      ],
+      "id": "ac96fb6e-ca32-43cb-9909-eeee50ac5784",
+      "name": "Obtener Info de Reserva"
+    },
+    {
+      "parameters": {
+        "jsCode": "const clasif = $('Clasificar Evento de Reserva').first().json;\nconst kind = clasif.kind;\nconst newStatus = clasif.new_status || null;\nconst currentBookingId = String(clasif.booking_id);\n\nlet info = $input.first().json;\nif (Array.isArray(info)) info = info[0];\nif (!info || Object.keys(info).length === 0) return [];\n\nconst DOMAIN = 'https://canchas-mino.vercel.app';\nconst secureOwnerLink = `${DOMAIN}/dashboard/bookings`;\nconst reservationsLink = `${DOMAIN}/reservations`;\n\nconst OWNER_FIXED_PHONE = '573006577286';\nconst instance = info.whatsapp_instance_name;\n\nfunction normalizeCoPhone(phone) {\n  if (!phone) return null;\n  const digits = String(phone).replace(/\\D/g, '');\n  if (digits.length === 10) return '57' + digits;\n  if (digits.length >= 11) return digits;\n  return null;\n}\n\nfunction mediaTypeFromUrl(url) {\n  if (!url) return null;\n  const clean = String(url).split('?')[0].toLowerCase();\n  if (clean.endsWith('.pdf')) return 'document';\n  return 'image';\n}\n\n// Agrupar horas hermanas\nlet siblings = Array.isArray(info.sibling_bookings) && info.sibling_bookings.length\n  ? info.sibling_bookings.slice()\n  : [{ pitch_name: info.pitch_name, start_time: info.start_time, booking_id: info.booking_id || currentBookingId }];\n\nsiblings = siblings.filter(sb => sb && sb.start_time);\nif (siblings.length === 0) return [];\n\nsiblings.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());\nconst leaderId = String(siblings[0].booking_id);\n\n// Solo el líder del grupo dispara el mensaje (evitar duplicados)\nif (currentBookingId !== leaderId) return [];\n\nconst horasList = siblings.map(sb => {\n  return new Date(sb.start_time).toLocaleString('es-CO', {\n    timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: true\n  }) + (sb.pitch_name !== info.pitch_name ? ` (${sb.pitch_name})` : '');\n});\n\nconst pitchNames = [...new Set(siblings.map(sb => sb.pitch_name).filter(Boolean))].join(' + ') || info.pitch_name || 'Cancha';\n\n// Fecha corta: \"viernes 3 de octubre\" → solo día de semana + número\nconst fechaObj = new Date(siblings[0].start_time);\nconst fechaCorta = fechaObj.toLocaleString('es-CO', {\n  timeZone: 'America/Bogota', weekday: 'long', day: 'numeric'\n});\nconst horariosStr = horasList.join(', ');\n\nconst customerPhone = normalizeCoPhone(info.customer_phone);\nconst ownerPhone = normalizeCoPhone(info.owner_phone) || OWNER_FIXED_PHONE;\nconst sends = [];\n\n// ── CASO 1: Comprobante recibido (nueva pendiente) ──\nif (kind === 'nueva_pendiente') {\n\n  // Al CLIENTE: mensaje corto y claro\n  if (customerPhone) {\n    sends.push({\n      whatsapp_instance_name: instance,\n      number: customerPhone,\n      media: null,\n      mediatype: null,\n      text: `✅ Recibimos tu comprobante\n\n⚽ ${pitchNames}\n📅 ${fechaCorta} a las ${horariosStr}\n\nEl dueño lo está revisando, te avisamos en seguida 🙌`,\n      destino: 'cliente'\n    });\n  }\n\n  // Al DUEÑO: con comprobante adjunto\n  const proof = info.payment_proof_url || clasif.payment_proof_url || null;\n  const proofType = mediaTypeFromUrl(proof);\n  const textoDueno = `🔔 Nueva reserva pendiente\n\n👤 ${info.customer_name} | 📱 ${info.customer_phone || 'Sin número'}\n⚽ ${pitchNames}\n📅 ${fechaCorta} — ${horariosStr}\n\n👉 ${secureOwnerLink}`;\n\n  const destinatariosDueno = [...new Set([ownerPhone, OWNER_FIXED_PHONE].filter(Boolean))];\n  for (const num of destinatariosDueno) {\n    sends.push({\n      whatsapp_instance_name: instance,\n      number: num,\n      media: proof,\n      mediatype: proofType,\n      fileName: proofType === 'document' ? 'comprobante.pdf' : 'comprobante.jpg',\n      text: proof ? textoDueno : textoDueno + '\\n\\n⚠️ No adjuntó comprobante',\n      destino: 'dueno'\n    });\n  }\n}\n\n// ── CASO 2: Reserva resuelta (confirmada o cancelada) ──\nif (kind === 'resuelta') {\n  const aprobada = newStatus === 'confirmed';\n\n  const textoCliente = aprobada\n    ? `🎉 ¡Tu reserva está confirmada!\n\n⚽ ${pitchNames}\n📅 ${fechaCorta} a las ${horariosStr}\n\nPreséntate al complejo y muestra este mensaje ✅\n👉 ${reservationsLink}`\n    : `❌ Tu reserva fue cancelada\n\n⚽ ${pitchNames}\n📅 ${fechaCorta} — ${horariosStr}\n\nSi tienes dudas, escríbenos directamente.`;\n\n  if (customerPhone) {\n    sends.push({\n      whatsapp_instance_name: instance,\n      number: customerPhone,\n      media: null,\n      mediatype: null,\n      text: textoCliente,\n      destino: 'cliente'\n    });\n  }\n}\n\nif (sends.length === 0) return [];\nreturn sends.map(s => ({ json: s }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        12464,
+        1360
+      ],
+      "id": "9686fdca-3681-4b72-bc36-01f5d347ebf6",
+      "name": "Preparar Envios Agrupados"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c_has_media",
+              "leftValue": "={{ $json.media }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        12704,
+        1360
+      ],
+      "id": "83a52e02-7e09-4afa-bdd3-b15b3b367e21",
+      "name": "Lleva Imagen?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://evolution-api:8080/message/sendMedia/{{ $json.whatsapp_instance_name }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "TusClavesSecretasDeEvolution123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"number\": $json.number,\n  \"mediatype\": $json.mediatype || \"image\",\n  \"fileName\": $json.fileName,\n  \"caption\": $json.text,\n  \"media\": $json.media,\n  \"delay\": 800\n} }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        12944,
+        1248
+      ],
+      "id": "496d5dd0-8da8-4a82-8c39-031b5279ae4e",
+      "name": "Enviar WhatsApp con Imagen"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://evolution-api:8080/message/sendText/{{ $json.whatsapp_instance_name }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "TusClavesSecretasDeEvolution123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"number\": $json.number,\n  \"text\": $json.text,\n  \"delay\": 800,\n  \"linkPreview\": false\n} }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        12944,
+        1472
+      ],
+      "id": "180aeffd-ddc8-4f1e-8981-fd118c7874ee",
+      "name": "Enviar WhatsApp Solo Texto"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Booking Notifications Webhook": {
+      "main": [
+        [
+          {
+            "node": "Clasificar Evento de Reserva",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clasificar Evento de Reserva": {
+      "main": [
+        [
+          {
+            "node": "Esperar horas hermanas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar horas hermanas": {
+      "main": [
+        [
+          {
+            "node": "Obtener Info de Reserva",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener Info de Reserva": {
+      "main": [
+        [
+          {
+            "node": "Preparar Envios Agrupados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Envios Agrupados": {
+      "main": [
+        [
+          {
+            "node": "Lleva Imagen?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lleva Imagen?": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp con Imagen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar WhatsApp Solo Texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "69020822-36d1-4cc2-b15f-0a38e256f778",
+  "meta": {
+    "instanceId": "70543e4d10b3d922219847d1304a20f416d98097d7ef8129ebca8eb0273e9faf"
+  },
+  "nodeGroups": [],
+  "id": "sRmJfFhwFqNutz0v",
+  "tags": []
+}

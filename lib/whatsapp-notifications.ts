@@ -9,12 +9,14 @@ const rawEvoUrl = process.env.EVOLUTION_API_URL || 'http://127.0.0.1:8080';
 const evoUrl = rawEvoUrl.replace('localhost', '127.0.0.1');
 const evoApiKey = process.env.EVOLUTION_API_KEY || process.env.EVOLUTION_GLOBAL_APIKEY || 'TusClavesSecretasDeEvolution123';
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
 /**
  * Normaliza cualquier número de teléfono al formato internacional requerido por WhatsApp (ej: 573001234567).
  */
 export function formatWhatsAppPhone(phone: string | null | undefined): string {
   if (!phone) return '';
-  if (phone.includes('@g.us')) return phone; // Permitir IDs de grupo
+  if (phone.includes('@g.us')) return phone;
   const clean = phone.replace(/\D/g, '');
   if (!clean) return '';
   if (clean.startsWith('57') && clean.length >= 12) return clean;
@@ -99,11 +101,10 @@ export async function sendEvolutionWhatsAppMedia(
 }
 
 /**
- * Notifica al cliente y al dueño cuando un cliente sube un comprobante de pago desde la web.
+ * Notifica al cliente y al dueño cuando un cliente sube un comprobante de pago.
  */
 export async function notifyBookingSubmitted(bookingId: string) {
   try {
-    // 1. Obtener datos de la reserva principal y complejo
     const { data: b, error: bErr } = await supabase
       .from('bookings')
       .select(`
@@ -137,7 +138,7 @@ export async function notifyBookingSubmitted(bookingId: string) {
       return;
     }
 
-    // 2. Buscar todas las reservas que se hicieron EN ESE MISMO MOMENTO
+    // Buscar todas las reservas del mismo comprobante (mismo momento)
     let siblingBookings: any[] = [b];
     if (b.payment_proof_url) {
       const { data: siblings } = await supabase
@@ -151,78 +152,59 @@ export async function notifyBookingSubmitted(bookingId: string) {
         .eq('payment_proof_url', b.payment_proof_url)
         .order('start_time', { ascending: true });
 
-      if (siblings && siblings.length > 0) {
-        siblingBookings = siblings;
-      }
+      if (siblings && siblings.length > 0) siblingBookings = siblings;
     } else if (b.user_id && b.created_at) {
       const bTime = new Date(b.created_at).getTime();
-      const minTime = new Date(bTime - 120000).toISOString();
-      const maxTime = new Date(bTime + 120000).toISOString();
       const { data: siblings } = await supabase
         .from('bookings')
         .select(`
           id, customer_name, customer_phone, start_time, end_time, payment_proof_url, total_price, deposit_amount, created_at,
-          pitches!inner (
-            id, name, price_per_hour, booking_percentage, custom_pricing
-          )
+          pitches!inner (id, name, price_per_hour, booking_percentage, custom_pricing)
         `)
         .eq('user_id', b.user_id)
-        .gte('created_at', minTime)
-        .lte('created_at', maxTime)
+        .gte('created_at', new Date(bTime - 120000).toISOString())
+        .lte('created_at', new Date(bTime + 120000).toISOString())
         .order('start_time', { ascending: true });
 
-      if (siblings && siblings.length > 0) {
-        siblingBookings = siblings;
-      }
+      if (siblings && siblings.length > 0) siblingBookings = siblings;
     }
 
-    // Ordenar cronológicamente
     siblingBookings.sort((a, c) => new Date(a.start_time).getTime() - new Date(c.start_time).getTime());
 
     const pitchNames = Array.from(new Set(siblingBookings.map((s: any) => s.pitches?.name).filter(Boolean)));
     const pitchNameCombined = pitchNames.join(' + ') || pitch.name;
 
+    // Fecha corta: "viernes 3"
     const startDate = new Date(b.start_time);
-    const dateStr = startDate.toLocaleDateString('es-CO', { timeZone: 'America/Bogota', day: '2-digit', month: '2-digit', year: 'numeric' });
+    const fechaCorta = startDate.toLocaleDateString('es-CO', {
+      timeZone: 'America/Bogota', weekday: 'long', day: 'numeric'
+    });
 
-    const timeSlotsLines = siblingBookings.map((s: any) => {
-      const start = new Date(s.start_time);
-      const end = new Date(s.end_time);
-      const t = `${start.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })} a ${end.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })}`;
-      return pitchNames.length > 1 ? `• ${s.pitches?.name}: ${t}` : `• ${t}`;
-    }).join('\n');
+    // Horas: solo rangos cortos "6:00 pm - 7:00 pm, 7:00 pm - 8:00 pm"
+    const horasStr = siblingBookings.map((s: any) => {
+      const start = new Date(s.start_time).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: true });
+      const end = new Date(s.end_time).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: true });
+      return `${start} - ${end}`;
+    }).join(', ');
 
-    const totalVal = siblingBookings.reduce((sum, s) => sum + Number(s.total_price || s.pitches?.price_per_hour || 0), 0);
-    const totalDeposit = siblingBookings.reduce((sum, s) => {
-      if (s.deposit_amount) return sum + Number(s.deposit_amount);
-      const pct = s.pitches?.booking_percentage || 50;
-      return sum + Math.round((Number(s.pitches?.price_per_hour || 0) * pct) / 100);
-    }, 0);
-
-    const short_id = b.id.slice(0, 6);
     const customer_name = b.customer_name || 'Jugador';
     const customer_phone = b.customer_phone;
     const company_name = company.name;
     const payment_proof_url = b.payment_proof_url;
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-
-    // A) NOTIFICAR AL CLIENTE (Un solo mensaje con todas las canchas y horas del momento)
+    // ── A) MENSAJE AL CLIENTE: corto y humano ──
     if (customer_phone) {
       const customerMsg =
-        `⚽ *¡Hola ${customer_name}!* Hemos recibido tu comprobante de pago para *${pitchNameCombined}* (${company_name}).\n\n` +
-        `📅 *Fecha:* ${dateStr}\n` +
-        `⏰ *Horarios reservados:*\n${timeSlotsLines}\n\n` +
-        `💰 *Valor Total:* $${totalVal.toLocaleString('es-CO')} COP\n` +
-        `💵 *Abono:* $${totalDeposit.toLocaleString('es-CO')} COP\n` +
-        `🎫 *Referencia:* #${short_id}\n\n` +
-        `⏳ Tu reserva está actualmente *en espera de revisión y aprobación* por parte de la administración del complejo.\n` +
-        `Te enviaremos tu ticket oficial de reserva en cuanto sea aprobada. ¡Gracias por preferirnos!`;
+        `✅ Recibimos tu comprobante\n\n` +
+        `⚽ ${pitchNameCombined} — ${company_name}\n` +
+        `📅 ${fechaCorta} a las ${horasStr}\n\n` +
+        `El dueño lo está revisando, te avisamos en cuanto confirme 🙌\n` +
+        `👉 ${APP_URL}/reservations`;
 
       await sendEvolutionWhatsAppText(instanceName, customer_phone, customerMsg);
     }
 
-    // B) NOTIFICAR AL DUEÑO (O GRUPO COMPROBANTES)
+    // ── B) MENSAJE AL DUEÑO: con el comprobante adjunto ──
     let finalOwnerPhone = ownerPhone;
     try {
       const groupRes = await fetch(`${evoUrl}/group/fetchAllGroups/${instanceName}?getParticipants=false`, {
@@ -231,7 +213,7 @@ export async function notifyBookingSubmitted(bookingId: string) {
       if (groupRes.ok) {
         const groups = await groupRes.json();
         const comprobantesGroup = groups.find((g: any) => g.subject && g.subject.toLowerCase() === 'comprobantes');
-        if (comprobantesGroup && comprobantesGroup.id) {
+        if (comprobantesGroup?.id) {
           finalOwnerPhone = comprobantesGroup.id;
         } else {
           const evoRes = await fetch(`${evoUrl}/instance/fetchInstances?instanceName=${instanceName}`, {
@@ -239,7 +221,7 @@ export async function notifyBookingSubmitted(bookingId: string) {
           });
           if (evoRes.ok) {
             const instances = await evoRes.json();
-            if (instances && instances.length > 0 && instances[0].ownerJid) {
+            if (instances?.length > 0 && instances[0].ownerJid) {
               finalOwnerPhone = instances[0].ownerJid.replace('@s.whatsapp.net', '');
             }
           }
@@ -250,34 +232,22 @@ export async function notifyBookingSubmitted(bookingId: string) {
     }
 
     if (finalOwnerPhone) {
-      const filteredDashboardUrl = `${appUrl}/dashboard/bookings?search=${encodeURIComponent(customer_name)}&status=pending`;
-
       const ownerMsg =
-        `🚨 *¡NUEVA SOLICITUD DE RESERVA!* 🚨\n\n` +
-        `📌 *Complejo:* ${company_name}\n` +
-        `⚽ *Cancha(s):* ${pitchNameCombined}\n` +
-        `👤 *Cliente:* ${customer_name}\n` +
-        `📱 *Teléfono:* ${customer_phone || 'No registrado'}\n` +
-        `📅 *Fecha:* ${dateStr}\n` +
-        `⏰ *Horarios solicitados:*\n${timeSlotsLines}\n\n` +
-        `💰 *Valor Total:* $${totalVal.toLocaleString('es-CO')} COP\n` +
-        `💵 *Abono reportado:* $${totalDeposit.toLocaleString('es-CO')} COP\n` +
-        `🎟️ *Código:* *${short_id}*\n\n` +
-        `🧾 *Comprobante:* ${payment_proof_url || 'No adjunto'}\n\n` +
-        `🔗 *Ver en tu panel:* ${filteredDashboardUrl}\n\n` +
-        `💬 *Para responder rápido desde aquí, escribe:*\n` +
-        `👉 *aprobar ${short_id}* (para confirmar y enviar ticket al cliente)\n` +
-        `👉 *cancelar ${short_id}* (para cancelar)`;
+        `🔔 Nueva reserva pendiente\n\n` +
+        `👤 ${customer_name}${customer_phone ? ` | 📱 ${customer_phone}` : ''}\n` +
+        `⚽ ${pitchNameCombined}\n` +
+        `📅 ${fechaCorta} — ${horasStr}\n\n` +
+        `👉 ${APP_URL}/dashboard/bookings`;
 
       await sendEvolutionWhatsAppText(instanceName, finalOwnerPhone, ownerMsg);
 
-      // Si hay imagen del comprobante, enviarla como medio al dueño
-      if (payment_proof_url && (payment_proof_url.includes('.jpg') || payment_proof_url.includes('.png') || payment_proof_url.includes('.jpeg') || payment_proof_url.includes('payment-proofs'))) {
+      // Adjuntar imagen del comprobante al dueño
+      if (payment_proof_url && (payment_proof_url.includes('payment-proofs') || /\.(jpg|jpeg|png|webp)/.test(payment_proof_url))) {
         await sendEvolutionWhatsAppMedia(
           instanceName,
           finalOwnerPhone,
           payment_proof_url,
-          `🧾 Comprobante de ${customer_name} (Ref: #${short_id})`
+          `🧾 Comprobante de ${customer_name}`
         );
       }
     }
@@ -287,7 +257,7 @@ export async function notifyBookingSubmitted(bookingId: string) {
 }
 
 /**
- * Notifica al cliente cuando el dueño aprueba o cancela la reserva (desde la web o por WhatsApp).
+ * Notifica al cliente cuando el dueño aprueba o cancela la reserva.
  */
 export async function notifyBookingStatusChange(bookingId: string, newStatus: 'confirmed' | 'cancelled') {
   try {
@@ -314,27 +284,29 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
 
     const start = new Date(b.start_time);
     const end = new Date(b.end_time);
-    const dateStr = start.toLocaleDateString('es-CO', { timeZone: 'America/Bogota', day: '2-digit', month: '2-digit', year: 'numeric' });
-    const timeStr = `${start.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })} a ${end.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })}`;
-    const shortId = b.id.slice(0, 6);
+
+    const fechaCorta = start.toLocaleDateString('es-CO', {
+      timeZone: 'America/Bogota', weekday: 'long', day: 'numeric'
+    });
+    const horaStr =
+      `${start.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: true })} - ` +
+      `${end.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: true })}`;
 
     if (newStatus === 'confirmed') {
       const pitchId = (pitch as any).id || '';
-      const pitchUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/cancha/${pitchId}`;
       const ticketMsg =
-        `⚽ *¡Partido confirmado!*\n\n` +
-        `📍 ${pitch.name}\n` +
-        `📅 Fecha: ${dateStr}\n` +
-        `🕐 Hora: ${timeStr}\n` +
-        `🎫 Ref: *#${shortId}*\n\n` +
-        `Ver cancha y ubicación:\n${pitchUrl}\n\n` +
-        `¡Allá nos vemos! 🏆`;
+        `🎉 ¡Tu reserva está confirmada!\n\n` +
+        `⚽ ${pitch.name} — ${company.name}\n` +
+        `📅 ${fechaCorta} a las ${horaStr}\n\n` +
+        `Preséntate al complejo y muestra este mensaje ✅\n` +
+        `👉 ${APP_URL}/reservations`;
 
       await sendEvolutionWhatsAppText(instanceName, b.customer_phone, ticketMsg);
     } else {
       const cancelMsg =
-        `⚠️ Tu reserva (Ref: *#${shortId}*) en *${company.name}* no pudo confirmarse.\n\n` +
-        `Si realizaste un pago, contáctate con la administración del complejo.`;
+        `❌ Tu reserva en *${company.name}* fue cancelada\n\n` +
+        `⚽ ${pitch.name} — ${fechaCorta}\n\n` +
+        `Si tienes dudas, escríbenos directamente.`;
 
       await sendEvolutionWhatsAppText(instanceName, b.customer_phone, cancelMsg);
     }

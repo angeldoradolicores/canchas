@@ -1,0 +1,859 @@
+{
+  "name": "Canchas Pasto - Asistente IA v6.1 (Mensajes Cortos + Links Fijos)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -7072,
+        -224
+      ],
+      "id": "bf401666-9480-4710-8905-52ecabe4e4ca",
+      "name": "Evolution API Webhook",
+      "webhookId": "whatsapp-canchas"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawInput = $input.first().json;\nconst body = rawInput.body || rawInput;\n\nif (!body || !body.data) {\n  return [];\n}\n\nconst event = String(body.event || \"\").toLowerCase();\nif (event && event !== \"messages.upsert\" && event !== \"messages_upsert\") {\n  return [];\n}\n\nconst data = Array.isArray(body.data) ? body.data[0] : body.data;\nconst key = data.key || {};\nconst message = data.message || {};\n\nif (key.fromMe === true) {\n  return [];\n}\n\nconst actualMessage = message.ephemeralMessage?.message || message.viewOnceMessage?.message || message;\nlet userText = \"\";\nif (actualMessage.conversation) {\n  userText = actualMessage.conversation;\n} else if (actualMessage.extendedTextMessage?.text) {\n  userText = actualMessage.extendedTextMessage.text;\n} else if (actualMessage.imageMessage?.caption) {\n  userText = actualMessage.imageMessage.caption;\n} else if (actualMessage.videoMessage?.caption) {\n  userText = actualMessage.videoMessage.caption;\n} else if (actualMessage.documentMessage?.caption) {\n  userText = actualMessage.documentMessage.caption;\n}\n\nif (!userText || !userText.trim()) {\n  return [];\n}\n\nfunction formatPhone(p) {\n  if (!p) return \"\";\n  if (String(p).includes(\"@g.us\")) return p;\n  const c = String(p).replace(/\\D/g, \"\");\n  if (c.length === 10) return \"57\" + c;\n  if (c.length === 12 && c.startsWith(\"57\")) return c;\n  return c;\n}\n\nconst remoteJid = key.remoteJid || \"\";\nlet rawPhone = remoteJid;\nif (rawPhone.includes(\"@s.whatsapp.net\")) {\n  rawPhone = rawPhone.replace(\"@s.whatsapp.net\", \"\");\n} else if (rawPhone.includes(\"@lid\") && key.participant && key.participant.includes(\"@s.whatsapp.net\")) {\n  rawPhone = key.participant.replace(\"@s.whatsapp.net\", \"\");\n}\nconst userPhone = remoteJid.includes(\"@g.us\") ? remoteJid : formatPhone(rawPhone);\n\nconst instanceName = body.instance || body.instanceName || rawInput.instance || \"canchas_4dd6d2dce9f9\";\nconst trimmedText = userText.trim();\n\nconst match = trimmedText.match(/(aprobar|aprobas|aprobás|aprovar|cancelar|confirmar|rechazar)\\s*([a-zA-Z0-9_-]{4,12})/i);\nlet isOwnerCommand = false;\nlet commandAction = \"\";\nlet commandCode = \"\";\n\nif (match) {\n  isOwnerCommand = true;\n  const verb = match[1].toLowerCase();\n  commandAction = (verb.includes(\"aprob\") || verb === \"confirmar\") ? \"confirmed\" : \"cancelled\";\n  commandCode = match[2];\n}\n\nreturn [{\n  json: {\n    sessionId: userPhone || remoteJid,\n    instance: instanceName,\n    remoteJid: remoteJid,\n    userPhone: userPhone || remoteJid,\n    messageText: trimmedText,\n    isOwnerCommand: isOwnerCommand,\n    commandAction: commandAction,\n    commandCode: commandCode\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -6848,
+        -224
+      ],
+      "id": "f9b8cafe-ffc6-4a81-899f-3c8bbd4c633b",
+      "name": "Normalize Incoming Message"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "companies",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "whatsapp_instance_name",
+              "keyValue": "={{ $json.instance }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -6640,
+        -224
+      ],
+      "id": "fb2512e8-99bf-4532-9cc7-bb4743acfa58",
+      "name": "Get Company Details",
+      "credentials": {
+        "supabaseApi": {
+          "id": "IyyGU5mGFTdWAya3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $('Normalize Incoming Message').item.json.isOwnerCommand }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -6416,
+        -224
+      ],
+      "id": "a77886c2-b28d-486b-ae5f-32e0c4baba6b",
+      "name": "Is Owner Command?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://rxykieyrzaqnfasouwke.supabase.co/rest/v1/rpc/resolve_pending_booking",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4eWtpZXlyemFxbmZhc291d2tlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NzI3MzcxNSwiZXhwIjoyMTAyODQ5NzE1fQ.VbPPy9ZRm9sbzQ9NPbq3oGKZvFR0O7LazYv7KGSxK48"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4eWtpZXlyemFxbmZhc291d2tlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NzI3MzcxNSwiZXhwIjoyMTAyODQ5NzE1fQ.VbPPy9ZRm9sbzQ9NPbq3oGKZvFR0O7LazYv7KGSxK48"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  p_company_id: $('Get Company Details').item.json.id,\n  p_prefix: $('Normalize Incoming Message').item.json.commandCode,\n  p_new_status: $('Normalize Incoming Message').item.json.commandAction\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -6192,
+        -448
+      ],
+      "id": "6a5d8399-690c-48dc-8d57-567f2066c5e8",
+      "name": "Resolve Booking in Supabase"
+    },
+    {
+      "parameters": {
+        "jsCode": "const res = $input.first().json;\n\nfunction formatPhone(p) {\n  if (!p) return \"\";\n  if (String(p).includes(\"@g.us\")) return p;\n  const c = String(p).replace(/\\D/g, \"\");\n  if (c.length === 10) return \"57\" + c;\n  if (c.length === 12 && c.startsWith(\"57\")) return c;\n  return c;\n}\n\nconst ownerDestination = $(\"Normalize Incoming Message\").item.json.userPhone;\nconst instance = $(\"Normalize Incoming Message\").item.json.instance;\n\nif (!res || res.success !== true) {\n  return [{\n    json: {\n      toPhone: ownerDestination,\n      instance: instance,\n      message: \"⚠️ No encontré esa reserva pendiente. Verifica el código e inténtalo de nuevo.\",\n      customerPhone: null,\n      customerMessage: \"\",\n      proofUrl: null\n    }\n  }];\n}\n\nconst isConfirmed = res.status === \"confirmed\";\nconst shortId = res.short_id || (res.booking_id ? res.booking_id.slice(0, 6) : \"N/A\");\nconst booking = res.booking || {};\nconst proofUrl = booking.payment_proof_url || res.payment_proof_url || null;\n// URL de imagen del ticket generado\nconst ticketImageUrl = res.ticket_image_url || null;\n\nconst ownerMsg = isConfirmed\n  ? `✅ *Reserva #${shortId} CONFIRMADA*\\nCliente: ${res.customer_name}\\n🏟️ ${res.company_name} - ${res.pitch_name}\\n📅 ${res.date_str} ⏰ ${res.time_str}\\n\\n🎫 Ticket enviado al cliente.`\n  : `❌ *Reserva #${shortId} CANCELADA*\\nCliente: ${res.customer_name}\\n\\n📩 Cliente notificado.`;\n\nlet customerMsg = \"\";\nif (res.customer_phone) {\n  customerMsg = isConfirmed\n    ? `🎟️ *TICKET DE RESERVA CONFIRMADA*\\n\\n🏟️ *${res.company_name}*\\n⚽ Cancha(s): ${res.pitch_name}\\n📅 Fecha: ${res.date_str}\\n⏰ Horario: ${res.time_str}\\n🎫 Ref: *#${shortId}*\\n\\nPresenta este ticket al llegar. ¡Te esperamos para jugar! 🏆`\n    : `⚠️ Tu reserva (Ref: *#${shortId}*) en *${res.company_name}* ha sido declinada.\\n\\nSi realizaste un pago, comunícate directamente con la administración.`;\n}\n\nreturn [{\n  json: {\n    toPhone: ownerDestination,\n    instance: instance,\n    message: ownerMsg,\n    customerPhone: formatPhone(res.customer_phone),\n    customerMessage: customerMsg,\n    proofUrl: proofUrl,\n    ticketImageUrl: ticketImageUrl\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -5952,
+        -448
+      ],
+      "id": "91834911-c76f-49b7-8bd4-8e11801748a3",
+      "name": "Prepare Resolution Notifications"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://evolution-api:8080/message/sendText/{{ $json.instance }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "TusClavesSecretasDeEvolution123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  number: $json.toPhone,\n  options: { delay: 1000, presence: 'composing' },\n  text: $json.message\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -5712,
+        -576
+      ],
+      "id": "456e2211-f90b-4fe2-b801-5c2433dc1a97",
+      "name": "Notify Owner Resolution"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c_cust",
+              "leftValue": "={{ $json.customerPhone }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -5712,
+        -384
+      ],
+      "id": "29f51afb-0741-4408-9247-6cdbd5db462f",
+      "name": "Has Customer Phone?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://evolution-api:8080/message/sendText/{{ $('Prepare Resolution Notifications').item.json.instance }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "TusClavesSecretasDeEvolution123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  number: $('Prepare Resolution Notifications').item.json.customerPhone,\n  options: { delay: 1500, presence: 'composing' },\n  text: $('Prepare Resolution Notifications').item.json.customerMessage\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -5472,
+        -448
+      ],
+      "id": "5d86455b-d547-4fef-ae6b-34405793de53",
+      "name": "Send Ticket to Customer"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c_proof",
+              "leftValue": "={{ $('Prepare Resolution Notifications').item.json.proofUrl }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -4880,
+        -288
+      ],
+      "id": "aec76944-7d3b-4861-9b1d-c17a67bf17ae",
+      "name": "Has Proof URL?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://evolution-api:8080/message/sendMedia/{{ $('Prepare Resolution Notifications').item.json.instance }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "TusClavesSecretasDeEvolution123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  number: $('Prepare Resolution Notifications').item.json.customerPhone,\n  mediatype: 'image',\n  caption: '🧾 Comprobante oficial de tu reserva confirmada',\n  media: $('Prepare Resolution Notifications').item.json.proofUrl\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -4544,
+        -288
+      ],
+      "id": "9f91b804-b216-40dd-8306-4c75a681c5f2",
+      "name": "Send Proof to Customer"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Clasifica este mensaje: ¿es consulta comercial sobre reservar/alquilar/disponibilidad de canchas deportivas, o es conversación privada/personal?\n\nMensaje: \"{{ $('Normalize Incoming Message').item.json.messageText }}\"\n\nResponde SOLO con una palabra: 'CLIENTE' si es sobre canchas/reservas, 'PERSONAL' si es privada o no relacionada."
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        -6192,
+        -64
+      ],
+      "id": "1efda46d-8d27-4737-bf2c-6b7d428c9aa6",
+      "name": "Filter Personal Messages"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash-lite",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -6224,
+        128
+      ],
+      "id": "3c97d6be-f5ec-441a-a446-5ea77c2e31df",
+      "name": "Gemini Flash - Classifier",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "nW3rRNr3B1NDCqy8",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c_intent",
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "CLIENTE",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -5984,
+        -64
+      ],
+      "id": "e325ef74-2adf-48e5-9cde-32b78f2b7a0e",
+      "name": "Is Business Related?"
+    },
+    {
+      "parameters": {
+        "url": "=https://rxykieyrzaqnfasouwke.supabase.co/rest/v1/pitches?company_id=eq.{{ $('Get Company Details').item.json.id }}&select=id,name,type,surface,price_per_hour&order=name.asc",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4eWtpZXlyemFxbmZhc291d2tlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNzM3MTUsImV4cCI6MjEwMjg0OTcxNX0.Y3lCThAI9ajyX9JlrBMh3av3Z-euXquxqBZyOl7jklc"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4eWtpZXlyemFxbmZhc291d2tlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNzM3MTUsImV4cCI6MjEwMjg0OTcxNX0.Y3lCThAI9ajyX9JlrBMh3av3Z-euXquxqBZyOl7jklc"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -5760,
+        -64
+      ],
+      "id": "f942a0b8-5e49-44ee-948b-a2d1f04425ae",
+      "name": "Get Company Pitches"
+    },
+    {
+      "parameters": {
+        "jsCode": "const company = $('Get Company Details').item.json;\nconst items = $input.all();\nconst pitches = items.map(it => it.json);\n\nconst baseUrl = 'https://canchas-mino.vercel.app';\n\nlet pitchLines = [];\nconst pitchLinks = {}; // id -> link, para usar en mensajes\n\nif (pitches.length === 0) {\n  pitchLines.push('No hay canchas registradas.');\n} else {\n  for (const p of pitches) {\n    const link = `${baseUrl}/cancha/${p.id}`;\n    pitchLinks[p.id] = { name: p.name, link };\n    pitchLines.push(`• \"${p.name}\" | Tipo: ${p.type || 'Fútbol'} | $${(p.price_per_hour || 0).toLocaleString('es-CO')}/h | Link: ${link}`);\n  }\n}\n\n// Texto para el agente: compacto, una línea por cancha\nconst pitchesListText = pitchLines.join('\\n');\n\n// Links en texto plano para que el agente los cite directamente\nconst pitchLinksText = pitches.map(p => `\"${p.name}\": ${baseUrl}/cancha/${p.id}`).join('\\n');\n\nreturn [{\n  json: {\n    companyId: company.id,\n    companyName: company.name,\n    totalPitches: pitches.length,\n    pitchesListText,\n    pitchLinksText,\n    pitchesData: pitches,\n    baseUrl\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -5568,
+        -64
+      ],
+      "id": "59eb4503-9535-45db-9b56-07f2e56c652a",
+      "name": "Format Pitches Context"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Normalize Incoming Message').item.json.messageText }}",
+        "options": {
+          "systemMessage": "Eres el asistente de WhatsApp del complejo deportivo \"{{ $('Format Pitches Context').item.json.companyName }}\".\nFecha y hora actual en Colombia: {{ $now.setZone('America/Bogota').toFormat('yyyy-MM-dd HH:mm') }}\n\nCANCHAS DISPONIBLES (con sus links de reserva directa):\n{{ $('Format Pitches Context').item.json.pitchLinksText }}\n\nREGLAS ESTRICTAS:\n1. Siempre usa \"Check Availability Tool\" con la fecha en YYYY-MM-DD antes de hablar de disponibilidad. NUNCA inventes horarios.\n2. Nunca menciones horas con status \"booked\" o \"being_booked\". Son OCUPADAS.\n3. Respuestas CORTAS y NATURALES. Máximo 5 líneas. Sin tablas, sin listas largas.\n4. Cuando mencionas la fecha, usa solo el día y día de semana (ej: \"este viernes 3\"). NUNCA el mes completo.\n5. Cuando el cliente quiera reservar o pregunte por horarios disponibles, siempre termina con el link de reserva de la cancha correspondiente.\n\nCÓMO RESPONDER:\n\nSi pregunta disponibilidad general:\n→ Muestra solo las 3-4 horas más populares disponibles con precio. Ejemplo:\n\"Hoy tenemos disponible 🟢\n• 6pm - $45.000\n• 7pm - $50.000\n• 9pm - $45.000\n¿Te sirve alguna? Reserva aquí: [link de la cancha]\"\n\nSi pide una hora específica ocupada:\n→ Dilo en 1 línea y ofrece la más cercana disponible.\n\"Las 8pm ya está ocupada 😅 pero tenemos las 7pm o las 9pm libres. ¿Te sirve?\"\n\nSi quiere reservar o confirma una hora:\n→ Siempre termina con el link correcto de la cancha. Ejemplo:\n\"Perfecto, para reservar las 7pm en [nombre cancha] entra aquí:\n[link]\nSolo elige la hora, sube el comprobante y listo ✅\"\n\nSi el mensaje no es sobre reservas: ignóralo silenciosamente, no respondas."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        -5344,
+        -64
+      ],
+      "id": "5a3b524d-ac5c-4fae-a2c0-4a93085afe7c",
+      "name": "Gemini AI Agent"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash-lite",
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -5424,
+        144
+      ],
+      "id": "a43da65f-be61-4fe0-a88a-70c186227e44",
+      "name": "Google Gemini 1.5 Flash",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "nW3rRNr3B1NDCqy8",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Normalize Incoming Message').item.json.sessionId }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -5280,
+        144
+      ],
+      "id": "066de05e-d576-4ae9-8113-ae242ff5872f",
+      "name": "Window Buffer Memory"
+    },
+    {
+      "parameters": {
+        "toolDescription": "OBLIGATORIO: Usa esta herramienta CADA VEZ que el usuario pida disponibilidad, horas o precios. Pasa 'p_date' en formato YYYY-MM-DD. Retorna lista con status (available, booked, being_booked) y price. Filtra e informa SOLO los slots con status = available.",
+        "method": "POST",
+        "url": "https://rxykieyrzaqnfasouwke.supabase.co/rest/v1/rpc/check_pitch_availability_n8nn",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
+            {
+              "name": "apikey",
+              "valueProvider": "fieldValue",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4eWtpZXlyemFxbmZhc291d2tlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NzI3MzcxNSwiZXhwIjoyMTAyODQ5NzE1fQ.VbPPy9ZRm9sbzQ9NPbq3oGKZvFR0O7LazYv7KGSxK48"
+            },
+            {
+              "name": "Authorization",
+              "valueProvider": "fieldValue",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4eWtpZXlyemFxbmZhc291d2tlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NzI3MzcxNSwiZXhwIjoyMTAyODQ5NzE1fQ.VbPPy9ZRm9sbzQ9NPbq3oGKZvFR0O7LazYv7KGSxK48"
+            },
+            {
+              "name": "Content-Type",
+              "valueProvider": "field"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_company_id: $('Get Company Details').item.json.id, p_date: '{p_date}' }) }}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "p_date",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        -5152,
+        144
+      ],
+      "id": "40100874-a77a-41d8-a16a-83cdde5378d1",
+      "name": "Check Availability Tool"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://evolution-api:8080/message/sendText/{{ $('Normalize Incoming Message').item.json.instance }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "TusClavesSecretasDeEvolution123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  number: $('Normalize Incoming Message').item.json.remoteJid || $('Normalize Incoming Message').item.json.userPhone,\n  options: { delay: 1000, presence: 'composing', linkPreview: true },\n  text: ($json.output || '').trim()\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -4864,
+        32
+      ],
+      "id": "36ac25db-cb71-4d15-b10c-07a894860833",
+      "name": "Send WhatsApp via Evolution"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c_ticket_img",
+              "leftValue": "={{ $('Prepare Resolution Notifications').item.json.ticketImageUrl }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -5472,
+        -288
+      ],
+      "id": "55260b1e-6d48-4f17-9432-61d6a2c8cc8a",
+      "name": "Has Ticket Image?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://evolution-api:8080/message/sendMedia/{{ $('Prepare Resolution Notifications').item.json.instance }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "TusClavesSecretasDeEvolution123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  number: $('Prepare Resolution Notifications').item.json.customerPhone,\n  mediatype: 'image',\n  caption: '🎟️ Tu ticket oficial de reserva confirmada',\n  media: $('Prepare Resolution Notifications').item.json.ticketImageUrl\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -5120,
+        -384
+      ],
+      "id": "5e3936c8-9f49-4d45-8477-b002afa1d6cc",
+      "name": "Send Ticket Image to Customer"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Evolution API Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Incoming Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Incoming Message": {
+      "main": [
+        [
+          {
+            "node": "Get Company Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Company Details": {
+      "main": [
+        [
+          {
+            "node": "Is Owner Command?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Owner Command?": {
+      "main": [
+        [
+          {
+            "node": "Resolve Booking in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Filter Personal Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Flash - Classifier": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Filter Personal Messages",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Personal Messages": {
+      "main": [
+        [
+          {
+            "node": "Is Business Related?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Business Related?": {
+      "main": [
+        [
+          {
+            "node": "Get Company Pitches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Booking in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Prepare Resolution Notifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Resolution Notifications": {
+      "main": [
+        [
+          {
+            "node": "Notify Owner Resolution",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Customer Phone?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Customer Phone?": {
+      "main": [
+        [
+          {
+            "node": "Send Ticket to Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Ticket to Customer": {
+      "main": [
+        [
+          {
+            "node": "Has Ticket Image?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Proof URL?": {
+      "main": [
+        [
+          {
+            "node": "Send Proof to Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Company Pitches": {
+      "main": [
+        [
+          {
+            "node": "Format Pitches Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Pitches Context": {
+      "main": [
+        [
+          {
+            "node": "Gemini AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini 1.5 Flash": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Gemini AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Gemini AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Availability Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Gemini AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp via Evolution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Ticket Image?": {
+      "main": [
+        [
+          {
+            "node": "Send Ticket Image to Customer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Has Proof URL?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Ticket Image to Customer": {
+      "main": [
+        [
+          {
+            "node": "Has Proof URL?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "a99f5c84-84cf-4f3c-95d9-b5b9b771a977",
+  "meta": {
+    "instanceId": "70543e4d10b3d922219847d1304a20f416d98097d7ef8129ebca8eb0273e9faf"
+  },
+  "nodeGroups": [],
+  "id": "hf8x3dh8TYPImS8V",
+  "tags": []
+}
