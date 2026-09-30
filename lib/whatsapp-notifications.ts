@@ -227,12 +227,12 @@ export async function notifyBookingSubmitted(bookingId: string) {
         `✅ *¡Recibimos tu comprobante!*\n\n` +
         `🏟️ *${company_name}*\n` +
         `⚽ *Cancha:* ${pitchNameCombined}\n` +
-        `📅 *Fecha:* ${fechaCorta}\n` +
-        `⏰ *Horario:* ${horasStr}\n` +
-        `🎫 *Ref:* #${shortId}\n\n` +
-        `⏳ Tu reserva quedó en revisión. El dueño está validando tu comprobante y te notificaremos apenas sea aprobada 🙌\n\n` +
-        `👉 *Consulta tus reservas y ticket:* \n` +
-        `${APP_URL}/reservations`;
+        // `📅 *Fecha:* ${fechaCorta}\n` +
+        // `⏰ *Horario:* ${horasStr}\n` +
+        // `🎫 *Ref:* #${shortId}\n\n` +
+        `⏳ Tu reserva quedó en revisión. El dueño está validando tu comprobante y te notificaremos apenas sea aprobada 🙌`;
+      // `👉 *Consulta tus reservas y ticket:* \n` +
+      // `${APP_URL}/reservations`;
 
       await sendEvolutionWhatsAppText(instanceName, customer_phone, customerMsg);
     }
@@ -273,7 +273,6 @@ export async function notifyBookingSubmitted(bookingId: string) {
         `👤 *Cliente:* ${customer_name}${customer_phone ? ` (📱 ${customer_phone})` : ''}\n` +
         `📅 *Fecha:* ${fechaCorta}\n` +
         `⏰ *Horario:* ${horasStr}\n` +
-        `🎫 *Ref:* #${shortId}\n\n` +
         `🔐 *Revisar y gestionar en tu panel seguro:*\n` +
         `👉 ${APP_URL}/dashboard/bookings`;
 
@@ -285,7 +284,7 @@ export async function notifyBookingSubmitted(bookingId: string) {
           instanceName,
           finalOwnerDest,
           payment_proof_url,
-          `🧾 Comprobante de ${customer_name} (Ref: #${shortId})`
+          `🧾 Comprobante de ${customer_name}`
         );
       }
     }
