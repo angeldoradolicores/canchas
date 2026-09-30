@@ -160,8 +160,8 @@ export async function notifyBookingSubmitted(bookingId: string) {
     const pitch = (b as any).pitches;
     const company = pitch?.companies;
 
-    // Remitente para el cliente: instancia de la cancha o la central 'Cancheros'
-    const customerSenderInstance = company?.whatsapp_instance_name || CENTRAL_WHATSAPP_INSTANCE;
+    // Remitente para el cliente: ÚNICA Y EXCLUSIVAMENTE la instancia propia de esa cancha
+    const customerSenderInstance = company?.whatsapp_instance_name;
 
     // Remitente para el dueño: SIEMPRE desde la instancia central 'Cancheros' (3006577286)
     const ownerSenderInstance = CENTRAL_WHATSAPP_INSTANCE;
@@ -233,11 +233,10 @@ export async function notifyBookingSubmitted(bookingId: string) {
     // ── A) MENSAJE AL CLIENTE: confirmación de recepción de comprobante ──
     const customerMsg =
       `✅ *¡Recibimos tu comprobante!*\n\n` +
-      `🏟️ *${company_name}*\n` +
-      `⚽ *${pitchNameCombined}*\n` +
-      `📅 *Fecha:* ${fechaCorta}\n` +
-      `⏰ *Horario:* ${horasStr}\n` +
-      `🎫 *Ref:* #${shortId}\n\n` +
+      `${company_name}\n` +
+      `${pitchNameCombined}\n` +
+      `*Fecha:* ${fechaCorta}\n` +
+      `*Horario:* ${horasStr}\n\n` +
       `Tu reserva quedó en revisión. El dueño está validando tu comprobante y te notificaremos apenas sea aprobada 🙌`;
 
     // ── B) RESOLVER DESTINATARIOS DEL DUEÑO (PRIORIZANDO SU TELÉFONO PERSONAL) ──
@@ -261,46 +260,50 @@ export async function notifyBookingSubmitted(bookingId: string) {
       targetOwnerPhones.add(formatWhatsAppPhone(OWNER_DEFAULT_PHONE));
     }
 
-    // ── C) MENSAJE AL DUEÑO: aviso de reserva pendiente + link seguro al dashboard ──
+    // ── C) MENSAJE AL DUEÑO: aviso de reserva pendiente + link al dashboard ──
     const ownerMsg =
       `🔔 *¡Nuevo comprobante de pago recibido!*\n\n` +
       `🏟️ *${company_name}*\n` +
-      `⚽ *Cancha:* ${pitchNameCombined}\n` +
-      `👤 *Cliente:* ${customer_name}${customer_phone ? ` (📱 ${customer_phone})` : ''}\n` +
+      `${pitchNameCombined}\n` +
+      `*Cliente:* ${customer_name}${customer_phone ? ` (📱 ${customer_phone})` : ''}\n` +
       `📅 *Fecha:* ${fechaCorta}\n` +
-      `⏰ *Horario:* ${horasStr}\n` +
-      `🎫 *Ref:* #${shortId}\n\n` +
-      `🔐 *Revisar y aprobar en tu panel seguro:*\n` +
+      `⏰ *Horario:* ${horasStr}\n\n` +
+      `*Revisar y aprobar en tu panel:*\n` +
       `👉 ${APP_URL}/dashboard/bookings`;
 
     // ── D) DISPARO PARALELO E INMEDIATO (SIN ESPERAS SECUENCIALES) ──
     const sendTasks: Promise<any>[] = [];
 
-    // Notificar al cliente desde la instancia de la cancha o la central
+    // Notificar al cliente ÚNICAMENTE desde la instancia de su propia cancha
     if (customer_phone && customerSenderInstance) {
       sendTasks.push(
         sendEvolutionWhatsAppText(customerSenderInstance, customer_phone, customerMsg).catch(err =>
-          console.error('[WhatsApp Notification] Error enviando a cliente:', err)
+          console.error('[WhatsApp Notification] Error enviando a cliente desde instancia de la cancha:', err)
         )
       );
     }
 
-    // Notificar al dueño SIEMPRE desde la instancia central Cancheros (3006577286)
+    // Notificar al dueño SIEMPRE desde la instancia central Cancheros (3006577286) con la imagen del comprobante
     for (const phone of targetOwnerPhones) {
       if (!phone) continue;
       sendTasks.push(
         (async () => {
-          await sendEvolutionWhatsAppText(ownerSenderInstance, phone, ownerMsg);
+          let sent = false;
           if (payment_proof_url) {
-            await sendEvolutionWhatsAppMedia(
+            // Envía la foto del comprobante directamente con todos los datos en el pie de foto
+            sent = await sendEvolutionWhatsAppMedia(
               ownerSenderInstance,
               phone,
               payment_proof_url,
-              `🧾 Comprobante de ${customer_name} (Ref: #${shortId})`
+              ownerMsg
             );
           }
+          // Si no había comprobante o falló el envío multimedia, enviar como texto para no perder la alerta
+          if (!sent) {
+            await sendEvolutionWhatsAppText(ownerSenderInstance, phone, ownerMsg);
+          }
         })().catch(err =>
-          console.error(`[WhatsApp Notification] Error enviando a dueño ${phone}:`, err)
+          console.error(`[WhatsApp Notification] Error enviando a dueño ${phone} desde Cancheros:`, err)
         )
       );
     }
@@ -335,7 +338,7 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
 
     const pitch = (b as any).pitches;
     const company = pitch?.companies;
-    const instanceName = company?.whatsapp_instance_name || CENTRAL_WHATSAPP_INSTANCE;
+    const instanceName = company?.whatsapp_instance_name;
     if (!instanceName) return;
 
     // Buscar si hay horas hermanas para incluirlas todas en un solo ticket
@@ -387,32 +390,22 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
     if (newStatus === 'confirmed') {
       // ── TICKET DIGITAL DE RESERVA (Diseño visual y estructurado) ──
       const ticketMsg =
-
         `✅ *RESERVA CONFIRMADA*\n\n` +
-        `🏟️ *COMPLEJO:* ${company.name.toUpperCase()}\n` +
-        `*CANCHA:* ${pitchNames.toUpperCase()}\n` +
-        // `🏷️ *DEPORTE:* ${pitch.type || 'Fútbol'}\n` +
-        // `👤 *JUGADOR:* ${b.customer_name || 'Jugador'}\n\n` +
+        `${company.name.toUpperCase()}\n` +
+        `${pitchNames.toUpperCase()}\n` +
         `📅 *FECHA:* ${fechaLarga}\n` +
         `⏰ *HORARIO:* ${horasStr}\n` +
-        `📍 *DIRECCIÓN:* ${address}\n` +
-        // `🎫 *REF:* #${shortId}\n` +
-        // `━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        // `📲 *Presenta este ticket digital al llegar al complejo.*\n` +
-        // `¡Prepárate para jugar! ⚽🔥\n\n` +
-        `🎫 *Ver y descargar ticket gráfico:* \n` +
-        `👉 ${APP_URL}/reservations`;
+        `📍 *DIRECCIÓN:* ${address}\n`;
 
       await sendEvolutionWhatsAppText(instanceName, b.customer_phone, ticketMsg);
     } else {
       // ── RESERVA CANCELADA ──
       const cancelMsg =
         `❌ *RESERVA DECLINADA / CANCELADA*\n\n` +
-        `🏟️ *COMPLEJO:* ${company.name}\n` +
-        `⚽ *CANCHA:* ${pitchNames}\n` +
+        `${company.name}\n` +
+        `${pitchNames}\n` +
         `📅 *FECHA:* ${fechaLarga}\n` +
-        `⏰ *HORARIO:* ${horasStr}\n` +
-        `🎫 *REF:* #${shortId}\n\n` +
+        `⏰ *HORARIO:* ${horasStr}\n\n` +
         `Tu solicitud de reserva no pudo ser confirmada por el complejo. Si realizaste un pago o tienes dudas, comunícate directamente con la administración de la cancha.`;
 
       await sendEvolutionWhatsAppText(instanceName, b.customer_phone, cancelMsg);
