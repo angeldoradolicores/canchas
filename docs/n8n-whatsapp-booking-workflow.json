@@ -1,0 +1,116 @@
+{
+  "name": "Canchas - WhatsApp Booking Link",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-incoming",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "notes": "Configura este URL en Meta Developers > WhatsApp > Configuration como Webhook URL."
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nlet senderPhone = '';\nlet messageText = '';\nlet waId = '';\n\nif (body?.entry) {\n  const entry = body.entry[0];\n  const change = entry?.changes[0];\n  const msg = change?.value?.messages?.[0];\n  if (!msg) return [];\n  senderPhone = msg.from;\n  messageText = msg.text?.body || '';\n  waId = msg.id;\n} else if (body?.From) {\n  senderPhone = body.From.replace('whatsapp:', '').replace('+', '');\n  messageText = body.Body || '';\n  waId = body.MessageSid;\n}\n\nif (!senderPhone || !messageText) return [];\n\nconst text = messageText.toLowerCase();\n\nconst timePatterns = [\n  { regex: /(\\d{1,2})(?::(\\d{2}))?\\s*(?:am|a\\.m\\.)/i, isAM: true },\n  { regex: /(\\d{1,2})(?::(\\d{2}))?\\s*(?:pm|p\\.m\\.)/i, isPM: true },\n  { regex: /(\\d{1,2}):(\\d{2})/, is24: true },\n];\n\nlet detectedHour = -1;\nfor (const p of timePatterns) {\n  const match = text.match(p.regex);\n  if (match) {\n    let h = parseInt(match[1]);\n    if (p.isPM && h !== 12) h += 12;\n    if (p.isAM && h === 12) h = 0;\n    if (h >= 6 && h <= 23) { detectedHour = h; break; }\n  }\n}\n\nconst today = new Date();\nlet detectedDate = '';\nif (text.includes('hoy') || text.includes('esta noche') || text.includes('esta tarde')) {\n  detectedDate = today.toISOString().split('T')[0];\n} else if (text.includes('ma') && (text.includes('ñana') || text.includes('nana'))) {\n  const tomorrow = new Date(today);\n  tomorrow.setDate(today.getDate() + 1);\n  detectedDate = tomorrow.toISOString().split('T')[0];\n} else {\n  const days = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];\n  for (let i = 0; i < days.length; i++) {\n    if (text.includes(days[i]) || text.includes(days[i].replace('e','é'))) {\n      const diff = ((i - today.getDay()) + 7) % 7 || 7;\n      const target = new Date(today);\n      target.setDate(today.getDate() + diff);\n      detectedDate = target.toISOString().split('T')[0];\n      break;\n    }\n  }\n}\n\nconst cleanPhone = senderPhone.replace(/^57/, '').slice(-10);\n\nreturn [{ json: {\n  senderPhone, cleanPhone, messageText, waId,\n  detectedHour, detectedDate,\n  canParseRequest: detectedHour >= 0\n}}];"
+      },
+      "id": "parse-message",
+      "name": "Parsear Mensaje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "cond-can-parse",
+              "leftValue": "={{ $json.canParseRequest }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-parseable",
+      "name": "Se detectó hora?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst PITCH_ID = process.env.DEFAULT_PITCH_ID || 'REEMPLAZA_CON_TU_PITCH_ID';\nconst BASE_URL = process.env.APP_URL || 'https://tudominio.com';\n\nconst params = [];\nif (data.detectedDate) params.push(`date=${data.detectedDate}`);\nif (data.detectedHour >= 0) {\n  const h = String(data.detectedHour).padStart(2, '0');\n  params.push(`times=${h}:00`);\n}\nif (data.cleanPhone) params.push(`phone=${data.cleanPhone}`);\n\nconst bookingUrl = `${BASE_URL}/cancha/${PITCH_ID}?${params.join('&')}`;\n\nconst replyMessage = data.detectedDate\n  ? `Hola! Aqui esta tu link para reservar:\\n\\n${bookingUrl}\\n\\nYa tiene la fecha y hora preseleccionadas. Solo confirma y sube tu comprobante de pago.`\n  : `Hola! Aqui esta tu link para reservar la cancha:\\n\\n${bookingUrl}\\n\\nElige la fecha y hora que quieras. Es muy facil!`;\n\nreturn [{ json: { ...data, bookingUrl, replyMessage } }];"
+      },
+      "id": "build-link",
+      "name": "Construir Link",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst PITCH_ID = process.env.DEFAULT_PITCH_ID || 'REEMPLAZA_CON_TU_PITCH_ID';\nconst BASE_URL = process.env.APP_URL || 'https://tudominio.com';\n\nconst params = data.cleanPhone ? `?phone=${data.cleanPhone}` : '';\nconst bookingUrl = `${BASE_URL}/cancha/${PITCH_ID}${params}`;\n\nconst replyMessage = `Hola! Para reservar tu cancha usa este link:\\n\\n${bookingUrl}\\n\\nElige el dia y hora disponible. Es rapido y sencillo!\\n\\nTienes algun dia preferido? Dimelo y te envio el link directo.`;\n\nreturn [{ json: { ...data, bookingUrl, replyMessage } }];"
+      },
+      "id": "generic-reply",
+      "name": "Respuesta Generica",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v20.0/{{ $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.WHATSAPP_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.senderPhone, type: 'text', text: { preview_url: true, body: $json.replyMessage } }) }}",
+        "options": {}
+      },
+      "id": "send-whatsapp",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\" }",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Responder Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": { "main": [[{ "node": "Parsear Mensaje", "type": "main", "index": 0 }]] },
+    "Parsear Mensaje": { "main": [[{ "node": "Se detectó hora?", "type": "main", "index": 0 }]] },
+    "Se detectó hora?": {
+      "main": [
+        [{ "node": "Construir Link", "type": "main", "index": 0 }],
+        [{ "node": "Respuesta Generica", "type": "main", "index": 0 }]
+      ]
+    },
+    "Construir Link": { "main": [[{ "node": "Enviar WhatsApp", "type": "main", "index": 0 }]] },
+    "Respuesta Generica": { "main": [[{ "node": "Enviar WhatsApp", "type": "main", "index": 0 }]] },
+    "Enviar WhatsApp": { "main": [[{ "node": "Responder Webhook", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

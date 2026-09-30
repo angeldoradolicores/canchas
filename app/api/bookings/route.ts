@@ -93,6 +93,24 @@ export async function POST(req: NextRequest) {
 
       const { pitch_id, selected_date, selected_times } = parseResult.data;
       const effectiveUserId = verifiedUserId || parseResult.data.user_id || null;
+
+      // Seguridad: verificar si el usuario ya tiene el límite de horas en proceso activas
+      if (effectiveUserId) {
+        const { count: draftCount } = await supabase
+          .from('bookings')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', effectiveUserId)
+          .eq('status', 'draft')
+          .gt('expires_at', new Date().toISOString());
+
+        if (draftCount && (draftCount + selected_times.length > 4)) {
+          return NextResponse.json(
+            { error: 'Superas el límite de 4 horas en proceso simultáneas. Por favor finaliza tu reserva actual antes de apartar más horas.' },
+            { status: 429 }
+          );
+        }
+      }
+
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutos de bloqueo
 
       const inserts = selected_times.map((slot: string) => {

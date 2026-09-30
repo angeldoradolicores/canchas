@@ -33,12 +33,10 @@ export default function UserReservationsPage() {
     return () => clearTimeout(t);
   }, [user]);
 
-  // Carga inicial
+  // Carga inicial (usuarios registrados e invitados con reservas en este navegador)
   useEffect(() => {
-    if (user) {
-      setAuthChecked(true);
-      fetchMyBookings();
-    }
+    setAuthChecked(true);
+    fetchMyBookings();
   }, [user]);
 
   // Sincronización en TIEMPO REAL: actualización inmediata cuando el dueño aprueba o cancela
@@ -111,7 +109,7 @@ export default function UserReservationsPage() {
 
   const fetchMyBookings = async () => {
     try {
-      const { data } = await supabase
+      let query = supabase
         .from('bookings')
         .select(`
           *,
@@ -125,9 +123,25 @@ export default function UserReservationsPage() {
             companies (name, zone, address)
           )
         `)
-        .eq('user_id', user!.id)
         .order('start_time', { ascending: false });
 
+      if (user?.id) {
+        query = query.eq('user_id', user.id);
+      } else {
+        const guestIds: string[] = typeof window !== 'undefined'
+          ? JSON.parse(localStorage.getItem('cancheros_guest_booking_ids') || '[]')
+          : [];
+
+        if (guestIds.length > 0) {
+          query = query.in('id', guestIds);
+        } else {
+          setBookings([]);
+          setLoading(false);
+          return;
+        }
+      }
+
+      const { data } = await query;
       if (data) setBookings(data);
     } catch (error) {
       console.error(error);
@@ -145,15 +159,19 @@ export default function UserReservationsPage() {
     );
   }
 
-  if (!user) {
+  if (!user && bookings.length === 0) {
     return (
-      <div className="page-content fade-in max-w-xl mx-auto text-center py-20">
+      <div className="page-content fade-in max-w-xl mx-auto text-center py-20 px-4">
         <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 text-primary border border-primary/20">
           <Ticket size={36} />
         </div>
-        <h2 className="text-2xl font-bold mb-3">Inicia sesión para ver tus reservas</h2>
-        <p className="text-muted-foreground mb-8">Debes tener una cuenta para poder gestionar tus partidos y ver los tickets de reserva.</p>
-        <Link href="/login" className="btn-primary w-full max-w-xs mx-auto block py-3">Ingresar o Crear Cuenta</Link>
+        <h2 className="text-2xl font-bold mb-3">Tus Reservas</h2>
+        <p className="text-muted-foreground mb-6 text-sm">
+          No tienes reservas activas en este dispositivo. Si ya tienes una cuenta registrada, inicia sesión para ver todo tu historial de partidos.
+        </p>
+        <Link href="/login" className="btn-primary w-full max-w-xs mx-auto block py-3">
+          Iniciar Sesión o Registrarme
+        </Link>
       </div>
     );
   }

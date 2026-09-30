@@ -193,16 +193,6 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
   const handleSearchRef = useRef<(silent?: boolean) => void>(() => { });
 
   const handleBook = useCallback((pitch: Pitch, preselectedTime?: string | string[], preselectedDate?: string) => {
-    if (!user) {
-      setAlertState({
-        isOpen: true,
-        type: 'login_required',
-        title: 'Inicia sesión para reservar',
-        message: 'Debes iniciar sesión o crear una cuenta para poder reservar esta cancha.',
-      });
-      return;
-    }
-
     if (preselectedTime && Array.isArray(preselectedTime) && preselectedDate) {
       const hoursCount = preselectedTime.length;
       const customPricing = (pitch as any).custom_pricing || {};

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Eye, EyeOff, Loader2, ArrowRight, Mail, CheckCircle2, RotateCw, Lock, User, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, Loader2, ArrowRight, Mail, CheckCircle2, RotateCw, Lock, User, ShieldCheck, Phone } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -18,6 +18,7 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -136,17 +137,29 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
         }
       }
 
+      const cleanPhone = phone.replace(/\D/g, '');
+      if (cleanPhone.length !== 10) {
+        setError('Ingresa un número de celular/WhatsApp válido de 10 dígitos (ej: 3123456789).');
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { full_name: fullName, role: forcedRole },
+          data: { full_name: fullName, role: forcedRole, phone: cleanPhone },
           emailRedirectTo,
         },
       });
       if (error) {
         setError(error.message);
       } else {
+        if (data.user) {
+          try {
+            await supabase.from('profiles').update({ phone: cleanPhone, full_name: fullName }).eq('id', data.user.id);
+          } catch {}
+        }
         if (data.session) {
           if (forcedRole === 'owner') router.push('/dashboard');
           else router.push(redirectPath);
@@ -358,6 +371,27 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
                 Este nombre será el principal de tu sede (ej. <em>Complejo San Juan</em>). Luego podrás asociarle Cancha 1, Cancha 2, Cancha 3, etc.
               </p>
             )}
+          </div>
+        )}
+
+        {mode === 'register' && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Phone size={14} className="text-emerald-500" />
+              <span>Número de Celular / WhatsApp *</span>
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              placeholder="Ej: 3123456789"
+              required
+              autoComplete="tel"
+              className="w-full px-4 py-3 bg-secondary/30 border border-border focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-2xl text-sm outline-none transition-all placeholder:text-muted-foreground/50"
+            />
+            <p className="text-[11px] text-muted-foreground leading-tight">
+              Para enviarte confirmaciones de reservas y tickets de partidos.
+            </p>
           </div>
         )}
 

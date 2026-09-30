@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Upload, CheckCircle2, Loader2, Image as ImageIcon, CalendarDays, Clock3, XCircle, Copy, CheckCheck, X, LandPlot, Lock, Percent, Layers, Zap } from 'lucide-react';
+import { ArrowLeft, Check, Upload, CheckCircle2, Loader2, Image as ImageIcon, CalendarDays, Clock3, XCircle, Copy, CheckCheck, X, LandPlot, Lock, Percent, Layers, Zap, Phone, User } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/client';
@@ -158,6 +158,26 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
 
   const { user, profile } = useAuth();
   const supabase = createClient();
+
+  // Datos de contacto del jugador (autocompletado para invitados o usuarios logueados)
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramName = urlParams.get('name') || urlParams.get('nombre') || '';
+    const paramPhone = urlParams.get('phone') || urlParams.get('tel') || '';
+
+    const savedName = localStorage.getItem('cancheros_customer_name') || '';
+    const savedPhone = localStorage.getItem('cancheros_customer_phone') || '';
+
+    const initialName = profile?.full_name || user?.user_metadata?.full_name || paramName || savedName || '';
+    const initialPhone = (profile as any)?.phone || user?.user_metadata?.phone || paramPhone || savedPhone || '';
+
+    if (initialName && !customerName) setCustomerName(initialName);
+    if (initialPhone && !customerPhone) setCustomerPhone(initialPhone);
+  }, [user, profile]);
   const {
     activeBooking,
     secondsLeft,
@@ -633,13 +653,15 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   };
 
   const handleBooking = async () => {
-    if (!user) {
-      setAlertState({
-        isOpen: true,
-        type: 'login_required',
-        title: 'Inicia Sesión',
-        message: 'Debes iniciar sesión para confirmar tu reserva.',
-      });
+    const finalName = customerName.trim() || profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || '';
+    const finalPhone = customerPhone.replace(/\D/g, '') || (profile as any)?.phone || user?.user_metadata?.phone || '';
+
+    if (!finalName || finalName.length < 2) {
+      setError('Por favor ingresa tu nombre completo para la reserva.');
+      return;
+    }
+    if (!finalPhone || finalPhone.length !== 10) {
+      setError('Por favor ingresa un número de celular/WhatsApp válido de 10 dígitos (ej: 3123456789).');
       return;
     }
     if (selectedTimes.length === 0) { setError('Por favor selecciona al menos una hora'); return; }
@@ -663,10 +685,10 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
           action: 'create_booking',
           payload: {
             pitch_id: currentPitch.id,
-            user_id: user.id,
+            user_id: user?.id || null,
             booking_ids: activeBooking?.bookingIds || [],
-            customer_name: profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Jugador',
-            customer_phone: (profile as any)?.phone || user.user_metadata?.phone || '',
+            customer_name: finalName,
+            customer_phone: finalPhone,
             selected_date: selectedDate,
             selected_times: selectedTimes,
             file_name: file.name,
@@ -680,6 +702,25 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Error al procesar la reserva.');
+      }
+
+      // Guardar datos en localStorage para que en futuras reservas ya esté todo listo
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cancheros_customer_name', finalName);
+        localStorage.setItem('cancheros_customer_phone', finalPhone);
+
+        const newIds = data.data ? (Array.isArray(data.data) ? data.data.map((b: any) => b.id) : [data.data.id]) : [];
+        if (newIds.length > 0) {
+          const oldList = JSON.parse(localStorage.getItem('cancheros_guest_booking_ids') || '[]');
+          localStorage.setItem('cancheros_guest_booking_ids', JSON.stringify(Array.from(new Set([...oldList, ...newIds]))));
+        }
+      }
+
+      // Si el usuario tiene sesión y no tenía teléfono en profiles, sincronizarlo
+      if (user && !(profile as any)?.phone) {
+        try {
+          await supabase.from('profiles').update({ phone: finalPhone }).eq('id', user.id);
+        } catch {}
       }
 
       clearActiveBooking();
@@ -1249,8 +1290,59 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                 );
               })()}
 
+              {/* Datos de Contacto del Jugador */}
+              <div className="bg-secondary/40 border border-border rounded-2xl p-4 sm:p-5 mb-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <User size={15} className="text-emerald-500" />
+                    <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                      Datos para tu Reserva y Ticket
+                    </span>
+                  </div>
+                  {user && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      Sesión activa
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                      <span>Tu Nombre Completo *</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="Ej: Carlos Eraso"
+                      className="w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-xs sm:text-sm font-medium outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                      <Phone size={12} className="text-emerald-500" />
+                      <span>Tu WhatsApp (10 dígitos) *</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder="Ej: 3123456789"
+                      className="w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-xs sm:text-sm font-medium outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-muted-foreground leading-snug flex items-center gap-1.5 pt-0.5">
+                  <span>📲</span>
+                  <span>Te notificaremos la confirmación y te enviaremos el ticket digital directamente a este WhatsApp.</span>
+                </p>
+              </div>
+
               <div className="auth-field mb-5">
-                <span className="font-semibold text-sm mb-2 block">Sube tu comprobante de transferencia</span>
+                <span className="font-semibold text-sm mb-2 block">Sube tu comprobante de transferencia *</span>
                 {!file ? (
                   <label className="border-2 border-dashed border-primary/40 bg-primary/5 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-primary/10 transition-colors">
                     <Upload size={28} className="text-primary mb-3" />

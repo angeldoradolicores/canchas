@@ -1333,16 +1333,6 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
               onClick={async () => {
                 if (selectedTimes.length === 0) return;
 
-                if (!user) {
-                  setAlertState({
-                    isOpen: true,
-                    type: 'login_required',
-                    title: 'Inicia sesión para reservar',
-                    message: 'Debes iniciar sesión o crear una cuenta para poder reservar esta cancha.',
-                  });
-                  return;
-                }
-
                 if (activeBooking) {
                   setAlertState({
                     isOpen: true,
