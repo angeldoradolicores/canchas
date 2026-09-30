@@ -369,22 +369,19 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
     if (newStatus === 'confirmed') {
       // ── TICKET DIGITAL DE RESERVA (Diseño visual y estructurado) ──
       const ticketMsg =
-        `🎟️━━━━━━━━━━━━━━━━━━━━━━🎟️\n` +
-        `    🏆 *TICKET DE RESERVA* 🏆\n` +
-        `         *C A N C H E R O S*\n` +
-        `🎟️━━━━━━━━━━━━━━━━━━━━━━🎟️\n\n` +
-        `✅ *ESTADO: RESERVA CONFIRMADA*\n\n` +
+
+        `✅ RESERVA CONFIRMADA*\n\n` +
         `🏟️ *COMPLEJO:* ${company.name.toUpperCase()}\n` +
-        `⚽ *CANCHA:* ${pitchNames.toUpperCase()}\n` +
-        `🏷️ *DEPORTE:* ${pitch.type || 'Fútbol'}\n` +
-        `👤 *JUGADOR:* ${b.customer_name || 'Jugador'}\n\n` +
+        `*CANCHA:* ${pitchNames.toUpperCase()}\n` +
+        // `🏷️ *DEPORTE:* ${pitch.type || 'Fútbol'}\n` +
+        // `👤 *JUGADOR:* ${b.customer_name || 'Jugador'}\n\n` +
         `📅 *FECHA:* ${fechaLarga}\n` +
         `⏰ *HORARIO:* ${horasStr}\n` +
         `📍 *DIRECCIÓN:* ${address}\n` +
-        `🎫 *REF:* #${shortId}\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `📲 *Presenta este ticket digital al llegar al complejo.*\n` +
-        `¡Prepárate para jugar! ⚽🔥\n\n` +
+        // `🎫 *REF:* #${shortId}\n` +
+        // `━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        // `📲 *Presenta este ticket digital al llegar al complejo.*\n` +
+        // `¡Prepárate para jugar! ⚽🔥\n\n` +
         `🎫 *Ver y descargar ticket gráfico:* \n` +
         `👉 ${APP_URL}/reservations`;
 
