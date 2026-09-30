@@ -12,6 +12,9 @@ const evoApiKey = process.env.EVOLUTION_API_KEY || process.env.EVOLUTION_GLOBAL_
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://canchas-mino.vercel.app').replace(/\/$/, '');
 const OWNER_DEFAULT_PHONE = '573006577286';
 
+// Instancia central oficial conectada al número 3006577286
+export const CENTRAL_WHATSAPP_INSTANCE = process.env.CENTRAL_WHATSAPP_INSTANCE || 'Cancheros';
+
 // Memoria caché para deduplicar eventos muy rápidos (ej: cuando el dueño aprueba varias horas continuas)
 const recentNotifications = new Map<string, number>();
 
@@ -45,7 +48,7 @@ export function formatWhatsAppPhone(phone: string | null | undefined): string {
 }
 
 /**
- * Envía un mensaje de texto vía Evolution API.
+ * Envía un mensaje de texto vía Evolution API de forma instantánea.
  */
 export async function sendEvolutionWhatsAppText(instanceName: string, toPhone: string, text: string): Promise<boolean> {
   const formattedNumber = formatWhatsAppPhone(toPhone);
@@ -61,9 +64,9 @@ export async function sendEvolutionWhatsAppText(instanceName: string, toPhone: s
       body: JSON.stringify({
         number: formattedNumber,
         options: {
-          delay: 1000,
-          presence: 'composing',
-          linkPreview: true,
+          delay: 0,
+          presence: 'available',
+          linkPreview: false,
         },
         text: text,
       }),
@@ -82,7 +85,7 @@ export async function sendEvolutionWhatsAppText(instanceName: string, toPhone: s
 }
 
 /**
- * Envía un archivo/imagen de comprobante vía Evolution API.
+ * Envía un archivo/imagen de comprobante vía Evolution API de forma instantánea.
  */
 export async function sendEvolutionWhatsAppMedia(
   instanceName: string,
@@ -107,6 +110,10 @@ export async function sendEvolutionWhatsAppMedia(
         caption: caption,
         media: mediaUrl,
         fileName: 'comprobante.jpg',
+        options: {
+          delay: 0,
+          presence: 'available',
+        },
       }),
     });
 
@@ -124,6 +131,9 @@ export async function sendEvolutionWhatsAppMedia(
 
 /**
  * Notifica al cliente y al dueño cuando un cliente sube un comprobante de pago.
+ * - Al CLIENTE: se envía desde la instancia de la cancha (o fallback a Cancheros).
+ * - Al DUEÑO: se envía SIEMPRE desde la instancia central 'Cancheros' (3006577286),
+ *   evitando que sea un automensaje y garantizando que suene/notifique en el celular del dueño.
  */
 export async function notifyBookingSubmitted(bookingId: string) {
   try {
@@ -150,12 +160,11 @@ export async function notifyBookingSubmitted(bookingId: string) {
     const pitch = (b as any).pitches;
     const company = pitch?.companies;
 
-    // Instancia de WhatsApp vinculada
-    const instanceName = company?.whatsapp_instance_name;
-    if (!instanceName) {
-      console.warn('[WhatsApp Notification] La empresa no tiene whatsapp_instance_name configurado.');
-      return;
-    }
+    // Remitente para el cliente: instancia de la cancha o la central 'Cancheros'
+    const customerSenderInstance = company?.whatsapp_instance_name || CENTRAL_WHATSAPP_INSTANCE;
+
+    // Remitente para el dueño: SIEMPRE desde la instancia central 'Cancheros' (3006577286)
+    const ownerSenderInstance = CENTRAL_WHATSAPP_INSTANCE;
 
     // 2. Buscar reservas hermanas (mismo comprobante o misma compra)
     let siblingBookings: any[] = [b];
@@ -217,77 +226,86 @@ export async function notifyBookingSubmitted(bookingId: string) {
 
     const customer_name = b.customer_name || 'Jugador';
     const customer_phone = b.customer_phone;
-    const company_name = company.name || 'Complejo Deportivo';
+    const company_name = company?.name || 'Complejo Deportivo';
     const payment_proof_url = b.payment_proof_url;
     const shortId = (b.id ? b.id.slice(0, 8) : 'REF').toUpperCase();
 
     // ── A) MENSAJE AL CLIENTE: confirmación de recepción de comprobante ──
-    if (customer_phone) {
-      const customerMsg =
-        `✅ *¡Recibimos tu comprobante!*\n\n` +
-        `🏟️ *${company_name}*\n` +
-        `⚽ *Cancha:* ${pitchNameCombined}\n` +
-        // `📅 *Fecha:* ${fechaCorta}\n` +
-        // `⏰ *Horario:* ${horasStr}\n` +
-        // `🎫 *Ref:* #${shortId}\n\n` +
-        `⏳ Tu reserva quedó en revisión. El dueño está validando tu comprobante y te notificaremos apenas sea aprobada 🙌`;
-      // `👉 *Consulta tus reservas y ticket:* \n` +
-      // `${APP_URL}/reservations`;
+    const customerMsg =
+      `✅ *¡Recibimos tu comprobante!*\n\n` +
+      `🏟️ *${company_name}*\n` +
+      `⚽ *${pitchNameCombined}*\n` +
+      `📅 *Fecha:* ${fechaCorta}\n` +
+      `⏰ *Horario:* ${horasStr}\n` +
+      `🎫 *Ref:* #${shortId}\n\n` +
+      `Tu reserva quedó en revisión. El dueño está validando tu comprobante y te notificaremos apenas sea aprobada 🙌`;
 
-      await sendEvolutionWhatsAppText(instanceName, customer_phone, customerMsg);
+    // ── B) RESOLVER DESTINATARIOS DEL DUEÑO (PRIORIZANDO SU TELÉFONO PERSONAL) ──
+    const targetOwnerPhones = new Set<string>();
+
+    // 1. Teléfono de contacto del dueño en la empresa (prioridad absoluta)
+    if (company?.owner_phone) {
+      targetOwnerPhones.add(formatWhatsAppPhone(company.owner_phone));
     }
 
-    // ── B) RESOLVER TELÉFONO DEL DUEÑO ──
-    let targetOwnerPhone = company.whatsapp_connected_phone || company.owner_phone;
-    if (!targetOwnerPhone && company.owner_id) {
+    // 2. Si no está en company, buscar el teléfono en su perfil de usuario
+    if (targetOwnerPhones.size === 0 && company?.owner_id) {
       const { data: prof } = await supabase.from('profiles').select('phone').eq('id', company.owner_id).maybeSingle();
-      if (prof?.phone) targetOwnerPhone = prof.phone;
-    }
-    if (!targetOwnerPhone) {
-      targetOwnerPhone = OWNER_DEFAULT_PHONE;
+      if (prof?.phone) {
+        targetOwnerPhones.add(formatWhatsAppPhone(prof.phone));
+      }
     }
 
-    // Verificar si hay grupo "Comprobantes" en Evolution API
-    let finalOwnerDest = targetOwnerPhone;
-    try {
-      const groupRes = await fetch(`${evoUrl}/group/fetchAllGroups/${instanceName}?getParticipants=false`, {
-        headers: { apikey: evoApiKey }
-      });
-      if (groupRes.ok) {
-        const groups = await groupRes.json();
-        const comprobantesGroup = groups.find((g: any) => g.subject && g.subject.toLowerCase() === 'comprobantes');
-        if (comprobantesGroup?.id) {
-          finalOwnerDest = comprobantesGroup.id;
-        }
-      }
-    } catch (e) {
-      console.warn('[WhatsApp] No se pudo consultar grupos:', e);
+    // 3. Fallback de soporte administrativo por defecto si no hay otro número
+    if (targetOwnerPhones.size === 0 && OWNER_DEFAULT_PHONE) {
+      targetOwnerPhones.add(formatWhatsAppPhone(OWNER_DEFAULT_PHONE));
     }
 
     // ── C) MENSAJE AL DUEÑO: aviso de reserva pendiente + link seguro al dashboard ──
-    if (finalOwnerDest) {
-      const ownerMsg =
-        `🔔 *¡Nueva reserva pendiente de revisión!*\n\n` +
-        `🏟️ *${company_name}*\n` +
-        `⚽ *Cancha:* ${pitchNameCombined}\n` +
-        `👤 *Cliente:* ${customer_name}${customer_phone ? ` (📱 ${customer_phone})` : ''}\n` +
-        `📅 *Fecha:* ${fechaCorta}\n` +
-        `⏰ *Horario:* ${horasStr}\n` +
-        `🔐 *Revisar y gestionar en tu panel seguro:*\n` +
-        `👉 ${APP_URL}/dashboard/bookings`;
+    const ownerMsg =
+      `🔔 *¡Nuevo comprobante de pago recibido!*\n\n` +
+      `🏟️ *${company_name}*\n` +
+      `⚽ *Cancha:* ${pitchNameCombined}\n` +
+      `👤 *Cliente:* ${customer_name}${customer_phone ? ` (📱 ${customer_phone})` : ''}\n` +
+      `📅 *Fecha:* ${fechaCorta}\n` +
+      `⏰ *Horario:* ${horasStr}\n` +
+      `🎫 *Ref:* #${shortId}\n\n` +
+      `🔐 *Revisar y aprobar en tu panel seguro:*\n` +
+      `👉 ${APP_URL}/dashboard/bookings`;
 
-      await sendEvolutionWhatsAppText(instanceName, finalOwnerDest, ownerMsg);
+    // ── D) DISPARO PARALELO E INMEDIATO (SIN ESPERAS SECUENCIALES) ──
+    const sendTasks: Promise<any>[] = [];
 
-      // Adjuntar la imagen del comprobante al dueño
-      if (payment_proof_url) {
-        await sendEvolutionWhatsAppMedia(
-          instanceName,
-          finalOwnerDest,
-          payment_proof_url,
-          `🧾 Comprobante de ${customer_name}`
-        );
-      }
+    // Notificar al cliente desde la instancia de la cancha o la central
+    if (customer_phone && customerSenderInstance) {
+      sendTasks.push(
+        sendEvolutionWhatsAppText(customerSenderInstance, customer_phone, customerMsg).catch(err =>
+          console.error('[WhatsApp Notification] Error enviando a cliente:', err)
+        )
+      );
     }
+
+    // Notificar al dueño SIEMPRE desde la instancia central Cancheros (3006577286)
+    for (const phone of targetOwnerPhones) {
+      if (!phone) continue;
+      sendTasks.push(
+        (async () => {
+          await sendEvolutionWhatsAppText(ownerSenderInstance, phone, ownerMsg);
+          if (payment_proof_url) {
+            await sendEvolutionWhatsAppMedia(
+              ownerSenderInstance,
+              phone,
+              payment_proof_url,
+              `🧾 Comprobante de ${customer_name} (Ref: #${shortId})`
+            );
+          }
+        })().catch(err =>
+          console.error(`[WhatsApp Notification] Error enviando a dueño ${phone}:`, err)
+        )
+      );
+    }
+
+    await Promise.allSettled(sendTasks);
   } catch (err) {
     console.error('[notifyBookingSubmitted] Error:', err);
   }
@@ -317,7 +335,7 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
 
     const pitch = (b as any).pitches;
     const company = pitch?.companies;
-    const instanceName = company?.whatsapp_instance_name;
+    const instanceName = company?.whatsapp_instance_name || CENTRAL_WHATSAPP_INSTANCE;
     if (!instanceName) return;
 
     // Buscar si hay horas hermanas para incluirlas todas en un solo ticket
@@ -370,7 +388,7 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
       // ── TICKET DIGITAL DE RESERVA (Diseño visual y estructurado) ──
       const ticketMsg =
 
-        `✅ RESERVA CONFIRMADA*\n\n` +
+        `✅ *RESERVA CONFIRMADA*\n\n` +
         `🏟️ *COMPLEJO:* ${company.name.toUpperCase()}\n` +
         `*CANCHA:* ${pitchNames.toUpperCase()}\n` +
         // `🏷️ *DEPORTE:* ${pitch.type || 'Fútbol'}\n` +

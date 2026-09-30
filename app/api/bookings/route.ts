@@ -520,10 +520,15 @@ export async function POST(req: NextRequest) {
       }
 
       if (updatedBookings.length > 0) {
-        // Disparar notificaciones por WhatsApp de forma asíncrona (no bloqueante)
-        notifyBookingSubmitted(updatedBookings[0].id).catch(err => {
-          console.error('[WhatsApp Notification] Error en notificación:', err);
-        });
+        // Disparar notificaciones por WhatsApp de forma garantizada y rápida
+        try {
+          await Promise.race([
+            notifyBookingSubmitted(updatedBookings[0].id),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout en notificación WhatsApp')), 3000)),
+          ]);
+        } catch (err) {
+          console.error('[WhatsApp Notification] Error o timeout en notificación:', err);
+        }
       }
 
       return NextResponse.json({ success: true, data: updatedBookings });
