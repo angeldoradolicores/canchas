@@ -74,6 +74,13 @@ export default function PitchesPage() {
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Error al actualizar nombre.');
       setCompany(data.data);
+      // Actualizar inmediatamente el nombre del complejo en todas las canchas cargadas sin recargar la página
+      const updatedName = data.data.name;
+      setPitches(prev => prev.map(p => ({
+        ...p,
+        company: p.company ? { ...p.company, name: updatedName } : { name: updatedName },
+        companies: p.companies ? { ...p.companies, name: updatedName } : { name: updatedName },
+      })));
       setEditingName(false);
     } catch (err: any) {
       alert(err.message || 'No se pudo actualizar el nombre del complejo.');

@@ -666,12 +666,41 @@ function NewPitchForm() {
     }
   };
 
+  const triggerError = (msg: string) => {
+    setErrorMsg(msg);
+    setTimeout(() => {
+      const el = document.getElementById('form-bottom-error');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 50);
+  };
+
   const handleSubmit = async () => {
-    if (!name.trim()) return setErrorMsg('El nombre de la cancha es obligatorio.');
-    if (!contactPhone.trim() || contactPhone.trim().length < 10) return setErrorMsg('El teléfono de la cancha es obligatorio y debe tener al menos 10 dígitos.');
-    if (!user?.id) return setErrorMsg('Sesión no detectada. Recarga la página.');
+    if (!name.trim()) return triggerError('El nombre de la cancha es obligatorio.');
+    if (!contactPhone.trim() || contactPhone.trim().replace(/\D/g, '').length < 10) {
+      return triggerError('El teléfono de la cancha es obligatorio y debe tener al menos 10 dígitos.');
+    }
+    if (!user?.id) return triggerError('Sesión no detectada. Recarga la página.');
     if (isCombined && linkedPitchIds.length < 2) {
-      return setErrorMsg('Para registrar una cancha combinada, debes seleccionar al menos 2 canchas que se unen.');
+      return triggerError('Para registrar una cancha combinada, debes seleccionar al menos 2 canchas que se unen.');
+    }
+
+    // ── OBLIGATORIO: Foto de la cancha ──
+    const hasPhoto = mediaItems.some(m => m.url && m.url.trim() && !m.url.includes('youtube') && !m.url.includes('vimeo'));
+    if (!hasPhoto) {
+      return triggerError('Es obligatorio subir al menos una foto de la cancha.');
+    }
+
+    // ── OBLIGATORIO: Método de pago ──
+    const hasPayment = paymentMethods.some(pm => pm.number && pm.number.trim());
+    if (!hasPayment) {
+      return triggerError('Es obligatorio agregar al menos un método de pago con su número de cuenta o celular.');
+    }
+
+    // ── OBLIGATORIO: Ubicación en mapa y dirección ──
+    if (!address?.trim() || lat === null || lat === undefined || lng === null || lng === undefined) {
+      return triggerError('Es obligatorio indicar la dirección y ubicación exacta de la cancha en el mapa.');
     }
 
     setLoading(true);
@@ -744,10 +773,31 @@ function NewPitchForm() {
       router.push('/dashboard/pitches');
       router.refresh();
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error de conexión.');
+      triggerError(err.message || 'Error de conexión.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const renderBottomError = () => {
+    if (!errorMsg) return null;
+    return (
+      <div
+        id="form-bottom-error"
+        className="w-full mb-3 p-4 rounded-xl bg-red-500/10 border-2 border-red-500/30 text-red-600 dark:text-red-400 text-xs sm:text-sm font-bold flex items-center gap-2.5 animate-in fade-in slide-in-from-bottom-2 shadow-xs"
+      >
+        <ShieldAlert size={18} className="shrink-0 text-red-600 dark:text-red-400" />
+        <span className="flex-1">{errorMsg}</span>
+        <button
+          type="button"
+          onClick={() => setErrorMsg('')}
+          className="p-1 hover:bg-red-500/20 rounded-lg cursor-pointer transition-colors"
+          title="Cerrar"
+        >
+          <X size={15} />
+        </button>
+      </div>
+    );
   };
 
   const previewData = {
@@ -1303,6 +1353,7 @@ function NewPitchForm() {
             </div>
           </div>
 
+          {renderBottomError()}
           <div className="flex items-center gap-3 pt-2">
             <button
               type="button"
@@ -1531,6 +1582,7 @@ function NewPitchForm() {
             </div>
           </div>
 
+          {renderBottomError()}
           <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
             <button onClick={() => setActiveSection('basic')} className="btn-primary bg-secondary text-foreground hover:bg-border py-3 px-4">← Atrás</button>
             <button
@@ -1636,6 +1688,7 @@ function NewPitchForm() {
               )}
             </div>
 
+            {renderBottomError()}
             <div className="flex flex-col sm:flex-row gap-2.5 pt-2 w-full max-w-full">
               <button onClick={() => setActiveSection('pricing')} className="btn-primary bg-secondary text-foreground hover:bg-border py-3 px-4 cursor-pointer">← Atrás</button>
               <button
@@ -1738,6 +1791,7 @@ function NewPitchForm() {
             )} */}
           </div>
 
+          {renderBottomError()}
           {/* Botones de Navegación de Paso */}
           <div className="flex items-center gap-2.5 pt-1">
             <button

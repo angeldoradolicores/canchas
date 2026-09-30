@@ -86,6 +86,8 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
     }
     setGpsLoading(true);
     setGpsError(false);
+    // Limpiar coordenadas anteriores para forzar recentrado del mapa
+    setUserCoords(null);
 
     const applyCoords = (coords: { lat: number; lng: number }) => {
       setUserCoords(coords);
@@ -143,7 +145,8 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
             setGpsLoading(false);
           }
         },
-        { enableHighAccuracy: highAcc, timeout: highAcc ? 6000 : 12000, maximumAge: 120000 }
+        // maximumAge: 0 → siempre solicita posición fresca, nunca usa caché
+        { enableHighAccuracy: highAcc, timeout: highAcc ? 8000 : 14000, maximumAge: 0 }
       );
     };
 
@@ -688,20 +691,21 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
       // Verificar que tiene TODAS las horas seleccionadas en draft
       const hasAllHours = selectedHours.every(h => hourMap.has(h));
       if (hasAllHours) {
-        // Tomar el expires_at más corto (más conservador)
+        // Recopilar todas las horas bloqueadas (no solo la primera)
         let minExpiry = '';
-        let firstSlot = '';
+        const allSlots: string[] = [];
         hourMap.forEach((v, h) => {
-          if (!firstSlot) { firstSlot = h; minExpiry = v.expiresAt; }
-          if (v.expiresAt < minExpiry) minExpiry = v.expiresAt;
+          allSlots.push(h);
+          if (!minExpiry || v.expiresAt < minExpiry) minExpiry = v.expiresAt;
         });
-        draftPitchMap.set(pitchId, { expiresAt: minExpiry, slot: firstSlot });
+        allSlots.sort();
+        draftPitchMap.set(pitchId, { expiresAt: minExpiry, slot: allSlots.join(',') });
         // Propagar a vinculadas
         const srcPitch = pitchById.get(pitchId);
         if (srcPitch) {
           propagateConflicts(pitchId, srcPitch).forEach(id => {
             if (!confirmedPitchIds.has(id) && !draftPitchMap.has(id)) {
-              draftPitchMap.set(id, { expiresAt: minExpiry, slot: firstSlot });
+              draftPitchMap.set(id, { expiresAt: minExpiry, slot: allSlots.join(',') });
             }
           });
         }
@@ -729,14 +733,21 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
     // Canchas disponibles: NO tienen reservas confirmadas ni borradores activos en las horas seleccionadas
     let available = filteredByFormat.filter(p => !confirmedPitchIds.has(p.id) && !draftPitchMap.has(p.id));
 
-    // Canchas que están siendo reservadas con cronómetro activo
+    // Canchas que están siendo reservadas con cronómetro activo — incluye TODOS los slots bloqueados
     let inProgress = filteredByFormat
       .filter(p => draftPitchMap.has(p.id) && !confirmedPitchIds.has(p.id))
-      .map(p => ({
-        ...p,
-        expiresAt: draftPitchMap.get(p.id)!.expiresAt,
-        slot: draftPitchMap.get(p.id)!.slot,
-      }));
+      .map(p => {
+        const draftEntry = draftPitchMap.get(p.id)!;
+        const rawSlot = draftEntry.slot;
+        // Convertir string de slots separados por coma a array
+        const slotsArr = rawSlot.includes(',') ? rawSlot.split(',').map(s => s.trim()) : [rawSlot.trim()];
+        return {
+          ...p,
+          expiresAt: draftEntry.expiresAt,
+          slot: rawSlot,
+          slots: slotsArr,
+        };
+      });
 
     if (!silent) {
       // Resultados iniciales aleatorios (shuffled una sola vez por búsqueda)

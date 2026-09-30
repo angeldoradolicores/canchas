@@ -103,7 +103,21 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
     if (mode === 'login') {
       const { error, data } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        setError('Correo o contraseña incorrectos.');
+        if (error.message?.toLowerCase().includes('email not confirmed')) {
+          setError('Tu correo electrónico no ha sido confirmado aún. Por favor revisa tu bandeja de entrada o spam.');
+        } else {
+          try {
+            const checkRes = await fetch('/api/auth/verify-login-error', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email }),
+            });
+            const checkData = await checkRes.json();
+            setError(checkData.message || 'Correo o contraseña incorrectos.');
+          } catch {
+            setError('Correo o contraseña incorrectos.');
+          }
+        }
       } else {
         const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).maybeSingle();
         const role = profile?.role || data.user.user_metadata?.role;

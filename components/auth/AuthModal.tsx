@@ -105,7 +105,21 @@ export function AuthModal({ isOpen = true, onClose, defaultMode = 'login', defau
     if (mode === 'login') {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        setError('Correo o contraseña incorrectos.');
+        if (error.message?.toLowerCase().includes('email not confirmed')) {
+          setError('Tu correo electrónico no ha sido confirmado aún. Por favor revisa tu bandeja de entrada o spam.');
+        } else {
+          try {
+            const checkRes = await fetch('/api/auth/verify-login-error', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email }),
+            });
+            const checkData = await checkRes.json();
+            setError(checkData.message || 'Correo o contraseña incorrectos.');
+          } catch {
+            setError('Correo o contraseña incorrectos.');
+          }
+        }
       } else {
         const { data: profile } = await supabase
           .from('profiles')
