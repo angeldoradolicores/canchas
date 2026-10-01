@@ -133,15 +133,29 @@ export default function UserReservationsPage() {
 
         if (!error && data) setBookings(data);
       } else {
-        const guestIds: string[] = typeof window !== 'undefined'
-          ? JSON.parse(localStorage.getItem('cancheros_guest_booking_ids') || '[]')
-          : [];
+        let guestIds: string[] = [];
+        if (typeof window !== 'undefined') {
+          try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const paramIds = urlParams.get('ids') ? urlParams.get('ids')!.split(',').map(s => s.trim()).filter(Boolean) : [];
+            const localIds: string[] = JSON.parse(localStorage.getItem('cancheros_guest_booking_ids') || '[]');
+            const sessionIds: string[] = JSON.parse(sessionStorage.getItem('cancheros_recent_booking_ids') || '[]');
+            guestIds = Array.from(new Set([...paramIds, ...localIds, ...sessionIds]));
+
+            // Si llegaron IDs por URL, persistirlos en localStorage para no perderlos
+            if (paramIds.length > 0 && guestIds.length > 0) {
+              localStorage.setItem('cancheros_guest_booking_ids', JSON.stringify(guestIds));
+            }
+          } catch {}
+        }
 
         if (guestIds.length > 0) {
           const res = await fetch(`/api/bookings?ids=${guestIds.join(',')}`);
           const resJson = await res.json();
           if (resJson.success && Array.isArray(resJson.data)) {
             setBookings(resJson.data);
+          } else {
+            console.error('[fetchMyBookings guest error]', resJson);
           }
         } else {
           setBookings([]);

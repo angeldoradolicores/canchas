@@ -61,6 +61,55 @@ function fmtSlot(slot: string) {
   return `${h12}:00 ${ampm}`;
 }
 
+async function compressImageIfNeeded(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX_DIM = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width > height) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          } else {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(e.target?.result as string);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.onerror = () => resolve(e.target?.result as string);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 function PaymentMethodCard({ pm }: { pm: { type: string; label: string; number: string; name: string } }) {
   const [copied, setCopied] = useState(false);
   const icons: Record<string, string> = { nequi: '🟣', daviplata: '🔴', bancolombia: '🔵', transferencia: '🏦' };
@@ -714,12 +763,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     setAlertState(prev => ({ ...prev, isOpen: false }));
 
     try {
-      const fileBase64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      const fileBase64 = await compressImageIfNeeded(file);
 
       const res = await fetch('/api/bookings', {
         method: 'POST',
@@ -747,7 +791,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         throw new Error(data.error || 'Error al procesar la reserva.');
       }
 
-      // Guardar datos en localStorage para que en futuras reservas ya esté todo listo
+      // Guardar datos en localStorage y sessionStorage para que en futuras reservas ya esté todo listo
       if (typeof window !== 'undefined') {
         localStorage.setItem('cancheros_customer_name', finalName);
         localStorage.setItem('cancheros_customer_phone', finalPhone);
@@ -755,7 +799,9 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         const newIds = data.data ? (Array.isArray(data.data) ? data.data.map((b: any) => b.id) : [data.data.id]) : [];
         if (newIds.length > 0) {
           const oldList = JSON.parse(localStorage.getItem('cancheros_guest_booking_ids') || '[]');
-          localStorage.setItem('cancheros_guest_booking_ids', JSON.stringify(Array.from(new Set([...oldList, ...newIds]))));
+          const merged = Array.from(new Set([...oldList, ...newIds]));
+          localStorage.setItem('cancheros_guest_booking_ids', JSON.stringify(merged));
+          sessionStorage.setItem('cancheros_recent_booking_ids', JSON.stringify(merged));
         }
       }
 
@@ -881,7 +927,11 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
             if (typeof window !== 'undefined') {
               sessionStorage.removeItem('canchas_booking_in_step_3');
             }
-            router.push(`/reservations`);
+            const guestIds = typeof window !== 'undefined'
+              ? JSON.parse(localStorage.getItem('cancheros_guest_booking_ids') || '[]')
+              : [];
+            const queryParam = guestIds.length > 0 ? `?ids=${guestIds.join(',')}` : '';
+            router.push(`/reservations${queryParam}`);
           }}
         >
           Ir a mis reservas
