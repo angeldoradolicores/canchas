@@ -79,6 +79,9 @@ export default function PublicPitchPage({ params }: { params: Promise<{ id: stri
   // Si se libera la cancha desde el timer flotante, otra pestaña o dispositivo, salir del BookingFlow
   useEffect(() => {
     const handleCancelled = () => {
+      if (typeof window !== 'undefined' && sessionStorage.getItem('canchas_booking_in_step_3') === 'true') {
+        return;
+      }
       setBooking(false);
       savedTimesRef.current = [];
       savedDateRef.current = '';

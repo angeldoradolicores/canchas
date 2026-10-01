@@ -43,6 +43,9 @@ export default function ExplorePage() {
     };
 
     const handleCancel = () => {
+      if (typeof window !== 'undefined' && sessionStorage.getItem('canchas_booking_in_step_3') === 'true') {
+        return;
+      }
       handleLeaveBooking();
     };
 

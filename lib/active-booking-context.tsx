@@ -71,6 +71,13 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
           sessionStorage.removeItem(STORAGE_KEY);
           localStorage.removeItem(STORAGE_KEY);
           window.dispatchEvent(new CustomEvent('cancel-active-booking'));
+        } else if (event.data?.type === 'CLEAR_ACTIVE_LOCK') {
+          setActiveBooking(null);
+          setIsFloating(false);
+          setShowCancelModal(false);
+          setSecondsLeft(0);
+          sessionStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(STORAGE_KEY);
         } else if (event.data?.type === 'SET_ACTIVE' && event.data?.payload) {
           setActiveBooking(event.data.payload);
         }
@@ -89,13 +96,12 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === STORAGE_KEY) {
         if (!e.newValue) {
-          // Fue liberado o eliminado en otra pestaña del mismo navegador
+          // Fue liberado o completado en otra pestaña
           setActiveBooking(null);
           setIsFloating(false);
           setShowCancelModal(false);
           setSecondsLeft(0);
           sessionStorage.removeItem(STORAGE_KEY);
-          window.dispatchEvent(new CustomEvent('cancel-active-booking'));
         } else {
           try {
             const parsed: ActiveBookingData = JSON.parse(e.newValue);
@@ -167,13 +173,19 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
         const { data, error } = await supabase
           .from('bookings')
           .select('id, status')
-          .in('id', bookingIds)
-          .eq('status', 'draft');
+          .in('id', bookingIds);
 
-        if (error) return;
+        if (error || !data) return;
 
-        // Si ya no existe ninguno de los registros en DB (fueron borrados/liberados)
-        if (!data || data.length === 0) {
+        // Si ya pasó a 'pending' o 'confirmed', la reserva fue enviada o confirmada exitosamente
+        const isCompleted = data.some((b: any) => b.status === 'pending' || b.status === 'confirmed');
+        if (isCompleted) {
+          clearActiveBooking();
+          return;
+        }
+
+        // Si ya no existe ninguno de los registros en DB (fueron borrados/liberados) o están cancelados
+        if (data.length === 0 || data.every((b: any) => b.status === 'cancelled')) {
           clearActiveBooking();
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('cancel-active-booking'));
@@ -251,7 +263,7 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
       localStorage.removeItem(STORAGE_KEY);
     }
     try {
-      broadcastChannelRef.current?.postMessage({ type: 'CANCEL_OR_RELEASE' });
+      broadcastChannelRef.current?.postMessage({ type: 'CLEAR_ACTIVE_LOCK' });
     } catch {}
   }, []);
 
@@ -283,6 +295,9 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
       console.error('[cancel draft error]', e);
     } finally {
       clearActiveBooking();
+      try {
+        broadcastChannelRef.current?.postMessage({ type: 'CANCEL_OR_RELEASE' });
+      } catch {}
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('cancel-active-booking'));
       }

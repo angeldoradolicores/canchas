@@ -190,6 +190,15 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   const router = useRouter();
 
   const [showCancelPrompt, setShowCancelPrompt] = useState(false);
+  const isSubmittedRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('canchas_booking_in_step_3');
+      }
+    };
+  }, []);
 
   // Cargar canchas asociadas al complejo deportivo
   useEffect(() => {
@@ -272,6 +281,14 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   // Si la cancha es liberada o cancelada desde otra pestaña, otro dispositivo o el timer flotante, salir inmediatamente
   useEffect(() => {
     const handleCancelled = () => {
+      // Si ya se envió el comprobante y estamos en confirmación (step 3), NUNCA salirse
+      if (
+        isSubmittedRef.current ||
+        step === 3 ||
+        (typeof window !== 'undefined' && sessionStorage.getItem('canchas_booking_in_step_3') === 'true')
+      ) {
+        return;
+      }
       onBack();
     };
     window.addEventListener('cancel-active-booking', handleCancelled);
@@ -280,7 +297,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
       window.removeEventListener('cancel-active-booking', handleCancelled);
       window.removeEventListener('active-booking-expired', handleCancelled);
     };
-  }, [onBack]);
+  }, [onBack, step]);
 
   // Control del temporizador flotante automático
   useEffect(() => {
@@ -723,8 +740,12 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         } catch {}
       }
 
-      clearActiveBooking();
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('canchas_booking_in_step_3', 'true');
+      }
+      isSubmittedRef.current = true;
       setStep(3);
+      clearActiveBooking();
     } catch (err: any) {
       setError(err.message || 'Error al procesar la reserva');
     } finally {
@@ -828,7 +849,12 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         <button
           type="button"
           className="btn-primary w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-sm shadow-md cursor-pointer active:scale-95 transition-all"
-          onClick={() => router.push(`/reservations`)}
+          onClick={() => {
+            if (typeof window !== 'undefined') {
+              sessionStorage.removeItem('canchas_booking_in_step_3');
+            }
+            router.push(`/reservations`);
+          }}
         >
           Ir a mis reservas
         </button>
