@@ -426,15 +426,15 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
                     <MapPin size={13} className="text-primary" /> Ubicación
                   </h4>
                   <div className="w-full rounded-2xl overflow-hidden border border-border shadow-xs">
-                    {/* Mapa con clip fijo no arrastrable y carga ultra rápida */}
-                    <div className="w-full h-36 relative bg-muted select-none pointer-events-none overflow-hidden">
+                    {/* Mapa de Google con marcador fijo y controles de zoom activos */}
+                    <div className="w-full h-40 relative bg-muted overflow-hidden">
                       <iframe
-                        title="map-preview"
+                        title="google-map-preview"
                         width="100%"
                         height="100%"
                         style={{ border: 0 }}
-                        loading="eager"
-                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number((currentPitch as any).lng) - 0.005}%2C${Number((currentPitch as any).lat) - 0.003}%2C${Number((currentPitch as any).lng) + 0.005}%2C${Number((currentPitch as any).lat) + 0.003}&layer=mapnik&marker=${(currentPitch as any).lat}%2C${(currentPitch as any).lng}`}
+                        loading="lazy"
+                        src={`https://maps.google.com/maps?q=${(currentPitch as any).lat},${(currentPitch as any).lng}&z=15&output=embed`}
                       />
                     </div>
                     {/* Barra de dirección estipulada limpia */}

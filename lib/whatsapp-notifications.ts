@@ -54,34 +54,37 @@ export async function sendEvolutionWhatsAppText(instanceName: string, toPhone: s
   const formattedNumber = formatWhatsAppPhone(toPhone);
   if (!formattedNumber || !instanceName) return false;
 
-  try {
-    const res = await fetch(`${evoUrl}/message/sendText/${instanceName}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: evoApiKey,
-      },
-      body: JSON.stringify({
-        number: formattedNumber,
-        options: {
-          delay: 0,
-          presence: 'available',
-          linkPreview: false,
-        },
-        text: text,
-      }),
-    });
+  const tryInstances = [instanceName];
+  if (instanceName.toLowerCase() !== instanceName) tryInstances.push(instanceName.toLowerCase());
+  if (instanceName.toUpperCase() !== instanceName) tryInstances.push(instanceName.charAt(0).toUpperCase() + instanceName.slice(1));
 
-    if (!res.ok) {
+  for (const inst of [...new Set(tryInstances)]) {
+    try {
+      const res = await fetch(`${evoUrl}/message/sendText/${inst}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: evoApiKey,
+        },
+        body: JSON.stringify({
+          number: formattedNumber,
+          options: {
+            delay: 0,
+            presence: 'available',
+            linkPreview: false,
+          },
+          text: text,
+        }),
+      });
+
+      if (res.ok) return true;
       const errText = await res.text().catch(() => '');
-      console.warn(`[WhatsApp] Error enviando texto a ${formattedNumber}:`, res.status, errText);
-      return false;
+      console.warn(`[WhatsApp] Error enviando texto con instancia ${inst} a ${formattedNumber}:`, res.status, errText);
+    } catch (err) {
+      console.error(`[WhatsApp] Excepción al enviar texto con ${inst}:`, err);
     }
-    return true;
-  } catch (err) {
-    console.error('[WhatsApp] Excepción al enviar texto:', err);
-    return false;
   }
+  return false;
 }
 
 /**
@@ -96,37 +99,40 @@ export async function sendEvolutionWhatsAppMedia(
   const formattedNumber = formatWhatsAppPhone(toPhone);
   if (!formattedNumber || !instanceName || !mediaUrl) return false;
 
-  try {
-    const res = await fetch(`${evoUrl}/message/sendMedia/${instanceName}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: evoApiKey,
-      },
-      body: JSON.stringify({
-        number: formattedNumber,
-        mediatype: 'image',
-        mimetype: 'image/jpeg',
-        caption: caption,
-        media: mediaUrl,
-        fileName: 'comprobante.jpg',
-        options: {
-          delay: 0,
-          presence: 'available',
-        },
-      }),
-    });
+  const tryInstances = [instanceName];
+  if (instanceName.toLowerCase() !== instanceName) tryInstances.push(instanceName.toLowerCase());
+  if (instanceName.toUpperCase() !== instanceName) tryInstances.push(instanceName.charAt(0).toUpperCase() + instanceName.slice(1));
 
-    if (!res.ok) {
+  for (const inst of [...new Set(tryInstances)]) {
+    try {
+      const res = await fetch(`${evoUrl}/message/sendMedia/${inst}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: evoApiKey,
+        },
+        body: JSON.stringify({
+          number: formattedNumber,
+          mediatype: 'image',
+          mimetype: 'image/jpeg',
+          caption: caption,
+          media: mediaUrl,
+          fileName: 'comprobante.jpg',
+          options: {
+            delay: 0,
+            presence: 'available',
+          },
+        }),
+      });
+
+      if (res.ok) return true;
       const errText = await res.text().catch(() => '');
-      console.warn(`[WhatsApp] Error enviando media a ${formattedNumber}:`, res.status, errText);
-      return false;
+      console.warn(`[WhatsApp] Error enviando media con instancia ${inst} a ${formattedNumber}:`, res.status, errText);
+    } catch (err) {
+      console.error(`[WhatsApp] Excepción al enviar media con ${inst}:`, err);
     }
-    return true;
-  } catch (err) {
-    console.error('[WhatsApp] Excepción al enviar media:', err);
-    return false;
   }
+  return false;
 }
 
 /**
@@ -143,7 +149,7 @@ export async function notifyBookingSubmitted(bookingId: string) {
       .select(`
         id, customer_name, customer_phone, start_time, end_time, payment_proof_url, created_at, user_id,
         pitches!inner (
-          id, name, price_per_hour, booking_percentage, custom_pricing, type,
+          id, name, price_per_hour, booking_percentage, custom_pricing, type, contact_phone,
           companies!inner (
             id, name, address, zone, owner_phone, whatsapp_instance_name, whatsapp_connected_phone, owner_id
           )
@@ -247,7 +253,17 @@ export async function notifyBookingSubmitted(bookingId: string) {
       targetOwnerPhones.add(formatWhatsAppPhone(company.owner_phone));
     }
 
-    // 2. Si no está en company, buscar el teléfono en su perfil de usuario
+    // 2. Teléfono de contacto configurado en la cancha
+    if (pitch?.contact_phone) {
+      targetOwnerPhones.add(formatWhatsAppPhone(pitch.contact_phone));
+    }
+
+    // 3. Teléfono de WhatsApp conectado a la empresa
+    if (company?.whatsapp_connected_phone) {
+      targetOwnerPhones.add(formatWhatsAppPhone(company.whatsapp_connected_phone));
+    }
+
+    // 4. Si no está en company, buscar el teléfono en su perfil de usuario
     if (targetOwnerPhones.size === 0 && company?.owner_id) {
       const { data: prof } = await supabase.from('profiles').select('phone').eq('id', company.owner_id).maybeSingle();
       if (prof?.phone) {
@@ -255,7 +271,7 @@ export async function notifyBookingSubmitted(bookingId: string) {
       }
     }
 
-    // 3. Fallback de soporte administrativo por defecto si no hay otro número
+    // 5. Fallback de soporte administrativo por defecto si no hay otro número
     if (targetOwnerPhones.size === 0 && OWNER_DEFAULT_PHONE) {
       targetOwnerPhones.add(formatWhatsAppPhone(OWNER_DEFAULT_PHONE));
     }

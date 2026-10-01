@@ -947,15 +947,15 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
             </h2>
             {pitchAny.lat && pitchAny.lng ? (
               <div className="rounded-2xl overflow-hidden border border-border shadow-xs">
-                {/* Contenedor del mapa con clip fijo no arrastrable y carga ultra rápida */}
-                <div className="w-full h-48 relative bg-muted select-none pointer-events-none overflow-hidden">
+                {/* Contenedor del mapa de Google con marcador fijo y controles de zoom activos */}
+                <div className="w-full h-52 relative bg-muted overflow-hidden">
                   <iframe
-                    title="map-fixed-location"
+                    title="google-map-location"
                     width="100%"
                     height="100%"
                     style={{ border: 0 }}
-                    loading="eager"
-                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(pitchAny.lng) - 0.005}%2C${Number(pitchAny.lat) - 0.003}%2C${Number(pitchAny.lng) + 0.005}%2C${Number(pitchAny.lat) + 0.003}&layer=mapnik&marker=${pitchAny.lat}%2C${pitchAny.lng}`}
+                    loading="lazy"
+                    src={`https://maps.google.com/maps?q=${pitchAny.lat},${pitchAny.lng}&z=15&output=embed`}
                   />
                 </div>
                 {/* Barra de dirección estipulada clara */}

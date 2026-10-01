@@ -724,8 +724,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
       }
 
       clearActiveBooking();
-      // Redirigir de inmediato a la pestaña de ver mis reservas
-      router.push('/reservations');
+      setStep(3);
     } catch (err: any) {
       setError(err.message || 'Error al procesar la reserva');
     } finally {
