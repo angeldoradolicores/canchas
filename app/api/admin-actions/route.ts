@@ -235,6 +235,7 @@ export async function POST(req: NextRequest) {
           media_urls: data.media_urls,
           lat: typeof payload.lat === 'number' ? payload.lat : null,
           lng: typeof payload.lng === 'number' ? payload.lng : null,
+          address: pitchAddress,
           city: typeof payload.city === 'string' ? payload.city.slice(0, 100) : 'Pasto',
           department: typeof payload.department === 'string' ? payload.department.slice(0, 100) : 'Nariño',
         })
@@ -244,16 +245,13 @@ export async function POST(req: NextRequest) {
       if (company && (payload.address || payload.city)) {
         const finalCompanyAddress = payload.address || `${payload.city || 'Pasto'}${payload.department ? ', ' + payload.department : ''}`;
         try {
-          const { data: curComp } = await supabase.from('companies').select('address').eq('id', company.id).single();
-          if (!curComp?.address) {
-            await supabase
-              .from('companies')
-              .update({
-                address: finalCompanyAddress,
-                zone: payload.zone || undefined,
-              })
-              .eq('id', company.id);
-          }
+          await supabase
+            .from('companies')
+            .update({
+              address: finalCompanyAddress,
+              zone: payload.zone || undefined,
+            })
+            .eq('id', company.id);
         } catch (e) {
           console.error('Error updating company address:', e);
         }
@@ -330,6 +328,7 @@ export async function POST(req: NextRequest) {
         lng: payload.lng || null,
       };
 
+      if (pitchAddress !== undefined) updateFields.address = pitchAddress;
       if (payload.city !== undefined) updateFields.city = payload.city;
       if (payload.department !== undefined) updateFields.department = payload.department;
 
@@ -347,10 +346,7 @@ export async function POST(req: NextRequest) {
           const { data: pitchRow } = await supabase.from('pitches').select('company_id').eq('id', pitch_id).single();
           if (pitchRow?.company_id) {
             const finalCompanyAddress = payload.address || `${payload.city || 'Pasto'}${payload.department ? ', ' + payload.department : ''}`;
-            const { data: curComp } = await supabase.from('companies').select('address').eq('id', pitchRow.company_id).single();
-            if (!curComp?.address) {
-              await supabase.from('companies').update({ address: finalCompanyAddress }).eq('id', pitchRow.company_id);
-            }
+            await supabase.from('companies').update({ address: finalCompanyAddress }).eq('id', pitchRow.company_id);
           }
         } catch (e) {}
       }

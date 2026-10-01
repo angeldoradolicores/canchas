@@ -136,6 +136,16 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
           applyCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         },
         (err) => {
+          if (err.code === 1) { // PERMISSION_DENIED
+            setGpsLoading(false);
+            setGpsError(true);
+            showAlert(
+              'warning',
+              'Permiso de ubicación denegado',
+              'Tu navegador tiene bloqueado el acceso a la ubicación. Para activarlo, presiona el icono de permisos o candado en la barra de direcciones de tu navegador, permite la ubicación y vuelve a presionar "Activar mi ubicación".'
+            );
+            return;
+          }
           if (highAcc) {
             // Reintento sin alta precisión (común en redes móviles)
             tryGetPosition(false);
@@ -143,10 +153,15 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
             console.info('GPS permission denied or unavailable:', err.message);
             setGpsError(true);
             setGpsLoading(false);
+            showAlert(
+              'warning',
+              'Ubicación no disponible',
+              'No pudimos obtener tu ubicación actual. Por favor verifica que el GPS de tu teléfono o equipo esté encendido e intenta de nuevo.'
+            );
           }
         },
         // maximumAge: 0 → siempre solicita posición fresca, nunca usa caché
-        { enableHighAccuracy: highAcc, timeout: highAcc ? 8000 : 14000, maximumAge: 0 }
+        { enableHighAccuracy: highAcc, timeout: highAcc ? 6000 : 10000, maximumAge: 0 }
       );
     };
 
@@ -674,9 +689,9 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
     const pitchById = new Map(pitches.map(p => [p.id, p]));
 
     pitchHourConfirmed.forEach((hours, pitchId) => {
-      // Verificar que la cancha tiene reserva para TODAS las horas seleccionadas
-      const hasAllHours = selectedHours.every(h => hours.has(h));
-      if (hasAllHours) {
+      // Si la cancha tiene reserva para AL MENOS UNA de las horas seleccionadas, NO está disponible
+      const hasConflict = selectedHours.some(h => hours.has(h));
+      if (hasConflict) {
         confirmedPitchIds.add(pitchId);
         // Propagar a vinculadas
         const srcPitch = pitchById.get(pitchId);
@@ -687,16 +702,18 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
     });
 
     pitchHourDraft.forEach((hourMap, pitchId) => {
-      if (confirmedPitchIds.has(pitchId)) return; // ya marcada como confirmada
-      // Verificar que tiene TODAS las horas seleccionadas en draft
-      const hasAllHours = selectedHours.every(h => hourMap.has(h));
-      if (hasAllHours) {
-        // Recopilar todas las horas bloqueadas (no solo la primera)
+      if (confirmedPitchIds.has(pitchId)) return; // ya marcada como confirmada/no disponible
+      // Si la cancha tiene borrador activo para AL MENOS UNA de las horas seleccionadas, está siendo reservada
+      const hasDraftConflict = selectedHours.some(h => hourMap.has(h));
+      if (hasDraftConflict) {
+        // Recopilar las horas que coinciden con las seleccionadas y su expiración
         let minExpiry = '';
         const allSlots: string[] = [];
         hourMap.forEach((v, h) => {
-          allSlots.push(h);
-          if (!minExpiry || v.expiresAt < minExpiry) minExpiry = v.expiresAt;
+          if (selectedHours.includes(h)) {
+            allSlots.push(h);
+            if (!minExpiry || v.expiresAt < minExpiry) minExpiry = v.expiresAt;
+          }
         });
         allSlots.sort();
         draftPitchMap.set(pitchId, { expiresAt: minExpiry, slot: allSlots.join(',') });
@@ -713,6 +730,11 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
     });
 
     const filteredByFormat = pitches.filter(p => {
+      // Filtro estricto por ciudad en reserva rápida
+      const pCity = ((p as any).city || (p as any).companies?.city || (p as any).zone || 'Pasto').trim();
+      const matchesCity = selectedCity === 'Todas' || pCity.toLowerCase() === selectedCity.toLowerCase();
+      if (!matchesCity) return false;
+
       // Filtro multi-modalidad en reserva rápida
       if (selectedFormats.length > 0) {
         const pitchTypes: string[] = Array.isArray((p as any).supported_types)
@@ -787,18 +809,27 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
       });
       setInProgressResults(inProgress);
     }
-  }, [selectedDate, selectedHours, pitches, selectedFormats, supabase]);
+  }, [selectedDate, selectedHours, pitches, selectedFormats, selectedCity, supabase]);
 
   useEffect(() => {
     handleSearchRef.current = handleSearch;
   }, [handleSearch]);
 
-  // Sincronización en TIEMPO REAL sin recargar la página ni bucle infinito
-  const hasResults = searchResults !== null;
+  // Búsqueda reactiva inmediata al elegir o cambiar horas en reserva rápida
   useEffect(() => {
-    if (!hasResults || !selectedDate || selectedHours.length === 0) return;
+    if (selectedDate && selectedHours.length > 0) {
+      handleSearchRef.current(true);
+    } else if (selectedHours.length === 0) {
+      setSearchResults(null);
+      setInProgressResults([]);
+    }
+  }, [selectedDate, selectedHours]);
 
-    // Canal en tiempo real para escuchar cambios de reservas únicamente cuando ocurren
+  // Sincronización en TIEMPO REAL sin recargar la página ni bucle infinito
+  useEffect(() => {
+    if (!selectedDate || selectedHours.length === 0) return;
+
+    // Canal en tiempo real para escuchar cambios de reservas cuando ocurren
     const channel = supabase
       .channel(`realtime:explore:bookings:${selectedDate}`)
       .on(
@@ -813,9 +844,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
     return () => {
       supabase.removeChannel(channel);
     };
-    // searchResults is intentionally excluded from deps to avoid remounting on every update
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasResults, selectedDate, selectedHours, supabase]);
+  }, [selectedDate, selectedHours, supabase]);
 
   const formattedSelectedDate = selectedDate
     ? new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -1142,7 +1171,6 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                               onClick={() => {
                                 if (selectedHours.includes(slot)) {
                                   setSelectedHours(prev => prev.filter(x => x !== slot));
-                                  setSearchResults(null);
                                 } else if (selectedHours.length >= 4) {
                                   setAlertState({
                                     isOpen: true,
@@ -1152,7 +1180,6 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                                   });
                                 } else {
                                   setSelectedHours(prev => [...prev, slot]);
-                                  setSearchResults(null);
                                 }
                               }}
                               className={`p-2.5 rounded-xl border text-center transition-all select-none ${isSel

@@ -16,6 +16,53 @@ function getAdminSupabase() {
   return createClient(url, key);
 }
 
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const idsParam = searchParams.get('ids');
+    const authedUser = await getAuthenticatedUser(req);
+    const verifiedUserId = authedUser?.id || null;
+
+    const supabase = getAdminSupabase();
+    let query = supabase
+      .from('bookings')
+      .select(`
+        *,
+        pitches (
+          name,
+          image_url,
+          media_urls,
+          tone,
+          type,
+          custom_pricing,
+          companies (name, zone, address, city)
+        )
+      `)
+      .order('start_time', { ascending: false });
+
+    if (idsParam) {
+      const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean);
+      if (ids.length === 0) return NextResponse.json({ success: true, data: [] });
+      query = query.in('id', ids);
+    } else if (verifiedUserId) {
+      query = query.eq('user_id', verifiedUserId);
+    } else {
+      return NextResponse.json({ success: true, data: [] });
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('[GET /api/bookings error]', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, data: data || [] });
+  } catch (err: any) {
+    console.error('[GET /api/bookings catch]', err);
+    return NextResponse.json({ error: err.message || 'Error de servidor' }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   // ── 1. RATE LIMITING: Máximo 25 peticiones por minuto por IP ──
   const rateLimit = checkRateLimit(req, {

@@ -941,26 +941,46 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
           </div>
 
           <div className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border/60 md:border-0 shadow-sm shadow-black/[0.03] md:shadow-none">
-            <h2 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-foreground">Ubicación</h2>
+            <h2 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-foreground flex items-center gap-2">
+              <MapPin size={20} className="text-primary shrink-0" />
+              <span>Ubicación</span>
+            </h2>
             {pitchAny.lat && pitchAny.lng ? (
-              <div className="rounded-xl overflow-hidden border border-border">
-                <iframe
-                  width="100%"
-                  height="200"
-                  style={{ border: 0 }}
-                  loading="lazy"
-                  allowFullScreen
-                  src={`https://maps.google.com/maps?q=${pitchAny.lat},${pitchAny.lng}&z=15&output=embed`}
-                ></iframe>
-                <div className="p-3 bg-card flex justify-between items-center">
-                  <div className="flex items-center gap-2">
+              <div className="rounded-2xl overflow-hidden border border-border shadow-xs">
+                {/* Contenedor del mapa con clip fijo no arrastrable y carga ultra rápida */}
+                <div className="w-full h-48 relative bg-muted select-none pointer-events-none overflow-hidden">
+                  <iframe
+                    title="map-fixed-location"
+                    width="100%"
+                    height="100%"
+                    style={{ border: 0 }}
+                    loading="eager"
+                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(pitchAny.lng) - 0.005}%2C${Number(pitchAny.lat) - 0.003}%2C${Number(pitchAny.lng) + 0.005}%2C${Number(pitchAny.lat) + 0.003}&layer=mapnik&marker=${pitchAny.lat}%2C${pitchAny.lng}`}
+                  />
+                </div>
+                {/* Barra de dirección estipulada clara */}
+                <div className="p-3.5 bg-card flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-border">
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <MapPin size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs sm:text-sm font-bold text-foreground">
+                        {pitchAny.address || (pitchAny as any).companies?.address || `${pitchAny.city || 'Pasto'}, Colombia`}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {(pitchAny as any).companies?.name || (pitchAny as any).company?.name || 'Complejo Deportivo'}
+                      </p>
+                    </div>
                   </div>
                   <button
                     type="button"
-                    onClick={() => window.open(`https://maps.google.com/maps?q=${pitchAny.lat},${pitchAny.lng}`, '_blank')}
-                    className="text-xs font-bold text-primary hover:underline"
+                    onClick={() => {
+                      const addr = pitchAny.address || (pitchAny as any).companies?.address;
+                      const query = addr ? `${addr}, ${pitchAny.city || 'Pasto'}` : `${pitchAny.lat},${pitchAny.lng}`;
+                      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
+                    }}
+                    className="shrink-0 px-4 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    Abrir en Google Maps
+                    <span>Cómo llegar</span>
                   </button>
                 </div>
               </div>
@@ -968,6 +988,9 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
               <div className="location-preview p-4 bg-secondary rounded-xl flex items-center gap-3">
                 <MapPin size={20} className="text-primary" />
                 <div>
+                  <p className="text-xs sm:text-sm font-bold text-foreground">
+                    {pitchAny.address || (pitchAny as any).companies?.address || 'Pasto, Colombia'}
+                  </p>
                   <p className="text-xs text-muted-foreground">Fácil acceso</p>
                 </div>
               </div>

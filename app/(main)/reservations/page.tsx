@@ -109,40 +109,40 @@ export default function UserReservationsPage() {
 
   const fetchMyBookings = async () => {
     try {
-      let query = supabase
-        .from('bookings')
-        .select(`
-          *,
-          pitches (
-            name,
-            image_url,
-            media_urls,
-            tone,
-            type,
-            custom_pricing,
-            companies (name, zone, address)
-          )
-        `)
-        .order('start_time', { ascending: false });
-
       if (user?.id) {
-        query = query.eq('user_id', user.id);
+        const { data, error } = await supabase
+          .from('bookings')
+          .select(`
+            *,
+            pitches (
+              name,
+              image_url,
+              media_urls,
+              tone,
+              type,
+              custom_pricing,
+              companies (name, zone, address)
+            )
+          `)
+          .eq('user_id', user.id)
+          .order('start_time', { ascending: false });
+
+        if (!error && data) setBookings(data);
       } else {
         const guestIds: string[] = typeof window !== 'undefined'
           ? JSON.parse(localStorage.getItem('cancheros_guest_booking_ids') || '[]')
           : [];
 
         if (guestIds.length > 0) {
-          query = query.in('id', guestIds);
+          const res = await fetch(`/api/bookings?ids=${guestIds.join(',')}`);
+          const resJson = await res.json();
+          if (resJson.success && Array.isArray(resJson.data)) {
+            setBookings(resJson.data);
+          }
         } else {
           setBookings([]);
-          setLoading(false);
-          return;
         }
       }
-
-      const { data } = await query;
-      if (data) setBookings(data);
     } catch (error) {
       console.error(error);
     } finally {

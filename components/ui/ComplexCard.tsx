@@ -423,16 +423,40 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
               {(currentPitch as any).lat && (currentPitch as any).lng && (
                 <div className="space-y-2 pt-2 border-t border-border/60">
                   <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                    <Navigation size={13} className="text-primary" /> Ubicación en el mapa
+                    <MapPin size={13} className="text-primary" /> Ubicación
                   </h4>
-                  <div className="w-full h-40 rounded-2xl overflow-hidden border border-border shadow-xs">
-                    <iframe
-                      title="map-preview"
-                      width="100%"
-                      height="100%"
-                      loading="lazy"
-                      src={`https://maps.google.com/maps?q=${(currentPitch as any).lat},${(currentPitch as any).lng}&z=15&output=embed`}
-                    />
+                  <div className="w-full rounded-2xl overflow-hidden border border-border shadow-xs">
+                    {/* Mapa con clip fijo no arrastrable y carga ultra rápida */}
+                    <div className="w-full h-36 relative bg-muted select-none pointer-events-none overflow-hidden">
+                      <iframe
+                        title="map-preview"
+                        width="100%"
+                        height="100%"
+                        style={{ border: 0 }}
+                        loading="eager"
+                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number((currentPitch as any).lng) - 0.005}%2C${Number((currentPitch as any).lat) - 0.003}%2C${Number((currentPitch as any).lng) + 0.005}%2C${Number((currentPitch as any).lat) + 0.003}&layer=mapnik&marker=${(currentPitch as any).lat}%2C${(currentPitch as any).lng}`}
+                      />
+                    </div>
+                    {/* Barra de dirección estipulada limpia */}
+                    <div className="p-3 bg-secondary/50 flex items-center justify-between gap-2 border-t border-border">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <MapPin size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span className="text-xs font-bold text-foreground truncate">
+                          {(currentPitch as any).address || (currentPitch as any).companies?.address || complex.address || `${complex.city || 'Pasto'}, Colombia`}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const addr = (currentPitch as any).address || (currentPitch as any).companies?.address || complex.address;
+                          const q = addr ? `${addr}, ${complex.city || 'Pasto'}` : `${(currentPitch as any).lat},${(currentPitch as any).lng}`;
+                          window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`, '_blank');
+                        }}
+                        className="text-xs font-bold text-primary hover:underline shrink-0"
+                      >
+                        Cómo llegar
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

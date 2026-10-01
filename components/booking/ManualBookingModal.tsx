@@ -114,6 +114,7 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showConfirm, setShowConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
@@ -602,15 +603,89 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
               <strong className="text-xl text-primary">${totalPrice.toLocaleString('es-CO')}</strong>
             </div>
             <button
-              onClick={handleCreate}
+              onClick={() => {
+                if (!selectedPitch) return setError('Selecciona una cancha');
+                if (selectedTimes.length === 0) return setError('Selecciona al menos una hora');
+                if (!customerName.trim()) return setError('Ingresa el nombre del cliente');
+                setError('');
+                setShowConfirm(true);
+              }}
               disabled={loading || selectedTimes.length === 0 || !customerName.trim()}
               className="btn-primary py-2.5 px-6 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? <Loader2 size={16} className="animate-spin" /> : 'Confirmar Reserva'}
+              {loading ? <Loader2 size={16} className="animate-spin" /> : 'Registrar Reserva'}
             </button>
           </div>
         </div>
       </div>
+
+      {/* ── Modal de Confirmación de Reserva Manual ── */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-card w-full max-w-md rounded-3xl shadow-2xl border border-border p-6 animate-in zoom-in-95 duration-200 space-y-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center shrink-0">
+                <Check size={24} className="text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <h3 className="font-black text-lg text-foreground tracking-tight">¿Confirmar reserva manual?</h3>
+                <p className="text-xs text-muted-foreground">Revisa los datos antes de guardarla</p>
+              </div>
+            </div>
+
+            <div className="bg-secondary/50 rounded-2xl p-4 border border-border/60 space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground font-semibold">Cancha:</span>
+                <span className="font-black text-foreground uppercase">{selectedPitch?.name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground font-semibold">Cliente:</span>
+                <span className="font-bold text-foreground capitalize">{customerName} {customerPhone ? `(${customerPhone})` : ''}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground font-semibold">Fecha:</span>
+                <span className="font-bold text-foreground capitalize">{formattedDate}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground font-semibold">Horario:</span>
+                <span className="font-bold text-primary">
+                  {selectedTimes.sort().map(t => {
+                    const hN = parseInt(t.split(':')[0]);
+                    return `${hN > 12 ? hN - 12 : hN === 0 ? 12 : hN}:00 ${hN < 12 ? 'am' : 'pm'}`;
+                  }).join(', ')}
+                </span>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t border-border/50">
+                <span className="text-muted-foreground font-semibold">Total a cobrar:</span>
+                <span className="font-black text-sm text-emerald-600 dark:text-emerald-400">${totalPrice.toLocaleString('es-CO')}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowConfirm(false);
+                  handleCreate();
+                }}
+                disabled={loading}
+                className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
+              >
+                {loading ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                <span>{loading ? 'Guardando...' : 'Sí, confirmar reserva'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowConfirm(false)}
+                disabled={loading}
+                className="flex-1 py-3 rounded-xl border border-border bg-secondary/80 hover:bg-secondary active:scale-98 text-foreground text-xs sm:text-sm font-bold transition-all text-center"
+              >
+                Volver a revisar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
