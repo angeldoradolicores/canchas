@@ -489,7 +489,14 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
 
   // Manejo de expiración del temporizador con salida garantizada
   const triggerExpiredAlert = useCallback(() => {
-    if (isExpiredAlertRef.current) return;
+    if (
+      isExpiredAlertRef.current ||
+      isSubmittedRef.current ||
+      step === 3 ||
+      (typeof window !== 'undefined' && sessionStorage.getItem('canchas_booking_in_step_3') === 'true')
+    ) {
+      return;
+    }
     isExpiredAlertRef.current = true;
 
     setAlertState({
@@ -523,11 +530,19 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         onBack();
       }
     }, 4500);
-  }, [onBack]);
+  }, [onBack, step]);
 
   // Escuchar evento del temporizador activo cuando expira a 0
   useEffect(() => {
     const handleExpiredEvent = (e: any) => {
+      if (
+        isSubmittedRef.current ||
+        loading ||
+        step === 3 ||
+        (typeof window !== 'undefined' && sessionStorage.getItem('canchas_booking_in_step_3') === 'true')
+      ) {
+        return;
+      }
       const pitchId = e.detail?.pitchId;
       if (!pitchId || pitchId === currentPitch.id) {
         triggerExpiredAlert();
@@ -538,14 +553,23 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     return () => {
       window.removeEventListener('active-booking-expired', handleExpiredEvent);
     };
-  }, [currentPitch.id, triggerExpiredAlert]);
+  }, [currentPitch.id, triggerExpiredAlert, loading, step]);
 
   // Si estaba en el paso de confirmación y el tiempo llegó a 0
   useEffect(() => {
-    if (step === 2 && hadActiveLockRef.current && secondsLeft <= 0) {
+    if (
+      isSubmittedRef.current ||
+      loading ||
+      step === 3 ||
+      (typeof window !== 'undefined' && sessionStorage.getItem('canchas_booking_in_step_3') === 'true')
+    ) {
+      return;
+    }
+
+    if (step === 2 && hadActiveLockRef.current && secondsLeft <= 0 && activeBooking) {
       triggerExpiredAlert();
     }
-  }, [step, secondsLeft, triggerExpiredAlert]);
+  }, [step, secondsLeft, loading, activeBooking, triggerExpiredAlert]);
 
   const toggleTime = (slot: string) => {
     if (selectedTimes.includes(slot)) {
@@ -686,6 +710,8 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
 
     setLoading(true);
     setError('');
+    isExpiredAlertRef.current = true;
+    setAlertState(prev => ({ ...prev, isOpen: false }));
 
     try {
       const fileBase64 = await new Promise<string>((resolve, reject) => {
@@ -744,9 +770,11 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         sessionStorage.setItem('canchas_booking_in_step_3', 'true');
       }
       isSubmittedRef.current = true;
+      setAlertState(prev => ({ ...prev, isOpen: false }));
       setStep(3);
       clearActiveBooking();
     } catch (err: any) {
+      isExpiredAlertRef.current = false;
       setError(err.message || 'Error al procesar la reserva');
     } finally {
       setLoading(false);

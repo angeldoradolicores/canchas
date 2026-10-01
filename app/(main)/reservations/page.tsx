@@ -9,7 +9,7 @@ import { toPng } from 'html-to-image';
 
 export default function UserReservationsPage() {
   const [bookings, setBookings] = useState<any[]>([]);
-  const [dateFilter, setDateFilter] = useState<'todas' | 'hoy' | 'pasados_3' | 'pasados_7' | 'historial'>('hoy');
+  const [dateFilter, setDateFilter] = useState<'todas' | 'hoy' | 'pasados_3' | 'pasados_7' | 'historial'>('todas');
   const [statusFilter, setStatusFilter] = useState<'todas' | 'confirmed' | 'pending' | 'cancelled'>('todas');
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
@@ -41,7 +41,11 @@ export default function UserReservationsPage() {
 
   // Sincronización en TIEMPO REAL: actualización inmediata cuando el dueño aprueba o cancela
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      // Para usuarios invitados: sondeo continuo cada 4 segundos
+      const guestInterval = setInterval(fetchMyBookings, 4000);
+      return () => clearInterval(guestInterval);
+    }
 
     const channel = supabase
       .channel(`user-reservations:${user.id}`)

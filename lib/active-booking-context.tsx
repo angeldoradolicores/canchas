@@ -230,6 +230,10 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
         // Expiró
         if (timerRef.current) clearInterval(timerRef.current);
         if (typeof window !== 'undefined') {
+          if (sessionStorage.getItem('canchas_booking_in_step_3') === 'true') {
+            clearActiveBooking();
+            return;
+          }
           window.dispatchEvent(
             new CustomEvent('active-booking-expired', {
               detail: {
