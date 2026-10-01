@@ -237,6 +237,7 @@ export async function POST(req: NextRequest) {
           lng: typeof payload.lng === 'number' ? payload.lng : null,
           city: typeof payload.city === 'string' ? payload.city.slice(0, 100) : 'Pasto',
           department: typeof payload.department === 'string' ? payload.department.slice(0, 100) : 'Nariño',
+          ...(pitchAddress ? { address: pitchAddress } : {}),
         })
         .select()
         .single();
@@ -329,6 +330,7 @@ export async function POST(req: NextRequest) {
 
       if (payload.city !== undefined) updateFields.city = payload.city;
       if (payload.department !== undefined) updateFields.department = payload.department;
+      if (pitchAddress !== undefined) updateFields.address = pitchAddress;
 
       const { data: pitch, error } = await supabase
         .from('pitches')

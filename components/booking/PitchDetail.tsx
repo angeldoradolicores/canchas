@@ -953,10 +953,13 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                     title="google-map-location"
                     width="100%"
                     height="100%"
-                    style={{ border: 0 }}
-                    loading="lazy"
-                    src={`https://maps.google.com/maps?q=${pitchAny.lat},${pitchAny.lng}&z=15&output=embed`}
+                    style={{ border: 0, pointerEvents: 'none' }}
+                    loading="eager"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    src={`https://maps.google.com/maps?q=${pitchAny.lat},${pitchAny.lng}&z=16&output=embed&maptype=roadmap`}
                   />
+                  {/* Capa transparente para bloquear interacción del usuario con el mapa (pin fijo) */}
+                  <div className="absolute inset-0 z-10 cursor-default" aria-hidden="true" />
                 </div>
                 {/* Barra de dirección estipulada clara */}
                 <div className="p-3.5 bg-card flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-border">
