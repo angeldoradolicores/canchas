@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth-context';
 import {
   Loader2, CheckCircle, XCircle, FileText, CalendarDays,
   LayoutList, Calendar as CalendarIcon, Plus, X, Download, Clock,
-  ChevronLeft, ChevronRight, Wrench, Search, AlertTriangle
+  ChevronLeft, ChevronRight, Wrench, Search, AlertTriangle, Bell
 } from 'lucide-react';
 import { useToday } from '@/lib/use-today';
 import { ManualBookingModal } from '@/components/booking/ManualBookingModal';
@@ -277,11 +277,11 @@ export default function BookingsPage() {
       });
       const e = b.end_time
         ? new Date(b.end_time).toLocaleTimeString('es-CO', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true,
-            timeZone: 'America/Bogota',
-          })
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: 'America/Bogota',
+        })
         : '';
       return e ? `${s} - ${e}` : s;
     });
@@ -353,7 +353,7 @@ export default function BookingsPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ bookingId: id, status: 'cancelled' }),
-        }).catch(() => {});
+        }).catch(() => { });
       });
     } else {
       alert('Error al rechazar reservas: ' + error.message);
@@ -411,7 +411,7 @@ export default function BookingsPage() {
 
         if (calView === 'month') {
           matchDate = matchDateStr.substring(0, 7) === selectedDate.substring(0, 7) ||
-                      (createdDateStr ? createdDateStr.substring(0, 7) === selectedDate.substring(0, 7) : false);
+            (createdDateStr ? createdDateStr.substring(0, 7) === selectedDate.substring(0, 7) : false);
         } else {
           // Coincide si el partido está programado en este rango O si la reserva fue REALIZADA (creada) en este rango
           matchDate = rangeDates.includes(matchDateStr) || (createdDateStr ? rangeDates.includes(createdDateStr) : false);
@@ -705,7 +705,7 @@ export default function BookingsPage() {
                     const bCreated = b.created_at ? getLocalDateString(b.created_at) : '';
                     if (calView === 'month') {
                       matchDt = bDate.substring(0, 7) === selectedDate.substring(0, 7) ||
-                                (bCreated ? bCreated.substring(0, 7) === selectedDate.substring(0, 7) : false);
+                        (bCreated ? bCreated.substring(0, 7) === selectedDate.substring(0, 7) : false);
                     } else {
                       matchDt = rangeDates.includes(bDate) || (bCreated ? rangeDates.includes(bCreated) : false);
                     }

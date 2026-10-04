@@ -16,11 +16,13 @@ import { Calendar, Clock } from 'lucide-react';
 import { ComplexCard, ComplexData } from '@/components/ui/ComplexCard';
 import { groupPitchesByComplex } from '@/lib/complex-utils';
 
+
 const DEFAULT_TIME_SLOTS = [
   '06:00', '07:00', '08:00', '09:00', '10:00', '11:00',
   '12:00', '13:00', '14:00', '15:00', '16:00', '17:00',
   '18:00', '19:00', '20:00', '21:00', '22:00', '23:00'
 ];
+
 
 
 const DynamicMap = dynamic(() => import('./DynamicMap'), {
@@ -77,7 +79,26 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState(false);
+  const [placeholderText, setPlaceholderText] = useState("Buscar complejos deportivos...");
 
+  useEffect(() => {
+    const messages = [
+      "¿Dónde jugamos hoy? Busca tu cancha...",
+      "Escribe el nombre de tu complejo",
+      "Encuentra canchas disponibles",
+      "Buscar complejos deportivos...",
+      "Encuentra tu cancha ideal...",
+
+    ];
+
+    let currentIndex = 0;
+    const interval = setInterval(() => {
+      currentIndex = (currentIndex + 1) % messages.length;
+      setPlaceholderText(messages[currentIndex]);
+    }, 5000); // Cambia de texto cada 3 segundos
+
+    return () => clearInterval(interval);
+  }, []);
   const requestGPS = () => {
     if (typeof window === 'undefined' || !navigator.geolocation) {
       setGpsError(true);
@@ -864,22 +885,40 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
 
       {/* Buscador */}
       <div className="search-row relative">
-        <div className="search-box w-full">
-          <Search size={18} />
-          <input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="Buscar complejos"
-          />
-        </div>
-        <div className="filter-pills">
-          {['Todos', 'Fútbol 5', 'Fútbol 6', 'Fútbol 7', 'Fútbol 11'].map(f => {
-            const isActive = f === 'Todos' ? selectedFormats.length === 0 : selectedFormats.includes(f);
-            return (
-              <button key={f} onClick={() => handleFormatToggle(f)}
-                className={isActive ? 'pill-active' : ''}>{f}</button>
-            );
-          })}
+        <div className="space-y-3.5 w-full">
+          {/* ── BARRA DE BÚSQUEDA DESTACADA CON PLACEHOLDER DINÁMICO ── */}
+          <div className="relative flex items-center w-full group">
+            <div className="absolute left-3.5 text-muted-foreground group-focus-within:text-emerald-600 transition-colors pointer-events-none">
+              <Search size={20} />
+            </div>
+            <input
+              type="text"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder={placeholderText}
+              className="w-full pl-11 pr-4 py-3.5 bg-card border-2 border-border/80 group-hover:border-emerald-500/50 focus:border-emerald-600 rounded-2xl text-sm font-medium text-foreground placeholder:text-muted-foreground/80 outline-none shadow-sm focus:ring-4 focus:ring-emerald-500/15 transition-all"
+            />
+          </div>
+
+          {/* ── FILTROS (PILLS) DINÁMICOS Y LLAMATIVOS ── */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar scroll-smooth">
+            {['Todos', 'Fútbol 5', 'Fútbol 6', 'Fútbol 7', 'Fútbol 11'].map(f => {
+              const isActive = f === 'Todos' ? selectedFormats.length === 0 : selectedFormats.includes(f);
+              return (
+                <button
+                  key={f}
+                  onClick={() => handleFormatToggle(f)}
+                  className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold whitespace-nowrap transition-all duration-200 cursor-pointer shadow-xs active:scale-95 flex items-center gap-1.5 ${isActive
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25 border-2 border-emerald-600 ring-2 ring-emerald-500/20'
+                    : 'bg-card text-muted-foreground hover:text-foreground border border-border/80 hover:border-emerald-500/40 hover:bg-secondary/60'
+                    }`}
+                >
+                  {isActive && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
+                  <span>{f}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
 

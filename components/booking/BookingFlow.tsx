@@ -1405,13 +1405,58 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                     Paso final
                   </span>
                 </div> */}
-
-                {/* ── PASO 1: MONTO Y MÉTODOS DE PAGO ── */}
+                {/* ── PASO 1: DATOS DEL CLIENTE (Estilo Formulario Amigable) ── */}
                 <div className="bg-card border border-border/80 rounded-3xl p-4 sm:p-6 shadow-sm space-y-4">
                   <div className="flex items-center justify-between pb-3 border-b border-border/60">
                     <div className="flex items-center gap-2.5">
                       <span className="w-7 h-7 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
                         1
+                      </span>
+                      <div>
+                        <h3 className="text-xs sm:text-sm font-black text-foreground uppercase tracking-wide">
+                          Tus Datos
+                        </h3>
+                        <p className="text-[11px] text-muted-foreground">Recibirás la confirmación de tu reserva por WhatsApp</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                        <User size={12} className="text-primary" />
+                        <span>Tu Nombre Completo *</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="Ej: Carlos Eraso"
+                        className="w-full px-4 py-3 bg-background border border-border rounded-2xl text-xs sm:text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                        <Phone size={12} className="text-emerald-500" />
+                        <span>Tu WhatsApp (10 dígitos) *</span>
+                      </label>
+                      <input
+                        type="tel"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        placeholder="Ej: 3123456789"
+                        className="w-full px-4 py-3 bg-background border border-border rounded-2xl text-xs sm:text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+                {/* ── PASO 2: MONTO Y MÉTODOS DE PAGO ── */}
+                <div className="bg-card border border-border/80 rounded-3xl p-4 sm:p-6 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-border/60">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-7 h-7 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
+                        2
                       </span>
                       <div>
                         <h3 className="text-xs sm:text-sm font-black text-foreground uppercase tracking-wide">
@@ -1470,52 +1515,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                   </div>
                 </div>
 
-                {/* ── PASO 2: DATOS DEL CLIENTE (Estilo Formulario Amigable) ── */}
-                <div className="bg-card border border-border/80 rounded-3xl p-4 sm:p-6 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-border/60">
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-7 h-7 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
-                        2
-                      </span>
-                      <div>
-                        <h3 className="text-xs sm:text-sm font-black text-foreground uppercase tracking-wide">
-                          Tus Datos
-                        </h3>
-                        <p className="text-[11px] text-muted-foreground">Recibirás tu pase de entrada directo por WhatsApp</p>
-                      </div>
-                    </div>
-                  </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold text-muted-foreground uppercase flex items-center gap-1">
-                        <User size={12} className="text-primary" />
-                        <span>Tu Nombre Completo *</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={customerName}
-                        onChange={(e) => setCustomerName(e.target.value)}
-                        placeholder="Ej: Carlos Eraso"
-                        className="w-full px-4 py-3 bg-background border border-border rounded-2xl text-xs sm:text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold text-muted-foreground uppercase flex items-center gap-1">
-                        <Phone size={12} className="text-emerald-500" />
-                        <span>Tu WhatsApp (10 dígitos) *</span>
-                      </label>
-                      <input
-                        type="tel"
-                        value={customerPhone}
-                        onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                        placeholder="Ej: 3123456789"
-                        className="w-full px-4 py-3 bg-background border border-border rounded-2xl text-xs sm:text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
 
                 {/* ── PASO 3: SUBIR COMPROBANTE (Estilo Drag & Drop Temu/MercadoLibre) ── */}
                 <div className={`relative rounded-3xl p-5 sm:p-6 transition-all duration-300 shadow-sm ${file
