@@ -40,7 +40,18 @@ function endOf(filter: DateFilter): Date {
 function fmt(n: number) { return '$' + n.toLocaleString('es-CO'); }
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'America/Bogota' });
+}
+
+function getLocalDateString(dateInput: string | Date): string {
+  if (!dateInput) return '';
+  const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  return new Intl.DateTimeFormat('fr-CA', {
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(d);
 }
 
 function getBookingIncome(b: any): number {
@@ -180,9 +191,36 @@ export function OwnerDashboard() {
 
   const filteredBookings = useMemo(() => {
     if (filter === 'total') return allBookings;
-    const from = startOf(filter); const to = endOf(filter);
-    return allBookings.filter(b => { const d = new Date(b.created_at || b.start_time); return d >= from && d <= to; });
+    const from = startOf(filter);
+    const to = endOf(filter);
+
+    return allBookings.filter(b => {
+      // 1. ¿Fue realizada (creada) en el período seleccionado? (ej: realizada hoy sin importar el día del partido)
+      const createdTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+      const isCreatedInPeriod = createdTime >= from.getTime() && createdTime <= to.getTime();
+
+      // 2. ¿El partido está programado para este período? (ej: partido hoy)
+      const matchTime = b.start_time ? new Date(b.start_time).getTime() : 0;
+      const isMatchInPeriod = matchTime >= from.getTime() && matchTime <= to.getTime();
+
+      return isCreatedInPeriod || isMatchInPeriod;
+    });
   }, [allBookings, filter]);
+
+  // Todas las pendientes del complejo en total
+  const allPending = useMemo(() => {
+    return allBookings.filter(b => b.status === 'pending');
+  }, [allBookings]);
+
+  // Pendientes correspondientes a partidos de otras fechas (futuras o pasadas fuera de hoy)
+  const pendingOtherDays = useMemo(() => {
+    const todayStr = getLocalDateString(new Date());
+    return allPending.filter(b => {
+      const matchDateStr = getLocalDateString(b.start_time);
+      const createdDateStr = b.created_at ? getLocalDateString(b.created_at) : '';
+      return matchDateStr !== todayStr && createdDateStr !== todayStr;
+    });
+  }, [allPending]);
 
   const confirmed = filteredBookings.filter(b => b.status === 'confirmed');
   const pending = filteredBookings.filter(b => b.status === 'pending');
@@ -285,7 +323,32 @@ export function OwnerDashboard() {
           <StatCard icon={<DollarSign size={18} className="text-primary shrink-0" />} title="Ingresos confirmados" value={fmt(totalIncome)} sub={`${confirmed.length} pagos aprobados`} accent="bg-primary" />
         </div>
         <div className="min-w-0">
-          <StatCard icon={<AlertCircle size={18} className="text-amber-500 shrink-0" />} title="Pendientes de aprobar" value={pending.length} sub="Requieren atención" accent="bg-amber-500" onClick={() => router.push('/dashboard/bookings')} />
+          <StatCard
+            icon={<AlertCircle size={18} className="text-amber-500 shrink-0" />}
+            title="Pendientes de aprobar"
+            value={
+              <div className="flex items-center gap-2 flex-wrap">
+                <span>{allPending.length}</span>
+                {pendingOtherDays.length > 0 && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse"
+                    title={`Hay ${pendingOtherDays.length} reserva(s) pendiente(s) para otros días`}
+                  >
+                    <Bell size={10} /> +{pendingOtherDays.length} otros días
+                  </span>
+                )}
+              </div>
+            }
+            sub={
+              allPending.length === 0
+                ? 'Al día · Sin pendientes'
+                : pendingOtherDays.length > 0
+                  ? `⚠️ ${pendingOtherDays.length} pendiente(s) de otros días`
+                  : `${pending.length} pendiente(s) para hoy`
+            }
+            accent="bg-amber-500"
+            onClick={() => router.push('/dashboard/bookings')}
+          />
         </div>
         <div className="min-w-0">
           <StatCard icon={<Grid2X2 size={18} className="text-violet-600 shrink-0" />} title="Canchas activas" value={stats?.pitchesCount || 0} sub="En tu complejo" accent="bg-violet-500" onClick={() => router.push('/dashboard/pitches')} />
@@ -305,6 +368,32 @@ export function OwnerDashboard() {
           <StatCard icon={<Clock size={18} className="text-rose-500 shrink-0" />} title="Hora más popular" value={topHour ? topHour[0] : '—'} sub={topHour ? `${topHour[1]} reservas` : 'Sin datos'} accent="bg-rose-400" />
         </div>
       </div>
+
+      {/* Banner de aviso para reservas pendientes de otras fechas */}
+      {pendingOtherDays.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in">
+          <div className="flex items-start sm:items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 animate-bounce">
+              <Bell size={16} />
+            </div>
+            <div>
+              <p className="font-extrabold text-foreground text-xs sm:text-sm">
+                Tienes {pendingOtherDays.length} {pendingOtherDays.length === 1 ? 'reserva pendiente' : 'reservas pendientes'} para fechas posteriores
+              </p>
+              <p className="text-muted-foreground text-[11px] mt-0.5">
+                Hay solicitudes de clientes para días futuros que requieren tu aprobación.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => router.push('/dashboard/bookings')}
+            className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold rounded-xl text-xs shrink-0 transition-all shadow-xs flex items-center justify-center gap-1.5 self-start sm:self-auto cursor-pointer"
+          >
+            <span>Revisar pendientes</span>
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Grid Principal */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -338,15 +427,20 @@ export function OwnerDashboard() {
                       {row.customer_name || 'Cliente'}
                     </div>
 
-                    {/* Línea 2: Cancha, Fecha y Hora completas */}
+                    {/* Línea 2: Cancha, Fecha y Hora completas con indicación de fecha del partido */}
                     <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] leading-tight">
                       <span className="font-semibold text-foreground/90 uppercase">
                         {row.pitches?.name || '—'}
                       </span>
                       <span className="text-muted-foreground/50">•</span>
                       <span className="text-muted-foreground font-medium">
-                        {fmtDate(row.start_time)}
+                        Partido: {fmtDate(row.start_time)} ({new Date(row.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })})
                       </span>
+                      {row.created_at && getLocalDateString(row.created_at) !== getLocalDateString(row.start_time) && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                          Reservada hoy
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="text-right shrink-0">

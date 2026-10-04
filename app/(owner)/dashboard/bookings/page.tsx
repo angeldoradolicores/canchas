@@ -406,12 +406,15 @@ export default function BookingsPage() {
       // 2. Filtro por Fecha con Zona Horaria Exacta
       let matchDate = true;
       if (listDateFilter === 'selected' && selectedDate) {
-        const bookingDateStr = getLocalDateString(b.start_time);
+        const matchDateStr = getLocalDateString(b.start_time);
+        const createdDateStr = b.created_at ? getLocalDateString(b.created_at) : '';
 
         if (calView === 'month') {
-          matchDate = bookingDateStr.substring(0, 7) === selectedDate.substring(0, 7);
+          matchDate = matchDateStr.substring(0, 7) === selectedDate.substring(0, 7) ||
+                      (createdDateStr ? createdDateStr.substring(0, 7) === selectedDate.substring(0, 7) : false);
         } else {
-          matchDate = rangeDates.includes(bookingDateStr);
+          // Coincide si el partido está programado en este rango O si la reserva fue REALIZADA (creada) en este rango
+          matchDate = rangeDates.includes(matchDateStr) || (createdDateStr ? rangeDates.includes(createdDateStr) : false);
         }
       }
 
@@ -429,6 +432,24 @@ export default function BookingsPage() {
       return matchStatus && matchDate && matchQuery;
     });
   }, [bookings, filterStatus, listDateFilter, selectedDate, calView, searchQuery, getDaysRange]);
+
+  // Todas las pendientes del complejo en total
+  const allPendingBookings = useMemo(() => {
+    return bookings.filter(b => b.status === 'pending');
+  }, [bookings]);
+
+  // Reservas pendientes que son para fechas fuera del filtro actual
+  const pendingOutsideCurrentFilter = useMemo(() => {
+    if (listDateFilter !== 'selected' || !selectedDate) return [];
+    const rangeDates = getDaysRange(selectedDate, calView);
+
+    return allPendingBookings.filter(b => {
+      const matchDateStr = getLocalDateString(b.start_time);
+      const createdDateStr = b.created_at ? getLocalDateString(b.created_at) : '';
+      const inRange = rangeDates.includes(matchDateStr) || (createdDateStr ? rangeDates.includes(createdDateStr) : false);
+      return !inRange;
+    });
+  }, [allPendingBookings, listDateFilter, selectedDate, calView, getDaysRange]);
 
   const groupedBookings = useMemo(() => {
     const groupsList: any[] = [];
@@ -681,10 +702,12 @@ export default function BookingsPage() {
 
                   if (listDateFilter === 'selected' && selectedDate) {
                     const bDate = getLocalDateString(b.start_time);
+                    const bCreated = b.created_at ? getLocalDateString(b.created_at) : '';
                     if (calView === 'month') {
-                      matchDt = bDate.substring(0, 7) === selectedDate.substring(0, 7);
+                      matchDt = bDate.substring(0, 7) === selectedDate.substring(0, 7) ||
+                                (bCreated ? bCreated.substring(0, 7) === selectedDate.substring(0, 7) : false);
                     } else {
-                      matchDt = rangeDates.includes(bDate);
+                      matchDt = rangeDates.includes(bDate) || (bCreated ? rangeDates.includes(bCreated) : false);
                     }
                   }
                   return matchSt && matchDt;
@@ -702,11 +725,49 @@ export default function BookingsPage() {
                     {st.color && <span className={`w-2 h-2 rounded-full ${st.color}`} />}
                     {st.label}
                     <span className="opacity-75">({count})</span>
+                    {st.key === 'pending' && pendingOutsideCurrentFilter.length > 0 && (
+                      <span
+                        title={`Tienes ${pendingOutsideCurrentFilter.length} reserva(s) pendiente(s) de otras fechas`}
+                        className="inline-flex items-center gap-1 ml-1 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black animate-pulse shadow-xs"
+                      >
+                        <Bell size={10} className="shrink-0" />
+                        +{pendingOutsideCurrentFilter.length} otro día
+                      </span>
+                    )}
                   </button>
                 );
               })}
             </div>
           </div>
+
+          {/* Aviso / Banner de reservas pendientes de otros días */}
+          {pendingOutsideCurrentFilter.length > 0 && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in">
+              <div className="flex items-start sm:items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 animate-bounce">
+                  <Bell size={16} />
+                </div>
+                <div>
+                  <p className="font-extrabold text-foreground text-xs sm:text-sm">
+                    Tienes {pendingOutsideCurrentFilter.length} {pendingOutsideCurrentFilter.length === 1 ? 'reserva pendiente' : 'reservas pendientes'} de otras fechas
+                  </p>
+                  <p className="text-muted-foreground text-[11px] mt-0.5">
+                    No aparecen en el filtro de fecha actual. Pulsa el botón para gestionarlas todas de una vez.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setFilterStatus('pending');
+                  setListDateFilter('all');
+                }}
+                className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold rounded-xl text-xs shrink-0 transition-all shadow-xs flex items-center justify-center gap-1.5 self-start sm:self-auto cursor-pointer"
+              >
+                <span>Ver todas las pendientes ({allPendingBookings.length})</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
 
           {/* Cards de Reservas — responsivo sin tabla */}
           {groupedBookings.length === 0 ? (
@@ -793,13 +854,18 @@ export default function BookingsPage() {
 
                         {/* Fecha y Duración */}
                         <div className="min-w-0">
-                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Fecha</p>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Fecha Partido</p>
                           <p className="font-bold text-xs sm:text-sm text-foreground capitalize leading-tight">
                             {startTime.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
                           </p>
                           <p className="text-[11px] text-primary font-bold mt-0.5">
                             {group.bookings.length} {group.bookings.length === 1 ? 'Hora' : 'Horas'}
                           </p>
+                          {group.created_at && getLocalDateString(group.created_at) !== getLocalDateString(group.start_time) && (
+                            <span className="inline-block mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                              Realizada hoy
+                            </span>
+                          )}
                         </div>
 
                         {/* Precio y Abono */}
