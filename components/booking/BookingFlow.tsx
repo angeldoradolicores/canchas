@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Upload, CheckCircle2, Loader2, Image as ImageIcon, CalendarDays, Clock3, XCircle, Copy, CheckCheck, X, LandPlot, Lock, Percent, Layers, Zap, Phone, User } from 'lucide-react';
+import { ArrowLeft, Check, Upload, CheckCircle2, Loader2, Image as ImageIcon, CalendarDays, Clock3, XCircle, Copy, CheckCheck, X, LandPlot, Lock, Percent, Layers, Zap, Phone, User, ShieldCheck, FileText, Sparkles, CreditCard, Receipt, FileUp, Trash2, ArrowRight } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/client';
@@ -114,7 +114,6 @@ function PaymentMethodCard({ pm }: { pm: { type: string; label: string; number: 
   const [copied, setCopied] = useState(false);
   const icons: Record<string, string> = { nequi: '🟣', daviplata: '🔴', bancolombia: '🔵', transferencia: '🏦' };
 
-
   const handleCopy = () => {
     navigator.clipboard.writeText(pm.number).then(() => {
       setCopied(true);
@@ -123,22 +122,27 @@ function PaymentMethodCard({ pm }: { pm: { type: string; label: string; number: 
   };
 
   return (
-    <div className={`flex items-center justify-between p-3.5 rounded-xl border ${'bg-secondary border-border text-foreground'}`}>
-      <div>
-        <div className="flex items-center gap-2 font-bold text-sm">
-          <span>{icons[pm.type] || '💳'}</span>
-          <span>{pm.label}</span>
+    <div className="flex items-center justify-between p-3.5 rounded-2xl border bg-card/90 hover:bg-secondary/40 border-border text-foreground transition-all shadow-2xs">
+      <div className="min-w-0 pr-2">
+        <div className="flex items-center gap-2 font-black text-xs sm:text-sm">
+          <span className="text-base">{icons[pm.type] || '💳'}</span>
+          <span className="uppercase tracking-wide">{pm.label}</span>
         </div>
-        <div className="font-mono font-bold text-base tracking-wider mt-0.5">{pm.number}</div>
-        {pm.name && <div className="text-xs opacity-70 mt-0.5">A nombre de: {pm.name}</div>}
+        <div className="font-mono font-black text-sm sm:text-base tracking-wider text-foreground mt-0.5 select-all">
+          {pm.number}
+        </div>
+        {pm.name && <div className="text-[11px] text-muted-foreground truncate mt-0.5">Titular: {pm.name}</div>}
       </div>
       <button
         type="button"
         onClick={handleCopy}
-        className="ml-3 flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-white/70 hover:bg-white rounded-lg text-xs font-bold border border-current/25 transition-all"
-        title="Copiar número"
+        className={`ml-2 flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${copied
+          ? 'bg-emerald-600 text-white shadow-emerald-600/30'
+          : 'bg-secondary hover:bg-primary hover:text-white border border-border text-foreground'
+          }`}
+        title="Copiar número de cuenta"
       >
-        {copied ? <><CheckCheck size={14} /> Copiado!</> : <><Copy size={14} /> Copiar</>}
+        {copied ? <><CheckCheck size={14} /> ¡Copiado!</> : <><Copy size={14} /> Copiar</>}
       </button>
     </div>
   );
@@ -195,6 +199,23 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   const [takenSlots, setTakenSlots] = useState<Map<string, { status: string, expires_at: string | null }>>(new Map());
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+
+  // Crear vista previa de la captura de pantalla o comprobante adjunto
+  useEffect(() => {
+    if (!file) {
+      setFilePreview(null);
+      return;
+    }
+    if (file.type.startsWith('image/')) {
+      const url = URL.createObjectURL(file);
+      setFilePreview(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setFilePreview(null);
+    }
+  }, [file]);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showCalendar, setShowCalendar] = useState(false);
@@ -529,11 +550,13 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   const totalHours = selectedTimes.length;
   const totalPrice = calculateTotal(selectedTimes);
 
+  const isFixedPricing = customPricing.booking_type === 'fixed';
+  const activePercentage = Number((currentPitch as any).booking_percentage || 50);
   let abonoPrice = 0;
-  if (customPricing.booking_type === 'fixed') {
+  if (isFixedPricing) {
     abonoPrice = (customPricing.booking_fixed || 0) * totalHours;
   } else {
-    abonoPrice = (totalPrice * Number((currentPitch as any).booking_percentage || 50)) / 100;
+    abonoPrice = (totalPrice * activePercentage) / 100;
   }
 
   // Manejo de expiración del temporizador con salida garantizada
@@ -809,7 +832,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
       if (user && !(profile as any)?.phone) {
         try {
           await supabase.from('profiles').update({ phone: finalPhone }).eq('id', user.id);
-        } catch {}
+        } catch { }
       }
 
       if (typeof window !== 'undefined') {
@@ -1005,8 +1028,8 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
             </div>
           </div>
 
-          {/* Selector de Canchas Asociadas al Complejo */}
-          {siblingPitches.length >= 1 && (
+          {/* Selector de Canchas Asociadas al Complejo (Solo visible en el Paso 1 de Selección de Horarios) */}
+          {step === 1 && siblingPitches.length > 1 && (
             <div className="mt-4 mb-4 p-3.5 rounded-2xl bg-secondary/60 border border-border shadow-xs overflow-hidden">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-3">
                 <div className="flex items-center gap-2">
@@ -1015,15 +1038,9 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                     Canchas de este complejo ({siblingPitches.length})
                   </h3>
                 </div>
-                {step === 2 ? (
-                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20 flex items-center gap-1">
-                    <Lock size={11} /> Reserva en curso · Cancha bloqueada
-                  </span>
-                ) : (
-                  <span className="text-[10px] sm:text-[11px] text-muted-foreground font-medium">
-                    Toca para cambiar de cancha y ver sus horarios
-                  </span>
-                )}
+                <span className="text-[10px] sm:text-[11px] text-muted-foreground font-medium">
+                  Toca para cambiar de cancha y ver sus horarios
+                </span>
               </div>
 
               {/* Contenedor con scroll horizontal */}
@@ -1339,30 +1356,30 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
           )}
 
           {step === 2 && (
-            <div className="slide-up mt-6">
+            <div className="slide-up mt-6 space-y-5">
+              {/* Temporizador de bloqueo activo */}
               {(() => {
                 const isCritical = secondsLeft <= 50;
                 return (
-                  <div className={`flex justify-between items-center p-3.5 rounded-2xl mb-5 border transition-all ${isCritical
+                  <div className={`flex justify-between items-center p-3.5 sm:p-4 rounded-2xl border transition-all shadow-xs ${isCritical
                     ? 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/40 ring-2 ring-red-500/20 animate-pulse'
-                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                    : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30'
                     }`}>
                     <span className="text-xs sm:text-sm font-bold flex items-center gap-2">
-                      <Clock3 size={16} className={`animate-spin ${isCritical ? 'text-red-500' : 'text-amber-500'}`} />
-                      <span>Tiempo para confirmar reserva:</span>
+                      <Clock3 size={17} className={`animate-spin ${isCritical ? 'text-red-500' : 'text-amber-500'}`} />
+                      <span>Tiempo para completar tu pago:</span>
                     </span>
                     <div className="flex items-center gap-3">
-                      <span className={`font-mono font-black text-sm sm:text-base px-2.5 py-1 rounded-xl shadow-xs ${isCritical
+                      <span className={`font-mono font-black text-sm sm:text-base px-3 py-1 rounded-xl shadow-xs ${isCritical
                         ? 'bg-red-500 text-white dark:bg-red-600'
-                        : 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                        : 'bg-amber-500/25 text-amber-800 dark:text-amber-200'
                         }`}>
                         {Math.floor(Math.max(0, secondsLeft) / 60)}:{(Math.max(0, secondsLeft) % 60).toString().padStart(2, '0')}
                       </span>
                       <button
                         type="button"
                         onClick={() => setShowCancelPrompt(true)}
-                        className={`text-xs font-bold underline transition-colors ${isCritical ? 'text-red-600 hover:text-red-700 dark:text-red-300' : 'text-red-500 hover:text-red-600'
-                          }`}
+                        className={`text-xs font-bold underline transition-colors ${isCritical ? 'text-red-600 hover:text-red-700 dark:text-red-300' : 'text-red-500 hover:text-red-600'}`}
                       >
                         Cancelar
                       </button>
@@ -1371,113 +1388,273 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                 );
               })()}
 
-              <p className="text-sm text-muted-foreground mb-5">
-                Para asegurar tu reserva, realiza un abono de <strong>${abonoPrice.toLocaleString('es-CO')}</strong> a la cuenta de la cancha y sube el comprobante.
-              </p>
+              <div className="space-y-4 max-w-2xl mx-auto w-full pb-6">
 
-              {(() => {
-                const paymentMethods: Array<{ type: string; label: string; number: string; name: string }> = (currentPitch as any).payment_methods || [];
-                if (paymentMethods.length === 0) {
-                  return (
-                    <div className="bg-secondary p-4 rounded-xl mb-5 border border-border">
-                      <p className="text-xs text-muted-foreground mb-1">Cuenta autorizada</p>
-                      <strong className="text-sm block">{currentPitch.name.toUpperCase()}</strong>
-                      <p className="text-xs text-muted-foreground mt-1">Consulta con el establecimiento el método de pago.</p>
-                    </div>
-                  );
-                }
-                return (
-                  <div className="space-y-3 mb-5">
-                    <p className="text-xs font-bold text-muted-foreground uppercase">Métodos de Pago Disponibles</p>
-                    {paymentMethods.map(pm => <PaymentMethodCard key={pm.type} pm={pm} />)}
-                  </div>
-                );
-              })()}
-
-              {/* Datos de Contacto del Jugador */}
-              <div className="bg-secondary/40 border border-border rounded-2xl p-4 sm:p-5 mb-5 space-y-3">
-                <div className="flex items-center justify-between">
+                {/* ── BARRA DE PROGRESO / ESTILO E-COMMERCE ── */}
+                {/* <div className="bg-card border border-border/80 rounded-2xl p-3 sm:p-4 shadow-xs flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <User size={15} className="text-emerald-500" />
-                    <span className="text-xs font-bold text-foreground uppercase tracking-wider">
-                      Datos para tu Reserva y Ticket
-                    </span>
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-black text-sm">
+                      ⚡
+                    </div>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-black text-foreground">Checkout Rápido de Cancha</h4>
+                      <p className="text-[11px] text-muted-foreground">Completa los 3 pasos para asegurar tu turno</p>
+                    </div>
                   </div>
-                  {user && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                      Sesión activa
-                    </span>
+                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-600 text-white shadow-xs">
+                    Paso final
+                  </span>
+                </div> */}
+
+                {/* ── PASO 1: MONTO Y MÉTODOS DE PAGO ── */}
+                <div className="bg-card border border-border/80 rounded-3xl p-4 sm:p-6 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-border/60">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-7 h-7 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
+                        1
+                      </span>
+                      <div>
+                        <h3 className="text-xs sm:text-sm font-black text-foreground uppercase tracking-wide">
+                          Realiza tu Pago o Abono
+                        </h3>
+                        <p className="text-[11px] text-muted-foreground">Copia los datos de la cuenta y transfiere</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tarjeta Destacada Estilo Carrito de Compras */}
+                  <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 p-4 sm:p-5 text-white shadow-md">
+                    <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-white/10 blur-xl pointer-events-none" />
+                    <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-100 flex items-center gap-1.5">
+                          Total abono:
+                        </span>
+                        <div className="text-3xl sm:text-4xl font-black tracking-tight mt-1">
+                          ${abonoPrice.toLocaleString('es-CO')}
+                        </div>
+                        {/* <p className="text-[11px] text-emerald-100/90 mt-1">
+                          {isFixedPricing ? 'Abono fijo por hora' : `Abono del ${activePercentage}%`} · El saldo restante se paga en la cancha
+                        </p> */}
+                      </div>
+                      {/* <div className="bg-black/20 backdrop-blur-md rounded-xl p-3 border border-white/10 text-left sm:text-right">
+                        <span className="text-[10px] text-emerald-200 block uppercase font-bold tracking-wider">Valor total de la reserva</span>
+                        <span className="text-base sm:text-lg font-bold">${totalPrice.toLocaleString('es-CO')}</span>
+                      </div> */}
+                    </div>
+                  </div>
+
+                  {/* Métodos de Pago */}
+                  <div className="space-y-2.5 pt-1">
+                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <CreditCard size={13} className="text-primary" />
+                      <span>Cuentas disponibles</span>
+                    </p>
+                    {(() => {
+                      const paymentMethods: Array<{ type: string; label: string; number: string; name: string }> = (currentPitch as any).payment_methods || [];
+                      if (paymentMethods.length === 0) {
+                        return (
+                          <div className="bg-secondary/60 p-4 rounded-xl border border-border">
+                            <p className="text-xs text-muted-foreground mb-1">Cuenta autorizada</p>
+                            <strong className="text-sm block">{currentPitch.name.toUpperCase()}</strong>
+                            <p className="text-xs text-muted-foreground mt-1">Consulta directamente con el administrador para coordinar el pago.</p>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {paymentMethods.map(pm => <PaymentMethodCard key={pm.type} pm={pm} />)}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                {/* ── PASO 2: DATOS DEL CLIENTE (Estilo Formulario Amigable) ── */}
+                <div className="bg-card border border-border/80 rounded-3xl p-4 sm:p-6 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-border/60">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-7 h-7 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
+                        2
+                      </span>
+                      <div>
+                        <h3 className="text-xs sm:text-sm font-black text-foreground uppercase tracking-wide">
+                          Tus Datos
+                        </h3>
+                        <p className="text-[11px] text-muted-foreground">Recibirás tu pase de entrada directo por WhatsApp</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                        <User size={12} className="text-primary" />
+                        <span>Tu Nombre Completo *</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="Ej: Carlos Eraso"
+                        className="w-full px-4 py-3 bg-background border border-border rounded-2xl text-xs sm:text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                        <Phone size={12} className="text-emerald-500" />
+                        <span>Tu WhatsApp (10 dígitos) *</span>
+                      </label>
+                      <input
+                        type="tel"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        placeholder="Ej: 3123456789"
+                        className="w-full px-4 py-3 bg-background border border-border rounded-2xl text-xs sm:text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── PASO 3: SUBIR COMPROBANTE (Estilo Drag & Drop Temu/MercadoLibre) ── */}
+                <div className={`relative rounded-3xl p-5 sm:p-6 transition-all duration-300 shadow-sm ${file
+                  ? 'border-2 border-emerald-500 bg-emerald-500/5 dark:bg-emerald-950/20 ring-4 ring-emerald-500/10'
+                  : 'border-2 border-dashed border-emerald-500/50 hover:border-emerald-500 bg-card'
+                  }`}>
+                  <div className="flex items-center justify-between pb-3.5 border-b border-border/60 mb-4">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-7 h-7 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
+                        3
+                      </span>
+                      <div>
+                        <h3 className="text-xs sm:text-sm font-black text-foreground uppercase tracking-wide flex items-center gap-2">
+                          <span>Sube tu Comprobante</span>
+                          <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                            Requerido
+                          </span>
+                        </h3>
+                        <p className="text-[11px] text-muted-foreground">Adjunta la captura de tu transferencia</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {!file ? (
+                    <label className="group relative flex flex-col items-center justify-center p-6 sm:p-8 rounded-2xl border-2 border-dashed border-emerald-500/30 hover:border-emerald-500 bg-secondary/30 hover:bg-emerald-500/5 transition-all cursor-pointer text-center">
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        className="hidden"
+                        onChange={e => setFile(e.target.files?.[0] || null)}
+                      />
+
+                      <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 group-hover:bg-emerald-500/20 text-emerald-600 flex items-center justify-center mb-3 transition-transform group-hover:scale-105">
+                        <Upload size={28} className="animate-bounce" />
+                      </div>
+
+                      <span className="text-sm sm:text-base font-black text-foreground tracking-tight mb-1">
+                        Toca para subir tu captura o foto
+                      </span>
+                      <p className="text-xs text-muted-foreground max-w-xs mb-3">
+                        Compatible con capturas de Nequi, Daviplata, Bancolombia o PDF.
+                      </p>
+
+                      {/* Insignias de confianza tipo e-commerce */}
+                      <div className="flex flex-wrap items-center justify-center gap-1.5">
+                        <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-background text-foreground/80 border border-border shadow-xs">
+                          📱 Nequi / Daviplata
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-background text-foreground/80 border border-border shadow-xs">
+                          🏦 Transferencia Bancaria
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-background text-foreground/80 border border-border shadow-xs">
+                          📄 Imagen o PDF
+                        </span>
+                      </div>
+                    </label>
+                  ) : (
+                    <div className="bg-background border border-emerald-500/40 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                        <div className="flex items-center gap-2 text-emerald-600 font-extrabold text-xs">
+                          <CheckCircle2 size={16} className="shrink-0" />
+                          <span>¡Comprobante adjuntado correctamente!</span>
+                        </div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600">
+                          Listo
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
+                        {filePreview ? (
+                          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden border border-emerald-500/40 shrink-0 bg-secondary">
+                            <img src={filePreview} alt="Comprobante" className="w-full h-full object-cover" />
+                          </div>
+                        ) : (
+                          <div className="w-20 h-20 rounded-xl bg-secondary flex items-center justify-center text-primary shrink-0">
+                            <FileText size={28} />
+                          </div>
+                        )}
+
+                        {/* min-w-0 es la clave absoluta para que truncate funcione en contenedores flex */}
+                        <div className="flex-1 min-w-0 w-full text-center sm:text-left space-y-1">
+                          <p className="font-extrabold text-xs sm:text-sm text-foreground truncate w-full">
+                            {file.name}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {(file.size / 1024).toFixed(1)} KB
+                          </p>
+                          <div className="pt-1 flex items-center justify-center sm:justify-start gap-2">
+                            <label className="text-xs font-bold text-primary hover:underline cursor-pointer bg-primary/10 px-3 py-1 rounded-lg transition-all">
+                              <span>Cambiar</span>
+                              <input type="file" accept="image/*,.pdf" className="hidden" onChange={e => setFile(e.target.files?.[0] || null)} />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setFile(null)}
+                              className="text-xs font-bold text-red-600 hover:text-red-700 bg-red-500/10 px-3 py-1 rounded-lg transition-all"
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-muted-foreground uppercase flex items-center gap-1">
-                      <span>Tu Nombre Completo *</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder="Ej: Carlos Eraso"
-                      className="w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-xs sm:text-sm font-medium outline-none focus:border-emerald-500 transition-colors"
-                    />
+                {error && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-2xl text-xs font-bold text-red-600 flex items-center gap-2">
+                    <XCircle size={16} className="shrink-0" />
+                    <span>{error}</span>
                   </div>
+                )}
 
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-muted-foreground uppercase flex items-center gap-1">
-                      <Phone size={12} className="text-emerald-500" />
-                      <span>Tu WhatsApp (10 dígitos) *</span>
-                    </label>
-                    <input
-                      type="tel"
-                      value={customerPhone}
-                      onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      placeholder="Ej: 3123456789"
-                      className="w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-xs sm:text-sm font-medium outline-none focus:border-emerald-500 transition-colors"
-                    />
+                {/* ── BOTÓN DE ACCIÓN FIJO / GIGANTE ESTILO TEMU/MERCADOLIBRE ── */}
+                <div className="pt-2 sticky bottom-4 z-20">
+                  <button
+                    type="button"
+                    onClick={handleBooking}
+                    disabled={loading}
+                    className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.99] text-white font-black text-sm sm:text-base transition-all shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 size={20} className="animate-spin" />
+                        <span>Verificando y enviando reserva...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>¡Confirmar Reserva Ahora!</span>
+                        <ArrowRight size={18} />
+                      </>
+                    )}
+                  </button>
+                  <div className="flex items-center justify-center gap-1.5 mt-2 bg-background/80 backdrop-blur-xs py-1 rounded-lg">
+                    <ShieldCheck size={13} className="text-emerald-500" />
+                    <span className="text-[11px] text-muted-foreground font-medium">Tus datos y horario quedan asegurados al instante</span>
                   </div>
                 </div>
 
-                <p className="text-[11px] text-muted-foreground leading-snug flex items-center gap-1.5 pt-0.5">
-                  <span>📲</span>
-                  <span>Te notificaremos la confirmación y te enviaremos el ticket digital directamente a este WhatsApp.</span>
-                </p>
-              </div>
-
-              <div className="auth-field mb-5">
-                <span className="font-semibold text-sm mb-2 block">Sube tu comprobante de transferencia *</span>
-                {!file ? (
-                  <label className="border-2 border-dashed border-primary/40 bg-primary/5 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-primary/10 transition-colors">
-                    <Upload size={28} className="text-primary mb-3" />
-                    <span className="font-semibold text-sm text-primary">Adjuntar PDF o Imagen</span>
-                    <span className="text-xs text-muted-foreground mt-1">Captura de pantalla o PDF</span>
-                    <input type="file" accept="image/*,.pdf" className="hidden" onChange={e => setFile(e.target.files?.[0] || null)} />
-                  </label>
-                ) : (
-                  <div className="border border-primary/30 rounded-xl p-4 flex items-center justify-between bg-primary/5">
-                    <div className="flex items-center gap-3 truncate">
-                      <ImageIcon size={20} className="text-primary flex-shrink-0" />
-                      <span className="text-sm font-medium truncate">{file.name}</span>
-                    </div>
-                    <button type="button" onClick={() => setFile(null)} className="text-xs font-bold text-primary hover:underline px-2">Cambiar</button>
-                  </div>
-                )}
-              </div>
-
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground mb-5">
-                <CheckCircle2 size={12} className="text-green-600" /> Abono protegido
-              </p>
-
-              {error && <p className="auth-error mb-4">{error}</p>}
-
-              <div className="flex gap-3">
-                {/* <button className="btn-primary bg-secondary text-foreground hover:bg-border" onClick={() => setStep(1)} disabled={loading}>
-                  ← Atrás
-                </button> */}
-                <button className="btn-primary flex-1" onClick={handleBooking} disabled={loading}>
-                  {loading ? <Loader2 size={18} className="animate-spin" /> : 'Confirmar Reserva ✓'}
-                </button>
               </div>
             </div>
           )}
