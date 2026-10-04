@@ -661,7 +661,7 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
               </div>
             </div>
 
-            <div className="flex gap-2.5 pt-1">
+            <div className="flex gap-2 pt-1 w-full">
               <button
                 type="button"
                 onClick={() => {
@@ -669,16 +669,17 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
                   handleCreate();
                 }}
                 disabled={loading}
-                className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
+                className="flex-1 py-3 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-[11px] sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50"
               >
-                {loading ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                <span>{loading ? 'Guardando...' : 'Sí, confirmar reserva'}</span>
+                {loading ? <Loader2 size={15} className="animate-spin shrink-0" /> : <Check size={15} className="shrink-0" />}
+                <span className="truncate">{loading ? 'Guardando...' : 'Sí, confirmar'}</span>
               </button>
+
               <button
                 type="button"
                 onClick={() => setShowConfirm(false)}
                 disabled={loading}
-                className="flex-1 py-3 rounded-xl border border-border bg-secondary/80 hover:bg-secondary active:scale-98 text-foreground text-xs sm:text-sm font-bold transition-all text-center"
+                className="flex-1 py-3 px-2 rounded-xl border border-border bg-secondary/80 hover:bg-secondary active:scale-98 text-foreground text-[11px] sm:text-sm font-bold transition-all text-center truncate"
               >
                 Volver a revisar
               </button>

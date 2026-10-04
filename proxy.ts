@@ -31,7 +31,7 @@ export async function proxy(request: NextRequest) {
   supabaseResponse.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   supabaseResponse.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 
-  // ── 3. REFRESCO DE SESIÓN SUPABASE ──
+  // ── 3. REFRESCO DE SESIÓN SUPABASE Y PROTECCIÓN DE RUTAS PRIVADAS ──
   try {
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -56,9 +56,23 @@ export async function proxy(request: NextRequest) {
       }
     );
 
-    await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // ── 4. PROTECCIÓN ESTRICTA DEL PANEL DEL DUEÑO (/dashboard) ──
+    if (pathname.startsWith('/dashboard')) {
+      if (!user) {
+        const loginUrl = new URL('/login', request.url);
+        loginUrl.searchParams.set('next', pathname);
+        return NextResponse.redirect(loginUrl);
+      }
+    }
   } catch {
-    // Si falla la conexión con Supabase en proxy, no bloquear la navegación pública
+    // Si falla la conexión o no hay credenciales válidas en /dashboard, redirigir al login
+    if (pathname.startsWith('/dashboard')) {
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('next', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
   }
 
   return supabaseResponse;

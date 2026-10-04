@@ -127,6 +127,17 @@ export default function BookingsPage() {
   const [cancelling, setCancelling] = useState(false);
   const [approveConfirm, setApproveConfirm] = useState<{ id: string; name: string; time: string } | null>(null);
   const [approving, setApproving] = useState(false);
+  const [batchApproveConfirm, setBatchApproveConfirm] = useState<{
+    ids: string[];
+    name: string;
+    bookings: any[];
+    hours: string[];
+    pitchName: string;
+    totalPrice: number;
+    depositAmount: number;
+    dateStr: string;
+  } | null>(null);
+  const [batchApproving, setBatchApproving] = useState(false);
   const [batchCancelling, setBatchCancelling] = useState(false);
   const [batchCancelConfirm, setBatchCancelConfirm] = useState<{ ids: string[]; label: string } | null>(null);
 
@@ -237,6 +248,83 @@ export default function BookingsPage() {
     await updateStatus(approveConfirm.id, 'confirmed');
     setApproving(false);
     setApproveConfirm(null);
+  };
+
+  // Aprobar todas las reservas pendientes de un grupo en batch
+  const handleBatchApproveRequest = (bookingsList: any[], customerName: string, pitchName: string, totalPrice: number, depositAmount: number) => {
+    const pendingList = bookingsList.filter((b: any) => b.status === 'pending');
+    if (pendingList.length === 0) return;
+
+    const ids = pendingList.map((b: any) => b.id);
+    const sorted = [...pendingList].sort(
+      (a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+    );
+
+    const firstDate = new Date(sorted[0].start_time);
+    const dateStr = firstDate.toLocaleDateString('es-CO', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      timeZone: 'America/Bogota',
+    });
+
+    const hours = sorted.map((b: any) => {
+      const s = new Date(b.start_time).toLocaleTimeString('es-CO', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'America/Bogota',
+      });
+      const e = b.end_time
+        ? new Date(b.end_time).toLocaleTimeString('es-CO', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+            timeZone: 'America/Bogota',
+          })
+        : '';
+      return e ? `${s} - ${e}` : s;
+    });
+
+    setBatchApproveConfirm({
+      ids,
+      name: customerName || 'Anónimo',
+      bookings: sorted,
+      hours,
+      pitchName: pitchName || 'Cancha',
+      totalPrice,
+      depositAmount,
+      dateStr,
+    });
+  };
+
+  const confirmBatchApprove = async () => {
+    if (!batchApproveConfirm) return;
+    setBatchApproving(true);
+    const { ids } = batchApproveConfirm;
+    const updatePayload: Record<string, any> = {
+      status: 'confirmed',
+      payment_status: 'verified',
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: user!.id,
+    };
+
+    const { error } = await supabase.from('bookings').update(updatePayload).in('id', ids);
+    if (!error) {
+      setBookings(prev => prev.map(b => ids.includes(b.id) ? { ...b, ...updatePayload } : b));
+      // Notificar al cliente con su ticket digital unificado por WhatsApp
+      if (ids.length > 0) {
+        fetch('/api/bookings/notify-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: ids[0], status: 'confirmed' }),
+        }).catch(err => console.error('[WhatsApp batch approve notification error]:', err));
+      }
+    } else {
+      alert('Error al confirmar reservas: ' + error.message);
+    }
+    setBatchApproving(false);
+    setBatchApproveConfirm(null);
   };
 
   // Rechazar todas las reservas de un grupo en batch (una sola query)
@@ -730,10 +818,17 @@ export default function BookingsPage() {
                           {group.status === 'pending' && (
                             <>
                               <button
-                                onClick={() => group.bookings.forEach((b: any) => handleApproveRequest(b))}
-                                className="flex-1 sm:flex-initial text-xs px-3 py-2 font-bold bg-green-500 hover:bg-green-600 text-white rounded-xl transition-colors shadow-sm text-center"
+                                onClick={() => handleBatchApproveRequest(
+                                  group.bookings,
+                                  group.customer_name,
+                                  group.pitches?.name,
+                                  tPrice,
+                                  dAmount
+                                )}
+                                className="flex-1 sm:flex-initial text-xs px-3.5 py-2 font-bold bg-green-600 hover:bg-green-700 active:scale-95 text-white rounded-xl transition-all shadow-sm text-center flex items-center justify-center gap-1.5"
                               >
-                                Confirmar Todas
+                                <CheckCircle size={14} />
+                                <span>Confirmar Todas ({group.bookings.filter((b: any) => b.status === 'pending').length})</span>
                               </button>
                               <button
                                 onClick={() => handleBatchCancelRequest(group.bookings, `las ${group.bookings.length} horas de ${group.customer_name || 'esta reserva'}`)}
@@ -1007,6 +1102,93 @@ export default function BookingsPage() {
                 type="button"
                 onClick={() => setApproveConfirm(null)}
                 disabled={approving}
+                className="flex-1 py-3 rounded-xl border border-border bg-secondary/80 hover:bg-secondary active:scale-98 text-foreground text-xs sm:text-sm font-bold transition-all text-center"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal de Confirmación de Aprobación en Lote (Confirmar Todas) ── */}
+      {batchApproveConfirm && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-card w-full max-w-md rounded-3xl shadow-2xl border border-border p-6 sm:p-7 animate-in zoom-in-95 duration-200 space-y-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-green-500/10 border border-green-500/25 flex items-center justify-center shrink-0">
+                <CheckCircle size={24} className="text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <h3 className="font-black text-lg text-foreground tracking-tight">¿Confirmar todas las reservas?</h3>
+                <p className="text-xs text-muted-foreground">Se aprobarán {batchApproveConfirm.ids.length} horas simultáneamente</p>
+              </div>
+            </div>
+
+            <div className="bg-secondary/50 rounded-2xl p-4 border border-border/60 space-y-3">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground font-semibold">Cliente:</span>
+                <span className="font-black text-foreground capitalize text-sm">{batchApproveConfirm.name}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground font-semibold">Cancha:</span>
+                <span className="font-bold text-foreground uppercase">{batchApproveConfirm.pitchName}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground font-semibold">Fecha:</span>
+                <span className="font-bold text-primary capitalize">{batchApproveConfirm.dateStr}</span>
+              </div>
+
+              {/* Lista de horas seleccionadas */}
+              <div className="pt-2 border-t border-border/50 space-y-1.5">
+                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                  Horas a confirmar ({batchApproveConfirm.hours.length}):
+                </p>
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
+                  {batchApproveConfirm.hours.map((h, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-green-500/10 border border-green-500/20 text-green-700 dark:text-green-300 font-bold text-xs"
+                    >
+                      <Clock size={12} /> {h}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {batchApproveConfirm.totalPrice > 0 && (
+                <div className="pt-2 border-t border-border/50 flex justify-between items-center text-xs">
+                  <span className="text-muted-foreground font-semibold">Valor total:</span>
+                  <div className="text-right">
+                    <span className="font-black text-foreground">${batchApproveConfirm.totalPrice.toLocaleString('es-CO')}</span>
+                    {batchApproveConfirm.depositAmount > 0 && (
+                      <span className="block text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
+                        Abono: ${batchApproveConfirm.depositAmount.toLocaleString('es-CO')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <p className="text-[11px] text-muted-foreground/90 pt-2 border-t border-border/50 leading-relaxed">
+                Al confirmar, el cliente recibirá su ticket unificado por WhatsApp con todas estas horas y quedarán bloqueadas en el calendario.
+              </p>
+            </div>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={confirmBatchApprove}
+                disabled={batchApproving}
+                className="flex-1 py-3 rounded-xl bg-green-600 hover:bg-green-700 active:scale-98 text-white text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
+              >
+                {batchApproving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                <span>{batchApproving ? 'Confirmando todas...' : `Sí, confirmar todas (${batchApproveConfirm.ids.length})`}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setBatchApproveConfirm(null)}
+                disabled={batchApproving}
                 className="flex-1 py-3 rounded-xl border border-border bg-secondary/80 hover:bg-secondary active:scale-98 text-foreground text-xs sm:text-sm font-bold transition-all text-center"
               >
                 Cancelar

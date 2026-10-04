@@ -138,9 +138,12 @@ export function OwnerDashboard() {
   // ⚠️ Esperar a que el contexto de auth termine de cargar antes de pedir stats
   useEffect(() => {
     if (authLoading) return;   // auth todavía cargando – no hacer nada
-    if (!user?.id) { setLoading(false); return; }  // no hay sesión
+    if (!user?.id) {
+      router.replace('/login?next=/dashboard');
+      return;
+    }
     fetchStats();
-  }, [user?.id, authLoading, fetchStats]);
+  }, [user?.id, authLoading, fetchStats, router]);
 
   // Realtime: escuchar nuevas reservas pending
   useEffect(() => {
@@ -217,14 +220,14 @@ export function OwnerDashboard() {
     return days;
   }, [allBookings]);
 
-  if (loading) {
+  if (loading || !user?.id) {
     return (
       <div className="py-24 flex flex-col items-center justify-center gap-4">
         <div className="relative w-12 h-12">
           <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
           <div className="absolute inset-0 rounded-full border-4 border-t-primary animate-spin" />
         </div>
-        <span className="text-xs font-semibold text-muted-foreground">Cargando tu panel...</span>
+        <span className="text-xs font-semibold text-muted-foreground">Verificando credenciales...</span>
       </div>
     );
   }
@@ -420,7 +423,7 @@ export function OwnerDashboard() {
                 return (
                   <div key={p.id} className="space-y-1">
                     <div className="flex justify-between text-xs font-semibold">
-                      <span className="flex items-center gap-1 truncate max-w-[140px]">{i === 0 && <Zap size={11} className="text-amber-500 shrink-0" />}{p.name.toUpperCase()}</span>
+                      <span className="flex items-center gap-1  max-w-[140px]">{i === 0 && <Zap size={11} className="text-amber-500 shrink-0" />}{p.name.toUpperCase()}</span>
                       <span className="text-foreground font-extrabold shrink-0">{fmt(p.income)}</span>
                     </div>
                     <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
@@ -449,7 +452,7 @@ export function OwnerDashboard() {
                   <div className="flex justify-between text-xs font-semibold">
                     <span className="flex items-center gap-1.5 truncate max-w-[140px]">
                       <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 ${i === 0 ? 'bg-amber-400 text-white' : i === 1 ? 'bg-zinc-300 text-zinc-700' : i === 2 ? 'bg-orange-300 text-white' : 'bg-secondary text-muted-foreground'}`}>{i + 1}</span>
-                      <span className="truncate">{p.name.toUpperCase()}</span>
+                      <span className="">{p.name.toUpperCase()}</span>
                     </span>
                     <span className="text-muted-foreground shrink-0">{p.count} res.</span>
                   </div>

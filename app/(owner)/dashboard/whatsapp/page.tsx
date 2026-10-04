@@ -147,10 +147,37 @@ export default function WhatsAppConnectionPage() {
       } catch (e) {
         console.error('Error comprobando conexión...', e);
       }
-    }, 4000);
+    }, 3500);
 
     return () => clearInterval(interval);
   }, [status, company, inputPhone]);
+
+  // 2.1 Polling cuando está 'connected' para sincronizar de inmediato si se desconecta desde el celular
+  useEffect(() => {
+    if (status !== 'connected' || !company?.id) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/whatsapp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'check_status', companyId: company.id }),
+        });
+        const data = await res.json();
+
+        if (data.success && data.status === 'disconnected') {
+          setStatus('disconnected');
+          setConnectedPhone('');
+          setQrCode(null);
+          setErrorMsg('Tu sesión de WhatsApp fue cerrada desde el celular en Dispositivos Vinculados.');
+        }
+      } catch (e) {
+        // Ignorar fallos de red esporádicos
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [status, company?.id]);
 
   // 3. Generar / Regenerar Código QR
   const handleGenerateQR = async (forceParam?: boolean | any) => {

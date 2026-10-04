@@ -95,7 +95,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
 
       try {
         localStorage.setItem('userCoords', JSON.stringify(coords));
-      } catch {}
+      } catch { }
 
       // Notificar coordenadas al resto de la app
       window.dispatchEvent(new CustomEvent('gpsCoords', { detail: coords }));
@@ -178,7 +178,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
           setUserCoords(parsed);
         }
       }
-    } catch {}
+    } catch { }
 
     // Escuchar coordenadas del header si se activa GPS allí
     const onGps = (e: any) => {
@@ -1294,7 +1294,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                              {complex.city || 'Pasto'} {complex.zone ? `· ${complex.zone}` : ''}
+                              {complex.city || 'Pasto'}
                             </span>
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                               {complex.pitches.length} {complex.pitches.length === 1 ? 'cancha disponible' : 'canchas disponibles'}

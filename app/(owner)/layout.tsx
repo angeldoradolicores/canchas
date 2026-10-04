@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { X, LayoutDashboard, CalendarDays, Map, ShieldCheck, LogOut, Smartphone } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, LayoutDashboard, CalendarDays, Map, ShieldCheck, LogOut, Smartphone, Loader2, ShieldAlert } from 'lucide-react';
 import { Logo } from '@/components/layout/Logo';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
@@ -10,9 +10,93 @@ import { usePathname, useRouter } from 'next/navigation';
 export default function OwnerLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
-      <OwnerLayoutInner>{children}</OwnerLayoutInner>
+      <OwnerAuthGuard>
+        <OwnerLayoutInner>{children}</OwnerLayoutInner>
+      </OwnerAuthGuard>
     </AuthProvider>
   );
+}
+
+function OwnerAuthGuard({ children }: { children: React.ReactNode }) {
+  const { user, profile, loading } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (!loading) {
+      if (!user) {
+        // Redirigir de inmediato al login si no tiene credenciales
+        const nextUrl = pathname ? `?next=${encodeURIComponent(pathname)}` : '';
+        router.replace(`/login${nextUrl}`);
+      } else if (
+        profile &&
+        profile.role !== 'owner' &&
+        profile.role !== 'admin' &&
+        profile.role !== 'superadmin' &&
+        user.user_metadata?.role !== 'owner'
+      ) {
+        // Si es jugador, denegar acceso al panel de dueño y enviar a inicio
+        router.replace('/');
+      }
+    }
+  }, [user, profile, loading, router, pathname]);
+
+  // Pantalla de carga mientras se verifican credenciales
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#f5f7f5] dark:bg-background flex flex-col items-center justify-center gap-4">
+        <Logo />
+        <div className="flex items-center gap-2.5 text-xs sm:text-sm font-semibold text-muted-foreground bg-card/80 px-5 py-3 rounded-2xl border border-border shadow-xs">
+          <Loader2 className="animate-spin text-primary" size={18} />
+          <span>Verificando credenciales de acceso...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Si no está autenticado, no mostrar NADA del panel de dueño mientras se ejecuta la redirección
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#f5f7f5] dark:bg-background flex flex-col items-center justify-center gap-4">
+        <Logo />
+        <div className="flex items-center gap-2.5 text-xs sm:text-sm font-semibold text-muted-foreground bg-card/80 px-5 py-3 rounded-2xl border border-border shadow-xs">
+          <Loader2 className="animate-spin text-primary" size={18} />
+          <span>Acceso privado. Redirigiendo a inicio de sesión...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Si el usuario existe pero no tiene permisos de dueño/admin
+  if (
+    profile &&
+    profile.role !== 'owner' &&
+    profile.role !== 'admin' &&
+    profile.role !== 'superadmin' &&
+    user.user_metadata?.role !== 'owner'
+  ) {
+    return (
+      <div className="min-h-screen bg-[#f5f7f5] dark:bg-background flex flex-col items-center justify-center p-4">
+        <div className="bg-card p-6 sm:p-8 rounded-3xl border border-border shadow-xl max-w-sm w-full text-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center mx-auto">
+            <ShieldAlert size={26} />
+          </div>
+          <h2 className="text-base font-extrabold text-foreground">Acceso Denegado</h2>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Esta sección es exclusiva para dueños y administradores de complejos deportivos.
+          </p>
+          <button
+            onClick={() => router.replace('/')}
+            className="w-full py-2.5 bg-primary hover:bg-primary/90 text-white rounded-xl text-xs font-bold transition-all"
+          >
+            Volver a Canchas Pasto
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
 }
 
 function OwnerLayoutInner({ children }: { children: React.ReactNode }) {
