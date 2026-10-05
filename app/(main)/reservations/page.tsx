@@ -9,7 +9,7 @@ import { toPng } from 'html-to-image';
 
 export default function UserReservationsPage() {
   const [bookings, setBookings] = useState<any[]>([]);
-  const [dateFilter, setDateFilter] = useState<'todas' | 'hoy' | 'pasados_3' | 'pasados_7' | 'historial'>('todas');
+  const [dateFilter, setDateFilter] = useState<'todas' | 'hoy' | 'pasados_3' | 'pasados_7' | 'historial'>('hoy');
   const [statusFilter, setStatusFilter] = useState<'todas' | 'confirmed' | 'pending' | 'cancelled'>('todas');
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
@@ -146,7 +146,7 @@ export default function UserReservationsPage() {
             if (paramIds.length > 0 && guestIds.length > 0) {
               localStorage.setItem('cancheros_guest_booking_ids', JSON.stringify(guestIds));
             }
-          } catch {}
+          } catch { }
         }
 
         if (guestIds.length > 0) {

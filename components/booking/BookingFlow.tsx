@@ -1451,175 +1451,175 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                     </div>
                   </div>
                 </div>
-                {/* ── PASO 2: MONTO Y MÉTODOS DE PAGO ── */}
-                <div className="bg-card border border-border/80 rounded-3xl p-4 sm:p-6 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-border/60">
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-7 h-7 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
-                        2
-                      </span>
-                      <div>
-                        <h3 className="text-xs sm:text-sm font-black text-foreground uppercase tracking-wide">
-                          Realiza tu Pago o Abono
-                        </h3>
-                        <p className="text-[11px] text-muted-foreground">Copia los datos de la cuenta y transfiere</p>
-                      </div>
-                    </div>
-                  </div>
+                <div className="space-y-4 w-full">
 
-                  {/* Tarjeta Destacada Estilo Carrito de Compras */}
-                  <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 p-4 sm:p-5 text-white shadow-md">
-                    <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-white/10 blur-xl pointer-events-none" />
-                    <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div>
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-100 flex items-center gap-1.5">
-                          Total abono:
+                  {/* ── PASO DE PAGO Y COMPROBANTE UNIFICADO ── */}
+                  <div className="bg-card border border-border/80 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
+
+                    {/* Cabecera */}
+                    <div className="flex items-center justify-between pb-3 border-b border-border/60">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
+                          2
                         </span>
-                        <div className="text-3xl sm:text-4xl font-black tracking-tight mt-1">
-                          ${abonoPrice.toLocaleString('es-CO')}
+                        <div>
+                          <h3 className="text-xs sm:text-sm font-black text-foreground uppercase tracking-wide">
+                            Pago y Comprobante de Reserva
+                          </h3>
+                          <p className="text-[11px] text-muted-foreground">Transfiere el abono y adjunta tu captura</p>
                         </div>
-                        {/* <p className="text-[11px] text-emerald-100/90 mt-1">
-                          {isFixedPricing ? 'Abono fijo por hora' : `Abono del ${activePercentage}%`} · El saldo restante se paga en la cancha
-                        </p> */}
                       </div>
-                      {/* <div className="bg-black/20 backdrop-blur-md rounded-xl p-3 border border-white/10 text-left sm:text-right">
-                        <span className="text-[10px] text-emerald-200 block uppercase font-bold tracking-wider">Valor total de la reserva</span>
-                        <span className="text-base sm:text-lg font-bold">${totalPrice.toLocaleString('es-CO')}</span>
-                      </div> */}
+                      <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase tracking-wider shrink-0">
+                        Paso Final
+                      </span>
                     </div>
-                  </div>
 
-                  {/* Métodos de Pago */}
-                  <div className="space-y-2.5 pt-1">
-                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                      <CreditCard size={13} className="text-primary" />
-                      <span>Cuentas disponibles</span>
-                    </p>
-                    {(() => {
-                      const paymentMethods: Array<{ type: string; label: string; number: string; name: string }> = (currentPitch as any).payment_methods || [];
-                      if (paymentMethods.length === 0) {
+                    {/* 1. Monto del Abono Centrado y Elegante (Sin verde saturado) */}
+                    <div className="text-center bg-secondary/40 border border-border/60 rounded-2xl p-4 space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                        Total abono a transferir
+                      </span>
+                      <div className="text-3xl sm:text-4xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
+                        ${abonoPrice.toLocaleString('es-CO')}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground pt-0.5">
+                        El saldo restante se paga directamente en la cancha.
+                      </p>
+                    </div>
+
+                    {/* 2. Cuentas Disponibles */}
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <CreditCard size={13} className="text-primary" />
+                        <span>Cuentas disponibles para transferir:</span>
+                      </p>
+                      {(() => {
+                        const paymentMethods: Array<{ type: string; label: string; number: string; name: string }> = (currentPitch as any).payment_methods || [];
+                        if (paymentMethods.length === 0) {
+                          return (
+                            <div className="bg-secondary/60 p-3.5 rounded-xl border border-border">
+                              <p className="text-xs text-muted-foreground mb-1">Cuenta autorizada</p>
+                              <strong className="text-xs sm:text-sm block">{currentPitch.name.toUpperCase()}</strong>
+                              <p className="text-[11px] text-muted-foreground">Consulta directamente con el administrador.</p>
+                            </div>
+                          );
+                        }
                         return (
-                          <div className="bg-secondary/60 p-4 rounded-xl border border-border">
-                            <p className="text-xs text-muted-foreground mb-1">Cuenta autorizada</p>
-                            <strong className="text-sm block">{currentPitch.name.toUpperCase()}</strong>
-                            <p className="text-xs text-muted-foreground mt-1">Consulta directamente con el administrador para coordinar el pago.</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {paymentMethods.map(pm => <PaymentMethodCard key={pm.type} pm={pm} />)}
                           </div>
                         );
-                      }
-                      return (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                          {paymentMethods.map(pm => <PaymentMethodCard key={pm.type} pm={pm} />)}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-
-
-
-                {/* ── PASO 3: SUBIR COMPROBANTE (Estilo Drag & Drop Temu/MercadoLibre) ── */}
-                <div className={`relative rounded-3xl p-5 sm:p-6 transition-all duration-300 shadow-sm ${file
-                  ? 'border-2 border-emerald-500 bg-emerald-500/5 dark:bg-emerald-950/20 ring-4 ring-emerald-500/10'
-                  : 'border-2 border-dashed border-emerald-500/50 hover:border-emerald-500 bg-card'
-                  }`}>
-                  <div className="flex items-center justify-between pb-3.5 border-b border-border/60 mb-4">
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-7 h-7 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
-                        3
-                      </span>
-                      <div>
-                        <h3 className="text-xs sm:text-sm font-black text-foreground uppercase tracking-wide flex items-center gap-2">
-                          <span>Sube tu Comprobante</span>
-                          <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                            Requerido
-                          </span>
-                        </h3>
-                        <p className="text-[11px] text-muted-foreground">Adjunta la captura de tu transferencia</p>
-                      </div>
+                      })()}
                     </div>
-                  </div>
 
-                  {!file ? (
-                    <label className="group relative flex flex-col items-center justify-center p-6 sm:p-8 rounded-2xl border-2 border-dashed border-emerald-500/30 hover:border-emerald-500 bg-secondary/30 hover:bg-emerald-500/5 transition-all cursor-pointer text-center">
-                      <input
-                        type="file"
-                        accept="image/*,.pdf"
-                        className="hidden"
-                        onChange={e => setFile(e.target.files?.[0] || null)}
-                      />
-
-                      <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 group-hover:bg-emerald-500/20 text-emerald-600 flex items-center justify-center mb-3 transition-transform group-hover:scale-105">
-                        <Upload size={28} className="animate-bounce" />
-                      </div>
-
-                      <span className="text-sm sm:text-base font-black text-foreground tracking-tight mb-1">
-                        Toca para subir tu captura o foto
+                    {/* Divisor sutil */}
+                    <div className="relative flex py-0.5 items-center">
+                      <div className="flex-grow border-t border-border/60"></div>
+                      <span className="flex-shrink mx-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-card px-2">
+                        Sube tu comprobante aquí 👇
                       </span>
-                      <p className="text-xs text-muted-foreground max-w-xs mb-3">
-                        Compatible con capturas de Nequi, Daviplata, Bancolombia o PDF.
-                      </p>
+                      <div className="flex-grow border-t border-border/60"></div>
+                    </div>
 
-                      {/* Insignias de confianza tipo e-commerce */}
-                      <div className="flex flex-wrap items-center justify-center gap-1.5">
-                        <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-background text-foreground/80 border border-border shadow-xs">
-                          📱 Nequi / Daviplata
-                        </span>
-                        <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-background text-foreground/80 border border-border shadow-xs">
-                          🏦 Transferencia Bancaria
-                        </span>
-                        <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-background text-foreground/80 border border-border shadow-xs">
-                          📄 Imagen o PDF
-                        </span>
-                      </div>
-                    </label>
-                  ) : (
-                    <div className="bg-background border border-emerald-500/40 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
-                      <div className="flex items-center justify-between pb-2 border-b border-border/60">
-                        <div className="flex items-center gap-2 text-emerald-600 font-extrabold text-xs">
-                          <CheckCircle2 size={16} className="shrink-0" />
-                          <span>¡Comprobante adjuntado correctamente!</span>
-                        </div>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600">
-                          Listo
-                        </span>
-                      </div>
+                    {/* 3. Área para Subir el Comprobante (Con aviso de revisión y etiqueta obligatorio) */}
+                    <div className="space-y-2">
+                      <div className={`relative rounded-2xl p-3.5 sm:p-4 transition-all duration-300 ${file
+                        ? 'border-2 border-emerald-500 bg-emerald-500/5 ring-2 ring-emerald-500/10'
+                        : 'border-2 border-dashed border-emerald-500/50 hover:border-emerald-500 bg-secondary/20'
+                        }`}>
 
-                      <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
-                        {filePreview ? (
-                          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden border border-emerald-500/40 shrink-0 bg-secondary">
-                            <img src={filePreview} alt="Comprobante" className="w-full h-full object-cover" />
-                          </div>
-                        ) : (
-                          <div className="w-20 h-20 rounded-xl bg-secondary flex items-center justify-center text-primary shrink-0">
-                            <FileText size={28} />
-                          </div>
+                        {/* 🏷️ Etiqueta de Obligatorio en la esquina superior derecha */}
+                        {!file && (
+                          <span className="absolute top-3 right-3 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-red-500 text-white shadow-xs z-10">
+                            Obligatorio
+                          </span>
                         )}
 
-                        {/* min-w-0 es la clave absoluta para que truncate funcione en contenedores flex */}
-                        <div className="flex-1 min-w-0 w-full text-center sm:text-left space-y-1">
-                          <p className="font-extrabold text-xs sm:text-sm text-foreground truncate w-full">
-                            {file.name}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {(file.size / 1024).toFixed(1)} KB
-                          </p>
-                          <div className="pt-1 flex items-center justify-center sm:justify-start gap-2">
-                            <label className="text-xs font-bold text-primary hover:underline cursor-pointer bg-primary/10 px-3 py-1 rounded-lg transition-all">
-                              <span>Cambiar</span>
-                              <input type="file" accept="image/*,.pdf" className="hidden" onChange={e => setFile(e.target.files?.[0] || null)} />
-                            </label>
-                            <button
-                              type="button"
-                              onClick={() => setFile(null)}
-                              className="text-xs font-bold text-red-600 hover:text-red-700 bg-red-500/10 px-3 py-1 rounded-lg transition-all"
-                            >
-                              Eliminar
-                            </button>
+                        {!file ? (
+                          <label className="group relative flex flex-col items-center justify-center p-3 sm:p-4 cursor-pointer text-center pt-2">
+                            <input
+                              type="file"
+                              accept="image/*,.pdf"
+                              className="hidden"
+                              onChange={e => setFile(e.target.files?.[0] || null)}
+                            />
+
+                            <div className="w-11 h-11 rounded-xl bg-emerald-500/10 group-hover:bg-emerald-500/20 text-emerald-600 flex items-center justify-center mb-2 transition-transform group-hover:scale-105">
+                              <Upload size={20} className="animate-bounce" />
+                            </div>
+
+                            <div className="mb-1">
+                              <span className="text-xs sm:text-sm font-black text-foreground tracking-tight">
+                                Sube tu comprobante de pago
+                              </span>
+                            </div>
+
+                            <p className="text-[10px] text-muted-foreground max-w-xs mb-2.5">
+                              Nequi, Daviplata, Bancolombia
+                            </p>
+
+                            <div className="flex flex-wrap items-center justify-center gap-1.5">
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-lg bg-background text-foreground/80 border border-border shadow-xs">
+                                Nequi / Daviplata / Bancolombia / Otros
+                              </span>
+                            </div>
+                          </label>
+                        ) : (
+                          <div className="bg-background border border-emerald-500/40 rounded-xl p-3 shadow-xs space-y-2.5">
+                            <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                              <div className="flex items-center gap-1.5 text-emerald-600 font-extrabold text-xs">
+                                <CheckCircle2 size={15} className="shrink-0" />
+                                <span>¡Comprobante adjuntado!</span>
+                              </div>
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600">
+                                Listo
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-3 w-full">
+                              {filePreview ? (
+                                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden border border-emerald-500/40 shrink-0 bg-secondary">
+                                  <img src={filePreview} alt="Comprobante" className="w-full h-full object-cover" />
+                                </div>
+                              ) : (
+                                <div className="w-14 h-14 rounded-xl bg-secondary flex items-center justify-center text-primary shrink-0">
+                                  <FileText size={22} />
+                                </div>
+                              )}
+
+                              <div className="flex-1 min-w-0 w-full space-y-1">
+                                <p className="font-extrabold text-xs text-foreground truncate w-full">
+                                  {file.name}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {(file.size / 1024).toFixed(1)} KB
+                                </p>
+                                <div className="flex items-center gap-2 pt-0.5">
+                                  <label className="text-[11px] font-bold text-primary hover:underline cursor-pointer bg-primary/10 px-2.5 py-0.5 rounded-lg transition-all">
+                                    <span>Cambiar</span>
+                                    <input type="file" accept="image/*,.pdf" className="hidden" onChange={e => setFile(e.target.files?.[0] || null)} />
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => setFile(null)}
+                                    className="text-[11px] font-bold text-red-600 hover:text-red-700 bg-red-500/10 px-2.5 py-0.5 rounded-lg transition-all"
+                                  >
+                                    Eliminar
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                        </div>
+                        )}
+                      </div>
+
+                      {/* Nota informativa de revisión */}
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-[11px]">
+                        <p>El administrador revisará el comprobante para confirmar y aprobar tu solicitud de reserva.</p>
                       </div>
                     </div>
-                  )}
+                  </div>
+
                 </div>
 
                 {error && (
