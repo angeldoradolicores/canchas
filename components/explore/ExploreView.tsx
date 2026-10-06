@@ -232,6 +232,25 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
   const handleSearchRef = useRef<(silent?: boolean) => void>(() => { });
 
   const handleBook = useCallback((pitch: Pitch, preselectedTime?: string | string[], preselectedDate?: string) => {
+    // ── BLOQUEO RESERVA ACTIVA: verificar ANTES de continuar ──
+    if (activeBooking && activeBooking.pitch.id !== pitch.id) {
+      setAlertState({
+        isOpen: true,
+        type: 'warning',
+        title: '⚠️ Reserva en proceso',
+        message: 'Ya tienes una reserva en proceso. Para iniciar una nueva, primero debes completar o cancelar la reserva actual.',
+        showCancel: true,
+        confirmText: 'Ir a mi reserva',
+        cancelText: 'Cerrar',
+        onConfirm: () => {
+          setAlertState(prev => ({ ...prev, isOpen: false }));
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('resume-active-booking', { detail: activeBooking }));
+          }
+        },
+      });
+      return;
+    }
     if (preselectedTime && Array.isArray(preselectedTime) && preselectedDate) {
       const hoursCount = preselectedTime.length;
       const customPricing = (pitch as any).custom_pricing || {};
@@ -962,9 +981,12 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                       <h4 className="font-bold text-sm text-foreground">
                         {comp.name}
                       </h4>
-                      <p className="text-xs text-muted-foreground">
-                        {comp.formats.join(', ')}
-                      </p>
+                      {(comp.zone || comp.address) && (
+                        <p className="text-[11px] text-muted-foreground truncate flex items-center gap-1 mt-0.5">
+                          <span className="text-emerald-500">📍</span>
+                          {[comp.zone, comp.address].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
                     </div>
                     <div className="flex flex-col gap-1.5 shrink-0 w-24">
                       <button
@@ -1342,6 +1364,12 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                           <h4 className="font-black text-sm sm:text-base text-foreground uppercase truncate">
                             {complex.name}
                           </h4>
+                          {(complex.zone || complex.address) && (
+                            <p className="text-[11px] text-muted-foreground truncate flex items-center gap-1 mt-0.5">
+                              <span className="text-emerald-500">📍</span>
+                              {[complex.zone, complex.address].filter(Boolean).join(' · ')}
+                            </p>
+                          )}
                         </div>
                       </div>
 

@@ -73,6 +73,13 @@ export async function POST(req: NextRequest) {
       console.warn('Error deleting challenges:', e);
     }
 
+    // 4b. Delete user's football schools (escuelas de fútbol)
+    try {
+      await supabaseAdmin.from('schools').delete().eq('user_id', userId);
+    } catch (e) {
+      console.warn('Error deleting schools:', e);
+    }
+
     // 5. Delete user's profile
     try {
       await supabaseAdmin.from('profiles').delete().eq('id', userId);

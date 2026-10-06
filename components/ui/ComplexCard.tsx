@@ -192,6 +192,13 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
               <h3 className="text-sm font-bold tracking-tight text-foreground line-clamp-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                 {complex.name}
               </h3>
+
+              {(complex.zone || complex.address) && (
+                <p className="text-[11px] text-muted-foreground truncate flex items-center gap-1">
+                  <MapPin size={10} className="text-muted-foreground/60 shrink-0" />
+                  <span className="truncate">{[complex.zone, complex.address].filter(Boolean).join(' · ')}</span>
+                </p>
+              )}
             </div>
 
             <div className="pt-2 border-t border-border/40 flex items-center justify-between text-xs text-muted-foreground">

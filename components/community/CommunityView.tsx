@@ -485,14 +485,25 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
                       )}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <CalendarDays size={13} /> {new Date(c.date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock3 size={13} /> {c.time}
-                      </span>
+                    {/* Fecha/hora del partido: destacada */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#054D27]/10 border border-[#054D27]/20 rounded-xl text-xs font-black text-[#054D27] dark:text-emerald-300">
+                        <CalendarDays size={13} />
+                        <span className="capitalize">{new Date(c.date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short' })}</span>
+                      </div>
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-xl text-xs font-black text-primary">
+                        <Clock3 size={13} />
+                        <span>{c.time}</span>
+                      </div>
                     </div>
+
+                    {/* Fecha de creación de la publicación */}
+                    {c.created_at && (
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                        <span className="opacity-60">Publicado:</span>
+                        <span className="font-medium">{new Date(c.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                      </p>
+                    )}
 
                     {/* Botón o Nombre de Cancha / Complejo */}
                     <div className="pt-1">
@@ -950,11 +961,26 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
                       )}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                      <span><CalendarIcon size={15} /> {new Date(c.date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
-                      <span><Clock3Icon size={15} /> {c.time}</span>
+                    {/* Fecha/hora del partido: destacada */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#054D27]/10 border border-[#054D27]/20 rounded-xl text-xs font-black text-[#054D27] dark:text-emerald-300">
+                        <CalendarIcon size={13} />
+                        <span className="capitalize">{new Date(c.date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short' })}</span>
+                      </div>
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-xl text-xs font-black text-primary">
+                        <Clock3Icon size={13} />
+                        <span>{c.time}</span>
+                      </div>
                       <LevelBadge level={c.level} />
                     </div>
+
+                    {/* Fecha de creación de la publicación */}
+                    {c.created_at && (
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                        <span className="opacity-60">Publicado:</span>
+                        <span className="font-medium">{new Date(c.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                      </p>
+                    )}
 
                     <div className="pt-1">
                       {c.pitches ? (
