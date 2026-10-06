@@ -179,9 +179,14 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
 
   const [step, setStep] = useState(initialStep || 1);
 
-  // Al cambiar de paso también asegurar que la vista comience desde arriba
+  // Sincronizar estado de paso para saber si el usuario está en subida de comprobante (step 2)
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      if (step === 2) {
+        sessionStorage.setItem('canchas_booking_in_step_2', 'true');
+      } else {
+        sessionStorage.removeItem('canchas_booking_in_step_2');
+      }
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [step]);
@@ -581,11 +586,11 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
             El tiempo de <strong className="text-primary">5 minutos</strong> para completar el pago ha expirado.
           </p>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Las horas han sido liberadas automáticamente para que otros jugadores puedan reservarlas. Te redirigiremos a la cancha.
+            Tienes <strong className="text-amber-600 dark:text-amber-400 font-bold">4 minutos adicionales de gracia</strong> para terminar tu reserva y subir tu comprobante antes de perder tu turno.
           </p>
         </div>
       ),
-      confirmText: 'Volver a Canchas',
+      confirmText: 'Entendido',
       confirmButtonClassName: 'btn-primary w-full shadow-md',
       onConfirm: () => {
         isExpiredAlertRef.current = false;
@@ -837,6 +842,8 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
 
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('canchas_booking_in_step_3', 'true');
+        sessionStorage.removeItem('canchas_booking_in_step_2');
+        localStorage.removeItem('canchas_expired_grace_booking');
       }
       isSubmittedRef.current = true;
       setAlertState(prev => ({ ...prev, isOpen: false }));
@@ -1058,9 +1065,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                       onClick={() => handleSwitchPitch(sp)}
                       className={`flex items-center gap-2.5 p-2.5 sm:p-3 rounded-2xl sm:rounded-xl border text-left transition-all relative cursor-pointer shrink-0 snap-start w-[190px] sm:w-[240px] ${isCurrent
                         ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/25 ring-2 ring-emerald-600/30'
-                        : step === 2
-                          ? 'bg-card/60 text-muted-foreground border-border/60 opacity-60'
-                          : 'bg-card text-foreground border-border hover:border-emerald-500/50 hover:bg-secondary/60'
+                        : 'bg-card text-foreground border-border hover:border-emerald-500/50 hover:bg-secondary/60'
                         }`}
                     >
                       {/* Imagen miniatura de la cancha */}
@@ -1075,11 +1080,6 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                         {isCurrent && (
                           <div className="absolute inset-0 bg-emerald-950/50 flex items-center justify-center">
                             <CheckCircle2 size={16} className="text-white drop-shadow" />
-                          </div>
-                        )}
-                        {step === 2 && !isCurrent && (
-                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                            <Lock size={14} className="text-white/80" />
                           </div>
                         )}
                         {/* {spIsCombined && !isCurrent && (
@@ -1367,7 +1367,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                     }`}>
                     <span className="text-xs sm:text-sm font-bold flex items-center gap-2">
                       <Clock3 size={17} className={`animate-spin ${isCritical ? 'text-red-500' : 'text-amber-500'}`} />
-                      <span>Tiempo para completar tu pago:</span>
+                      <span>Tiempo para completar tu abono:</span>
                     </span>
                     <div className="flex items-center gap-3">
                       <span className={`font-mono font-black text-sm sm:text-base px-3 py-1 rounded-xl shadow-xs ${isCritical

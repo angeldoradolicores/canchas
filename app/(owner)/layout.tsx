@@ -31,7 +31,7 @@ function OwnerAuthGuard({ children }: { children: React.ReactNode }) {
       } else if (
         profile &&
         profile.role !== 'owner' &&
-        profile.role !== 'admin' &&
+        (profile.role as string) !== 'admin' &&
         profile.role !== 'superadmin' &&
         user.user_metadata?.role !== 'owner'
       ) {
@@ -71,7 +71,7 @@ function OwnerAuthGuard({ children }: { children: React.ReactNode }) {
   if (
     profile &&
     profile.role !== 'owner' &&
-    profile.role !== 'admin' &&
+    (profile.role as string) !== 'admin' &&
     profile.role !== 'superadmin' &&
     user.user_metadata?.role !== 'owner'
   ) {

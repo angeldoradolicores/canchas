@@ -13,7 +13,8 @@ export default function ExplorePage() {
   const [detail, setDetail] = useState<Pitch | null>(null);
   const [preselectedTimes, setPreselectedTimes] = useState<string[]>([]);
   const [preselectedDate, setPreselectedDate] = useState('');
-  const { activeBooking, setIsFloating } = useActiveBooking();
+  const [bookingInitialStep, setBookingInitialStep] = useState<number>(1);
+  const { activeBooking, setIsFloating, startLock } = useActiveBooking();
 
   const [alertState, setAlertState] = useState<AlertModalState>({
     isOpen: false,
@@ -28,6 +29,7 @@ export default function ExplorePage() {
       setIsFloating(true); // Mostrar el cronómetro flotante automáticamente
     }
     setBooking(null);
+    setBookingInitialStep(1);
     setPreselectedTimes([]);
     setPreselectedDate('');
   };
@@ -59,9 +61,45 @@ export default function ExplorePage() {
       }
     };
 
+    const handleResumeGrace = async (snapshot: any) => {
+      if (!snapshot?.pitch || !snapshot?.selectedDate || !snapshot?.selectedTimes?.length) return;
+      try {
+        const ok = await startLock(snapshot.pitch, snapshot.selectedDate, snapshot.selectedTimes);
+        if (ok) {
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('canchas_expired_grace_booking');
+            localStorage.removeItem('canchas_resume_grace_booking');
+          }
+          setBooking(snapshot.pitch);
+          setPreselectedTimes(snapshot.selectedTimes);
+          setPreselectedDate(snapshot.selectedDate);
+          setBookingInitialStep(2);
+          setDetail(null);
+        } else {
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('canchas_expired_grace_booking');
+            localStorage.removeItem('canchas_resume_grace_booking');
+          }
+          setAlertState({
+            isOpen: true,
+            type: 'error',
+            title: 'Horario no disponible',
+            message: 'El tiempo de gracia ha terminado o la cancha fue reservada por otro jugador mientras tanto. Por favor selecciona otro horario.',
+          });
+        }
+      } catch (e: any) {
+        console.error('Error reanudando reserva de gracia:', e);
+      }
+    };
+
+    const handleGraceEvent = (e: any) => {
+      if (e.detail) handleResumeGrace(e.detail);
+    };
+
     window.addEventListener('resume-active-booking', handleResume);
     window.addEventListener('cancel-active-booking', handleCancel);
     window.addEventListener('reset-explore-view', handleResetExplore);
+    window.addEventListener('canchas-resume-grace-booking', handleGraceEvent);
 
     // Auto-resume if coming from another page via FloatingBookingTimer
     if (typeof window !== 'undefined' && localStorage.getItem('resume-booking') === 'true' && activeBooking) {
@@ -69,12 +107,24 @@ export default function ExplorePage() {
       handleResume();
     }
 
+    // Auto-resume if coming from ExpiredBookingFloatingBanner
+    if (typeof window !== 'undefined') {
+      const savedGrace = localStorage.getItem('canchas_resume_grace_booking');
+      if (savedGrace) {
+        localStorage.removeItem('canchas_resume_grace_booking');
+        try {
+          handleResumeGrace(JSON.parse(savedGrace));
+        } catch {}
+      }
+    }
+
     return () => {
       window.removeEventListener('resume-active-booking', handleResume);
       window.removeEventListener('cancel-active-booking', handleCancel);
       window.removeEventListener('reset-explore-view', handleResetExplore);
+      window.removeEventListener('canchas-resume-grace-booking', handleGraceEvent);
     };
-  }, [activeBooking]);
+  }, [activeBooking, startLock]);
 
   // 1. Determinar qué vista mostrar sin usar "returns" anticipados
   return (
@@ -85,6 +135,7 @@ export default function ExplorePage() {
           pitch={booking}
           preselectedTimes={preselectedTimes}
           preselectedDate={preselectedDate}
+          initialStep={bookingInitialStep}
           onBack={handleLeaveBooking}
         />
       ) : detail ? (
@@ -93,6 +144,7 @@ export default function ExplorePage() {
           onBack={() => setDetail(null)}
           onSelectPitch={(p) => setDetail(p)}
           onBook={(times, date, chosenPitch) => {
+            setBookingInitialStep(1);
             setPreselectedTimes(times || []);
             setPreselectedDate(date || '');
             setBooking(chosenPitch || detail);

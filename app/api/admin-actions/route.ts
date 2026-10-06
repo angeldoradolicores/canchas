@@ -199,10 +199,19 @@ export async function POST(req: NextRequest) {
       const tiktokUrl = typeof payload.tiktok_url === 'string' ? payload.tiktok_url.trim() : null;
 
       const pitchAddress = typeof payload.address === 'string' ? payload.address.trim() : (typeof data.address === 'string' ? data.address.trim() : null);
+      const pitchNeighborhood = typeof payload.neighborhood === 'string' ? payload.neighborhood.trim() : (typeof payload.custom_pricing?.neighborhood === 'string' ? payload.custom_pricing.neighborhood.trim() : null);
+      const pitchPlaceId = typeof payload.place_id === 'string' ? payload.place_id.trim() : (typeof payload.custom_pricing?.place_id === 'string' ? payload.custom_pricing.place_id.trim() : null);
+      const pitchPlaceName = typeof payload.place_name === 'string' ? payload.place_name.trim() : (typeof payload.custom_pricing?.place_name === 'string' ? payload.custom_pricing.place_name.trim() : null);
+      const pitchMapsUrl = typeof payload.maps_url === 'string' ? payload.maps_url.trim() : (typeof payload.custom_pricing?.maps_url === 'string' ? payload.custom_pricing.maps_url.trim() : null);
 
       const mergedCustomPricing = {
         ...(payload.custom_pricing || {}),
-        ...(pitchAddress ? { address: pitchAddress } : {}),
+        ...(pitchAddress ? { address: pitchAddress, street: payload.street || pitchAddress } : {}),
+        ...(pitchNeighborhood ? { neighborhood: pitchNeighborhood, barrio: pitchNeighborhood } : {}),
+        ...(pitchPlaceId ? { place_id: pitchPlaceId } : {}),
+        ...(pitchPlaceName ? { place_name: pitchPlaceName } : {}),
+        ...(pitchMapsUrl ? { maps_url: pitchMapsUrl } : {}),
+        full_address: payload.full_address || (pitchAddress && pitchNeighborhood ? `${pitchAddress}, Barrio ${pitchNeighborhood}` : pitchAddress || null),
         ...(facebookUrl ? { facebook_url: facebookUrl } : {}),
         ...(instagramUrl ? { instagram_url: instagramUrl } : {}),
         ...(tiktokUrl ? { tiktok_url: tiktokUrl } : {}),
@@ -242,14 +251,14 @@ export async function POST(req: NextRequest) {
         .select()
         .single();
 
-      if (company && (payload.address || payload.city)) {
+      if (company && (payload.address || payload.city || pitchNeighborhood)) {
         const finalCompanyAddress = payload.address || `${payload.city || 'Pasto'}${payload.department ? ', ' + payload.department : ''}`;
         try {
           await supabase
             .from('companies')
             .update({
               address: finalCompanyAddress,
-              zone: payload.zone || undefined,
+              zone: pitchNeighborhood || payload.zone || undefined,
             })
             .eq('id', company.id);
         } catch (e) {
@@ -293,10 +302,19 @@ export async function POST(req: NextRequest) {
       const tiktokUrl = payload.tiktok_url !== undefined ? (typeof payload.tiktok_url === 'string' ? payload.tiktok_url.trim() : null) : undefined;
 
       const pitchAddress = payload.address !== undefined ? (typeof payload.address === 'string' ? payload.address.trim() : null) : undefined;
+      const pitchNeighborhood = payload.neighborhood !== undefined ? (typeof payload.neighborhood === 'string' ? payload.neighborhood.trim() : null) : (typeof payload.custom_pricing?.neighborhood === 'string' ? payload.custom_pricing.neighborhood.trim() : undefined);
+      const pitchPlaceId = payload.place_id !== undefined ? (typeof payload.place_id === 'string' ? payload.place_id.trim() : null) : (typeof payload.custom_pricing?.place_id === 'string' ? payload.custom_pricing.place_id.trim() : undefined);
+      const pitchPlaceName = payload.place_name !== undefined ? (typeof payload.place_name === 'string' ? payload.place_name.trim() : null) : (typeof payload.custom_pricing?.place_name === 'string' ? payload.custom_pricing.place_name.trim() : undefined);
+      const pitchMapsUrl = payload.maps_url !== undefined ? (typeof payload.maps_url === 'string' ? payload.maps_url.trim() : null) : (typeof payload.custom_pricing?.maps_url === 'string' ? payload.custom_pricing.maps_url.trim() : undefined);
 
       const mergedCustomPricing = {
         ...(payload.custom_pricing || {}),
-        ...(pitchAddress !== undefined ? { address: pitchAddress } : {}),
+        ...(pitchAddress !== undefined ? { address: pitchAddress, street: payload.street || pitchAddress } : {}),
+        ...(pitchNeighborhood !== undefined ? { neighborhood: pitchNeighborhood, barrio: pitchNeighborhood } : {}),
+        ...(pitchPlaceId !== undefined ? { place_id: pitchPlaceId } : {}),
+        ...(pitchPlaceName !== undefined ? { place_name: pitchPlaceName } : {}),
+        ...(pitchMapsUrl !== undefined ? { maps_url: pitchMapsUrl } : {}),
+        ...(payload.full_address !== undefined ? { full_address: payload.full_address } : (pitchAddress && pitchNeighborhood ? { full_address: `${pitchAddress}, Barrio ${pitchNeighborhood}` } : {})),
         ...(facebookUrl !== undefined ? { facebook_url: facebookUrl } : {}),
         ...(instagramUrl !== undefined ? { instagram_url: instagramUrl } : {}),
         ...(tiktokUrl !== undefined ? { tiktok_url: tiktokUrl } : {}),
@@ -341,12 +359,15 @@ export async function POST(req: NextRequest) {
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-      if (payload.address || payload.city) {
+      if (payload.address || payload.city || pitchNeighborhood) {
         try {
           const { data: pitchRow } = await supabase.from('pitches').select('company_id').eq('id', pitch_id).single();
           if (pitchRow?.company_id) {
             const finalCompanyAddress = payload.address || `${payload.city || 'Pasto'}${payload.department ? ', ' + payload.department : ''}`;
-            await supabase.from('companies').update({ address: finalCompanyAddress }).eq('id', pitchRow.company_id);
+            await supabase.from('companies').update({
+              address: finalCompanyAddress,
+              ...(pitchNeighborhood ? { zone: pitchNeighborhood } : {}),
+            }).eq('id', pitchRow.company_id);
           }
         } catch (e) {}
       }

@@ -27,9 +27,8 @@ export async function proxy(request: NextRequest) {
   // ── 2. CABECERAS DE SEGURIDAD OWASP ──
   supabaseResponse.headers.set('X-Content-Type-Options', 'nosniff');
   supabaseResponse.headers.set('X-Frame-Options', 'SAMEORIGIN');
-  supabaseResponse.headers.set('X-XSS-Protection', '1; mode=block');
   supabaseResponse.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  supabaseResponse.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  supabaseResponse.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)');
 
   // ── 3. REFRESCO DE SESIÓN SUPABASE Y PROTECCIÓN DE RUTAS PRIVADAS ──
   try {

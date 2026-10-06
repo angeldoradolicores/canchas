@@ -14,7 +14,9 @@ import { usePathname } from 'next/navigation';
 
 import { FavoritesProvider } from '@/lib/favorites-context';
 import { ActiveBookingProvider } from '@/lib/active-booking-context';
+import { ReservationsNotificationProvider, useReservationsNotifications } from '@/lib/reservations-notification-context';
 import { FloatingBookingTimer } from '@/components/booking/FloatingBookingTimer';
+import { ExpiredBookingFloatingBanner } from '@/components/booking/ExpiredBookingFloatingBanner';
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -24,8 +26,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     <AuthProvider>
       <FavoritesProvider>
         <ActiveBookingProvider>
-          <div className="app-shell">
-            <Sidebar />
+          <ReservationsNotificationProvider>
+            <div className="app-shell">
+              <Sidebar />
 
             {/* ── Menú móvil overlay ── */}
             {mobileOpen && (
@@ -76,11 +79,15 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             {/* Cronómetro flotante persistente en toda la navegación */}
             <FloatingBookingTimer />
 
+            {/* Aviso flotante de gracia de 4 minutos cuando expira la reserva para permitir terminar de subir el comprobante */}
+            <ExpiredBookingFloatingBanner />
+
             {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
 
             {/* Modal para solicitar número de WhatsApp al jugador (obligatorio, sólo números, una sola vez) */}
             <PhoneOnboarding />
           </div>
+          </ReservationsNotificationProvider>
         </ActiveBookingProvider>
       </FavoritesProvider>
     </AuthProvider>
@@ -90,10 +97,11 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 function MobileNavLinks({ onClose }: { onClose: () => void }) {
   const pathname = usePathname() || '/';
   const { profile } = useAuth();
+  const { hasReservationUpdates } = useReservationsNotifications();
 
   const items = [
     { label: 'Explorar Canchas', Icon: Search, path: '/' },
-    { label: 'Mis reservas', Icon: CalendarDays, path: '/reservations' },
+    { label: 'Mis reservas', Icon: CalendarDays, path: '/reservations', isReservas: true },
     { label: 'Favoritos', Icon: Heart, path: '/favorites' },
     { label: 'Retos y Jugadores', Icon: Swords, path: '/community' },
     { label: 'Campeonatos', Icon: Trophy, path: '/tournaments' },
@@ -104,8 +112,9 @@ function MobileNavLinks({ onClose }: { onClose: () => void }) {
   return (
     <nav className="flex flex-col gap-0.5">
       <p className="text-[9px] font-black text-muted-foreground/70 uppercase tracking-[0.15em] px-3 mb-2">Menú principal</p>
-      {items.map(({ label, Icon, path }) => {
+      {items.map(({ label, Icon, path, isReservas }) => {
         const isActive = pathname === path;
+        const showBadge = isReservas && hasReservationUpdates && !isActive;
         return (
           <Link
             key={path}
@@ -124,13 +133,24 @@ function MobileNavLinks({ onClose }: { onClose: () => void }) {
               : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
               }`}
           >
-            <span className={`flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-200 shrink-0 ${isActive
+            <span className={`relative flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-200 shrink-0 ${isActive
               ? 'bg-primary text-white shadow-sm'
               : 'bg-secondary/80 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
               }`}>
               <Icon size={16} />
+              {showBadge && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 ring-2 ring-card shadow-xs" />
+                </span>
+              )}
             </span>
-            {label}
+            <span className="flex-1 truncate">{label}</span>
+            {showBadge && (
+              <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 animate-pulse shrink-0">
+                Nuevo
+              </span>
+            )}
             {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
           </Link>
         );

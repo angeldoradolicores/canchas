@@ -6,6 +6,7 @@ import { MapPin, Heart, ChevronRight, ChevronLeft, Check, Star, CreditCard, Spar
 import { Pitch } from '@/lib/types';
 import { useFavorites } from '@/lib/favorites-context';
 import { isCombinedPitch } from '@/lib/combined-pitch-utils';
+import { getPitchLocation } from '@/lib/pitch-location';
 
 export interface ComplexData {
   id: string;
@@ -441,25 +442,31 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
                        <div className="absolute inset-0 z-10 cursor-default" aria-hidden="true" />
                      </div>
                     {/* Barra de dirección estipulada limpia */}
-                    <div className="p-3 bg-secondary/50 flex items-center justify-between gap-2 border-t border-border">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <MapPin size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                        <span className="text-xs font-bold text-foreground truncate">
-                          {(currentPitch as any).address || (currentPitch as any).companies?.address || complex.address || `${complex.city || 'Pasto'}, Colombia`}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const addr = (currentPitch as any).address || (currentPitch as any).companies?.address || complex.address;
-                          const q = addr ? `${addr}, ${complex.city || 'Pasto'}` : `${(currentPitch as any).lat},${(currentPitch as any).lng}`;
-                          window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`, '_blank');
-                        }}
-                        className="text-xs font-bold text-primary hover:underline shrink-0"
-                      >
-                        Cómo llegar
-                      </button>
-                    </div>
+                    {(() => {
+                      const loc = getPitchLocation(currentPitch);
+                      return (
+                        <div className="p-3 bg-secondary/50 flex items-center justify-between gap-2 border-t border-border">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <MapPin size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <span className="text-xs font-bold text-foreground truncate">
+                              {loc.fullAddress || complex.address || `${complex.city || 'Pasto'}, Colombia`}
+                            </span>
+                            {loc.neighborhood && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-background/80 text-foreground shrink-0 hidden sm:inline-block">
+                                Barrio {loc.neighborhood}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => window.open(loc.googleMapsUrl, '_blank')}
+                            className="text-xs font-bold text-primary hover:underline shrink-0 cursor-pointer"
+                          >
+                            Cómo llegar
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               )}

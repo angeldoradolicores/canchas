@@ -41,7 +41,9 @@ const ActiveBookingContext = createContext<ActiveBookingContextType>({
   clearActiveBooking: () => {},
 });
 
-const STORAGE_KEY = 'canchas_active_draft_booking';
+export const STORAGE_KEY = 'canchas_active_draft_booking';
+export const EXPIRED_GRACE_KEY = 'canchas_expired_grace_booking';
+export const GRACE_PERIOD_SECONDS = 4 * 60; // 4 minutos exactos de gracia tras expirar los 5 minutos
 const BROADCAST_CHANNEL_NAME = 'canchas_active_booking_channel';
 
 export function ActiveBookingProvider({ children }: { children: React.ReactNode }) {
@@ -130,6 +132,24 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
           setSecondsLeft(diff);
           setIsFloating(true);
         } else {
+          // Expiró mientras el usuario estaba fuera o recargó la página
+          const elapsedSinceExpiry = Math.floor((now - expiresTime) / 1000);
+          if (elapsedSinceExpiry >= 0 && elapsedSinceExpiry < GRACE_PERIOD_SECONDS) {
+            try {
+              const graceSnapshot = {
+                pitch: parsed.pitch,
+                selectedDate: parsed.selectedDate,
+                selectedTimes: parsed.selectedTimes,
+                complexName: parsed.pitch.companies?.name || (parsed.pitch as any).company?.name || 'Complejo Deportivo',
+                pitchName: parsed.pitch.name,
+                expiredAt: expiresTime,
+              };
+              localStorage.setItem(EXPIRED_GRACE_KEY, JSON.stringify(graceSnapshot));
+              window.dispatchEvent(new CustomEvent('canchas-expired-grace-updated', { detail: graceSnapshot }));
+            } catch {}
+          } else {
+            localStorage.removeItem(EXPIRED_GRACE_KEY);
+          }
           sessionStorage.removeItem(STORAGE_KEY);
           localStorage.removeItem(STORAGE_KEY);
         }
@@ -227,13 +247,28 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
       setSecondsLeft(diff);
 
       if (diff <= 0) {
-        // Expiró
+        // Expiró el temporizador de 5 minutos
         if (timerRef.current) clearInterval(timerRef.current);
         if (typeof window !== 'undefined') {
           if (sessionStorage.getItem('canchas_booking_in_step_3') === 'true') {
             clearActiveBooking();
             return;
           }
+
+          // Guardar snapshot para activar la ventana flotante de 4 minutos de gracia
+          try {
+            const graceSnapshot = {
+              pitch: activeBooking.pitch,
+              selectedDate: activeBooking.selectedDate,
+              selectedTimes: activeBooking.selectedTimes,
+              complexName: activeBooking.pitch.companies?.name || (activeBooking.pitch as any).company?.name || 'Complejo Deportivo',
+              pitchName: activeBooking.pitch.name,
+              expiredAt: Date.now(),
+            };
+            localStorage.setItem(EXPIRED_GRACE_KEY, JSON.stringify(graceSnapshot));
+            window.dispatchEvent(new CustomEvent('canchas-expired-grace-updated', { detail: graceSnapshot }));
+          } catch {}
+
           window.dispatchEvent(
             new CustomEvent('active-booking-expired', {
               detail: {
@@ -299,6 +334,9 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
       console.error('[cancel draft error]', e);
     } finally {
       clearActiveBooking();
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(EXPIRED_GRACE_KEY);
+      }
       try {
         broadcastChannelRef.current?.postMessage({ type: 'CANCEL_OR_RELEASE' });
       } catch {}

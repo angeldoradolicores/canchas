@@ -9,9 +9,10 @@ import {
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/client';
-import { useFavorites } from '@/lib/favorites-context';
 import { useRouter } from 'next/navigation';
+import { useFavorites } from '@/lib/favorites-context';
 import { isCombinedPitch } from '@/lib/combined-pitch-utils';
+import { getPitchLocation } from '@/lib/pitch-location';
 
 export interface PaymentMethod {
   type: string;
@@ -720,22 +721,44 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
               )}
 
               {/* Mapa si hay coordenadas */}
-              {pitch.lat && pitch.lng && (
-                <div className="space-y-2">
-                  <h4 className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                    <MapPin size={14} className="text-primary" /> Ubicación en Mapa
-                  </h4>
-                  <div className="w-full h-44 sm:h-52 rounded-2xl overflow-hidden border border-border shadow-xs">
-                    <iframe
-                      title="map-preview"
-                      width="100%"
-                      height="100%"
-                      loading="lazy"
-                      src={`https://maps.google.com/maps?q=${pitch.lat},${pitch.lng}&z=15&output=embed`}
-                    />
+              {pitch.lat && pitch.lng && (() => {
+                const loc = getPitchLocation(pitch);
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <MapPin size={14} className="text-primary" /> Ubicación en Mapa
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => window.open(loc.googleMapsUrl, '_blank')}
+                        className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        Abrir en Google Maps ↗
+                      </button>
+                    </div>
+                    <div className="w-full h-44 sm:h-52 rounded-2xl overflow-hidden border border-border shadow-xs">
+                      <iframe
+                        title="map-preview"
+                        width="100%"
+                        height="100%"
+                        loading="lazy"
+                        src={`https://maps.google.com/maps?q=${pitch.lat},${pitch.lng}&z=15&output=embed`}
+                      />
+                    </div>
+                    {loc.fullAddress && (
+                      <p className="text-xs text-muted-foreground">
+                        📍 <span className="font-semibold text-foreground">{loc.fullAddress}</span>
+                        {loc.neighborhood && (
+                          <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-secondary text-foreground">
+                            {loc.neighborhood}
+                          </span>
+                        )}
+                      </p>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             {/* Pie Fijo del Modal */}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowRight, Clock3, Heart, MapPin, ShieldCheck, CalendarDays, Calendar, CheckCircle, Loader2, Grid, X, ChevronLeft, ChevronRight, Trophy, CheckCircle2, Phone, Users, Building2, Layers, LandPlot } from 'lucide-react';
+import { ArrowRight, Clock3, Heart, MapPin, ShieldCheck, CalendarDays, Calendar, CheckCircle, Loader2, Grid, X, ChevronLeft, ChevronRight, Trophy, CheckCircle2, Phone, Users, Building2, Layers, LandPlot, Check, Copy } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
@@ -11,8 +11,8 @@ import { CustomMonthCalendar } from '../explore/CustomMonthCalendar';
 import { useFavorites } from '@/lib/favorites-context';
 import { useActiveBooking } from '@/lib/active-booking-context';
 import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
-import { Copy, Check } from "lucide-react";
 import { isCombinedPitch, getLinkedPitchIds, getCombinedPitchNames } from '@/lib/combined-pitch-utils';
+import { getPitchLocation } from '@/lib/pitch-location';
 
 
 interface PitchDetailProps {
@@ -962,30 +962,40 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                   <div className="absolute inset-0 z-10 cursor-default" aria-hidden="true" />
                 </div>
                 {/* Barra de dirección estipulada clara */}
-                <div className="p-3.5 bg-card flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-border">
-                  <div className="flex items-start gap-2.5 min-w-0">
-                    <MapPin size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-xs sm:text-sm font-bold text-foreground">
-                        {pitchAny.address || (pitchAny as any).companies?.address || `${pitchAny.city || 'Pasto'}, Colombia`}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {(pitchAny as any).companies?.name || (pitchAny as any).company?.name || 'Complejo Deportivo'}
-                      </p>
+                {(() => {
+                  const loc = getPitchLocation(pitchAny);
+                  return (
+                    <div className="p-3.5 bg-card flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-border">
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <MapPin size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs sm:text-sm font-bold text-foreground">
+                            {loc.fullAddress || `${pitchAny.city || 'Pasto'}, Colombia`}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[11px] text-muted-foreground">
+                              {(pitchAny as any).companies?.name || (pitchAny as any).company?.name || loc.placeName || 'Complejo Deportivo'}
+                            </span>
+                            {loc.neighborhood && (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-secondary text-foreground">
+                                Barrio {loc.neighborhood}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          window.open(loc.googleMapsUrl, '_blank');
+                        }}
+                        className="shrink-0 px-4 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-xs"
+                      >
+                        <span>Cómo llegar</span>
+                      </button>
                     </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const addr = pitchAny.address || (pitchAny as any).companies?.address;
-                      const query = addr ? `${addr}, ${pitchAny.city || 'Pasto'}` : `${pitchAny.lat},${pitchAny.lng}`;
-                      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
-                    }}
-                    className="shrink-0 px-4 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <span>Cómo llegar</span>
-                  </button>
-                </div>
+                  );
+                })()}
               </div>
             ) : (
               <div className="location-preview p-4 bg-secondary rounded-xl flex items-center gap-3">

@@ -139,6 +139,10 @@ function NewPitchForm() {
   const [surface, setSurface] = useState('Sintética');
   const [tone, setTone] = useState('field-emerald');
   const [address, setAddress] = useState('Pasto, Nariño');
+  const [neighborhood, setNeighborhood] = useState('');
+  const [placeId, setPlaceId] = useState('');
+  const [placeName, setPlaceName] = useState('');
+  const [mapsUrl, setMapsUrl] = useState('');
   const [city, setCity] = useState('Pasto');
   const [department, setDepartment] = useState('Nariño');
   const [lat, setLat] = useState<number | null>(1.2136);
@@ -648,11 +652,21 @@ function NewPitchForm() {
     } catch { }
   };
 
-  const handleLocationChange = (newLat: number, newLng: number, geocodedAddress?: string) => {
+  const handleLocationChange = (newLat: number, newLng: number, geocodedAddress?: string, details?: any) => {
     setLat(newLat);
     setLng(newLng);
-    // Siempre actualizar la dirección si viene del reverse geocoding del mapa
-    if (geocodedAddress) setAddress(geocodedAddress);
+    if (details) {
+      if (details.address) setAddress(details.address);
+      else if (geocodedAddress) setAddress(geocodedAddress);
+      if (details.neighborhood) setNeighborhood(details.neighborhood);
+      if (details.placeId) setPlaceId(details.placeId);
+      if (details.placeName) setPlaceName(details.placeName);
+      if (details.mapsUrl) setMapsUrl(details.mapsUrl);
+      if (details.city) setCity(details.city);
+      if (details.department) setDepartment(details.department);
+    } else if (geocodedAddress) {
+      setAddress(geocodedAddress);
+    }
   };
   const getCurrentLocation = () => {
     if (navigator.geolocation) {
@@ -764,6 +778,13 @@ function NewPitchForm() {
             city,
             department,
             address,
+            neighborhood: neighborhood.trim() || null,
+            place_id: placeId.trim() || null,
+            place_name: placeName.trim() || null,
+            maps_url: mapsUrl.trim() || null,
+            full_address: neighborhood.trim() && address.trim() && !address.toLowerCase().includes(neighborhood.toLowerCase())
+              ? `${address.trim()}, Barrio ${neighborhood.trim()}`
+              : address.trim(),
           },
         }),
       });
@@ -1754,19 +1775,33 @@ function NewPitchForm() {
                   className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium"
                 />
               </div>
-              {/* <div className="space-y-1.5 sm:col-span-2">
+              <div className="space-y-1.5 sm:col-span-1">
                 <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1">
                   <MapPin size={12} className="text-emerald-500" />
-                  <span>Dirección o Barrio (se autocompleta con el mapa) *</span>
+                  <span>Dirección (Calle / Nomenclatura) *</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="Ej: Calle 5 # 24-10, Barrio San Fernando"
+                  placeholder="Ej: Calle 18 # 24-10"
                   value={address}
                   onChange={e => setAddress(e.target.value)}
-                  className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium"
+                  className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium shadow-xs"
                 />
-              </div> */}
+              </div>
+
+              <div className="space-y-1.5 sm:col-span-1">
+                <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1">
+                  <MapPin size={12} className="text-emerald-500" />
+                  <span>Barrio / Sector</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: Pandiaco, Maridiaz, etc."
+                  value={neighborhood}
+                  onChange={e => setNeighborhood(e.target.value)}
+                  className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium shadow-xs"
+                />
+              </div>
             </div>
 
             {/* Contenedor del Mapa Adaptable */}
@@ -1776,6 +1811,9 @@ function NewPitchForm() {
                 lng={lng || -77.2811}
                 onChange={handleLocationChange}
                 initialAddress={address}
+                initialNeighborhood={neighborhood}
+                initialPlaceId={placeId}
+                initialPlaceName={placeName}
               />
             </div>
 
