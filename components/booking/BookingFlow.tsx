@@ -1023,7 +1023,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
           </div>
 
           {/* Hero con Complejo y Cancha claramente destacados */}
-          <div className={`booking-hero ${(currentPitch as any).tone || 'field-emerald'}`}>
+          {/* <div className={`booking-hero ${(currentPitch as any).tone || 'field-emerald'}`}>
             <div className="pitch-lines" />
             <div className="relative z-10 flex flex-col items-center justify-center text-center px-3 py-1.5 w-full max-w-full min-w-0 overflow-hidden">
               <span className="text-[11px] sm:text-xs font-black tracking-widest text-emerald-100 uppercase mb-0.5 drop-shadow truncate max-w-full block">
@@ -1033,7 +1033,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                 {currentPitch.name}
               </span>
             </div>
-          </div>
+          </div> */}
 
           {/* Selector de Canchas Asociadas al Complejo (Solo visible en el Paso 1 de Selección de Horarios) */}
           {step === 1 && siblingPitches.length > 1 && (

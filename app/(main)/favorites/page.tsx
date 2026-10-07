@@ -69,22 +69,22 @@ export default function FavoritesPage() {
   return (
     <section className="page-content fade-in">
       {/* ── Header ── */}
-      <div className="bg-[#DCE7DE] border border-[#C8DACB] rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
+      <div className="page-header-banner bg-[#DCE7DE] border border-[#C8DACB] rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2.5">
-              <Heart className="text-[#054D27]" size={26} strokeWidth={2.5} />
-              <h1 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
+              <Heart className="page-header-text-primary text-[#054D27]" size={26} strokeWidth={2.5} />
+              <h1 className="page-header-text-primary text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
                 Favoritos
               </h1>
             </div>
-            <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1 leading-relaxed">
+            <p className="page-header-text-secondary text-xs sm:text-sm text-[#4D715B] font-medium mt-1 leading-relaxed">
               Tus complejos habituales organizados en un solo lugar para armar el partido sin rodeos.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 bg-[#CDE0D1]/70 border border-[#BACFC0] px-4 py-2.5 rounded-xl shrink-0 self-start sm:self-auto">
-            <span className="text-xs sm:text-sm font-black text-[#054D27]">
+          <div className="page-filter-bar flex items-center gap-2 bg-[#CDE0D1]/70 border border-[#BACFC0] px-4 py-2.5 rounded-xl shrink-0 self-start sm:self-auto">
+            <span className="page-header-text-primary text-xs sm:text-sm font-black text-[#054D27]">
               {loading ? '…' : favoriteComplexes.length}{' '}
               {favoriteComplexes.length === 1 ? 'complejo guardado' : 'complejos guardados'}
             </span>

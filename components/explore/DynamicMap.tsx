@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { Pitch } from '@/lib/types';
 import { cleanAddress } from '@/lib/complex-utils';
 
@@ -26,6 +26,13 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
   const mapRef = useRef<any>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<any[]>([]);
+  const tileLayerRef = useRef<any>(null);
+
+  const isDarkMode = () =>
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+
+  const OSM_TILE = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
   useEffect(() => {
     const initMap = async () => {
@@ -47,13 +54,12 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
         zoomControl: true,
       });
 
-      L.tileLayer(
-        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-          maxZoom: 20,
-        }
-      ).addTo(mapRef.current);
+      const tileLayer = L.tileLayer(OSM_TILE, {
+        attribution: OSM_ATTR,
+        maxZoom: 19,
+      });
+      tileLayer.addTo(mapRef.current);
+      tileLayerRef.current = tileLayer;
 
       updateMarkers(L, pitches);
     };
@@ -253,42 +259,34 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
           return `
         <div
           onclick="window._mapSelectPitch('${p.id}')"
-          style="
-            display:flex;align-items:center;gap:8px;
-            padding:8px 10px;border-radius:10px;margin-bottom:6px;
-            background:#f0fdf4;cursor:pointer;
-            border:1px solid #bbf7d0;
-            transition:background 0.15s;
-          "
-          onmouseover="this.style.background='#dcfce7'"
-          onmouseout="this.style.background='#f0fdf4'"
+          class="complex-popup-pitch-btn"
         >
           <span style="font-size:16px;flex-shrink:0;">⚽</span>
           <div style="min-width:0;flex:1;word-break:break-word;">
-            <div style="font-size:12px;font-weight:800;color:#065f46;text-transform:uppercase;line-height:1.25;white-space:normal;">
+            <div class="complex-popup-pitch-name">
               ${(p as any).name}
             </div>
-            <div style="font-size:11px;color:#16a34a;font-weight:600;margin-top:2px;">
+            <div class="complex-popup-pitch-type">
               ${type}
             </div>
           </div>
-          <span style="font-size:14px;color:#16a34a;flex-shrink:0;">›</span>
+          <span class="complex-popup-arrow">›</span>
         </div>
       `;
         }).join('');
 
         const popupContent = `
-      <div style="font-family:Inter,sans-serif;width:100%;max-width:280px;box-sizing:border-box;padding:2px 0;">
-        <div style="font-size:14px;font-weight:900;color:#064e3b;margin-bottom:${isSinglePitch ? '2px' : '4px'};text-transform:uppercase;letter-spacing:0.02em;line-height:1.25;word-break:break-word;white-space:normal;">
+      <div class="complex-popup-content" style="font-family:Inter,sans-serif;width:100%;max-width:280px;box-sizing:border-box;padding:2px 0;">
+        <div class="complex-popup-title" style="font-size:14px;font-weight:900;margin-bottom:${isSinglePitch ? '2px' : '4px'};text-transform:uppercase;letter-spacing:0.02em;line-height:1.25;word-break:break-word;white-space:normal;">
           🏟️ ${group.name}
         </div>
         ${isSinglePitch ? `
-          <div style="font-size:12px;font-weight:800;color:#059669;margin-bottom:6px;text-transform:uppercase;line-height:1.25;word-break:break-word;white-space:normal;">
+          <div class="complex-popup-single-name" style="font-size:12px;font-weight:800;margin-bottom:6px;text-transform:uppercase;line-height:1.25;word-break:break-word;white-space:normal;">
             ⚽ ${firstPitch.name}
           </div>
         ` : ''}
-        ${cleanAddress(group.address) ? `<div style="font-size:11px;color:#4b5563;margin-bottom:8px;display:flex;align-items:flex-start;gap:4px;line-height:1.3;word-break:break-word;"><span style="flex-shrink:0;">📍</span><span style="white-space:normal;">${cleanAddress(group.address)}</span></div>` : ''}
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#059669;letter-spacing:0.04em;margin-bottom:6px;">
+        ${cleanAddress(group.address) ? `<div class="complex-popup-addr" style="font-size:11px;margin-bottom:8px;display:flex;align-items:flex-start;gap:4px;line-height:1.3;word-break:break-word;"><span style="flex-shrink:0;">📍</span><span style="white-space:normal;">${cleanAddress(group.address)}</span></div>` : ''}
+        <div class="complex-popup-section" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">
           ${isSinglePitch ? 'Toca para ver disponibilidad' : `Canchas en esta sede (${group.pitches.length})`}
         </div>
         ${pitchRows}
@@ -330,9 +328,55 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
           border-radius: 16px;
           box-shadow: 0 8px 32px rgba(0,0,0,0.18);
           border: 1px solid #d1fae5;
+          background: #ffffff;
         }
         .complex-popup .leaflet-popup-tip {
-          background: white;
+          background: #ffffff;
+        }
+        .complex-popup-pitch-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 10px;
+          border-radius: 10px;
+          margin-bottom: 6px;
+          background: #f0fdf4;
+          cursor: pointer;
+          border: 1px solid #bbf7d0;
+          transition: background 0.15s;
+        }
+        .complex-popup-pitch-btn:hover {
+          background: #dcfce7;
+        }
+        .complex-popup-pitch-name {
+          font-size: 12px;
+          font-weight: 800;
+          color: #065f46;
+          text-transform: uppercase;
+          line-height: 1.25;
+        }
+        .complex-popup-pitch-type {
+          font-size: 11px;
+          color: #16a34a;
+          font-weight: 600;
+          margin-top: 2px;
+        }
+        .complex-popup-arrow {
+          font-size: 14px;
+          color: #16a34a;
+          flex-shrink: 0;
+        }
+        .complex-popup-title {
+          color: #064e3b;
+        }
+        .complex-popup-single-name {
+          color: #059669;
+        }
+        .complex-popup-addr {
+          color: #4b5563;
+        }
+        .complex-popup-section {
+          color: #059669;
         }
       `}</style>
     </div>

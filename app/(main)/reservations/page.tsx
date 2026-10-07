@@ -564,18 +564,18 @@ export default function UserReservationsPage() {
       )}
 
       {/* ── Contenedor Principal (Header + Filtros de Mis Reservas) ── */}
-      <div className="bg-[#DCE7DE] border border-[#C8DACB] rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
+      <div className="page-header-banner bg-[#DCE7DE] border border-[#C8DACB] rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
 
         {/* Encabezado: Título y Contador / Badge Resumen */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-[#C8DACB]">
           <div>
             <div className="flex items-center gap-2.5">
-              <CalendarDays className="text-[#054D27]" size={26} strokeWidth={2.5} />
-              <h1 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
+              <CalendarDays className="page-header-text-primary text-[#054D27]" size={26} strokeWidth={2.5} />
+              <h1 className="page-header-text-primary text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
                 Mis Reservas
               </h1>
             </div>
-            <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1 leading-relaxed">
+            <p className="page-header-text-secondary text-xs sm:text-sm text-[#4D715B] font-medium mt-1 leading-relaxed">
               Verifica el estado de tus reservas, comparte el ticket con los detalles de fecha, hora y dirección, y envíaselo a tus compañeros.            </p>
           </div>
 
@@ -593,11 +593,11 @@ export default function UserReservationsPage() {
         <div className="flex flex-col gap-4">
           {/* Filtro por Estado */}
           <div>
-            <h2 className="text-[10px] font-extrabold text-[#4D715B] uppercase tracking-wider mb-2 px-1">
+            <h2 className="page-header-text-secondary text-[10px] font-extrabold text-[#4D715B] uppercase tracking-wider mb-2 px-1">
               Filtrar por estado
             </h2>
 
-            <div className="bg-[#CDE0D1]/70 border border-[#BACFC0] rounded-2xl p-1 mb-6">
+            <div className="page-filter-bar bg-[#CDE0D1]/70 border border-[#BACFC0] rounded-2xl p-1 mb-6">
               <div className="flex items-center w-full">
                 {[
                   { id: 'todas', label: 'Todas', showIcon: true },
@@ -611,8 +611,8 @@ export default function UserReservationsPage() {
                       key={f.id}
                       type="button"
                       onClick={() => setStatusFilter(f.id as any)}
-                      className={`flex-1 py-2 px-1 sm:px-2 rounded-xl text-[11px] sm:text-xs font-black transition-all duration-200 select-none flex items-center justify-center gap-1 leading-tight text-center ${isActive
-                        ? 'bg-[#DCE7DE] text-[#054D27] shadow-xs border border-[#BACFC0]'
+                      className={`page-filter-btn flex-1 py-2 px-1 sm:px-2 rounded-xl text-[11px] sm:text-xs font-black transition-all duration-200 select-none flex items-center justify-center gap-1 leading-tight text-center ${isActive
+                        ? 'page-filter-btn-active bg-[#DCE7DE] text-[#054D27] shadow-xs border border-[#BACFC0]'
                         : 'text-[#4D715B] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
                         }`}
                     >
@@ -641,7 +641,7 @@ export default function UserReservationsPage() {
           <select
             value={dateFilter}
             onChange={(e) => setDateFilter(e.target.value as any)}
-            className="w-full appearance-none cursor-pointer outline-none text-xs font-black rounded-xl pl-3 pr-8 py-2 transition-all shadow-xs border bg-[#CDE0D1]/70 text-[#054D27] border-[#BACFC0] hover:bg-[#CDE0D1] focus:ring-2 focus:ring-[#008744]/20"
+            className="page-filter-bar page-header-text-primary w-full appearance-none cursor-pointer outline-none text-xs font-black rounded-xl pl-3 pr-8 py-2 transition-all shadow-xs border bg-[#CDE0D1]/70 text-[#054D27] border-[#BACFC0] hover:bg-[#CDE0D1] focus:ring-2 focus:ring-[#008744]/20"
           >
             <option value="todas" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">
               Cualquier fecha

@@ -80,7 +80,7 @@ function ImageCarousel({
 
   if (!images || images.length === 0) {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-[#cde4d5] text-[#1b5e39] gap-2 rounded-2xl">
+      <div className="w-full h-full flex flex-col items-center justify-center bg-secondary text-muted-foreground gap-2 rounded-2xl">
         <ImageIcon size={36} className="opacity-40" />
         <span className="text-xs font-bold uppercase">Sin imágenes</span>
       </div>
@@ -88,7 +88,7 @@ function ImageCarousel({
   }
 
   return (
-    <div className="relative w-full h-full group/carousel overflow-hidden rounded-2xl bg-black/10">
+    <div className="relative w-full h-full group/carousel overflow-hidden rounded-2xl bg-secondary/50">
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -482,7 +482,7 @@ export default function SchoolsPage() {
   return (
     <div className="pb-28 pt-4 px-3 sm:px-6 max-w-7xl mx-auto min-h-screen">
       {/* Header */}
-      <div className="bg-[#DCE7DE] border border-[#C8DACB] rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
+      <div className="bg-card border border-border rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
         <Link
           href="/"
           className="inline-flex items-center text-xs font-bold text-muted-foreground hover:text-primary mb-3 transition-colors"
@@ -493,16 +493,16 @@ export default function SchoolsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
-              <GraduationCap className="text-[#007a3e]" size={26} strokeWidth={2.5} />
+              <GraduationCap className="text-primary" size={26} strokeWidth={2.5} />
               <h1 className="text-2xl sm:text-3xl font-black text-foreground uppercase tracking-tight">
                 Escuelas de Fútbol
               </h1>
-              {/* <span className="inline-flex items-center gap-1 bg-[#CDE0D1] text-[#054D27] font-bold text-xs px-2.5 py-1 rounded-full border border-[#BACFC0]">
-                <MapPin size={12} className="text-[#007a3e]" />
+              {/* <span className="inline-flex items-center gap-1 bg-secondary text-foreground font-bold text-xs px-2.5 py-1 rounded-full border border-border">
+                <MapPin size={12} className="text-primary" />
                 <span>{selectedCity === 'Todas' ? 'Toda Colombia' : selectedCity}</span>
               </span> */}
             </div>
-            <div className="flex flex-col gap-1 mt-1 text-xs sm:text-sm text-[#4D715B]">
+            <div className="flex flex-col gap-1 mt-1 text-xs sm:text-sm text-muted-foreground">
               <p className="font-medium">
                 Conoce los mejores centros de formación y entrenamiento.
               </p>
@@ -524,18 +524,18 @@ export default function SchoolsPage() {
       {/* Listado de Tarjetas */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-24 gap-3">
-          <Loader2 size={34} className="animate-spin text-[#007a3e]" />
-          <p className="text-xs font-bold text-[#1b5e39] uppercase tracking-wider">Cargando escuelas...</p>
+          <Loader2 size={34} className="animate-spin text-primary" />
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Cargando escuelas...</p>
         </div>
       ) : filteredSchools.length === 0 ? (
-        <div className="bg-[#dcefe3] border border-dashed border-[#a4d4b4] rounded-3xl p-8 sm:p-14 text-center flex flex-col items-center gap-3">
-          <div className="w-16 h-16 bg-[#cde4d5] rounded-full flex items-center justify-center">
-            <Users size={28} className="text-[#1b5e39]" />
+        <div className="bg-card border border-dashed border-border rounded-3xl p-8 sm:p-14 text-center flex flex-col items-center gap-3">
+          <div className="w-16 h-16 bg-secondary rounded-full flex items-center justify-center">
+            <Users size={28} className="text-primary" />
           </div>
-          <h3 className="font-extrabold text-[#0f3822] text-lg uppercase">
+          <h3 className="font-extrabold text-foreground text-lg uppercase">
             {selectedCity !== 'Todas' ? `No hay escuelas en ${selectedCity}` : 'Sin escuelas registradas'}
           </h3>
-          <p className="text-xs sm:text-sm text-[#1b5e39] max-w-sm">
+          <p className="text-xs sm:text-sm text-muted-foreground max-w-sm">
             {selectedCity !== 'Todas'
               ? `Actualmente no hay escuelas registradas en ${selectedCity}. Puedes ver las escuelas de todas las ciudades.`
               : 'Sé el primero en registrar una academia o escuela deportiva para que miles de deportistas puedan inscribirse.'}
@@ -551,7 +551,7 @@ export default function SchoolsPage() {
                     window.dispatchEvent(new CustomEvent('cityChange', { detail: 'Todas' }));
                   }
                 }}
-                className="bg-[#cde4d5] hover:bg-[#b8dec4] text-[#0f3822] font-black px-4 py-2 rounded-xl text-xs uppercase tracking-wider cursor-pointer shadow-xs transition"
+                className="bg-secondary hover:bg-secondary/80 text-foreground font-black px-4 py-2 rounded-xl text-xs uppercase tracking-wider cursor-pointer shadow-xs transition"
               >
                 Ver en todas las ciudades
               </button>
@@ -579,7 +579,7 @@ export default function SchoolsPage() {
               <div
                 key={school.id}
                 onClick={() => setSelected(school)}
-                className="bg-[#dcefe3] border border-[#c5e2d0] rounded-3xl overflow-hidden p-4 flex flex-col justify-between cursor-pointer hover:shadow-xl hover:border-[#a4d4b4] transition-all relative group"
+                className="bg-card border border-border rounded-3xl overflow-hidden p-4 flex flex-col justify-between cursor-pointer hover:shadow-xl hover:border-primary/30 transition-all relative group"
               >
                 <div>
                   {/* Carrusel de Imágenes */}
@@ -593,7 +593,7 @@ export default function SchoolsPage() {
 
                   {/* Título de la escuela */}
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="text-xl font-black text-[#0f3822] uppercase tracking-tight leading-tight">
+                    <h3 className="text-xl font-black text-foreground uppercase tracking-tight leading-tight">
                       {school.name}
                     </h3>
                     {school.created_by_owner && (
@@ -609,30 +609,27 @@ export default function SchoolsPage() {
                       <Link
                         href={`/cancha/${registeredPitchId}`}
                         onClick={e => e.stopPropagation()}
-                        className="bg-[#cde4d5] hover:bg-[#bce0ca] border border-[#a4d4b4] text-[#0f3822] rounded-2xl p-2.5 mt-2.5 flex items-start gap-2 transition group/link shadow-xs"
+                        className="bg-secondary/60 hover:bg-secondary border border-border text-foreground rounded-2xl p-2.5 mt-2.5 flex items-start gap-2 transition group/link shadow-xs"
                         title="Ver perfil de la cancha"
                       >
-                        <MapPin size={16} className="text-[#007a3e] shrink-0 mt-0.5 group-hover/link:scale-110 transition" />
+                        <MapPin size={16} className="text-primary shrink-0 mt-0.5 group-hover/link:scale-110 transition" />
                         <div className="flex-1 min-w-0">
-                          <span className="text-[10px] font-black uppercase text-[#1b5e39] tracking-wider flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase text-primary tracking-wider flex items-center justify-between">
                             <span>Sede Oficial:</span>
-                            {/* <span className="text-[9px] bg-[#007a3e]/20 text-[#007a3e] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5">
-                              Ver Cancha ↗
-                            </span> */}
                           </span>
-                          <span className="text-xs font-black uppercase text-[#0f3822] break-words leading-snug block underline decoration-[#007a3e]/40 group-hover/link:text-[#007a3e]">
+                          <span className="text-xs font-black uppercase text-foreground break-words leading-snug block underline decoration-primary/40 group-hover/link:text-primary">
                             {locationText}
                           </span>
                         </div>
                       </Link>
                     ) : (
-                      <div className="bg-[#cde4d5] border border-[#a4d4b4] text-[#0f3822] rounded-2xl p-2.5 mt-2.5 flex items-start gap-2">
-                        <MapPin size={16} className="text-[#007a3e] shrink-0 mt-0.5" />
+                      <div className="bg-secondary/60 border border-border text-foreground rounded-2xl p-2.5 mt-2.5 flex items-start gap-2">
+                        <MapPin size={16} className="text-primary shrink-0 mt-0.5" />
                         <div className="flex-1 min-w-0">
-                          <span className="text-[10px] font-black uppercase text-[#1b5e39] tracking-wider block">
+                          <span className="text-[10px] font-black uppercase text-primary tracking-wider block">
                             Sede / Cancha:
                           </span>
-                          <span className="text-xs font-black uppercase text-[#0f3822] break-words leading-snug block">
+                          <span className="text-xs font-black uppercase text-foreground break-words leading-snug block">
                             {locationText}
                           </span>
                         </div>
@@ -643,7 +640,7 @@ export default function SchoolsPage() {
                   {/* Categorías / Edades */}
                   {school.categories && (
                     <div className="mt-2.5 flex flex-wrap gap-1.5 items-center">
-                      <span className="bg-[#007a3e]/15 text-[#007a3e] border border-[#007a3e]/20 font-black text-[11px] px-2.5 py-1 rounded-xl uppercase tracking-wider">
+                      <span className="bg-primary/10 text-primary border border-primary/20 font-black text-[11px] px-2.5 py-1 rounded-xl uppercase tracking-wider">
                         ⚽ {school.categories}
                       </span>
                     </div>
@@ -651,21 +648,21 @@ export default function SchoolsPage() {
 
                   {/* Descripción Preview */}
                   {school.description && (
-                    <p className="text-xs text-[#1b5e39] font-medium mt-2 line-clamp-2 leading-relaxed break-words">
+                    <p className="text-xs text-muted-foreground font-medium mt-2 line-clamp-2 leading-relaxed break-words">
                       {school.description}
                     </p>
                   )}
 
                   {/* Contacto WhatsApp y Redes Sociales */}
                   {(school.contact_phone || school.instagram_url || school.facebook_url || school.tiktok_url) && (
-                    <div className="mt-3 pt-2.5 border-t border-[#c5e2d0]/60 flex items-center justify-between gap-2 flex-wrap">
+                    <div className="mt-3 pt-2.5 border-t border-border/60 flex items-center justify-between gap-2 flex-wrap">
                       {school.contact_phone ? (
                         <a
                           href={`https://wa.me/57${school.contact_phone.replace(/\D/g, '')}`}
                           target="_blank"
                           rel="noreferrer"
                           onClick={e => e.stopPropagation()}
-                          className="inline-flex items-center gap-1.5 bg-[#25D366]/20 hover:bg-[#25D366]/35 text-[#128C7E] font-black text-xs px-3 py-1.5 rounded-xl transition cursor-pointer"
+                          className="inline-flex items-center gap-1.5 bg-[#25D366]/20 hover:bg-[#25D366]/35 text-[#128C7E] dark:text-emerald-400 font-black text-xs px-3 py-1.5 rounded-xl transition cursor-pointer"
                         >
                           <Phone size={13} /> {school.contact_phone}
                         </a>
@@ -725,14 +722,14 @@ export default function SchoolsPage() {
                 </div>
 
                 {/* Acciones de la Tarjeta */}
-                <div className="mt-4 flex items-center gap-2 pt-2 border-t border-[#c5e2d0]/80">
-                  <button className="flex-1 bg-[#007a3e] hover:bg-[#006332] text-white font-extrabold py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer text-center">
+                <div className="mt-4 flex items-center gap-2 pt-2 border-t border-border/80">
+                  <button className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer text-center">
                     Ver Ficha Completa
                   </button>
                   {isOwner && (
                     <button
                       onClick={(e) => handleOpenEdit(school, e)}
-                      className="bg-[#007a3e]/15 hover:bg-[#007a3e]/25 text-[#007a3e] font-black py-2.5 px-3.5 rounded-xl text-xs uppercase tracking-wider cursor-pointer transition flex items-center gap-1"
+                      className="bg-secondary hover:bg-secondary/80 text-foreground font-black py-2.5 px-3.5 rounded-xl text-xs uppercase tracking-wider cursor-pointer transition flex items-center gap-1 border border-border"
                       title="Editar Escuela"
                     >
                       <Edit3 size={13} /> Editar
@@ -752,17 +749,17 @@ export default function SchoolsPage() {
           onClick={() => setSelected(null)}
         >
           <div
-            className="bg-[#dcefe3] text-[#0f3822] w-full max-w-lg rounded-[32px] overflow-hidden shadow-2xl flex flex-col max-h-[92dvh] animate-in zoom-in-95 duration-200 border border-[#b8dbc5]"
+            className="bg-card text-foreground w-full max-w-lg rounded-[32px] overflow-hidden shadow-2xl flex flex-col max-h-[92dvh] animate-in zoom-in-95 duration-200 border border-border"
             onClick={e => e.stopPropagation()}
           >
             {/* Header Modal */}
-            <div className="flex items-center justify-between p-6 pb-4 border-b border-[#c2e2cc]/60">
+            <div className="flex items-center justify-between p-6 pb-4 border-b border-border">
               <div className="pr-2">
-                <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight leading-tight text-[#0f3822]">
+                <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight leading-tight text-foreground">
                   {selected.name}
                 </h2>
                 {selected.created_by_owner && (
-                  <span className="inline-block bg-amber-500/20 text-amber-900 border border-amber-500/30 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider mt-1">
+                  <span className="inline-block bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-500/30 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider mt-1">
                     ⭐ Escuela Oficial Verificada
                   </span>
                 )}
@@ -775,7 +772,7 @@ export default function SchoolsPage() {
                       setSelected(null);
                       handleOpenEdit(current, e);
                     }}
-                    className="bg-[#007a3e]/15 hover:bg-[#007a3e]/25 text-[#007a3e] font-black px-3 py-1.5 rounded-xl text-xs flex items-center gap-1 uppercase transition cursor-pointer"
+                    className="bg-secondary hover:bg-secondary/80 text-foreground border border-border font-black px-3 py-1.5 rounded-xl text-xs flex items-center gap-1 uppercase transition cursor-pointer"
                   >
                     <Edit3 size={14} /> Editar
                   </button>
@@ -783,7 +780,7 @@ export default function SchoolsPage() {
                 <button
                   type="button"
                   onClick={() => setSelected(null)}
-                  className="text-[#0f3822]/70 hover:text-[#0f3822] p-1 rounded-full transition cursor-pointer"
+                  className="text-muted-foreground hover:text-foreground p-1 rounded-full transition cursor-pointer"
                 >
                   <X size={24} />
                 </button>
@@ -799,61 +796,45 @@ export default function SchoolsPage() {
 
                 return (
                   <div className="space-y-2">
-                    <div className="h-60 sm:h-64 w-full rounded-2xl overflow-hidden border border-[#b8dbc5]/60 shadow-inner">
+                    <div className="h-60 sm:h-64 w-full rounded-2xl overflow-hidden border border-border shadow-inner">
                       <ImageCarousel
                         images={allImgs}
                         title={selected.name}
                         onImageClick={(url) => setFullscreenImage(url)}
                       />
                     </div>
-
-                    {/* Fila de Miniaturas si hay más de 1 imagen */}
-                    {/* {allImgs.length > 1 && (
-                      <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                        {allImgs.map((img, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => setFullscreenImage(img)}
-                            className="w-14 h-14 rounded-xl overflow-hidden border-2 border-[#a4d4b4] shrink-0 hover:opacity-80 transition cursor-pointer"
-                          >
-                            <img src={img} alt="" className="w-full h-full object-cover" />
-                          </button>
-                        ))}
-                      </div>
-                    )} */}
                   </div>
                 );
               })()}
 
               {/* Grid Categorías + Cancha Completa con Link */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="bg-[#cde4d5]/80 p-3.5 rounded-2xl border border-[#b8dbc5]/60">
-                  <p className="text-[10px] font-black uppercase text-[#1b5e39] tracking-wider">
+                <div className="bg-secondary/70 p-3.5 rounded-2xl border border-border">
+                  <p className="text-[10px] font-black uppercase text-primary tracking-wider">
                     Categorías / Edades
                   </p>
-                  <p className="text-sm font-black text-[#0f3822] mt-0.5 break-words">
+                  <p className="text-sm font-black text-foreground mt-0.5 break-words">
                     {selected.categories || 'Formación general'}
                   </p>
                 </div>
 
-                <div className="bg-[#cde4d5]/80 p-3.5 rounded-2xl border border-[#b8dbc5]/60">
-                  <p className="text-[10px] font-black uppercase text-[#1b5e39] tracking-wider">
+                <div className="bg-secondary/70 p-3.5 rounded-2xl border border-border">
+                  <p className="text-[10px] font-black uppercase text-primary tracking-wider">
                     Cancha / Sede Principal
                   </p>
                   {selected.pitch_id || selected.pitches?.id ? (
                     <Link
                       href={`/cancha/${selected.pitch_id || selected.pitches?.id}`}
-                      className="text-sm font-black text-[#007a3e] hover:underline mt-0.5 break-words whitespace-normal leading-snug flex items-center gap-1.5 group"
+                      className="text-sm font-black text-primary hover:underline mt-0.5 break-words whitespace-normal leading-snug flex items-center gap-1.5 group"
                       title="Ver perfil de la cancha"
                     >
                       <span className="group-hover:underline">
                         {(selected.pitches?.companies as any)?.name || selected.pitches?.name || selected.custom_location}
                       </span>
-                      <ExternalLink size={14} className="shrink-0 text-[#007a3e]" />
+                      <ExternalLink size={14} className="shrink-0 text-primary" />
                     </Link>
                   ) : (
-                    <p className="text-sm font-black text-[#0f3822] mt-0.5 break-words whitespace-normal leading-snug">
+                    <p className="text-sm font-black text-foreground mt-0.5 break-words whitespace-normal leading-snug">
                       {(selected.pitches?.companies as any)?.name || selected.pitches?.name || selected.custom_location || 'Sin ubicación registrada'}
                     </p>
                   )}
@@ -862,8 +843,8 @@ export default function SchoolsPage() {
 
               {/* Redes Sociales si existen */}
               {(selected.instagram_url || selected.facebook_url || selected.tiktok_url) && (
-                <div className="bg-[#cde4d5]/40 dark:bg-card/60 p-3.5 rounded-2xl border border-[#b8dbc5]/60 dark:border-border flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-[11px] font-black uppercase text-[#1b5e39] dark:text-emerald-400 tracking-wider">
+                <div className="bg-secondary/40 p-3.5 rounded-2xl border border-border flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-[11px] font-black uppercase text-primary tracking-wider">
                     Redes sociales:
                   </span>
 
@@ -918,10 +899,10 @@ export default function SchoolsPage() {
               {/* Descripción Completa */}
               {selected.description && (
                 <div>
-                  <p className="text-[10px] font-black uppercase text-[#1b5e39] tracking-wider mb-1.5">
+                  <p className="text-[10px] font-black uppercase text-primary tracking-wider mb-1.5">
                     Descripción
                   </p>
-                  <div className="bg-[#cde4d5]/60 p-4 rounded-2xl border border-[#b8dbc5]/60 text-xs sm:text-sm font-medium leading-relaxed text-[#0f3822] whitespace-pre-wrap break-words">
+                  <div className="bg-secondary/60 p-4 rounded-2xl border border-border text-xs sm:text-sm font-medium leading-relaxed text-foreground whitespace-pre-wrap break-words">
                     {selected.description}
                   </div>
                 </div>
@@ -968,16 +949,16 @@ export default function SchoolsPage() {
       {/* ── Modal Crear / Editar Escuela ── */}
       {showFormModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-[#dcefe3] text-[#0f3822] w-full max-w-lg rounded-[32px] overflow-hidden shadow-2xl flex flex-col max-h-[94dvh] animate-in zoom-in-95 duration-200 border border-[#b8dbc5]">
-            <div className="flex items-center justify-between p-5 border-b border-[#c2e2cc]/60">
-              <h2 className="text-xl font-black uppercase tracking-tight text-[#0f3822] flex items-center gap-2">
-                {isEditing ? <Edit3 size={18} className="text-[#007a3e]" /> : <Plus size={18} className="text-[#007a3e]" />}
+          <div className="bg-card text-foreground w-full max-w-lg rounded-[32px] overflow-hidden shadow-2xl flex flex-col max-h-[94dvh] animate-in zoom-in-95 duration-200 border border-border">
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <h2 className="text-xl font-black uppercase tracking-tight text-foreground flex items-center gap-2">
+                {isEditing ? <Edit3 size={18} className="text-primary" /> : <Plus size={18} className="text-primary" />}
                 {isEditing ? 'Editar Escuela' : 'Registrar Nueva Escuela'}
               </h2>
               <button
                 type="button"
                 onClick={() => setShowFormModal(false)}
-                className="text-[#0f3822]/70 hover:text-[#0f3822] cursor-pointer p-1"
+                className="text-muted-foreground hover:text-foreground cursor-pointer p-1"
               >
                 <X size={20} />
               </button>
@@ -985,66 +966,14 @@ export default function SchoolsPage() {
 
             <div className="overflow-y-auto flex-1 p-5 space-y-4">
               {formError && (
-                <div className="bg-rose-500/10 text-rose-700 text-xs font-bold p-3 rounded-2xl border border-rose-500/20">
+                <div className="bg-rose-500/10 text-rose-700 dark:text-rose-400 text-xs font-bold p-3 rounded-2xl border border-rose-500/20">
                   {formError}
                 </div>
               )}
 
-              {/* Subida Múltiple de Fotos */}
-              {/* <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-black uppercase tracking-wider text-[#1b5e39]">
-                    Fotos / Galería de la Escuela
-                  </label>
-                  <span className="text-[10px] font-bold text-[#1b5e39]/70 uppercase">
-                    {form.images.length} seleccionada{form.images.length === 1 ? '' : 's'}
-                  </span>
-                </div>
-
-                <input
-                  type="file"
-                  ref={fileRef}
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={handleFilesChange}
-                />
-
-                <div className="grid grid-cols-3 gap-2">
-                  {form.images.map((imgUrl, idx) => (
-                    <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border border-[#b8dbc5] shadow-xs">
-                      <img src={imgUrl} alt="" className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => removeImage(idx)}
-                        className="absolute top-1 right-1 w-5 h-5 bg-black/70 hover:bg-black text-white rounded-full flex items-center justify-center cursor-pointer transition"
-                        title="Eliminar foto"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    disabled={uploading}
-                    className="aspect-video rounded-xl border-2 border-dashed border-[#a4d4b4] bg-[#cde4d5]/50 hover:bg-[#cde4d5] flex flex-col items-center justify-center text-[#1b5e39] font-bold text-xs cursor-pointer transition disabled:opacity-50"
-                  >
-                    {uploading ? (
-                      <Loader2 size={18} className="animate-spin text-[#007a3e]" />
-                    ) : (
-                      <>
-                        <Plus size={18} className="text-[#007a3e]" />
-                        <span className="text-[11px] font-black uppercase mt-0.5">+ Foto</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div> */}
-
               {/* Nombre de la Escuela */}
               <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-[#1b5e39] mb-1">
+                <label className="block text-xs font-black uppercase tracking-wider text-primary mb-1">
                   Nombre de la Escuela *
                 </label>
                 <input
@@ -1052,20 +981,20 @@ export default function SchoolsPage() {
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="Ej: Escuela de Fútbol Los Príncipes"
-                  className="w-full bg-[#cde4d5]/60 border border-[#a4d4b4] rounded-2xl px-4 py-3 text-sm font-bold text-[#0f3822] placeholder:text-[#1b5e39]/50 focus:outline-none focus:ring-2 focus:ring-[#007a3e]"
+                  className="w-full bg-secondary/60 border border-border rounded-2xl px-4 py-3 text-sm font-bold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
 
               {/* Selector o Texto Libre de Complejo / Cancha */}
               <div className="relative">
                 {/* Label */}
-                <label className="block text-xs font-black uppercase tracking-wider text-[#1b5e39] mb-1">
+                <label className="block text-xs font-black uppercase tracking-wider text-primary mb-1">
                   Complejo / Sede de Entrenamiento
                 </label>
 
                 {/* Input con icono de búsqueda */}
                 <div className="relative">
-                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#1b5e39]/60 pointer-events-none" />
+                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                   <input
                     type="text"
                     value={pitchQuery}
@@ -1086,39 +1015,35 @@ export default function SchoolsPage() {
                       }
                     }}
                     placeholder={`Escribe o busca un complejo en ${selectedCity !== 'Todas' ? selectedCity : 'tu ciudad'}...`}
-                    className="w-full bg-[#cde4d5]/60 border border-[#007a3e] rounded-2xl pl-10 pr-4 py-3 text-sm font-black text-[#0f3822] placeholder:text-[#1b5e39]/50 focus:outline-none focus:ring-2 focus:ring-[#007a3e] transition-all"
+                    className="w-full bg-secondary/60 border border-primary/40 focus:border-primary rounded-2xl pl-10 pr-4 py-3 text-sm font-black text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-all"
                   />
                 </div>
 
                 {/* Ayuda / Leyenda inferior */}
-                <p className="text-[10px] font-medium text-[#1b5e39] mt-1">
+                <p className="text-[10px] font-medium text-muted-foreground mt-1">
                   💡 Si seleccionas un complejo registrado, se enlazará a su perfil. Si escribes un lugar externo, se guardará con la ciudad en donde estás ({selectedCity !== 'Todas' ? selectedCity : 'Pasto'}).
                 </p>
 
                 {/* Confirmación visual si hay un complejo enlazado */}
                 {form.pitch_id && (
-                  <p className="text-xs text-[#007a3e] font-extrabold mt-1.5 flex items-center gap-1">
+                  <p className="text-xs text-primary font-extrabold mt-1.5 flex items-center gap-1">
                     ✓ Complejo oficial enlazado: <span className="underline">{pitchQuery}</span>
                   </p>
                 )}
 
-                {/* Dropdown de sugerencias (Solo si está activo Y hay resultados) */}
+                {/* Dropdown de sugerencias */}
                 {showPitchDropdown && complexSuggestions.length > 0 && (
                   <>
-                    {/* Overlay para cerrar al hacer clic fuera */}
                     <div
                       className="fixed inset-0 z-30"
                       onClick={() => setShowPitchDropdown(false)}
                     />
 
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-[#d0e6d7] border border-[#a4d4b4] rounded-2xl shadow-2xl z-50 overflow-hidden max-h-56 overflow-y-auto divide-y divide-[#b8dbc5]/40 touch-pan-y">
-
-                      {/* Encabezado del Dropdown */}
-                      <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-[#1b5e39] bg-[#bce0ca]/60 sticky top-0 backdrop-blur-sm border-b border-[#b8dbc5]">
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-2xl shadow-2xl z-50 overflow-hidden max-h-56 overflow-y-auto divide-y divide-border touch-pan-y">
+                      <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-primary bg-secondary sticky top-0 backdrop-blur-sm border-b border-border">
                         Complejos registrados en {selectedCity !== 'Todas' ? selectedCity : 'el sistema'}
                       </div>
 
-                      {/* Lista de resultados */}
                       {complexSuggestions.map((c: any) => (
                         <button
                           key={c.id}
@@ -1138,25 +1063,20 @@ export default function SchoolsPage() {
                             }));
                             setShowPitchDropdown(false);
                           }}
-                          className="w-full px-3.5 py-2.5 hover:bg-[#bce0ca] active:bg-[#a8d6b8] cursor-pointer flex items-center justify-between gap-2 text-left transition-colors"
+                          className="w-full px-3.5 py-2.5 hover:bg-secondary active:bg-secondary/80 cursor-pointer flex items-center justify-between gap-2 text-left transition-colors"
                         >
                           <div className="flex flex-col min-w-0 flex-1">
-                            <span className="text-xs font-black uppercase text-[#0f3822] truncate flex items-center gap-1">
+                            <span className="text-xs font-black uppercase text-foreground truncate flex items-center gap-1">
                               <span className="shrink-0">🏟️</span>
                               <span className="truncate">{c.name}</span>
                             </span>
 
                             {c.address && (
-                              <span className="text-[10px] text-[#1b5e39] font-semibold truncate pl-5 mt-0.5">
+                              <span className="text-[10px] text-muted-foreground font-semibold truncate pl-5 mt-0.5">
                                 {c.address}
                               </span>
                             )}
                           </div>
-
-                          {/* Badge de estado registrado */}
-                          {/* <span className="shrink-0 text-[10px] font-black text-[#1b5e39] bg-[#a4d4b4]/50 border border-[#1b5e39]/20 px-2 py-0.5 rounded-lg uppercase whitespace-nowrap">
-                            Registrado ↗
-                          </span> */}
                         </button>
                       ))}
                     </div>
@@ -1166,7 +1086,7 @@ export default function SchoolsPage() {
 
               {/* Categorías / Edades */}
               <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-[#1b5e39] mb-1">
+                <label className="block text-xs font-black uppercase tracking-wider text-primary mb-1">
                   Categorías / Edades
                 </label>
                 <input
@@ -1174,13 +1094,13 @@ export default function SchoolsPage() {
                   value={form.categories}
                   onChange={e => setForm(f => ({ ...f, categories: e.target.value }))}
                   placeholder="Ej: De 4 a 16 años, Sub-15, Femenino"
-                  className="w-full bg-[#cde4d5]/60 border border-[#a4d4b4] rounded-2xl px-4 py-3 text-sm font-bold text-[#0f3822] placeholder:text-[#1b5e39]/50 focus:outline-none focus:ring-2 focus:ring-[#007a3e]"
+                  className="w-full bg-secondary/60 border border-border rounded-2xl px-4 py-3 text-sm font-bold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
 
               {/* Teléfono WhatsApp */}
               <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-[#1b5e39] mb-1">
+                <label className="block text-xs font-black uppercase tracking-wider text-primary mb-1">
                   Teléfono / WhatsApp (Solo números)
                 </label>
                 <input
@@ -1189,14 +1109,14 @@ export default function SchoolsPage() {
                   value={form.contact_phone}
                   onChange={e => setForm(f => ({ ...f, contact_phone: e.target.value.replace(/\D/g, '') }))}
                   placeholder="3001234567"
-                  className="w-full bg-[#cde4d5]/60 border border-[#a4d4b4] rounded-2xl px-4 py-3 text-sm font-bold text-[#0f3822] placeholder:text-[#1b5e39]/50 focus:outline-none focus:ring-2 focus:ring-[#007a3e]"
+                  className="w-full bg-secondary/60 border border-border rounded-2xl px-4 py-3 text-sm font-bold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
 
               {/* Redes Sociales */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-[#1b5e39] mb-1">
+                  <label className="block text-[11px] font-black uppercase tracking-wider text-primary mb-1">
                     Instagram URL
                   </label>
                   <input
@@ -1204,11 +1124,11 @@ export default function SchoolsPage() {
                     value={form.instagram_url}
                     onChange={e => setForm(f => ({ ...f, instagram_url: e.target.value }))}
                     placeholder="@micuenta o enlace"
-                    className="w-full bg-[#cde4d5]/60 border border-[#a4d4b4] rounded-xl px-3 py-2.5 text-xs font-bold text-[#0f3822] placeholder:text-[#1b5e39]/50 focus:outline-none focus:ring-2 focus:ring-[#007a3e]"
+                    className="w-full bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-xs font-bold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-[#1b5e39] mb-1">
+                  <label className="block text-[11px] font-black uppercase tracking-wider text-primary mb-1">
                     Facebook URL
                   </label>
                   <input
@@ -1216,11 +1136,11 @@ export default function SchoolsPage() {
                     value={form.facebook_url}
                     onChange={e => setForm(f => ({ ...f, facebook_url: e.target.value }))}
                     placeholder="@micuenta o enlace"
-                    className="w-full bg-[#cde4d5]/60 border border-[#a4d4b4] rounded-xl px-3 py-2.5 text-xs font-bold text-[#0f3822] placeholder:text-[#1b5e39]/50 focus:outline-none focus:ring-2 focus:ring-[#007a3e]"
+                    className="w-full bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-xs font-bold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-[#1b5e39] mb-1">
+                  <label className="block text-[11px] font-black uppercase tracking-wider text-primary mb-1">
                     TikTok URL
                   </label>
                   <input
@@ -1228,14 +1148,14 @@ export default function SchoolsPage() {
                     value={form.tiktok_url}
                     onChange={e => setForm(f => ({ ...f, tiktok_url: e.target.value }))}
                     placeholder="@micuenta o enlace"
-                    className="w-full bg-[#cde4d5]/60 border border-[#a4d4b4] rounded-xl px-3 py-2.5 text-xs font-bold text-[#0f3822] placeholder:text-[#1b5e39]/50 focus:outline-none focus:ring-2 focus:ring-[#007a3e]"
+                    className="w-full bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-xs font-bold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
               </div>
 
               {/* Descripción */}
               <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-[#1b5e39] mb-1">
+                <label className="block text-xs font-black uppercase tracking-wider text-primary mb-1">
                   Descripción
                 </label>
                 <textarea
@@ -1243,68 +1163,17 @@ export default function SchoolsPage() {
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                   placeholder="Detalles sobre horarios, días de entrenamiento, metodología, mensualidades..."
                   rows={3}
-                  className="w-full bg-[#cde4d5]/60 border border-[#a4d4b4] rounded-2xl px-4 py-3 text-sm font-bold text-[#0f3822] placeholder:text-[#1b5e39]/50 focus:outline-none focus:ring-2 focus:ring-[#007a3e] resize-none"
+                  className="w-full bg-secondary/60 border border-border rounded-2xl px-4 py-3 text-sm font-bold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
                 />
-              </div>
-              {/* Subida Múltiple de Fotos */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-black uppercase tracking-wider text-[#1b5e39]">
-                    Fotos / Galería de la Escuela
-                  </label>
-                  <span className="text-[10px] font-bold text-[#1b5e39]/70 uppercase">
-                    {form.images.length} seleccionada{form.images.length === 1 ? '' : 's'}
-                  </span>
-                </div>
-
-                <input
-                  type="file"
-                  ref={fileRef}
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={handleFilesChange}
-                />
-
-                <div className="grid grid-cols-3 gap-2">
-                  {form.images.map((imgUrl, idx) => (
-                    <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border border-[#b8dbc5] shadow-xs">
-                      <img src={imgUrl} alt="" className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => removeImage(idx)}
-                        className="absolute top-1 right-1 w-5 h-5 bg-black/70 hover:bg-black text-white rounded-full flex items-center justify-center cursor-pointer transition"
-                        title="Eliminar foto"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    disabled={uploading}
-                    className="aspect-video rounded-xl border-2 border-dashed border-[#a4d4b4] bg-[#cde4d5]/50 hover:bg-[#cde4d5] flex flex-col items-center justify-center text-[#1b5e39] font-bold text-xs cursor-pointer transition disabled:opacity-50"
-                  >
-                    {uploading ? (
-                      <Loader2 size={18} className="animate-spin text-[#007a3e]" />
-                    ) : (
-                      <>
-                        <Plus size={18} className="text-[#007a3e]" />
-                        <span className="text-[11px] font-black uppercase mt-0.5">+ Foto</span>
-                      </>
-                    )}
-                  </button>
-                </div>
               </div>
             </div>
 
             {/* Acciones Modal */}
-            <div className="p-4 bg-[#d0e6d7]/60 border-t border-[#b8dbc5] flex justify-end gap-3 shrink-0">
+            <div className="p-4 bg-card border-t border-border flex justify-end gap-3 shrink-0">
               <button
                 type="button"
                 onClick={() => setShowFormModal(false)}
-                className="bg-[#007a3e]/15 hover:bg-[#007a3e]/25 text-[#007a3e] font-black py-3 px-6 rounded-2xl text-xs uppercase tracking-wider transition cursor-pointer"
+                className="bg-secondary hover:bg-secondary/80 text-foreground border border-border font-black py-3 px-6 rounded-2xl text-xs uppercase tracking-wider transition cursor-pointer"
               >
                 Cancelar
               </button>

@@ -290,14 +290,14 @@ export default function OwnerSchoolsPage() {
                 <div className="absolute top-2 right-2 flex gap-1.5">
                   <button
                     onClick={() => openEdit(school)}
-                    className="w-8 h-8 bg-white/90 hover:bg-white rounded-lg flex items-center justify-center text-foreground transition"
+                    className="w-8 h-8 bg-card/90 hover:bg-card border border-border/50 rounded-lg flex items-center justify-center text-foreground transition shadow-sm"
                   >
                     <Pencil size={13} />
                   </button>
                   <button
                     onClick={() => handleDelete(school.id)}
                     disabled={deleting === school.id}
-                    className="w-8 h-8 bg-white/90 hover:bg-red-50 rounded-lg flex items-center justify-center text-red-500 transition"
+                    className="w-8 h-8 bg-card/90 hover:bg-red-500/10 border border-border/50 rounded-lg flex items-center justify-center text-red-500 transition shadow-sm"
                   >
                     {deleting === school.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
                   </button>
@@ -324,13 +324,13 @@ export default function OwnerSchoolsPage() {
                 <div className="flex gap-2 mt-1">
                   {school.instagram_url && (
                     <a href={school.instagram_url} target="_blank" rel="noreferrer"
-                      className="text-[10px] font-bold text-pink-600 bg-pink-50 px-2 py-0.5 rounded-md hover:bg-pink-100 transition">
+                      className="text-[10px] font-bold text-pink-600 dark:text-pink-400 bg-pink-500/10 hover:bg-pink-500/20 px-2 py-0.5 rounded-md transition">
                       Instagram
                     </a>
                   )}
                   {school.facebook_url && (
                     <a href={school.facebook_url} target="_blank" rel="noreferrer"
-                      className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md hover:bg-blue-100 transition">
+                      className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 px-2 py-0.5 rounded-md transition">
                       Facebook
                     </a>
                   )}

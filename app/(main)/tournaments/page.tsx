@@ -438,22 +438,22 @@ export default function TournamentsPage() {
       <CustomAlertModal alertState={alertState} onClose={() => setAlertState(prev => ({ ...prev, isOpen: false }))} />
 
       {/* ── Contenedor Principal de Controles (Header + Filtros) ── */}
-      <div className="bg-[#DCE7DE] border border-[#C8DACB] rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
+      <div className="bg-card border border-border rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
 
         {/* Encabezado: Título y Botón de Acción */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-[#C8DACB]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-border">
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
-              <Trophy className="text-[#054D27]" size={26} strokeWidth={2.5} />
-              <h1 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
+              <Trophy className="text-primary" size={26} strokeWidth={2.5} />
+              <h1 className="text-2xl sm:text-3xl font-black text-foreground uppercase tracking-tight">
                 Campeonatos
               </h1>
-              {/* <span className="inline-flex items-center gap-1 bg-[#CDE0D1] text-[#054D27] font-bold text-xs px-2.5 py-1 rounded-full border border-[#BACFC0]">
-                <MapPin size={12} className="text-[#008744]" />
+              {/* <span className="inline-flex items-center gap-1 bg-secondary text-foreground font-bold text-xs px-2.5 py-1 rounded-full border border-border">
+                <MapPin size={12} className="text-primary" />
                 <span>{selectedCity === 'Todas' ? 'Toda Colombia' : selectedCity}</span>
               </span> */}
             </div>
-            <div className="flex flex-col gap-1 mt-1 text-xs sm:text-sm text-[#4D715B]">
+            <div className="flex flex-col gap-1 mt-1 text-xs sm:text-sm text-muted-foreground">
               <p className="font-medium">
                 Explora y participa en los torneos y campeonatos organizados por centros deportivos y la comunidad de jugadores.
               </p>
@@ -465,14 +465,14 @@ export default function TournamentsPage() {
 
           <button
             onClick={openCreate}
-            className="flex items-center justify-center gap-2 bg-[#008744] hover:bg-[#054D27] text-white font-black px-5 py-3 rounded-xl transition-colors shadow-md text-sm shrink-0"
+            className="flex items-center justify-center gap-2 bg-[#008744] hover:bg-[#054D27] text-white font-black px-5 py-3 rounded-xl transition-colors shadow-md text-sm shrink-0 cursor-pointer"
           >
             <Plus size={18} strokeWidth={3} /> Crear Campeonato
           </button>
         </div>
 
         {/* Barra de Filtros en una sola línea continua compacta */}
-        <div className="bg-[#CDE0D1]/70 border border-[#BACFC0] rounded-2xl p-0.5 flex items-center justify-between gap-0 w-full">
+        <div className="bg-secondary/70 border border-border rounded-2xl p-0.5 flex items-center justify-between gap-0 w-full">
           {[
             { key: 'all', label: 'Todos' },
             { key: 'active', label: 'Abierto' },
@@ -484,9 +484,9 @@ export default function TournamentsPage() {
               <button
                 key={f.key}
                 onClick={() => setStatusFilter(f.key as any)}
-                className={`flex-1 min-w-0 flex items-center justify-center px-0.5 py-1.5 rounded-xl text-[8.5px] sm:text-[11px] font-black transition-all duration-200 select-none whitespace-nowrap ${isActive
-                  ? 'bg-[#DCE7DE] text-[#054D27] shadow-xs border border-[#BACFC0]'
-                  : 'text-[#4D715B] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
+                className={`flex-1 min-w-0 flex items-center justify-center px-0.5 py-1.5 rounded-xl text-[8.5px] sm:text-[11px] font-black transition-all duration-200 select-none whitespace-nowrap cursor-pointer ${isActive
+                  ? 'bg-card text-foreground shadow-xs border border-border'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-card/50'
                   }`}
               >
                 <span className="truncate">{f.label}</span>
@@ -510,18 +510,18 @@ export default function TournamentsPage() {
           <Loader2 size={36} className="animate-spin text-[#008744]" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 px-4 bg-[#DCE7DE]/50 border border-[#C8DACB] rounded-[2.5rem]">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#CDE0D1] flex items-center justify-center text-[#054D27]">
+        <div className="text-center py-16 px-4 bg-card/60 border border-border rounded-[2.5rem]">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-secondary flex items-center justify-center text-primary">
             <Trophy size={32} />
           </div>
-          <h3 className="font-black text-xl text-[#054D27] uppercase tracking-tight mb-1">
+          <h3 className="font-black text-xl text-foreground uppercase tracking-tight mb-1">
             {selectedCity !== 'Todas'
               ? `No hay campeonatos en ${selectedCity}`
               : (statusFilter !== 'all'
                 ? `No hay campeonatos ${STATUS_LABELS[statusFilter]?.label || ''}`
                 : 'No hay campeonatos aún')}
           </h3>
-          <p className="text-[#4D715B] text-sm font-medium max-w-sm mx-auto mb-4">
+          <p className="text-muted-foreground text-sm font-medium max-w-sm mx-auto mb-4">
             {selectedCity !== 'Todas'
               ? `Actualmente no hay torneos registrados en ${selectedCity}. Puedes ver los torneos disponibles a nivel nacional.`
               : (user ? '¡Sé el primero en crear y publicar un campeonato!' : 'Inicia sesión para registrar tu torneo.')}
@@ -558,8 +558,8 @@ export default function TournamentsPage() {
 
             // Configuración POR DEFECTO: Abiertas / Activo (VERDE)
             let statusClasses = {
-              bg: 'bg-[#E8F3EB] border-[#008744] shadow-sm',
-              text: 'text-[#054D27]',
+              bg: 'bg-[#E8F3EB] dark:bg-emerald-950/40 border-[#008744] dark:border-emerald-600/50 shadow-sm',
+              text: 'text-[#054D27] dark:text-emerald-300',
               dot: 'bg-[#008744] animate-pulse',
               label: 'Inscripciones abiertas', // Texto visible
             };
@@ -567,8 +567,8 @@ export default function TournamentsPage() {
             // Condición estricta para CUPO LLENO (ROJO/NARANJA FUERTE)
             if (status === 'closed') {
               statusClasses = {
-                bg: 'bg-[#FFF0F0] border-red-500 shadow-sm',
-                text: 'text-red-700',
+                bg: 'bg-[#FFF0F0] dark:bg-rose-950/40 border-red-500 dark:border-rose-600/50 shadow-sm',
+                text: 'text-red-700 dark:text-rose-300',
                 dot: 'bg-red-500',
                 label: 'Cupos llenos', // Texto visible
               };
@@ -589,7 +589,7 @@ export default function TournamentsPage() {
               <article
                 key={t.id}
                 onClick={() => setSelectedTournament(t)}
-                className="group relative bg-[#DCE7DE] border border-[#C8DACB] rounded-[2rem] overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 hover:-translate-y-1.5 flex flex-col cursor-pointer select-none"
+                className="group relative bg-card border border-border rounded-[2rem] overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 hover:-translate-y-1.5 flex flex-col cursor-pointer select-none"
               >
                 {/* Header con Imagen */}
                 <div className="relative aspect-[4/4] w-full bg-secondary overflow-hidden">
@@ -629,7 +629,7 @@ export default function TournamentsPage() {
                           e.stopPropagation();
                           openEdit(t);
                         }}
-                        className="p-2 bg-[#DCE7DE]/90 backdrop-blur-md text-[#054D27] rounded-full hover:bg-[#008744] hover:text-white transition-all shadow-md"
+                        className="p-2 bg-background/90 backdrop-blur-md text-foreground rounded-full hover:bg-primary hover:text-primary-foreground transition-all shadow-md"
                         title="Editar torneo"
                       >
                         <Edit3 size={14} />
@@ -640,7 +640,7 @@ export default function TournamentsPage() {
                           e.stopPropagation();
                           handleDelete(t.id);
                         }}
-                        className="p-2 bg-[#DCE7DE]/90 backdrop-blur-md text-red-600 rounded-full hover:bg-red-600 hover:text-white transition-all shadow-md"
+                        className="p-2 bg-background/90 backdrop-blur-md text-red-600 rounded-full hover:bg-red-600 hover:text-white transition-all shadow-md"
                         title="Eliminar torneo"
                       >
                         <Trash2 size={14} />
@@ -657,7 +657,7 @@ export default function TournamentsPage() {
                 </div>
 
                 {/* Cuerpo de la tarjeta */}
-                <div className="p-4 flex flex-col gap-3 flex-1 text-[#0F3822]">
+                <div className="p-4 flex flex-col gap-3 flex-1 text-foreground">
 
                   {/* SECCIÓN SUPERIOR: Badge de Estado Dinámico + Fecha de inicio */}
                   <div className="flex items-center justify-between gap-2">
@@ -670,11 +670,11 @@ export default function TournamentsPage() {
                     </span>
 
                     {t.start_date && (
-                      <div className="flex items-center gap-1 text-[11px] font-extrabold text-[#4D715B]">
-                        <CalendarDays size={13} className="text-[#0B6637] shrink-0" />
+                      <div className="flex items-center gap-1 text-[11px] font-extrabold text-muted-foreground">
+                        <CalendarDays size={13} className="text-primary shrink-0" />
                         <span>
                           Inicio:{' '}
-                          <strong className="text-[#054D27]">
+                          <strong className="text-foreground">
                             {new Date(t.start_date + 'T12:00:00').toLocaleDateString('es-CO', {
                               day: 'numeric',
                               month: 'short',
@@ -686,25 +686,25 @@ export default function TournamentsPage() {
                     )}
                   </div>
 
-                  {/* BLOQUE PREMIO MAYOR - SUAVE, ELEGANTE Y DE ALTO CONTRASTE */}
-                  <div className="bg-[#CDE0D1] border border-[#BACFC0] rounded-2xl p-3.5 flex items-center gap-3.5 shadow-xs">
-                    {/* Caja del Icono en Verde Oscuro Corporativo */}
-                    <div className="w-11 h-11 rounded-xl bg-[#054D27] text-white flex items-center justify-center shrink-0 shadow-xs">
-                      <Trophy size={22} className="text-[#DCE7DE]" />
+                  {/* BLOQUE PREMIO MAYOR */}
+                  <div className="bg-secondary/60 border border-border rounded-2xl p-3.5 flex items-center gap-3.5 shadow-xs">
+                    {/* Caja del Icono */}
+                    <div className="w-11 h-11 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shrink-0 shadow-xs">
+                      <Trophy size={22} className="text-primary-foreground" />
                     </div>
 
                     {/* Contenido del Premio */}
                     <div className="min-w-0 flex-1">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-[#4D715B] leading-none mb-1">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">
                         Premio Mayor
                       </p>
-                      <p className="font-black text-xl text-[#054D27] tracking-tight leading-none truncate">
+                      <p className="font-black text-xl text-foreground tracking-tight leading-none truncate">
                         {hasPrizeValue
                           ? `$${Number(t.prize_value).toLocaleString('es-CO')} COP`
                           : t.prize || 'Por definir'}
                       </p>
                       {t.prize && Number(t.prize_value || 0) > 0 && (
-                        <p className="text-[11px] font-bold text-[#1C412B] truncate mt-0.5">
+                        <p className="text-[11px] font-bold text-primary truncate mt-0.5">
                           {t.prize}
                         </p>
                       )}
@@ -715,14 +715,14 @@ export default function TournamentsPage() {
                   {/* Grid de Inscripción y Sede */}
                   <div className="grid grid-cols-2 gap-2.5">
                     {/* Bloque Inscripción */}
-                    <div className="bg-[#CDE0D1] border border-[#BACFC0] rounded-2xl p-3 flex flex-col justify-between">
+                    <div className="bg-secondary/60 border border-border rounded-2xl p-3 flex flex-col justify-between">
                       <div className="flex items-center gap-1.5 mb-1">
-                        <Ticket size={13} className="text-[#0B6637] shrink-0" />
-                        <span className="text-[9px] font-extrabold uppercase tracking-wider text-[#4D715B]">
+                        <Ticket size={13} className="text-primary shrink-0" />
+                        <span className="text-[9px] font-extrabold uppercase tracking-wider text-muted-foreground">
                           Inscripción
                         </span>
                       </div>
-                      <p className="font-black text-xs sm:text-sm text-[#054D27] leading-tight">
+                      <p className="font-black text-xs sm:text-sm text-foreground leading-tight">
                         {t.entry_fee > 0
                           ? `$${Number(t.entry_fee).toLocaleString('es-CO')}`
                           : 'Gratuito'}
@@ -730,10 +730,10 @@ export default function TournamentsPage() {
                     </div>
 
                     {/* Bloque Sede / Cancha */}
-                    <div className="bg-[#CDE0D1] border border-[#BACFC0] rounded-2xl p-3 flex flex-col justify-between">
+                    <div className="bg-secondary/60 border border-border rounded-2xl p-3 flex flex-col justify-between">
                       <div className="flex items-center gap-1.5 mb-1">
-                        <MapPin size={13} className="text-[#0B6637] shrink-0" />
-                        <span className="text-[9px] font-extrabold uppercase tracking-wider text-[#4D715B]">
+                        <MapPin size={13} className="text-primary shrink-0" />
+                        <span className="text-[9px] font-extrabold uppercase tracking-wider text-muted-foreground">
                           Lugar
                         </span>
                       </div>
@@ -741,13 +741,13 @@ export default function TournamentsPage() {
                         <Link
                           href={`/cancha/${t.pitch_id}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="font-black text-xs text-[#054D27]  uppercase leading-tight line-clamp-2"
+                          className="font-black text-xs text-foreground uppercase leading-tight line-clamp-2"
                         >
                           {t.pitches?.companies?.name}
                           <ExternalLink size={11} className="shrink-0 mt-0.5" />
                         </Link>
                       ) : (
-                        <p className="font-black text-xs text-[#054D27] uppercase leading-tight line-clamp-2">
+                        <p className="font-black text-xs text-foreground uppercase leading-tight line-clamp-2">
                           {t.location || 'Por definir'}
                         </p>
                       )}
@@ -756,7 +756,7 @@ export default function TournamentsPage() {
 
                   {/* Descripción */}
                   {t.description && (
-                    <p className="text-xs text-[#1C412B] font-medium line-clamp-2 leading-relaxed px-1">
+                    <p className="text-xs text-muted-foreground font-medium line-clamp-2 leading-relaxed px-1">
                       {t.description}
                     </p>
                   )}
@@ -784,16 +784,16 @@ export default function TournamentsPage() {
         >
           {/* Tarjeta Flotante Completa */}
           <div
-            className="bg-[#DCE7DE] w-full max-w-md max-h-[88vh] flex flex-col rounded-[2.5rem] shadow-2xl overflow-hidden border border-[#C8DACB] animate-in zoom-in-95 duration-200"
+            className="bg-[#DCE7DE] dark:bg-card w-full max-w-md max-h-[88vh] flex flex-col rounded-[2.5rem] shadow-2xl overflow-hidden border border-[#C8DACB] dark:border-border animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             {/* 1. Header Principal */}
-            <div className="p-6 pb-3 flex items-start justify-between bg-[#DCE7DE] shrink-0">
+            <div className="p-6 pb-3 flex items-start justify-between bg-[#DCE7DE] dark:bg-card shrink-0">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#4D715B] mb-0.5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#4D715B] dark:text-muted-foreground mb-0.5">
                   Torneo
                 </p>
-                <h2 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase leading-tight tracking-tight">
+                <h2 className="text-2xl sm:text-3xl font-black text-[#054D27] dark:text-foreground uppercase leading-tight tracking-tight">
                   {selectedTournament.name}
                 </h2>
               </div>
@@ -803,7 +803,7 @@ export default function TournamentsPage() {
                   <button
                     type="button"
                     onClick={() => openEdit(selectedTournament)}
-                    className="p-2 text-[#054D27] hover:bg-[#CDE0D1] rounded-full transition-colors"
+                    className="p-2 text-[#054D27] dark:text-foreground hover:bg-[#CDE0D1] dark:hover:bg-secondary rounded-full transition-colors"
                   >
                     <Edit3 size={18} />
                   </button>
@@ -811,7 +811,7 @@ export default function TournamentsPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedTournament(null)}
-                  className="p-2 text-[#054D27] hover:bg-[#CDE0D1] rounded-full transition-colors"
+                  className="p-2 text-[#054D27] dark:text-foreground hover:bg-[#CDE0D1] dark:hover:bg-secondary rounded-full transition-colors"
                 >
                   <X size={22} />
                 </button>
@@ -819,7 +819,7 @@ export default function TournamentsPage() {
             </div>
 
             {/* 2. Cuerpo Desplazable */}
-            <div className="overflow-y-auto flex-1 px-5 pb-5 space-y-3 text-[#0F3822]">
+            <div className="overflow-y-auto flex-1 px-5 pb-5 space-y-3 text-[#0F3822] dark:text-foreground">
 
               {/* Imagen / Carrusel Embebido */}
               {(() => {
@@ -835,7 +835,7 @@ export default function TournamentsPage() {
                 const currentImg = mediaUrls[currentImageIdx || 0];
 
                 return (
-                  <div className="relative w-full h-80 sm:h-96 md:h-[420px] rounded-3xl overflow-hidden bg-black/40 shrink-0 group select-none shadow-md border border-[#C5E1CB]">
+                  <div className="relative w-full h-80 sm:h-96 md:h-[420px] rounded-3xl overflow-hidden bg-black/40 shrink-0 group select-none shadow-md border border-[#C5E1CB] dark:border-border">
                     {/* Fondo difuminado para rellenar laterales en imágenes verticales */}
                     <img
                       src={currentImg}
@@ -905,21 +905,21 @@ export default function TournamentsPage() {
               {/* Highlight Banner: Premio Mayor */}
               {(selectedTournament.prize ||
                 (selectedTournament.prize_value && selectedTournament.prize_value > 0)) && (
-                  <div className="bg-[#CDE0D1] border border-[#BACFC0] rounded-2xl p-3.5 flex items-center gap-3.5 shadow-2xs">
+                  <div className="bg-[#CDE0D1] dark:bg-secondary/60 border border-[#BACFC0] dark:border-border rounded-2xl p-3.5 flex items-center gap-3.5 shadow-2xs">
                     <div className="w-10 h-10 rounded-full bg-[#008744] text-white flex items-center justify-center shrink-0 shadow-xs">
                       <Trophy size={20} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#4D715B]">
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#4D715B] dark:text-muted-foreground">
                         Premio Mayor
                       </p>
-                      <p className="font-black text-lg text-[#054D27] leading-tight">
+                      <p className="font-black text-lg text-[#054D27] dark:text-foreground leading-tight">
                         {selectedTournament.prize_value && selectedTournament.prize_value > 0
                           ? `$${Number(selectedTournament.prize_value).toLocaleString('es-CO')} COP`
                           : selectedTournament.prize}
                       </p>
                       {selectedTournament.prize && Number(selectedTournament.prize_value || 0) > 0 && (
-                        <p className="text-[11px] font-bold text-[#1C412B] truncate mt-0.5">
+                        <p className="text-[11px] font-bold text-[#1C412B] dark:text-emerald-400 truncate mt-0.5">
                           {selectedTournament.prize}
                         </p>
                       )}
@@ -930,10 +930,10 @@ export default function TournamentsPage() {
               {/* Grid de 2 Columnas: Sede & Inscripción */}
               <div className="grid grid-cols-2 gap-3">
                 {(selectedTournament.location || selectedTournament.pitches) && (
-                  <div className="bg-[#CDE0D1] border border-[#BACFC0] rounded-2xl p-3.5 flex flex-col justify-between">
+                  <div className="bg-[#CDE0D1] dark:bg-secondary/60 border border-[#BACFC0] dark:border-border rounded-2xl p-3.5 flex flex-col justify-between">
                     <div className="flex items-center gap-1.5 mb-1.5">
-                      <MapPin size={14} className="text-[#0B6637] shrink-0" />
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#4D715B]">
+                      <MapPin size={14} className="text-[#0B6637] dark:text-emerald-400 shrink-0" />
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#4D715B] dark:text-muted-foreground">
                         Lugar
                       </p>
                     </div>
@@ -941,9 +941,9 @@ export default function TournamentsPage() {
                       <Link
                         href={`/cancha/${selectedTournament.pitch_id}`}
                         title={selectedTournament.pitches.name}
-                        className="group font-black text-xs sm:text-sm text-[#054D27]  flex items-start gap-1 uppercase leading-snug break-words"
+                        className="group font-black text-xs sm:text-sm text-[#054D27] dark:text-foreground flex items-start gap-1 uppercase leading-snug break-words"
                       >
-                        <span className="line-clamp-2 transition-colors group-hover:text-[#008744]">
+                        <span className="line-clamp-2 transition-colors group-hover:text-[#008744] dark:group-hover:text-emerald-400">
                           {selectedTournament.pitches.companies?.name}
 
                         </span>
@@ -952,7 +952,7 @@ export default function TournamentsPage() {
                     ) : (
                       <p
                         title={selectedTournament.location}
-                        className="font-black text-xs sm:text-sm text-[#054D27] uppercase leading-snug line-clamp-2 break-words"
+                        className="font-black text-xs sm:text-sm text-[#054D27] dark:text-foreground uppercase leading-snug line-clamp-2 break-words"
                       >
                         {selectedTournament.location}
                       </p>
@@ -961,14 +961,14 @@ export default function TournamentsPage() {
                 )}
 
                 {selectedTournament.entry_fee !== undefined && (
-                  <div className="bg-[#CDE0D1] border border-[#BACFC0] rounded-2xl p-3.5 flex flex-col justify-between">
+                  <div className="bg-[#CDE0D1] dark:bg-secondary/60 border border-[#BACFC0] dark:border-border rounded-2xl p-3.5 flex flex-col justify-between">
                     <div className="flex items-center gap-1.5 mb-1.5">
-                      <Ticket size={14} className="text-[#0B6637] shrink-0" />
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#4D715B]">
+                      <Ticket size={14} className="text-[#0B6637] dark:text-emerald-400 shrink-0" />
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#4D715B] dark:text-muted-foreground">
                         Inscripción
                       </p>
                     </div>
-                    <p className="font-black text-xs sm:text-sm text-[#054D27] leading-tight">
+                    <p className="font-black text-xs sm:text-sm text-[#054D27] dark:text-foreground leading-tight">
                       {selectedTournament.entry_fee > 0
                         ? `$${Number(selectedTournament.entry_fee).toLocaleString('es-CO')} COP`
                         : 'Gratuito'}
@@ -981,17 +981,17 @@ export default function TournamentsPage() {
               {(selectedTournament.start_date ||
                 selectedTournament.registration_end_date ||
                 selectedTournament.final_date) && (
-                  <div className="bg-[#CDE0D1] border border-[#BACFC0] rounded-2xl p-3.5 space-y-2.5">
+                  <div className="bg-[#CDE0D1] dark:bg-secondary/60 border border-[#BACFC0] dark:border-border rounded-2xl p-3.5 space-y-2.5">
                     {selectedTournament.start_date && (
                       <div className="flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-full bg-[#B8D3BD] flex items-center justify-center shrink-0">
-                          <CalendarDays size={15} className="text-[#0B6637]" />
+                        <div className="w-7 h-7 rounded-full bg-[#B8D3BD] dark:bg-secondary flex items-center justify-center shrink-0">
+                          <CalendarDays size={15} className="text-[#0B6637] dark:text-emerald-400" />
                         </div>
                         <div>
-                          <p className="text-[9px] font-extrabold uppercase tracking-wider text-[#4D715B]">
+                          <p className="text-[9px] font-extrabold uppercase tracking-wider text-[#4D715B] dark:text-muted-foreground">
                             Inicio del Torneo
                           </p>
-                          <p className="font-black text-xs text-[#054D27] capitalize">
+                          <p className="font-black text-xs text-[#054D27] dark:text-foreground capitalize">
                             {new Date(selectedTournament.start_date + 'T12:00:00').toLocaleDateString(
                               'es-CO',
                               { day: 'numeric', month: 'long', year: 'numeric' }
@@ -1002,15 +1002,15 @@ export default function TournamentsPage() {
                     )}
 
                     {selectedTournament.registration_end_date && (
-                      <div className="flex items-center gap-3 pt-2 border-t border-[#BACFC0]/60">
-                        <div className="w-7 h-7 rounded-full bg-[#B8D3BD] flex items-center justify-center shrink-0">
-                          <CalendarDays size={15} className="text-[#0B6637]" />
+                      <div className="flex items-center gap-3 pt-2 border-t border-[#BACFC0]/60 dark:border-border">
+                        <div className="w-7 h-7 rounded-full bg-[#B8D3BD] dark:bg-secondary flex items-center justify-center shrink-0">
+                          <CalendarDays size={15} className="text-[#0B6637] dark:text-emerald-400" />
                         </div>
                         <div>
-                          <p className="text-[9px] font-extrabold uppercase tracking-wider text-[#4D715B]">
+                          <p className="text-[9px] font-extrabold uppercase tracking-wider text-[#4D715B] dark:text-muted-foreground">
                             Fecha Límite de Inscripción
                           </p>
-                          <p className="font-black text-xs text-[#054D27] capitalize">
+                          <p className="font-black text-xs text-[#054D27] dark:text-foreground capitalize">
                             {new Date(
                               selectedTournament.registration_end_date + 'T12:00:00'
                             ).toLocaleDateString('es-CO', {
@@ -1024,15 +1024,15 @@ export default function TournamentsPage() {
                     )}
 
                     {selectedTournament.final_date && (
-                      <div className="flex items-center gap-3 pt-2 border-t border-[#BACFC0]/60">
-                        <div className="w-7 h-7 rounded-full bg-[#B8D3BD] flex items-center justify-center shrink-0">
-                          <CalendarDays size={15} className="text-[#0B6637]" />
+                      <div className="flex items-center gap-3 pt-2 border-t border-[#BACFC0]/60 dark:border-border">
+                        <div className="w-7 h-7 rounded-full bg-[#B8D3BD] dark:bg-secondary flex items-center justify-center shrink-0">
+                          <CalendarDays size={15} className="text-[#0B6637] dark:text-emerald-400" />
                         </div>
                         <div>
-                          <p className="text-[9px] font-extrabold uppercase tracking-wider text-[#4D715B]">
+                          <p className="text-[9px] font-extrabold uppercase tracking-wider text-[#4D715B] dark:text-muted-foreground">
                             Fecha de Premiación
                           </p>
-                          <p className="font-black text-xs text-[#054D27] capitalize">
+                          <p className="font-black text-xs text-[#054D27] dark:text-foreground capitalize">
                             {new Date(selectedTournament.final_date + 'T12:00:00').toLocaleDateString(
                               'es-CO',
                               { day: 'numeric', month: 'long', year: 'numeric' }
@@ -1046,11 +1046,11 @@ export default function TournamentsPage() {
 
               {/* Descripción */}
               {selectedTournament.description && (
-                <div className="bg-[#CDE0D1] border border-[#BACFC0] rounded-2xl p-4">
-                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#4D715B] mb-1.5">
+                <div className="bg-[#CDE0D1] dark:bg-secondary/60 border border-[#BACFC0] dark:border-border rounded-2xl p-4">
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#4D715B] dark:text-muted-foreground mb-1.5">
                     Descripción
                   </p>
-                  <p className="text-xs sm:text-sm text-[#1C412B] font-medium leading-relaxed whitespace-pre-wrap">
+                  <p className="text-xs sm:text-sm text-[#1C412B] dark:text-foreground font-medium leading-relaxed whitespace-pre-wrap">
                     {selectedTournament.description}
                   </p>
                 </div>
@@ -1058,11 +1058,11 @@ export default function TournamentsPage() {
             </div>
 
             {/* 3. Footer Botones */}
-            <div className="p-4 bg-[#DCE7DE] flex items-center gap-3 shrink-0 border-t border-[#BACFC0]">
+            <div className="p-4 bg-[#DCE7DE] dark:bg-card flex items-center gap-3 shrink-0 border-t border-[#BACFC0] dark:border-border">
               <button
                 type="button"
                 onClick={() => setSelectedTournament(null)}
-                className="flex-1 py-3 px-4 rounded-full bg-[#CDE0D1] text-[#054D27] font-extrabold text-sm hover:bg-[#BFD7C4] transition-colors flex items-center justify-center gap-2"
+                className="flex-1 py-3 px-4 rounded-full bg-[#CDE0D1] dark:bg-secondary text-[#054D27] dark:text-foreground font-extrabold text-sm hover:bg-[#BFD7C4] dark:hover:bg-secondary/80 transition-colors flex items-center justify-center gap-2"
               >
 
                 Cerrar

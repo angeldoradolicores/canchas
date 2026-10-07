@@ -407,7 +407,7 @@ export default function WhatsAppConnectionPage() {
     <div className="space-y-6 max-w-4xl mx-auto pb-12 p-4">
       <div>
         <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600">WHATSAPP SAAS DE TU COMPLEJO</span>
-        <h1 className="text-2xl font-bold flex items-center gap-2 text-zinc-900 mt-1">
+        <h1 className="text-2xl font-bold flex items-center gap-2 text-foreground mt-1">
           <Smartphone className="text-emerald-600" size={24} /> Conectar mi WhatsApp
         </h1>
         <p className="text-xs text-zinc-500">
@@ -426,10 +426,10 @@ export default function WhatsAppConnectionPage() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-2 bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+        <div className="wp-card md:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-zinc-100 mb-6">
-              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">Estado de Vinculación</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Estado de Vinculación</span>
               {status === 'connected' && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-green-100 text-green-700">
                   <CheckCircle2 size={14} /> Conectado
@@ -455,20 +455,20 @@ export default function WhatsAppConnectionPage() {
                     📱
                   </div>
                   <div>
-                    <strong className="text-base block font-bold text-zinc-900">
+                    <strong className="text-base block font-bold text-foreground">
                       {formatDisplayPhone(connectedPhone) ||
                         formatDisplayPhone(company?.whatsapp_connected_phone) ||
                         formatDisplayPhone(company?.owner_phone) ||
                         formatDisplayPhone(profile?.phone) ||
                         'Número no registrado'}
                     </strong>
-                    <p className="text-xs text-zinc-500">Sesión activa · Vinculado a <strong> {company?.name || 'Mi Complejo'}</strong></p>
+                    <p className="text-xs text-muted-foreground">Sesión activa · Vinculado a <strong> {company?.name || 'Mi Complejo'}</strong></p>
                   </div>
                 </div>
 
-                <div className="bg-zinc-50 p-4 rounded-xl space-y-2 text-xs border border-zinc-100">
+                <div className="bg-secondary/60 p-4 rounded-xl space-y-2 text-xs border border-border">
                   <div className="flex justify-between">
-                    <span className="text-zinc-500">Instancia activa:</span>
+                    <span className="text-muted-foreground">Instancia activa:</span>
                     <code className="font-mono font-bold text-emerald-600">{instanceName}</code>
                   </div>
                 </div>
@@ -522,18 +522,18 @@ export default function WhatsAppConnectionPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <h3 className="font-bold text-sm text-zinc-900">Escanea este código QR con WhatsApp</h3>
-                  <p className="text-xs text-zinc-500 max-w-sm">
+                  <h3 className="font-bold text-sm text-foreground">Escanea este código QR con WhatsApp</h3>
+                  <p className="text-xs text-muted-foreground max-w-sm">
                     Abre WhatsApp ➔ Menú ➔ Dispositivos vinculados ➔ Vincular dispositivo.
                   </p>
-                  <p className="text-xs text-zinc-500 max-w-sm">
+                  <p className="text-xs text-muted-foreground max-w-sm">
                     Si no se genera el QR, intenta volver a generar el QR.
                   </p>
 
                   <button
                     onClick={() => handleGenerateQR(true)}
                     disabled={generating}
-                    className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold text-xs rounded-xl inline-flex items-center gap-1.5 transition-colors border border-zinc-200 mt-2"
+                    className="px-4 py-2 bg-secondary hover:bg-secondary/80 text-foreground font-bold text-xs rounded-xl inline-flex items-center gap-1.5 transition-colors border border-border mt-2"
                   >
                     <RefreshCw size={14} className={generating ? 'animate-spin' : ''} /> Generar de nuevo
                   </button>
@@ -563,12 +563,12 @@ export default function WhatsAppConnectionPage() {
             {/* ESTADO DESCONECTADO */}
             {status === 'disconnected' && (
               <div className="py-8 text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-zinc-100 text-zinc-400 mx-auto flex items-center justify-center">
+                <div className="w-16 h-16 rounded-full bg-secondary text-muted-foreground mx-auto flex items-center justify-center">
                   <QrCode size={32} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-zinc-900">WhatsApp no vinculado</h3>
-                  <p className="text-xs text-zinc-500 max-w-md mx-auto mt-1">
+                  <h3 className="font-bold text-base text-foreground">WhatsApp no vinculado</h3>
+                  <p className="text-xs text-muted-foreground max-w-md mx-auto mt-1">
                     Vincula tu número para enviar mensajes de confirmación de reservas y recordatorios automáticamente a tus jugadores.
                   </p>
                 </div>
@@ -582,7 +582,7 @@ export default function WhatsAppConnectionPage() {
                     <Loader2 size={16} className="animate-spin" />
                   ) : (
                     <>
-                      <QrCode size={18} /> Generar Código QR de Conexión
+                      <QrCode size={18} /> Generar Código QR
                     </>
                   )}
                 </button>
@@ -591,7 +591,7 @@ export default function WhatsAppConnectionPage() {
           </div>
 
           {status === 'connected' && (
-            <div className="pt-6 mt-6 border-t border-zinc-100 flex justify-end">
+            <div className="pt-6 mt-6 border-t border-border flex justify-end">
               <button
                 onClick={handleDisconnect}
                 disabled={generating}
@@ -603,17 +603,17 @@ export default function WhatsAppConnectionPage() {
           )}
         </div>
 
-        <div className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm space-y-4 flex flex-col justify-between">
+        <div className="wp-card bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4 flex flex-col justify-between">
           <div className="space-y-3">
             <h3 className="font-bold text-sm flex items-center gap-1.5 text-emerald-600">
               <Zap size={16} /> ¿Cómo funciona el envío?
             </h3>
-            <p className="text-xs text-zinc-500 leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               Cada complejo deportivo en <strong>Cancheros</strong> dispone de una instancia aislada para gestionar sus notificaciones sin interferir con otros negocios.
             </p>
           </div>
 
-          <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-100 text-[11px] text-zinc-500 flex items-start gap-2">
+          <div className="p-3 bg-secondary/60 rounded-xl border border-border text-[11px] text-muted-foreground flex items-start gap-2">
             <Info size={16} className="text-emerald-600 flex-shrink-0 mt-0.5" />
             <span>
               Puedes desvincular o cerrar la sesión cuando quieras desde Dispositivos vinculados en tu WhatsApp.

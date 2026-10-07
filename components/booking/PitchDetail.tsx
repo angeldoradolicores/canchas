@@ -1020,7 +1020,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-3.5 w-full min-w-0">
                 {tournaments.map(t => (
                   <Link href="/tournaments" key={t.id} className="block group w-full min-w-0">
-                    <div className="flex items-center gap-3 p-3.5 sm:p-4 bg-emerald-50/30 rounded-2xl sm:rounded-xl border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/60 shadow-sm transition-all duration-200 w-full min-w-0">
+                    <div className="flex items-center gap-3 p-3.5 sm:p-4 bg-emerald-50/30 dark:bg-card/70 rounded-2xl sm:rounded-xl border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/60 dark:hover:bg-secondary/60 shadow-sm transition-all duration-200 w-full min-w-0">
 
                       {/* Contenedor de Imagen o Icono */}
                       <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shrink-0 shadow-sm group-hover:scale-105 transition-transform overflow-hidden">
@@ -1033,7 +1033,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
 
                       {/* Información del Torneo */}
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-extrabold capitalize text-sm sm:text-base text-foreground truncate group-hover:text-emerald-700 transition-colors">
+                        <h4 className="font-extrabold capitalize text-sm sm:text-base text-foreground truncate group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
                           {t.name}
                         </h4>
                         <p className="text-[11px] sm:text-xs font-medium text-muted-foreground mt-0.5 truncate">
@@ -1041,11 +1041,11 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                         </p>
                       </div>
 
-                      {/* Premio Mayor Destacado (Adaptado para verse limpio horizontalmente) */}
+                      {/* Premio Mayor Destacado */}
                       {(t.prize || (t.prize_value && t.prize_value > 0)) && (
-                        <div className="flex flex-col items-end justify-center bg-emerald-100/50 border border-emerald-200/60 px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl shrink-0 text-right shadow-xs group-hover:bg-emerald-100 transition-colors">
-                          <p className="text-[9px] sm:text-[10px] font-bold text-emerald-800/80 uppercase tracking-wider">Premio</p>
-                          <p className="text-xs sm:text-sm font-black text-emerald-700 tracking-tight mt-0.5 whitespace-nowrap">
+                        <div className="flex flex-col items-end justify-center bg-emerald-100/50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/50 px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl shrink-0 text-right shadow-xs group-hover:bg-emerald-100 dark:group-hover:bg-emerald-950/60 transition-colors">
+                          <p className="text-[9px] sm:text-[10px] font-bold text-emerald-800/80 dark:text-emerald-300 uppercase tracking-wider">Premio</p>
+                          <p className="text-xs sm:text-sm font-black text-emerald-700 dark:text-emerald-400 tracking-tight mt-0.5 whitespace-nowrap">
                             {t.prize_value && t.prize_value > 0 ? `$${Number(t.prize_value).toLocaleString('es-CO')}` : t.prize}
                           </p>
                         </div>
@@ -1067,8 +1067,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-3.5 w-full min-w-0">
                 {schools.map(s => (
                   <Link href="/schools" key={s.id} className="block group w-full min-w-0">
-                    {/* Cambiado a items-start para que si la descripción crece, el logo y las categorías no se desalineen */}
-                    <div className="flex items-start gap-3 p-3.5 sm:p-4 bg-secondary/30 rounded-2xl sm:rounded-xl border border-border/60 hover:border-primary/50 hover:bg-secondary/60 shadow-sm transition-all duration-200 w-full min-w-0">
+                    <div className="flex items-start gap-3 p-3.5 sm:p-4 bg-secondary/30 dark:bg-card/70 rounded-2xl sm:rounded-xl border border-border/60 hover:border-primary/50 hover:bg-secondary/60 dark:hover:bg-secondary shadow-sm transition-all duration-200 w-full min-w-0">
 
                       {/* Logo de la escuela */}
                       <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-card border border-border/80 flex items-center justify-center text-muted-foreground shrink-0 shadow-sm group-hover:scale-105 transition-transform overflow-hidden mt-0.5">
@@ -1079,22 +1078,21 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                         )}
                       </div>
 
-                      {/* Información central (Nombre y Descripción con límite de líneas) */}
+                      {/* Información central */}
                       <div className="flex-1 min-w-0">
                         <h4 className="font-extrabold capitalize text-sm sm:text-base text-foreground truncate group-hover:text-primary transition-colors">
                           {s.name}
                         </h4>
 
-                        {/* Usamos line-clamp-2 para que soporte texto largo pero corte con puntos suspensivos a las 2 líneas */}
                         <p className="text-[11px] sm:text-xs font-medium text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
                           {s.description || s.categories || 'Formación deportiva'}
                         </p>
                       </div>
 
                       {/* Insignia de Categorías a la derecha */}
-                      <div className="flex flex-col items-end justify-center bg-emerald-100/50 border border-emerald-200/60 px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl shrink-0 text-right shadow-xs group-hover:bg-emerald-100 transition-colors">
-                        <p className="text-[9px] sm:text-[10px] font-bold text-emerald-800/80 uppercase tracking-wider">Categorias</p>
-                        <p className="text-xs sm:text-sm font-black text-emerald-700 tracking-tight mt-0.5 whitespace-nowrap">
+                      <div className="flex flex-col items-end justify-center bg-emerald-100/50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/50 px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl shrink-0 text-right shadow-xs group-hover:bg-emerald-100 dark:group-hover:bg-emerald-950/60 transition-colors">
+                        <p className="text-[9px] sm:text-[10px] font-bold text-emerald-800/80 dark:text-emerald-300 uppercase tracking-wider">Categorias</p>
+                        <p className="text-xs sm:text-sm font-black text-emerald-700 dark:text-emerald-400 tracking-tight mt-0.5 whitespace-nowrap">
                           {s.categories || 'General'}
                         </p>
                       </div>

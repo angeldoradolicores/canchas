@@ -235,7 +235,7 @@ export async function POST(req: NextRequest) {
             rawBase64 = createData?.qrcode?.base64 || createData?.base64;
             rawCode = createData?.qrcode?.code || createData?.code;
             // Configurar webhook en segundo plano sin retrasar la respuesta al usuario
-            void setupInstanceWebhook(evoUrl, evoHeaders, instanceName).catch(() => {});
+            void setupInstanceWebhook(evoUrl, evoHeaders, instanceName).catch(() => { });
           }
         } catch (e) {
           console.warn('[WhatsApp API] Error al crear la instancia:', e);
@@ -273,7 +273,7 @@ export async function POST(req: NextRequest) {
 
       if (!finalQrImage) {
         return NextResponse.json({
-          error: 'Evolution API no devolvió un código QR. Presiona "Generar de nuevo" para reiniciar la sesión.',
+          error: 'Presiona "Generar Código" para generar un nuevo código .',
           instanceName,
         }, { status: 502 });
       }

@@ -1,6 +1,7 @@
 import { Analytics } from '@vercel/analytics/next'
 import { Inter } from 'next/font/google'
 import type { Metadata, Viewport } from 'next'
+import { ThemeProvider } from '@/lib/theme-context'
 // import { AppSplashScreen } from '@/components/layout/AppSplashScreen'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
@@ -48,10 +49,12 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es" className="bg-background">
+    <html lang="es" className="bg-background" suppressHydrationWarning>
       <body className={`${inter.variable} antialiased`}>
         {/* <AppSplashScreen /> */}
-        {children}
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

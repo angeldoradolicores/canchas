@@ -54,6 +54,28 @@
   --radius: 1rem;
 }
 
+.dark {
+  color-scheme: dark;
+  --background: oklch(.16 .025 160);
+  --foreground: oklch(.94 .015 150);
+  --card: oklch(.20 .025 160);
+  --card-foreground: oklch(.94 .015 150);
+  --popover: oklch(.19 .025 160);
+  --popover-foreground: oklch(.94 .015 150);
+  --primary: oklch(.60 .18 155);
+  --primary-foreground: oklch(.10 .02 160);
+  --secondary: oklch(.26 .03 160);
+  --secondary-foreground: oklch(.88 .02 150);
+  --muted: oklch(.24 .025 160);
+  --muted-foreground: oklch(.62 .04 155);
+  --accent: oklch(.75 .18 90);
+  --accent-foreground: oklch(.20 .07 70);
+  --destructive: oklch(.62 .20 25);
+  --border: oklch(.28 .03 160);
+  --input: oklch(.28 .03 160);
+  --ring: oklch(.55 .15 155);
+}
+
 * {
   @apply border-border outline-ring/50;
   box-sizing: border-box;
@@ -77,6 +99,123 @@ input {
 button {
   cursor: pointer;
 }
+
+/* ─── Dark mode overrides for hardcoded green page headers ─── */
+/* These pages use brand greens like #DCE7DE, #054D27, #4D715B.
+   In dark mode we remap them to dark card surface tones. */
+.dark .page-header-banner {
+  background: oklch(.22 .03 160) !important;
+  border-color: oklch(.30 .04 160) !important;
+}
+.dark .page-header-text-primary {
+  color: oklch(.85 .12 155) !important;
+}
+.dark .page-header-text-secondary {
+  color: oklch(.65 .06 155) !important;
+}
+.dark .page-filter-bar {
+  background: oklch(.24 .03 160) !important;
+  border-color: oklch(.32 .04 160) !important;
+}
+.dark .page-filter-btn-active {
+  background: oklch(.28 .04 160) !important;
+  color: oklch(.85 .12 155) !important;
+  border-color: oklch(.38 .07 160) !important;
+}
+.dark .page-filter-btn {
+  color: oklch(.65 .06 155) !important;
+}
+.dark .page-filter-btn:hover {
+  color: oklch(.85 .12 155) !important;
+  background: oklch(.28 .04 160) !important;
+}
+
+/* Fallbacks to guarantee legacy arbitrary sage/mint greens render dark in dark mode */
+.dark [class*="bg-[#DCE7DE]"],
+.dark [class*="bg-[#dce7de]"],
+.dark [class*="bg-[#dcefe3]"],
+.dark [class*="bg-[#d0e6d7]"] {
+  background-color: var(--card) !important;
+}
+.dark [class*="bg-[#CDE0D1]"],
+.dark [class*="bg-[#cde0d1]"],
+.dark [class*="bg-[#cde4d5]"],
+.dark [class*="bg-[#bce0ca]"] {
+  background-color: var(--secondary) !important;
+}
+.dark [class*="border-[#C8DACB]"],
+.dark [class*="border-[#BACFC0]"],
+.dark [class*="border-[#b8dbc5]"],
+.dark [class*="border-[#a4d4b4]"] {
+  border-color: var(--border) !important;
+}
+/* Leaflet map dark mode tile */
+.dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.85) saturate(0.8) !important;
+}
+.dark .leaflet-container {
+  background: oklch(.18 .02 160) !important;
+}
+.dark .leaflet-control-zoom a {
+  background: oklch(.24 .03 160) !important;
+  color: oklch(.90 .02 160) !important;
+  border-color: oklch(.32 .04 160) !important;
+}
+.dark .leaflet-control-zoom a:hover {
+  background: oklch(.30 .04 160) !important;
+}
+.dark .leaflet-control-attribution {
+  background: rgba(18, 25, 20, 0.8) !important;
+  color: #9ca3af !important;
+}
+.dark .leaflet-control-attribution a {
+  color: #34d399 !important;
+}
+/* Leaflet popup dark */
+.dark .complex-popup .leaflet-popup-content-wrapper {
+  background: oklch(.22 .03 160) !important;
+  border: 1px solid oklch(.34 .05 155) !important;
+  color: oklch(.92 .02 150) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+}
+.dark .complex-popup .leaflet-popup-tip {
+  background: oklch(.22 .03 160) !important;
+}
+.dark .complex-popup .complex-popup-title {
+  color: oklch(.92 .06 155) !important;
+}
+.dark .complex-popup .complex-popup-single-name {
+  color: oklch(.80 .12 155) !important;
+}
+.dark .complex-popup .complex-popup-addr {
+  color: oklch(.70 .04 155) !important;
+}
+.dark .complex-popup .complex-popup-section {
+  color: oklch(.75 .10 155) !important;
+}
+.dark .complex-popup .complex-popup-pitch-btn {
+  background: oklch(.26 .03 160) !important;
+  border-color: oklch(.34 .04 160) !important;
+}
+.dark .complex-popup .complex-popup-pitch-btn:hover {
+  background: oklch(.30 .04 160) !important;
+}
+.dark .complex-popup .complex-popup-pitch-name {
+  color: oklch(.92 .05 155) !important;
+}
+.dark .complex-popup .complex-popup-pitch-type {
+  color: oklch(.75 .10 155) !important;
+}
+.dark .complex-popup .complex-popup-arrow {
+  color: oklch(.75 .10 155) !important;
+}
+/* WhatsApp page dark */
+.dark .wp-card {
+  background: oklch(.20 .025 160);
+  border-color: oklch(.28 .03 160);
+  color: oklch(.90 .015 150);
+}
+
 
 .app-shell {
   min-height: 100vh;

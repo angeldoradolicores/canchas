@@ -279,14 +279,14 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
       {previewPitch && <PitchPreviewModal pitch={previewPitch} onClose={() => setPreviewPitch(null)} />}
 
       {/* ── Contenedor Principal de Controles (Header + Filtros de Retos) ── */}
-      <div className="bg-[#DCE7DE] border border-[#C8DACB] rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
+      <div className="bg-card border border-border rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
 
         {/* Encabezado: Título, Descripción y Botón de Acción */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-[#C8DACB]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-border">
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
-              <Swords className="text-[#054D27]" size={26} strokeWidth={2.5} />
-              <h1 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
+              <Swords className="text-primary" size={26} strokeWidth={2.5} />
+              <h1 className="text-2xl sm:text-3xl font-black text-foreground uppercase tracking-tight">
                 Retos y Partidos
               </h1>
               {/* <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#054D27]/10 text-[#054D27] border border-[#054D27]/20">
@@ -294,7 +294,7 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
                 <span>{selectedCity === 'Todas' ? 'Toda Colombia' : selectedCity}</span>
               </span> */}
             </div>
-            <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1 leading-relaxed">
+            <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-1 leading-relaxed">
               ¿Tu equipo está listo para jugar? Desafía a otros grupos, acuerda el nivel y organiza un partido competitivo.
             </p>
           </div>
@@ -306,7 +306,7 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
               setEditingChallenge(null);
               setShowForm(!showForm);
             }}
-            className="flex items-center justify-center gap-2 bg-[#008744] hover:bg-[#054D27] text-white font-black px-5 py-3 rounded-xl transition-colors shadow-md text-sm shrink-0"
+            className="flex items-center justify-center gap-2 bg-[#008744] hover:bg-[#054D27] text-white font-black px-5 py-3 rounded-xl transition-colors shadow-md text-sm shrink-0 cursor-pointer"
           >
             <Plus size={18} strokeWidth={3} /> Crear reto
           </button>
@@ -314,7 +314,7 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
 
         {/* Barra de Filtros Compacta */}
         <div>
-          <h2 className="text-[10px] font-extrabold text-[#4D715B] uppercase tracking-wider mb-2 px-1">
+          <h2 className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider mb-2 px-1">
             Filtrar partidos
           </h2>
 
@@ -323,9 +323,9 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
             <button
               type="button"
               onClick={() => setFilterUrgent(!filterUrgent)}
-              className={`h-10 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 select-none border ${filterUrgent
+              className={`h-10 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 select-none border cursor-pointer ${filterUrgent
                 ? 'bg-red-600 text-white border-red-600 shadow-xs'
-                : 'bg-[#CDE0D1]/70 text-[#4D715B] border-[#BACFC0] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
+                : 'bg-secondary text-foreground border-border hover:bg-secondary/80'
                 }`}
             >
               <Flame size={14} className={filterUrgent ? 'text-white' : 'text-red-500'} strokeWidth={2.5} />
@@ -337,19 +337,19 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
               <button
                 type="button"
                 onClick={() => setOpenDropdown(openDropdown === 'date' ? null : ('date' as any))}
-                className={`w-full h-10 px-3 border rounded-xl text-xs font-black flex items-center justify-between outline-none transition-all ${filterDate !== 'todas'
-                  ? 'bg-[#DCE7DE] text-[#054D27] border-[#BACFC0] shadow-xs'
-                  : 'bg-[#CDE0D1]/70 text-[#4D715B] border-[#BACFC0] hover:text-[#054D27]'
+                className={`w-full h-10 px-3 border rounded-xl text-xs font-black flex items-center justify-between outline-none transition-all cursor-pointer ${filterDate !== 'todas'
+                  ? 'bg-primary/10 text-primary border-primary shadow-xs'
+                  : 'bg-secondary text-foreground border-border hover:bg-secondary/80'
                   }`}
               >
                 <span className="truncate">
                   {filterDate === 'todas' ? 'Fechas' : filterDate === 'hoy' ? 'Hoy' : 'Filtrado'}
                 </span>
-                <ChevronDown size={14} strokeWidth={2.5} className="text-[#4D715B] shrink-0" />
+                <ChevronDown size={14} strokeWidth={2.5} className="text-muted-foreground shrink-0" />
               </button>
 
               {openDropdown === ('date' as any) && (
-                <div className="absolute top-11 left-0 w-44 p-1.5 bg-[#DCE7DE] border border-[#BACFC0] rounded-xl shadow-xl z-50 flex flex-col gap-1">
+                <div className="absolute top-11 left-0 w-44 p-1.5 bg-popover text-popover-foreground border border-border rounded-xl shadow-xl z-50 flex flex-col gap-1">
                   {[
                     { val: 'todas', label: 'Todas las fechas' },
                     { val: 'hoy', label: 'Hoy' },
@@ -363,9 +363,9 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
                         setFilterDate(dt.val as any);
                         setOpenDropdown(null);
                       }}
-                      className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-colors ${filterDate === dt.val
-                        ? 'bg-[#008744] text-white'
-                        : 'text-[#054D27] hover:bg-[#CDE0D1]'
+                      className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-colors cursor-pointer ${filterDate === dt.val
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-foreground hover:bg-muted'
                         }`}
                     >
                       {dt.label}
@@ -380,19 +380,19 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
               <button
                 type="button"
                 onClick={() => setOpenDropdown(openDropdown === 'level' ? null : 'level')}
-                className={`w-full h-10 px-3 border rounded-xl text-xs font-black flex items-center justify-between outline-none transition-all ${filterLevel !== 'todos'
-                  ? 'bg-[#DCE7DE] text-[#054D27] border-[#BACFC0] shadow-xs'
-                  : 'bg-[#CDE0D1]/70 text-[#4D715B] border-[#BACFC0] hover:text-[#054D27]'
+                className={`w-full h-10 px-3 border rounded-xl text-xs font-black flex items-center justify-between outline-none transition-all cursor-pointer ${filterLevel !== 'todos'
+                  ? 'bg-primary/10 text-primary border-primary shadow-xs'
+                  : 'bg-secondary text-foreground border-border hover:bg-secondary/80'
                   }`}
               >
                 <span className="truncate">
                   {filterLevel === 'todos' ? 'Nivel' : filterLevel}
                 </span>
-                <ChevronDown size={14} strokeWidth={2.5} className="text-[#4D715B] shrink-0" />
+                <ChevronDown size={14} strokeWidth={2.5} className="text-muted-foreground shrink-0" />
               </button>
 
               {openDropdown === 'level' && (
-                <div className="absolute top-11 right-0 w-40 p-1.5 bg-[#DCE7DE] border border-[#BACFC0] rounded-xl shadow-xl z-50 flex flex-col gap-1">
+                <div className="absolute top-11 right-0 w-40 p-1.5 bg-popover text-popover-foreground border border-border rounded-xl shadow-xl z-50 flex flex-col gap-1">
                   {[
                     { val: 'todos', label: 'Todos los niveles' },
                     { val: 'recreativo', label: 'Recreativo' },
@@ -406,9 +406,9 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
                         setFilterLevel(lvl.val);
                         setOpenDropdown(null);
                       }}
-                      className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-colors ${filterLevel === lvl.val
-                        ? 'bg-[#008744] text-white'
-                        : 'text-[#054D27] hover:bg-[#CDE0D1]'
+                      className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-colors cursor-pointer ${filterLevel === lvl.val
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-foreground hover:bg-muted'
                         }`}
                     >
                       {lvl.label}
@@ -759,14 +759,14 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
       )}
 
       {/* ── Contenedor Principal de Controles (Header + Filtros de Convocatorias) ── */}
-      <div className="bg-[#DCE7DE] border border-[#C8DACB] rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
+      <div className="bg-card border border-border rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
 
         {/* Encabezado: Título, Descripción y Botón de Acción */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-[#C8DACB]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-border">
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
-              <UserPlus className="text-[#054D27]" size={26} strokeWidth={2.5} />
-              <h1 className="text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
+              <UserPlus className="text-primary" size={26} strokeWidth={2.5} />
+              <h1 className="text-2xl sm:text-3xl font-black text-foreground uppercase tracking-tight">
                 Convocatorias
               </h1>
               {/* <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#054D27]/10 text-[#054D27] border border-[#054D27]/20">
@@ -774,7 +774,7 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
                 <span>{selectedCity === 'Todas' ? 'Toda Colombia' : selectedCity}</span>
               </span> */}
             </div>
-            <p className="text-xs sm:text-sm text-[#4D715B] font-medium mt-1 leading-relaxed">
+            <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-1 leading-relaxed">
               ¿Tienes un partido reservado pero te falta gente? Publica aquí y encuentra los jugadores exactos que necesitas.
             </p>
           </div>
@@ -792,7 +792,7 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
               setEditingItem(null);
               setShowForm(!showForm);
             }}
-            className="flex items-center justify-center gap-2 bg-[#008744] hover:bg-[#054D27] text-white font-black px-5 py-3 rounded-xl transition-colors shadow-md text-sm shrink-0"
+            className="flex items-center justify-center gap-2 bg-[#008744] hover:bg-[#054D27] text-white font-black px-5 py-3 rounded-xl transition-colors shadow-md text-sm shrink-0 cursor-pointer"
           >
             <Plus size={18} strokeWidth={3} /> Necesito un jugador
           </button>
@@ -800,7 +800,7 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
 
         {/* Barra de Filtros Compacta */}
         <div>
-          <h2 className="text-[10px] font-extrabold text-[#4D715B] uppercase tracking-wider mb-2 px-1">
+          <h2 className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider mb-2 px-1">
             Filtrar convocatorias
           </h2>
 
@@ -809,9 +809,9 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
             <button
               type="button"
               onClick={() => setFilterUrgent(!filterUrgent)}
-              className={`h-10 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 select-none border ${filterUrgent
+              className={`h-10 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 select-none border cursor-pointer ${filterUrgent
                 ? 'bg-red-600 text-white border-red-600 shadow-xs'
-                : 'bg-[#CDE0D1]/70 text-[#4D715B] border-[#BACFC0] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
+                : 'bg-secondary text-foreground border-border hover:bg-secondary/80'
                 }`}
             >
               <Flame size={14} className={filterUrgent ? 'text-white' : 'text-red-500'} strokeWidth={2.5} />
@@ -823,9 +823,9 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
               <button
                 type="button"
                 onClick={() => setOpenDropdown(openDropdown === 'date' ? null : ('date' as any))}
-                className={`w-full h-10 px-3 border rounded-xl text-xs font-black flex items-center justify-between outline-none transition-all ${filterDate !== 'todas'
-                  ? 'bg-[#DCE7DE] text-[#054D27] border-[#BACFC0] shadow-xs'
-                  : 'bg-[#CDE0D1]/70 text-[#4D715B] border-[#BACFC0] hover:text-[#054D27]'
+                className={`w-full h-10 px-3 border rounded-xl text-xs font-black flex items-center justify-between outline-none transition-all cursor-pointer ${filterDate !== 'todas'
+                  ? 'bg-primary/10 text-primary border-primary shadow-xs'
+                  : 'bg-secondary text-foreground border-border hover:bg-secondary/80'
                   }`}
               >
                 <span className="truncate">
@@ -842,13 +842,13 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
                 <ChevronDown
                   size={14}
                   strokeWidth={2.5}
-                  className={`transition-transform text-[#4D715B] shrink-0 ${openDropdown === ('date' as any) ? 'rotate-180' : ''
+                  className={`transition-transform text-muted-foreground shrink-0 ${openDropdown === ('date' as any) ? 'rotate-180' : ''
                     }`}
                 />
               </button>
 
               {openDropdown === ('date' as any) && (
-                <div className="absolute top-11 left-0 w-44 p-1.5 bg-[#DCE7DE] border border-[#BACFC0] rounded-xl shadow-xl z-50 flex flex-col gap-1 animate-in fade-in slide-in-from-top-1">
+                <div className="absolute top-11 left-0 w-44 p-1.5 bg-popover text-popover-foreground border border-border rounded-xl shadow-xl z-50 flex flex-col gap-1 animate-in fade-in slide-in-from-top-1">
                   {[
                     { val: 'todas', label: 'Todas las fechas' },
                     { val: 'hoy', label: 'Hoy' },
@@ -862,9 +862,9 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
                         setFilterDate(dt.val as any);
                         setOpenDropdown(null);
                       }}
-                      className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-colors ${filterDate === dt.val
-                        ? 'bg-[#008744] text-white'
-                        : 'text-[#054D27] hover:bg-[#CDE0D1]'
+                      className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-colors cursor-pointer ${filterDate === dt.val
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-foreground hover:bg-muted'
                         }`}
                     >
                       {dt.label}
@@ -879,9 +879,9 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
               <button
                 type="button"
                 onClick={() => setOpenDropdown(openDropdown === 'level' ? null : 'level')}
-                className={`w-full h-10 px-3 border rounded-xl text-xs font-black flex items-center justify-between outline-none transition-all ${filterLevel !== 'todos'
-                  ? 'bg-[#DCE7DE] text-[#054D27] border-[#BACFC0] shadow-xs'
-                  : 'bg-[#CDE0D1]/70 text-[#4D715B] border-[#BACFC0] hover:text-[#054D27]'
+                className={`w-full h-10 px-3 border rounded-xl text-xs font-black flex items-center justify-between outline-none transition-all cursor-pointer ${filterLevel !== 'todos'
+                  ? 'bg-primary/10 text-primary border-primary shadow-xs'
+                  : 'bg-secondary text-foreground border-border hover:bg-secondary/80'
                   }`}
               >
                 <span className="truncate capitalize">
@@ -890,13 +890,13 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
                 <ChevronDown
                   size={14}
                   strokeWidth={2.5}
-                  className={`transition-transform text-[#4D715B] shrink-0 ${openDropdown === 'level' ? 'rotate-180' : ''
+                  className={`transition-transform text-muted-foreground shrink-0 ${openDropdown === 'level' ? 'rotate-180' : ''
                     }`}
                 />
               </button>
 
               {openDropdown === 'level' && (
-                <div className="absolute top-11 right-0 sm:right-auto sm:left-0 w-40 p-1.5 bg-[#DCE7DE] border border-[#BACFC0] rounded-xl shadow-xl z-50 flex flex-col gap-1 animate-in fade-in slide-in-from-top-1">
+                <div className="absolute top-11 right-0 sm:right-auto sm:left-0 w-40 p-1.5 bg-popover text-popover-foreground border border-border rounded-xl shadow-xl z-50 flex flex-col gap-1 animate-in fade-in slide-in-from-top-1">
                   {[
                     { val: 'todos', label: 'Todos los niveles' },
                     { val: 'recreativo', label: 'Recreativo' },
@@ -910,9 +910,9 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
                         setFilterLevel(lvl.val);
                         setOpenDropdown(null);
                       }}
-                      className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-colors ${filterLevel === lvl.val
-                        ? 'bg-[#008744] text-white'
-                        : 'text-[#054D27] hover:bg-[#CDE0D1]'
+                      className={`py-2 px-3 rounded-lg text-xs font-bold text-left transition-colors cursor-pointer ${filterLevel === lvl.val
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-foreground hover:bg-muted'
                         }`}
                     >
                       {lvl.label}
