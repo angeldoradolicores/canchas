@@ -94,26 +94,26 @@ export function CustomMonthCalendar({ selectedDate, onSelectDate, minDate }: Cus
   }
 
   return (
-    <div className="w-full max-w-[340px] mx-auto font-sans bg-white rounded-2xl overflow-hidden shadow-lg border border-border">
+    <div className="w-full max-w-[340px] mx-auto font-sans bg-card dark:bg-[#151e18] rounded-2xl overflow-hidden shadow-xl dark:shadow-2xl dark:shadow-black/50 border border-border/80 dark:border-emerald-500/20 transition-colors">
       {/* Header del Calendario */}
-      <div className="bg-primary text-white py-3.5 px-4 flex items-center justify-between">
+      <div className="bg-gradient-to-r from-emerald-700 via-emerald-600 to-emerald-700 dark:from-emerald-950 dark:via-emerald-900 dark:to-emerald-950 text-white py-3.5 px-4 flex items-center justify-between border-b border-white/10 dark:border-emerald-500/20">
         <button
           type="button"
           onClick={handlePrevMonth}
-          className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors text-white"
+          className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all text-white cursor-pointer"
           aria-label="Mes anterior"
         >
           <ChevronLeft size={20} />
         </button>
 
-        <h3 className="font-bold text-base tracking-wide uppercase">
+        <h3 className="font-extrabold text-sm sm:text-base tracking-wider uppercase text-white drop-shadow-xs">
           {MONTH_NAMES[currentMonth]} {currentYear}
         </h3>
 
         <button
           type="button"
           onClick={handleNextMonth}
-          className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors text-white"
+          className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all text-white cursor-pointer"
           aria-label="Mes siguiente"
         >
           <ChevronRight size={20} />
@@ -121,24 +121,24 @@ export function CustomMonthCalendar({ selectedDate, onSelectDate, minDate }: Cus
       </div>
 
       {/* Días de la semana */}
-      <div className="grid grid-cols-7 bg-secondary/60 text-center text-[11px] font-bold text-muted-foreground uppercase border-b border-border py-2">
+      <div className="grid grid-cols-7 bg-secondary/50 dark:bg-black/30 text-center text-[11px] font-bold text-muted-foreground uppercase border-b border-border/60 dark:border-emerald-500/10 py-2">
         {WEEKDAYS.map((wd) => (
           <div key={wd}>{wd}</div>
         ))}
       </div>
 
       {/* Grid de días */}
-      <div className="grid grid-cols-7 p-2 gap-1 bg-white">
+      <div className="grid grid-cols-7 p-2.5 gap-1.5 bg-card dark:bg-[#151e18]">
         {cells.map((cell, idx) => {
           if (cell.type === 'blank') {
-            return <div key={`blank-${idx}`} className="h-9 rounded-lg bg-secondary/20" />;
+            return <div key={`blank-${idx}`} className="h-9 rounded-xl opacity-0 pointer-events-none" />;
           }
 
           if (cell.isDisabled) {
             return (
               <div
                 key={cell.dateStr}
-                className="h-9 flex items-center justify-center text-xs text-muted-foreground/40 bg-secondary/10 rounded-lg cursor-not-allowed select-none line-through"
+                className="h-9 flex items-center justify-center text-xs text-muted-foreground/35 dark:text-muted-foreground/25 rounded-xl cursor-not-allowed select-none line-through"
               >
                 {cell.dayNumber}
               </div>
@@ -150,12 +150,13 @@ export function CustomMonthCalendar({ selectedDate, onSelectDate, minDate }: Cus
               key={cell.dateStr}
               type="button"
               onClick={() => cell.dateStr && onSelectDate(cell.dateStr)}
-              className={`h-9 rounded-xl text-xs font-bold transition-all flex items-center justify-center ${cell.isSelected
-                  ? 'bg-primary text-white shadow-md scale-105 ring-2 ring-primary/30'
+              className={`h-9 rounded-xl text-xs font-semibold transition-all flex items-center justify-center cursor-pointer ${
+                cell.isSelected
+                  ? 'bg-primary text-white font-extrabold shadow-md shadow-primary/30 scale-105 ring-2 ring-primary/40 dark:ring-primary/60'
                   : cell.isToday
-                    ? 'bg-emerald-100 text-primary border border-primary/40'
-                    : 'hover:bg-primary/10 hover:text-primary text-foreground'
-                }`}
+                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40 font-bold hover:bg-emerald-500/25'
+                    : 'text-foreground hover:bg-secondary dark:hover:bg-white/10 hover:text-foreground active:scale-95'
+              }`}
             >
               {cell.dayNumber}
             </button>

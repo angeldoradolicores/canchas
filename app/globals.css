@@ -409,10 +409,16 @@ button {
   display: none;
   justify-content: space-around;
   padding: 10px 8px 8px;
-  border: 0;
+  border: 1px solid var(--border);
   border-radius: 1.2rem;
-  background: var(--background);
-  box-shadow: 8px 9px 18px oklch(.4 .035 160 / .2), -8px -8px 18px oklch(1 0 0 / .75);
+  background: var(--card);
+  box-shadow: 0 8px 20px oklch(.4 .035 160 / .15);
+}
+
+.dark .mobile-bottom-nav {
+  background: oklch(.20 .025 160 / .95);
+  border: 1px solid oklch(.32 .03 160 / .7);
+  box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.8), 0 4px 10px -2px rgba(0, 0, 0, 0.6);
 }
 
 .mobile-bottom-nav button {
