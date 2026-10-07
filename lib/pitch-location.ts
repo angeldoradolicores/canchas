@@ -224,3 +224,5 @@ export function getPitchLocation(pitch: any): {
     lng,
   };
 }
+
+export const resolvePitchLocation = getPitchLocation;

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { buildGoogleMapsUrl } from './pitch-location';
+import { resolvePitchLocation, buildGoogleMapsUrl } from './pitch-location';
 
 
 const supabase = createClient(
@@ -77,6 +77,7 @@ export async function sendEvolutionWhatsAppText(instanceName: string, toPhone: s
           },
           text: text,
         }),
+        signal: AbortSignal.timeout(7000),
       });
 
       if (res.ok) return true;
@@ -125,6 +126,7 @@ export async function sendEvolutionWhatsAppMedia(
             presence: 'available',
           },
         }),
+        signal: AbortSignal.timeout(9000),
       });
 
       if (res.ok) return true;
@@ -168,8 +170,8 @@ export async function notifyBookingSubmitted(bookingId: string) {
     const pitch = (b as any).pitches;
     const company = pitch?.companies;
 
-    // Remitente para el cliente: ÚNICA Y EXCLUSIVAMENTE la instancia propia de esa cancha
-    const customerSenderInstance = company?.whatsapp_instance_name;
+    // Remitente para el cliente: instancia propia de la cancha (o fallback a Cancheros central)
+    const customerSenderInstance = company?.whatsapp_instance_name || CENTRAL_WHATSAPP_INSTANCE;
 
     // Remitente para el dueño: SIEMPRE desde la instancia central 'Cancheros' (3006577286)
     const ownerSenderInstance = CENTRAL_WHATSAPP_INSTANCE;
@@ -343,9 +345,9 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
       .select(`
         id, customer_name, customer_phone, start_time, end_time, payment_proof_url, created_at, user_id,
         pitches!inner (
-          id, name, type, price_per_hour,
+          id, name, type, price_per_hour, lat, lng, address, city, department, custom_pricing, contact_phone,
           companies!inner (
-            id, name, address, zone, whatsapp_instance_name, lat, lng, place_id, place_name
+            id, name, address, zone, lat, lng, whatsapp_instance_name
           )
         )
       `)
@@ -367,9 +369,9 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
 
     const pitch = (b as any).pitches;
     const company = pitch?.companies;
-    const instanceName = company?.whatsapp_instance_name;
+    const instanceName = company?.whatsapp_instance_name || CENTRAL_WHATSAPP_INSTANCE;
     if (!instanceName) {
-      console.warn('[notifyBookingStatusChange] Empresa sin whatsapp_instance_name, no se envía:', bookingId, company?.name);
+      console.warn('[notifyBookingStatusChange] No hay instancia de WhatsApp disponible:', bookingId, company?.name);
       return;
     }
 
@@ -419,16 +421,10 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
 
     const pitchNames = Array.from(new Set(siblingBookings.map((s: any) => s.pitches?.name).filter(Boolean))).join(' + ') || pitch.name;
     const shortId = (b.id ? b.id.slice(0, 8) : 'REF').toUpperCase();
-    const address = company.address ? `${company.address}${company.zone ? `, ${company.zone}` : ''}` : 'Pasto, Nariño';
-    // Construir link de Google Maps: usa place_id (pin exacto) → coordenadas → dirección texto
-    const mapsUrl = buildGoogleMapsUrl({
-      placeId: company.place_id || null,
-      placeName: company.place_name || company.name || null,
-      address: company.address || null,
-      city: 'Pasto',
-      lat: company.lat || null,
-      lng: company.lng || null,
-    });
+    
+    // Resolver la ubicación y link de Google Maps de forma robusta
+    const loc = resolvePitchLocation(pitch);
+    const mapsUrl = loc.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${company?.name || 'Canchas'}, Pasto`)}`;
     if (newStatus === 'confirmed') {
       // ── TICKET DIGITAL DE RESERVA (Diseño visual y estructurado) ──
       const ticketMsg =
