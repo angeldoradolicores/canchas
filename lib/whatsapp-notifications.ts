@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import { buildGoogleMapsUrl } from './pitch-location';
+
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -238,11 +240,11 @@ export async function notifyBookingSubmitted(bookingId: string) {
 
     // ── A) MENSAJE AL CLIENTE: confirmación de recepción de comprobante ──
     const customerMsg =
-      `✅ *¡Recibimos tu comprobante!*\n\n` +
-      `${company_name}\n` +
-      `${pitchNameCombined}\n` +
-      `*Fecha:* ${fechaCorta}\n` +
-      `*Horario:* ${horasStr}\n\n` +
+      `*¡Recibimos tu comprobante!*\n\n` +
+      // `${company_name}\n` +
+      // `${pitchNameCombined}\n` +
+      // `*Fecha:* ${fechaCorta}\n` +
+      // `*Horario:* ${horasStr}\n\n` +
       `Tu reserva quedó en revisión. El dueño está validando tu comprobante y te notificaremos apenas sea aprobada 🙌`;
 
     // ── B) RESOLVER DESTINATARIOS DEL DUEÑO (PRIORIZANDO SU TELÉFONO PERSONAL) ──
@@ -341,7 +343,7 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
       .select(`
         id, customer_name, customer_phone, start_time, end_time, payment_proof_url, created_at, user_id,
         pitches!inner (
-          id, name, type, price_per_hour,
+          id, name, type, price_per_hour, lat, lng,place_id,place_name,
           companies!inner (
             id, name, address, zone, whatsapp_instance_name
           )
@@ -402,7 +404,15 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
     const pitchNames = Array.from(new Set(siblingBookings.map((s: any) => s.pitches?.name).filter(Boolean))).join(' + ') || pitch.name;
     const shortId = (b.id ? b.id.slice(0, 8) : 'REF').toUpperCase();
     const address = company.address ? `${company.address}${company.zone ? `, ${company.zone}` : ''}` : 'Pasto, Nariño';
-
+    // Construir link de Google Maps: usa place_id (pin exacto) → coordenadas → dirección texto
+    const mapsUrl = buildGoogleMapsUrl({
+      placeId: company.place_id || null,
+      placeName: company.place_name || company.name || null,
+      address: company.address || null,
+      city: 'Pasto',
+      lat: company.lat || null,
+      lng: company.lng || null,
+    });
     if (newStatus === 'confirmed') {
       // ── TICKET DIGITAL DE RESERVA (Diseño visual y estructurado) ──
       const ticketMsg =
@@ -411,7 +421,8 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
         `${pitchNames.toUpperCase()}\n` +
         `📅 *FECHA:* ${fechaLarga}\n` +
         `⏰ *HORARIO:* ${horasStr}\n` +
-        `📍 *DIRECCIÓN:* ${address}\n`;
+        `📍 *VER EN MAPS:* ${mapsUrl}\n`;
+      // ` *DIRECCIÓN:* ${address}\n`;
 
       await sendEvolutionWhatsAppText(instanceName, b.customer_phone, ticketMsg);
     } else {
