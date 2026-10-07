@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { Pitch } from '@/lib/types';
+import { cleanAddress } from '@/lib/complex-utils';
 
 export const COLOMBIAN_CITIES: Record<string, { lat: number; lng: number }> = {
   'Pasto': { lat: 1.2136, lng: -77.2811 },
@@ -286,7 +287,7 @@ export default function DynamicMap({ pitches, onMarkerClick, userCoords, selecte
             ⚽ ${firstPitch.name}
           </div>
         ` : ''}
-        ${group.address ? `<div style="font-size:11px;color:#4b5563;margin-bottom:8px;display:flex;align-items:flex-start;gap:4px;line-height:1.3;word-break:break-word;"><span style="flex-shrink:0;">📍</span><span style="white-space:normal;">${group.address}</span></div>` : ''}
+        ${cleanAddress(group.address) ? `<div style="font-size:11px;color:#4b5563;margin-bottom:8px;display:flex;align-items:flex-start;gap:4px;line-height:1.3;word-break:break-word;"><span style="flex-shrink:0;">📍</span><span style="white-space:normal;">${cleanAddress(group.address)}</span></div>` : ''}
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#059669;letter-spacing:0.04em;margin-bottom:6px;">
           ${isSinglePitch ? 'Toca para ver disponibilidad' : `Canchas en esta sede (${group.pitches.length})`}
         </div>

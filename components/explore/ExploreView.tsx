@@ -14,7 +14,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useActiveBooking } from '@/lib/active-booking-context';
 import { Calendar, Clock } from 'lucide-react';
 import { ComplexCard, ComplexData } from '@/components/ui/ComplexCard';
-import { groupPitchesByComplex } from '@/lib/complex-utils';
+import { groupPitchesByComplex, cleanAddress } from '@/lib/complex-utils';
 
 
 const DEFAULT_TIME_SLOTS = [
@@ -987,10 +987,10 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                       </h4>
 
                       {/* Ubicación / Dirección */}
-                      {(comp.zone || comp.address) && (
+                      {(comp.zone || cleanAddress(comp.address)) && (
                         <p className="text-[10px] sm:text-[11px] text-muted-foreground truncate flex items-center gap-1 leading-none mt-0.5">
                           {/* <span className="text-emerald-500 text-[10px] shrink-0">📍</span> */}
-                          <span className="truncate">{[comp.zone, comp.address].filter(Boolean).join(' · ')}</span>
+                          <span className="truncate">{[comp.zone, cleanAddress(comp.address)].filter(Boolean).join(' · ')}</span>
                         </p>
                       )}
                     </div>
@@ -1373,9 +1373,9 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                             {complex.name}
                           </h4>
 
-                          {(complex.zone || complex.address) && (
+                          {(complex.zone || cleanAddress(complex.address)) && (
                             <p className="text-[10px] sm:text-[11px] text-muted-foreground truncate capitalize leading-tight">
-                              {[complex.zone, complex.address].filter(Boolean).join(' · ')}
+                              {[complex.zone, cleanAddress(complex.address)].filter(Boolean).join(' · ')}
                             </p>
                           )}
                         </div>

@@ -7,6 +7,7 @@ import { Pitch } from '@/lib/types';
 import { useFavorites } from '@/lib/favorites-context';
 import { isCombinedPitch } from '@/lib/combined-pitch-utils';
 import { getPitchLocation } from '@/lib/pitch-location';
+import { cleanAddress } from '@/lib/complex-utils';
 
 export interface ComplexData {
   id: string;
@@ -188,10 +189,10 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
                   <span>{complex.rating || '4.9'}</span>
                 </div>
               </div>
-              {(complex.zone || complex.address) && (
+              {(complex.zone || cleanAddress(complex.address)) && (
                 <p className="text-[11px] text-muted-foreground truncate flex items-center gap-1">
                   {/* <MapPin size={10} className="text-muted-foreground/60 shrink-0" /> */}
-                  <span className="truncate capitalize">{[complex.zone, complex.address].filter(Boolean).join(' · ')}</span>
+                  <span className="truncate capitalize">{[complex.zone, cleanAddress(complex.address)].filter(Boolean).join(' · ')}</span>
                 </p>
               )}
 
@@ -457,7 +458,7 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
                           <div className="flex items-center gap-2 min-w-0">
                             <MapPin size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
                             <span className="text-xs font-bold text-foreground truncate">
-                              {loc.fullAddress || complex.address || `${complex.city || 'Pasto'}, Colombia`}
+                              {cleanAddress(loc.address || complex.address) || [complex.zone, complex.name].filter(Boolean).join(' · ')}
                             </span>
                             {loc.neighborhood && (
                               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-background/80 text-foreground shrink-0 hidden sm:inline-block">

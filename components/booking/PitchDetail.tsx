@@ -13,6 +13,7 @@ import { useActiveBooking } from '@/lib/active-booking-context';
 import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
 import { isCombinedPitch, getLinkedPitchIds, getCombinedPitchNames } from '@/lib/combined-pitch-utils';
 import { getPitchLocation } from '@/lib/pitch-location';
+import { cleanAddress } from '@/lib/complex-utils';
 
 
 interface PitchDetailProps {
@@ -970,7 +971,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                         <MapPin size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                         <div>
                           <p className="text-xs sm:text-sm font-bold text-foreground">
-                            {loc.fullAddress || `${pitchAny.city || 'Pasto'}, Colombia`}
+                            {cleanAddress(loc.address || (pitchAny as any).companies?.address || pitchAny.address) || [loc.neighborhood ? `Barrio ${loc.neighborhood}` : null, (pitchAny as any).companies?.name || pitchAny.name].filter(Boolean).join(' · ')}
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-[11px] text-muted-foreground">
@@ -1002,7 +1003,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                 <MapPin size={20} className="text-primary" />
                 <div>
                   <p className="text-xs sm:text-sm font-bold text-foreground">
-                    {pitchAny.address || (pitchAny as any).companies?.address || 'Pasto, Colombia'}
+                    {cleanAddress(pitchAny.address || (pitchAny as any).companies?.address) || 'Ubicación disponible en mapa'}
                   </p>
                   <p className="text-xs text-muted-foreground">Fácil acceso</p>
                 </div>

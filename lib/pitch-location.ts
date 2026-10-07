@@ -1,3 +1,5 @@
+export { cleanAddress } from './complex-utils';
+
 export interface LocationDetails {
   lat: number;
   lng: number;

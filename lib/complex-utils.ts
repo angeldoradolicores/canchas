@@ -23,6 +23,43 @@ export function formatDistance(km: number): string {
   return `${km.toFixed(1)} km`;
 }
 
+/**
+ * Limpia una dirección para conservar únicamente la nomenclatura vial (calle, carrera, número, etc.),
+ * eliminando ciudad (Pasto, Cali, etc.), departamento (Nariño, etc.) y país (Colombia).
+ */
+export function cleanAddress(addr: string | null | undefined): string {
+  if (!addr || typeof addr !== 'string') return '';
+  let s = addr.trim();
+
+  // Si es solo ciudad/departamento/país sin nomenclatura vial, retornar vacío
+  const isOnlyLocation = /^(pasto|san juan de pasto|cali|ipiales|tumaco|túquerres|tuquerres|bogotá|bogota|medellín|medellin|nariño|narino|valle del cauca|colombia)(\s*[,·\-\/]\s*(pasto|san juan de pasto|cali|ipiales|tumaco|túquerres|tuquerres|bogotá|bogota|medellín|medellin|nariño|narino|valle del cauca|colombia))*$/i;
+  if (isOnlyLocation.test(s)) {
+    return '';
+  }
+
+  // 1. Eliminar ciudad/departamento entre paréntesis ej: (Pasto), (Pasto, Nariño)
+  s = s.replace(/\(\s*(san juan de pasto|pasto|cali|colombia|nariño|narino)[^)]*\)/gi, '');
+  s = s.replace(/\(\s*\)/g, '');
+
+  // 2. Eliminar país (Colombia, CO)
+  s = s.replace(/,?\s*\bcolombia\b/gi, '');
+  s = s.replace(/,?\s*\bco\b(?!\w)/gi, '');
+
+  // 3. Eliminar departamentos colombianos
+  s = s.replace(/,?\s*\b(nariño|narino|valle del cauca|cundinamarca|antioquia|cauca|putumayo|huila|tolima|caldas|risaralda|quindío|quindio|boyacá|boyaca|santander)\b/gi, '');
+
+  // 4. Eliminar ciudades
+  s = s.replace(/,?\s*\b(san juan de pasto|pasto|cali|ipiales|tumaco|túquerres|tuquerres|bogotá|bogota|medellín|medellin|popayán|popayan|barranquilla|bucaramanga|pereira|manizales|ibagué|ibague|cartagena)\b/gi, '');
+
+  // 5. Eliminar códigos postales comunes (5 o 6 dígitos)
+  s = s.replace(/,?\s*\b\d{5,6}\b/g, '');
+
+  // 6. Limpiar separadores sobrantes al inicio o al final (, - · /)
+  s = s.replace(/^[\s,·\-\/]+|[\s,·\-\/]+$/g, '').trim();
+
+  return s;
+}
+
 export function groupPitchesByComplex(
   pitches: Pitch[],
   userCoords?: { lat: number; lng: number } | null,
@@ -242,7 +279,7 @@ export function groupPitchesByComplex(
     complexes.push({
       id: group.id,
       name: group.name,
-      address: resolvedAddress,
+      address: cleanAddress(resolvedAddress),
       zone: group.zone || primaryPitch.zone,
       city: primaryCity,
       department: primaryDept,
