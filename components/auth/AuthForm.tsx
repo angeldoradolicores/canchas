@@ -172,7 +172,7 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
         if (data.user) {
           try {
             await supabase.from('profiles').update({ phone: cleanPhone, full_name: fullName }).eq('id', data.user.id);
-          } catch {}
+          } catch { }
         }
         if (data.session) {
           if (forcedRole === 'owner') router.push('/dashboard');
@@ -238,7 +238,7 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
 
         <div className="p-4 bg-secondary/50 rounded-2xl border border-border text-left space-y-2.5 text-xs text-muted-foreground">
           <p className="font-bold text-foreground uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-            <ShieldCheck size={14} className="text-emerald-500" /> Pasos a seguir:
+            Pasos a seguir:
           </p>
           <div className="space-y-2">
             <p className="flex items-start gap-2">
