@@ -54,7 +54,6 @@ export default function PrivacidadPage() {
       title: '4. Almacenamiento y Seguridad',
       items: [
         'Los datos se almacenan en servidores seguros con cifrado en tránsito (HTTPS/TLS) y en reposo.',
-        'Utilizamos Supabase como plataforma de base de datos, cumpliendo estándares internacionales de seguridad.',
         'Implementamos controles de acceso estrictos para garantizar que solo personal autorizado acceda a los datos.',
         'Los comprobantes de pago se almacenan en almacenamiento seguro en la nube y son accesibles únicamente por el propietario del complejo y el equipo de soporte.',
         'Conservamos sus datos mientras su cuenta esté activa o por el tiempo necesario para cumplir obligaciones legales.',
@@ -110,9 +109,7 @@ export default function PrivacidadPage() {
           </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-black text-foreground">Política de Privacidad</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Última actualización: Octubre 2025 · Conforme a la Ley 1581 de 2012
-            </p>
+
           </div>
         </div>
 
@@ -120,8 +117,8 @@ export default function PrivacidadPage() {
         <div className="mt-6 p-4 bg-emerald-500/10 border border-emerald-500/25 rounded-2xl flex items-start gap-3">
           <ShieldCheck size={18} className="text-emerald-500 shrink-0 mt-0.5" />
           <p className="text-sm text-foreground/80 leading-relaxed">
-            En Canchas Pasto nos comprometemos a proteger su privacidad y a tratar sus datos personales conforme a la 
-            <strong className="text-foreground"> Ley Estatutaria 1581 de 2012</strong> y el 
+            En Cancheros nos comprometemos a proteger su privacidad y a tratar sus datos personales conforme a la
+            <strong className="text-foreground"> Ley Estatutaria 1581 de 2012</strong> y el
             <strong className="text-foreground"> Decreto 1377 de 2013</strong> de la República de Colombia.
           </p>
         </div>

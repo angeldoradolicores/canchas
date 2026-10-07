@@ -44,19 +44,6 @@ function saveStored(key: string, ids: string[]) {
   } catch {}
 }
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-async function syncToBackend(id: string, action: 'add' | 'remove', userId: string | null) {
-  if (!id || !UUID_REGEX.test(id)) return;
-  try {
-    await fetch('/api/favorites', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pitch_id: id, user_id: userId, action }),
-    });
-  } catch {}
-}
-
 export function FavoritesProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [favoriteComplexIds, setFavoriteComplexIds] = useState<Set<string>>(new Set());
@@ -89,11 +76,8 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
         const data = await res.json();
         if (!cancelled && Array.isArray(data.favorites)) {
           fetchedUserRef.current = userId;
-          // All saved IDs from backend (can be pitch IDs or complex keys)
           const backendIds: string[] = data.favorites;
 
-          // Separate complex keys (start with 'cplx_' or uuid) vs pitch IDs
-          // We save complexes as-is; legacy pitch entries are kept too
           const merged = new Set([...localPitches, ...backendIds]);
           setFavoriteIds(merged);
           saveStored(LOCAL_PITCH_KEY, Array.from(merged));
@@ -101,12 +85,6 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
           const mergedComplexes = new Set([...localComplexes, ...backendIds]);
           setFavoriteComplexIds(mergedComplexes);
           saveStored(LOCAL_COMPLEX_KEY, Array.from(mergedComplexes));
-
-          // Sync any local entries not yet in backend
-          const toSync = [...localComplexes, ...localPitches].filter(id => !backendIds.includes(id));
-          for (const id of toSync) {
-            syncToBackend(id, 'add', userId);
-          }
         }
       } catch (err) {
         console.warn('[Favorites fetch error]', err);
@@ -143,13 +121,18 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
         }));
       }
 
+      // Si el usuario no ha iniciado sesión, se conserva localmente sin peticiones POST innecesarias
+      if (!user?.id) {
+        return willBeFav;
+      }
+
       try {
         const res = await fetch('/api/favorites', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             pitch_id: complexId, // stored using complexId as key
-            user_id: user?.id || null,
+            user_id: user.id,
             action: willBeFav ? 'add' : 'remove',
           }),
         });
@@ -163,7 +146,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
 
       return willBeFav;
     },
-    [favoriteComplexIds, user]
+    [favoriteComplexIds, user?.id]
   );
 
   // ── Pitch-level favorites (backward compat) ──
@@ -190,13 +173,18 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
         }));
       }
 
+      // Si el usuario no ha iniciado sesión, se conserva localmente sin peticiones POST innecesarias
+      if (!user?.id) {
+        return willBeFav;
+      }
+
       try {
         const res = await fetch('/api/favorites', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             pitch_id: pitchId,
-            user_id: user?.id || null,
+            user_id: user.id,
             action: willBeFav ? 'add' : 'remove',
           }),
         });
@@ -210,7 +198,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
 
       return willBeFav;
     },
-    [favoriteIds, user]
+    [favoriteIds, user?.id]
   );
 
   return (

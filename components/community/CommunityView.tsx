@@ -12,7 +12,8 @@ import {
   UserCheck, Shield, CalendarDays, Clock3,
   Pencil, Trash2, MapPin, X, Flame, ChevronRight, ChevronDown,
   Clock3Icon,
-  CalendarIcon, UserPlus
+  CalendarIcon, UserPlus,
+  User
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -470,100 +471,128 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
           {filtered.map(c => {
             const isOwner = c.creator_id === user?.id;
             return (
-              <div key={c.id} className="p-5 bg-card border border-border rounded-2xl shadow-sm hover:border-primary/40 transition-all">
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="w-8 h-8 bg-primary/10 rounded-xl flex items-center justify-center text-primary flex-shrink-0">
-                        <Trophy size={16} />
+              <div
+                key={c.id}
+                className="p-3.5 sm:p-4 bg-card border border-border/80 rounded-2xl shadow-xs transition-all hover:border-primary/40 flex flex-col gap-3 min-w-0 overflow-hidden"
+              >
+                {/* Header: Foto/Avatar + Nombre + Nivel + Estado/Urgente */}
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <div className="w-9 h-9 bg-primary/10 text-primary rounded-xl flex items-center justify-center shrink-0">
+                      <User size={18} />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-xs sm:text-sm text-foreground capitalize truncate max-w-[130px] sm:max-w-[180px]">
+                          {c.profiles?.full_name || 'Jugador'}
+                        </span>
+                        <LevelBadge level={c.level} />
                       </div>
-                      <span className="font-bold capitalize">{c.profiles?.full_name || 'Jugador'}</span>                      <LevelBadge level={c.level} />
-                      {c.is_urgent && (
-                        <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-600 text-[10px] font-bold animate-pulse flex items-center gap-1">
-                          <Flame size={11} /> Urgente
+                      {c.created_at && (
+                        <span className="text-[10px] text-muted-foreground/80">
+                          {new Date(c.created_at).toLocaleDateString('es-CO', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
                         </span>
                       )}
                     </div>
-
-                    {/* Fecha/hora del partido: destacada */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#054D27]/10 border border-[#054D27]/20 rounded-xl text-xs font-black text-[#054D27] dark:text-emerald-300">
-                        <CalendarDays size={13} />
-                        <span className="capitalize">{new Date(c.date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short' })}</span>
-                      </div>
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-xl text-xs font-black text-primary">
-                        <Clock3 size={13} />
-                        <span>{c.time}</span>
-                      </div>
-                    </div>
-
-                    {/* Fecha de creación de la publicación */}
-                    {c.created_at && (
-                      <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                        <span className="opacity-60">Publicado:</span>
-                        <span className="font-medium">{new Date(c.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-                      </p>
-                    )}
-
-                    {/* Botón o Nombre de Cancha / Complejo */}
-                    <div className="pt-1">
-                      {c.pitches ? (
-                        <Link
-                          href={`/cancha/${c.pitches.id}`}
-                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 dark:text-emerald-300 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all border border-emerald-200/80 dark:border-emerald-800/80 shadow-sm cursor-pointer"
-                        >
-                          🏟️ {(c.pitches.companies?.name || c.pitches.name).toUpperCase()}  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">(Ver complejo)</span>
-                        </Link>
-                      ) : (
-                        <span className="px-3 py-1.5 bg-secondary text-foreground rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 border border-border">
-                          📍 {c.custom_pitch_name || 'Por definir'.toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-
-                    {c.message && (
-                      <div className="mt-2 p-2.5 rounded-xl bg-secondary/60 border border-border/70 text-xs flex items-start gap-2">
-                        <span className="text-primary text-sm shrink-0 leading-none">💬</span>
-                        <p className="text-foreground/90 italic leading-relaxed break-words">{c.message}</p>
-                      </div>
-                    )}
                   </div>
 
-                  <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
-                    {isOwner ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setEditingChallenge(c)}
-                          className="p-2 text-primary hover:bg-primary/10 rounded-xl transition-colors"
-                          title="Editar reto"
-                        >
-                          <Pencil size={17} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteChallenge(c.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
-                          title="Eliminar reto"
-                        >
-                          <Trash2 size={17} />
-                        </button>
-                      </>
-                    ) : contacted.includes(c.id) ? (
-                      <span className="bg-green-100 text-green-800 font-medium text-xs py-2.5 px-4 w-full sm:w-auto rounded-lg transition-colors
-">
-                        Ya solicitaste unirte a este reto
+                  {/* Badge de Urgente */}
+                  {c.is_urgent && (
+                    <span className="shrink-0 px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 text-[10px] font-extrabold flex items-center gap-1">
+                      <Flame size={11} /> Urgente
+                    </span>
+                  )}
+                </div>
+
+                {/* Bloque Destacado: Fecha y Hora del Partido */}
+                <div className="flex items-center gap-2 p-2 bg-secondary/40 border border-border/60 rounded-xl min-w-0">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-foreground flex-1 min-w-0">
+                    <CalendarDays size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="capitalize truncate">
+                      {new Date(c.date + 'T12:00:00').toLocaleDateString('es-CO', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                      })}
+                    </span>
+                  </div>
+
+                  <div className="h-4 w-[1px] bg-border/80 shrink-0" />
+
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-primary shrink-0">
+                    <Clock3 size={14} className="shrink-0" />
+                    <span>{c.time}</span>
+                  </div>
+                </div>
+
+                {/* Lugar / Complejo Deportivo */}
+                <div className="min-w-0">
+                  {c.pitches ? (
+                    <Link
+                      href={`/cancha/${c.pitches.id}`}
+                      className="w-full sm:w-auto px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-bold flex items-center justify-between gap-1.5 transition-colors border border-emerald-500/20"
+                    >
+                      <span className="truncate">
+                        🏟️ {(c.pitches.companies?.name || c.pitches.name).toUpperCase()}
                       </span>
-                    ) : (
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold shrink-0">
+                        Ver →
+                      </span>
+                    </Link>
+                  ) : (
+                    <div className="px-2.5 py-1.5 bg-secondary/60 text-muted-foreground rounded-xl text-xs font-medium flex items-center gap-1.5 border border-border/60 truncate">
+                      <span>📍</span>
+                      <span className="truncate">{c.custom_pitch_name || 'Por definir'}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Mensaje Opcional */}
+                {c.message && (
+                  <p className="text-xs text-muted-foreground bg-card p-2 rounded-lg border border-border/50 italic leading-snug break-words">
+                    💬 "{c.message}"
+                  </p>
+                )}
+
+                {/* Acciones del Usuario (Abajo y full width en móvil) */}
+                <div className="pt-1 border-t border-border/40 flex items-center justify-end gap-2">
+                  {isOwner ? (
+                    <div className="flex items-center gap-1 w-full justify-end">
                       <button
                         type="button"
-                        onClick={() => joinChallenge(c)}
-                        className="btn-primary text-xs py-2.5 px-4 w-full sm:w-auto"
+                        onClick={() => setEditingChallenge(c)}
+                        className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-xl transition-colors cursor-pointer"
+                        title="Editar reto"
                       >
-                        Unirme
+                        <Pencil size={16} />
                       </button>
-                    )}
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => deleteChallenge(c.id)}
+                        className="p-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer"
+                        title="Eliminar reto"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ) : contacted.includes(c.id) ? (
+                    <div className="w-full text-center py-2 px-3 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold text-xs rounded-xl border border-emerald-500/20">
+                      ✓ Solicitud enviada
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => joinChallenge(c)}
+                      className="w-full sm:w-auto h-9 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center cursor-pointer active:scale-[0.98]"
+                    >
+                      Unirme
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -945,101 +974,139 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
           {filtered.map(c => {
             const isOwner = c.creator_id === user?.id;
             return (
-              <div key={c.id} className="p-5 bg-card border border-border rounded-2xl hover:border-primary/40 hover:shadow-sm transition-all">
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="w-8 h-8 bg-primary/10 rounded-xl flex items-center justify-center text-primary flex-shrink-0"><Users size={15} /></div>
-                      {/* <span className="font-bold">{c.profiles?.full_name || 'Jugador'}</span> */}
-                      <span className="font-bold capitalize">{c.profiles?.full_name || 'Jugador'}</span>
-                      <span className="text-muted-foreground text-xs">necesita</span>
-                      <span className="font-bold text-primary">{c.players_needed} jugador{c.players_needed > 1 ? 'es' : ''}</span>
-                      {c.is_urgent && (
-                        <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-600 text-[10px] font-bold animate-pulse flex items-center gap-1">
-                          <Flame size={11} /> Urgente
+              <div
+                key={c.id}
+                className="p-3.5 sm:p-4 bg-card border border-border/80 rounded-2xl shadow-xs transition-all hover:border-primary/40 flex flex-col gap-3 min-w-0 overflow-hidden"
+              >
+                {/* Header: Icono + Nombre + Necesidad (Píldora) + Urgente */}
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <div className="w-9 h-9 bg-primary/10 text-primary rounded-xl flex items-center justify-center shrink-0">
+                      <Users size={18} />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-xs sm:text-sm text-foreground capitalize truncate max-w-[120px] sm:max-w-[180px]">
+                          {c.profiles?.full_name || 'Jugador'}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-[10px] font-extrabold shrink-0">
+                          Busca {c.players_needed} {c.players_needed > 1 ? 'jugadores' : 'jugador'}
+                        </span>
+                      </div>
+                      {c.created_at && (
+                        <span className="text-[10px] text-muted-foreground/80">
+                          {new Date(c.created_at).toLocaleDateString('es-CO', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
                         </span>
                       )}
                     </div>
-
-                    {/* Fecha/hora del partido: destacada */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#054D27]/10 border border-[#054D27]/20 rounded-xl text-xs font-black text-[#054D27] dark:text-emerald-300">
-                        <CalendarIcon size={13} />
-                        <span className="capitalize">{new Date(c.date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short' })}</span>
-                      </div>
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-xl text-xs font-black text-primary">
-                        <Clock3Icon size={13} />
-                        <span>{c.time}</span>
-                      </div>
-                      <LevelBadge level={c.level} />
-                    </div>
-
-                    {/* Fecha de creación de la publicación */}
-                    {c.created_at && (
-                      <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                        <span className="opacity-60">Publicado:</span>
-                        <span className="font-medium">{new Date(c.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-                      </p>
-                    )}
-
-                    <div className="pt-1">
-                      {c.pitches ? (
-                        <Link
-                          href={`/cancha/${c.pitches.id}`}
-                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 dark:text-emerald-300 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all border border-emerald-200/80 dark:border-emerald-800/80 shadow-sm cursor-pointer"
-                        >
-                          🏟️ {(c.pitches.companies?.name || c.pitches.name).toUpperCase()}  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">(Ver complejo)</span>
-                        </Link>
-                      ) : (
-                        <span className="px-3 py-1.5 bg-secondary text-foreground rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 border border-border">
-                          📍 {c.custom_pitch_name || 'POR DEFINIR'.toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-
-                    {c.message && (
-                      <div className="mt-2 p-2.5 rounded-xl bg-secondary/60 border border-border/70 text-xs flex items-start gap-2">
-                        <span className="text-primary text-sm shrink-0 leading-none">💬</span>
-                        <p className="text-foreground/90 italic leading-relaxed break-words">{c.message}</p>
-                      </div>
-                    )}
                   </div>
 
-                  <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
-                    {isOwner ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setEditingItem(c)}
-                          className="p-2 text-primary hover:bg-primary/10 rounded-xl transition-colors"
-                          title="Editar"
-                        >
-                          <Pencil size={17} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteConvocatoria(c.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
-                          title="Eliminar"
-                        >
-                          <Trash2 size={17} />
-                        </button>
-                      </>
-                    ) : contacted.includes(c.id) ? (
-                      <span className="bg-green-100 text-green-800 font-medium text-xs py-2.5 px-4 w-full sm:w-auto rounded-lg transition-colors
-">
-                        Ya te postulaste a esta convocatoria
+                  {/* Badge de Urgente */}
+                  {c.is_urgent && (
+                    <span className="shrink-0 px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 text-[10px] font-extrabold flex items-center gap-1">
+                      <Flame size={11} /> Urgente
+                    </span>
+                  )}
+                </div>
+
+                {/* Bloque Destacado: Fecha, Hora y Nivel */}
+                <div className="flex items-center gap-2 p-2 bg-secondary/40 border border-border/60 rounded-xl min-w-0">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-foreground flex-1 min-w-0">
+                    <CalendarIcon size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="capitalize truncate">
+                      {new Date(c.date + 'T12:00:00').toLocaleDateString('es-CO', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                      })}
+                    </span>
+                  </div>
+
+                  <div className="h-4 w-[1px] bg-border/80 shrink-0" />
+
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-primary shrink-0">
+                    <Clock3Icon size={14} className="shrink-0" />
+                    <span>{c.time}</span>
+                  </div>
+
+                  {c.level && (
+                    <>
+                      <div className="h-4 w-[1px] bg-border/80 shrink-0" />
+                      <div className="shrink-0">
+                        <LevelBadge level={c.level} />
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Lugar / Complejo Deportivo */}
+                <div className="min-w-0">
+                  {c.pitches ? (
+                    <Link
+                      href={`/cancha/${c.pitches.id}`}
+                      className="w-full sm:w-auto px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-bold flex items-center justify-between gap-1.5 transition-colors border border-emerald-500/20"
+                    >
+                      <span className="truncate">
+                        🏟️ {(c.pitches.companies?.name || c.pitches.name).toUpperCase()}
                       </span>
-                    ) : (
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold shrink-0">
+                        Ver →
+                      </span>
+                    </Link>
+                  ) : (
+                    <div className="px-2.5 py-1.5 bg-secondary/60 text-muted-foreground rounded-xl text-xs font-medium flex items-center gap-1.5 border border-border/60 truncate">
+                      <span>📍</span>
+                      <span className="truncate capitalize">{c.custom_pitch_name || 'Por definir'}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Mensaje Opcional */}
+                {c.message && (
+                  <p className="text-xs text-muted-foreground bg-card p-2 rounded-lg border border-border/50 italic leading-snug break-words">
+                    💬 "{c.message}"
+                  </p>
+                )}
+
+                {/* Acciones del Usuario (Full width en móvil) */}
+                <div className="pt-1 border-t border-border/40 flex items-center justify-end gap-2">
+                  {isOwner ? (
+                    <div className="flex items-center gap-1 w-full justify-end">
                       <button
                         type="button"
-                        onClick={() => handleOffer(c)}
-                        className="btn-primary text-xs py-2.5 px-4 w-full sm:w-auto"
+                        onClick={() => setEditingItem(c)}
+                        className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-xl transition-colors cursor-pointer"
+                        title="Editar"
                       >
-                        Contactar
+                        <Pencil size={16} />
                       </button>
-                    )}
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => deleteConvocatoria(c.id)}
+                        className="p-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer"
+                        title="Eliminar"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ) : contacted.includes(c.id) ? (
+                    <div className="w-full text-center py-2 px-3 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold text-xs rounded-xl border border-emerald-500/20">
+                      ✓ Ya te postulaste
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleOffer(c)}
+                      className="w-full sm:w-auto h-9 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center cursor-pointer active:scale-[0.98]"
+                    >
+                      Contactar
+                    </button>
+                  )}
                 </div>
               </div>
             );

@@ -14,13 +14,30 @@ export default function RegisterOwnerPage() {
         subtitle="Crea tu cuenta de Dueño para empezar a recibir reservas y gestionar tus canchas."
         redirectPath="/dashboard"
       />
-      
-      <p className="auth-switch">
-        ¿Ya tienes cuenta? <Link href="/login">Inicia sesión</Link>
-      </p>
-      <p className="auth-switch mt-4">
-        ¿Solo quieres reservar? <Link href="/register">Regístrate como Jugador</Link>
-      </p>
+
+      <div className="mt-6 pt-5 border-t border-emerald-800/10 text-center space-y-3">
+        {/* Opción 1: Iniciar Sesión */}
+        <p className="text-xs sm:text-sm font-semibold text-emerald-950/70">
+          ¿Ya tienes cuenta?{' '}
+          <Link
+            href="/login"
+            className="text-emerald-700 hover:text-emerald-800 font-extrabold underline underline-offset-4 decoration-emerald-500/40 hover:decoration-emerald-600 transition-all py-1 px-1 active:scale-95 inline-block"
+          >
+            Inicia sesión
+          </Link>
+        </p>
+
+        {/* Opción 2: Regístrate como Jugador */}
+        <p className="text-xs sm:text-sm font-semibold text-emerald-950/70">
+          ¿Solo quieres reservar?{' '}
+          <Link
+            href="/register"
+            className="text-emerald-700 hover:text-emerald-800 font-extrabold underline underline-offset-4 decoration-emerald-500/40 hover:decoration-emerald-600 transition-all py-1 px-1 active:scale-95 inline-block"
+          >
+            Regístrate como Jugador
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }

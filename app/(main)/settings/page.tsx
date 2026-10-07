@@ -8,7 +8,6 @@ export default function SettingsPage() {
       icon: <Lock className="text-primary" size={20} />,
       items: [
         { name: 'Cambiar contraseña', description: 'Actualiza tu contraseña periódicamente para mayor seguridad.' },
-        { name: 'Autenticación de dos pasos', description: 'Añade una capa extra de seguridad a tu cuenta.' },
         { name: 'Privacidad del perfil', description: 'Controla quién puede ver tu historial de partidos.' }
       ]
     },
@@ -21,14 +20,7 @@ export default function SettingsPage() {
         { name: 'Recordatorios de partidos', description: 'Te avisamos 2 horas antes de tu partido.' }
       ]
     },
-    {
-      title: 'Métodos de Pago',
-      icon: <CreditCard className="text-emerald-500" size={20} />,
-      items: [
-        { name: 'Tarjetas guardadas', description: 'Gestiona tus tarjetas de crédito o débito.' },
-        { name: 'Cuentas bancarias', description: 'Configura tus cuentas para transferencias rápidas.' }
-      ]
-    },
+
     {
       title: 'Apariencia y Accesibilidad',
       icon: <Moon className="text-indigo-500" size={20} />,
@@ -141,11 +133,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="mt-8 text-center">
-        <button className="text-red-500 text-sm font-semibold hover:underline">
-          Eliminar cuenta
-        </button>
-      </div>
+
     </div>
   );
 }

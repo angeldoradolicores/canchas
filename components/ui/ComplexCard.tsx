@@ -188,17 +188,18 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
                   <span>{complex.rating || '4.9'}</span>
                 </div>
               </div>
+              {(complex.zone || complex.address) && (
+                <p className="text-[11px] text-muted-foreground truncate flex items-center gap-1">
+                  {/* <MapPin size={10} className="text-muted-foreground/60 shrink-0" /> */}
+                  <span className="truncate capitalize">{[complex.zone, complex.address].filter(Boolean).join(' · ')}</span>
+                </p>
+              )}
 
-              <h3 className="text-sm font-bold tracking-tight text-foreground line-clamp-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+              <h3 className="text-sx font-bold tracking-tight text-foreground line-clamp-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                 {complex.name}
               </h3>
 
-              {(complex.zone || complex.address) && (
-                <p className="text-[11px] text-muted-foreground truncate flex items-center gap-1">
-                  <MapPin size={10} className="text-muted-foreground/60 shrink-0" />
-                  <span className="truncate">{[complex.zone, complex.address].filter(Boolean).join(' · ')}</span>
-                </p>
-              )}
+
             </div>
 
             <div className="pt-2 border-t border-border/40 flex items-center justify-between text-xs text-muted-foreground">
@@ -436,18 +437,18 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
                   <div className="w-full rounded-2xl overflow-hidden border border-border shadow-xs">
                     {/* Mapa de Google con marcador fijo y controles de zoom activos */}
                     <div className="w-full h-40 relative bg-muted overflow-hidden">
-                       <iframe
-                         title="google-map-preview"
-                         width="100%"
-                         height="100%"
-                         style={{ border: 0, pointerEvents: 'none' }}
-                         loading="eager"
-                         referrerPolicy="no-referrer-when-downgrade"
-                         src={`https://maps.google.com/maps?q=${(currentPitch as any).lat},${(currentPitch as any).lng}&z=16&output=embed&maptype=roadmap`}
-                       />
-                       {/* Capa que bloquea interacción — el pin queda fijo */}
-                       <div className="absolute inset-0 z-10 cursor-default" aria-hidden="true" />
-                     </div>
+                      <iframe
+                        title="google-map-preview"
+                        width="100%"
+                        height="100%"
+                        style={{ border: 0, pointerEvents: 'none' }}
+                        loading="eager"
+                        referrerPolicy="no-referrer-when-downgrade"
+                        src={`https://maps.google.com/maps?q=${(currentPitch as any).lat},${(currentPitch as any).lng}&z=16&output=embed&maptype=roadmap`}
+                      />
+                      {/* Capa que bloquea interacción — el pin queda fijo */}
+                      <div className="absolute inset-0 z-10 cursor-default" aria-hidden="true" />
+                    </div>
                     {/* Barra de dirección estipulada limpia */}
                     {(() => {
                       const loc = getPitchLocation(currentPitch);

@@ -237,7 +237,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
       setAlertState({
         isOpen: true,
         type: 'warning',
-        title: '⚠️ Reserva en proceso',
+        title: ' Reserva en proceso',
         message: 'Ya tienes una reserva en proceso. Para iniciar una nueva, primero debes completar o cancelar la reserva actual.',
         showCancel: true,
         confirmText: 'Ir a mi reserva',
@@ -969,22 +969,28 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                         className="w-full h-full object-cover"
                       />
                     </div>
-                    <div className="flex-1 min-w-0 pr-2">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 truncate">
+                    <div className="flex-1 min-w-0 flex flex-col gap-0.5 overflow-hidden">
+                      {/* Fila Superior: Ciudad y Conteo de Canchas */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 truncate">
                           {comp.city || 'Pasto'}
                         </span>
-                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-secondary text-muted-foreground">
+
+                        <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                           {comp.pitchesCount} {comp.pitchesCount === 1 ? 'cancha' : 'canchas'}
                         </span>
                       </div>
-                      <h4 className="font-bold text-sm text-foreground">
+
+                      {/* Título del Complejo */}
+                      <h4 className="font-extrabold text-xs sm:text-sm text-foreground uppercase truncate leading-tight">
                         {comp.name}
                       </h4>
+
+                      {/* Ubicación / Dirección */}
                       {(comp.zone || comp.address) && (
-                        <p className="text-[11px] text-muted-foreground truncate flex items-center gap-1 mt-0.5">
-                          <span className="text-emerald-500">📍</span>
-                          {[comp.zone, comp.address].filter(Boolean).join(' · ')}
+                        <p className="text-[10px] sm:text-[11px] text-muted-foreground truncate flex items-center gap-1 leading-none mt-0.5">
+                          {/* <span className="text-emerald-500 text-[10px] shrink-0">📍</span> */}
+                          <span className="truncate">{[comp.zone, comp.address].filter(Boolean).join(' · ')}</span>
                         </p>
                       )}
                     </div>
@@ -1003,7 +1009,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                         className="w-full justify-center px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer active:scale-95 shadow-xs"
                       >
                         <span>Reservar</span>
-                        <ChevronRight size={11} />
+                        {/* <ChevronRight size={11} /> */}
                       </button>
                     </div>
                   </div>
@@ -1312,10 +1318,11 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
 
           {/* ═══ RESULTADOS DE BÚSQUEDA ═══ */}
           {searchResults !== null && (
-            <div id="search-results" className="mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-bold text-lg">
+            <div id="search-results" className="mb-6 w-full max-w-full overflow-hidden">
+              {/* Encabezado Principal */}
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <div className="min-w-0">
+                  <h3 className="font-bold text-base sm:text-lg truncate">
                     {searchResults.length > 0
                       ? `${searchResults.length} cancha${searchResults.length > 1 ? 's' : ''} disponible${searchResults.length > 1 ? 's' : ''}`
                       : 'Sin disponibilidad'}
@@ -1324,57 +1331,58 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                 <button
                   type="button"
                   onClick={() => setSearchResults(null)}
-                  className="text-xs text-muted-foreground hover:text-foreground underline cursor-pointer"
+                  className="text-xs text-muted-foreground hover:text-foreground underline cursor-pointer shrink-0"
                 >
                   Limpiar resultados
                 </button>
               </div>
 
               {groupedSearchResults && groupedSearchResults.length === 0 ? (
-                <div className="p-8 bg-card border border-border rounded-2xl text-center">
-                  <p className="text-4xl mb-3">😔</p>
-                  <h4 className="font-bold mb-1">Todas las canchas están ocupadas</h4>
-                  <p className="text-sm text-muted-foreground">Intenta con otras horas o fecha en el calendario.</p>
+                <div className="p-6 sm:p-8 bg-card border border-border rounded-2xl text-center">
+                  <p className="text-3xl sm:text-4xl mb-3">😔</p>
+                  <h4 className="font-bold mb-1 text-sm sm:text-base">Todas las canchas están ocupadas</h4>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Intenta con otras horas o fecha en el calendario.</p>
                 </div>
               ) : (
-                <div className="grid gap-4">
+                <div className="grid gap-4 w-full">
                   {groupedSearchResults?.map(complex => (
                     <div
                       key={complex.id}
-                      className="p-4 bg-card border border-border rounded-2xl shadow-xs hover:border-primary/40 transition-all flex flex-col gap-3"
+                      className="p-3.5 sm:p-4 bg-card border border-border rounded-2xl shadow-xs hover:border-primary/40 transition-all flex flex-col gap-3 min-w-0 overflow-hidden"
                     >
-                      {/* Cabecera del Complejo con disponibilidad */}
-                      <div className="flex items-center gap-3 pb-3 border-b border-border/60">
-                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex-shrink-0 overflow-hidden bg-muted">
+                      {/* Cabecera del Complejo */}
+                      <div className="flex items-center gap-2.5 sm:gap-3 pb-3 border-b border-border/60 min-w-0">
+                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl shrink-0 overflow-hidden bg-muted">
                           <img
                             src={complex.image}
                             alt={complex.name}
                             className="w-full h-full object-cover"
                           />
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                        <div className="flex-1 min-w-0 flex flex-col gap-0.5 sm:gap-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 truncate">
                               {complex.city || 'Pasto'}
                             </span>
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                              {complex.pitches.length} {complex.pitches.length === 1 ? 'cancha disponible' : 'canchas disponibles'}
+                            <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                              {complex.pitches.length} {complex.pitches.length === 1 ? 'cancha' : 'canchas'}
                             </span>
                           </div>
-                          <h4 className="font-black text-sm sm:text-base text-foreground uppercase truncate">
+
+                          <h4 className="font-black text-xs sm:text-base text-foreground uppercase truncate leading-snug">
                             {complex.name}
                           </h4>
+
                           {(complex.zone || complex.address) && (
-                            <p className="text-[11px] text-muted-foreground truncate flex items-center gap-1 mt-0.5">
-                              <span className="text-emerald-500">📍</span>
+                            <p className="text-[10px] sm:text-[11px] text-muted-foreground truncate capitalize leading-tight">
                               {[complex.zone, complex.address].filter(Boolean).join(' · ')}
                             </p>
                           )}
                         </div>
                       </div>
 
-                      {/* Lista de canchas disponibles en este complejo */}
-                      <div className="grid gap-2.5">
+                      {/* Lista de Canchas */}
+                      <div className="grid gap-2.5 min-w-0">
                         {complex.pitches.map((pitch: any) => {
                           const totalPrice = selectedHours.reduce(
                             (sum, h) => sum + Number(pitch.custom_pricing?.[h] || pitch.price_per_hour || 0),
@@ -1384,40 +1392,38 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                           return (
                             <div
                               key={pitch.id}
-                              className="p-3 bg-secondary/30 rounded-xl border border-border/80 flex flex-col gap-2.5"
+                              className="p-3 bg-secondary/30 rounded-xl border border-border/80 flex flex-col gap-2.5 min-w-0 overflow-hidden"
                             >
-                              {/* Nombre y tipos/superficie de la cancha */}
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="min-w-0">
-                                  <h5 className="font-bold text-xs sm:text-sm text-foreground uppercase truncate">
-                                    {pitch.name}
-                                  </h5>
-                                  <div className="flex flex-wrap gap-1 mt-1">
-                                    {(Array.isArray(pitch.supported_types)
-                                      ? pitch.supported_types
-                                      : [pitch.type]
-                                    ).map((type: string, index: number) => (
-                                      <span key={index} className="text-[10px] text-muted-foreground bg-card border border-border/50 px-1.5 py-0.5 rounded font-medium">
-                                        {type}
-                                      </span>
-                                    ))}
+                              {/* Nombre y tipo/superficie */}
+                              <div className="flex flex-col gap-1 min-w-0">
+                                <h5 className="font-bold text-xs sm:text-sm text-foreground uppercase truncate">
+                                  {pitch.name}
+                                </h5>
+                                <div className="flex flex-wrap gap-1">
+                                  {(Array.isArray(pitch.supported_types)
+                                    ? pitch.supported_types
+                                    : [pitch.type]
+                                  ).map((type: string, index: number) => (
+                                    <span key={index} className="text-[9px] sm:text-[10px] text-muted-foreground bg-card border border-border/50 px-1.5 py-0.5 rounded font-medium truncate max-w-[120px]">
+                                      {type}
+                                    </span>
+                                  ))}
 
-                                    {pitch.surface && (
-                                      <span className="text-[10px] text-muted-foreground bg-card border border-border/50 px-1.5 py-0.5 rounded font-medium">
-                                        {pitch.surface}
-                                      </span>
-                                    )}
-                                  </div>
+                                  {pitch.surface && (
+                                    <span className="text-[9px] sm:text-[10px] text-muted-foreground bg-card border border-border/50 px-1.5 py-0.5 rounded font-medium truncate max-w-[120px]">
+                                      {pitch.surface}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
 
-                              {/* Bloque Resumen: Fecha, Hora(s) y Total Dinámico */}
-                              <div className="bg-primary/5 border border-primary/15 rounded-xl p-3 flex items-center justify-between gap-3">
-                                {/* Lado izquierdo: Fecha e Horas elegidas */}
-                                <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-                                  {/* Fecha con icono */}
-                                  <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-                                    <Calendar size={13} className="text-primary shrink-0" />
+                              {/* Resumen Horizontal a lo ancho: Fecha, Horas (Izquierda) y Precio Total (Derecha) */}
+                              <div className="bg-primary/5 border border-primary/15 rounded-xl p-2.5 flex items-center justify-between gap-2 min-w-0 w-full">
+                                {/* Lado Izquierdo: Fecha y Badges de Horas */}
+                                <div className="flex flex-col gap-1 min-w-0 flex-1">
+                                  {/* Fecha */}
+                                  <div className="flex items-center gap-1 text-[11px] font-bold text-foreground min-w-0">
+                                    <Calendar size={12} className="text-primary shrink-0" />
                                     <span className="capitalize truncate">
                                       {selectedDate
                                         ? new Date(selectedDate + 'T00:00:00').toLocaleDateString('es-CO', {
@@ -1425,23 +1431,23 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                                           day: 'numeric',
                                           month: 'short',
                                         })
-                                        : 'Fecha no seleccionada'}
+                                        : 'Sin fecha'}
                                     </span>
                                   </div>
 
                                   {/* Badges de Hora(s) */}
-                                  <div className="flex flex-wrap items-center gap-1">
+                                  <div className="flex flex-wrap items-center gap-1 min-w-0">
                                     {[...selectedHours].sort().map(h => {
                                       const price = Number(pitch.custom_pricing?.[h] || pitch.price_per_hour || 0);
                                       return (
                                         <span
                                           key={h}
-                                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-card border border-border rounded-lg text-[11px] font-bold text-foreground shadow-2xs"
+                                          className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-card border border-border rounded-md text-[10px] font-bold text-foreground shadow-2xs max-w-full truncate"
                                         >
-                                          <Clock size={11} className="text-muted-foreground shrink-0" />
+                                          <Clock size={10} className="text-muted-foreground shrink-0" />
                                           <span>{fmtSlot(h)}</span>
                                           {selectedHours.length > 1 && (
-                                            <span className="text-[10px] text-muted-foreground font-normal">
+                                            <span className="text-[9px] text-muted-foreground font-normal shrink-0">
                                               (${price.toLocaleString('es-CO')})
                                             </span>
                                           )}
@@ -1451,19 +1457,19 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                                   </div>
                                 </div>
 
-                                {/* Lado derecho: Total */}
-                                <div className="text-right shrink-0">
-                                  <span className="block text-[9px] font-bold uppercase text-muted-foreground">
+                                {/* Lado Derecho: Precio Total Alineado a la Derecha */}
+                                <div className="text-right shrink-0 pl-1 border-l border-primary/10">
+                                  <span className="block text-[8px] sm:text-[9px] font-bold uppercase text-muted-foreground leading-none mb-0.5">
                                     {selectedHours.length > 1 ? `Total (${selectedHours.length}h)` : 'Por hora'}
                                   </span>
-                                  <span className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400">
+                                  <span className="text-xs sm:text-sm font-black text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
                                     ${totalPrice.toLocaleString('es-CO')}
                                   </span>
                                 </div>
                               </div>
 
                               {/* Botones de acción */}
-                              <div className="grid grid-cols-2 gap-2 pt-1">
+                              <div className="grid grid-cols-2 gap-2 pt-0.5">
                                 <button
                                   type="button"
                                   onClick={() => onOpen(pitch)}
@@ -1503,7 +1509,6 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
 
                 const complexName = (p as any).complex_name || (p as any).companies?.name || (complexes as any).name || 'Complejo Deportivo';
 
-                // ── SOLUCIÓN: Buscamos tanto en 'slots' (array) como en 'slot' (string o array) ──
                 const rawSlots = (p as any).slots || (p as any).slot;
                 let slotsList: any[] = [];
 
@@ -1520,10 +1525,10 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                 return (
                   <div
                     key={p.id}
-                    className="flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 bg-amber-500/5 border border-amber-500/30 rounded-2xl transition-all"
+                    className="mt-3 flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 bg-amber-500/5 border border-amber-500/30 rounded-2xl transition-all min-w-0 overflow-hidden"
                   >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex-shrink-0 overflow-hidden bg-muted">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl shrink-0 overflow-hidden bg-muted">
                         {((p as any).media_urls?.[0] || (p as any).image_url) ? (
                           <img
                             src={(p as any).media_urls?.[0] || (p as any).image_url}
@@ -1536,36 +1541,35 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between sm:justify-start gap-1.5 flex-wrap mb-1">
-                          <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                        <div className="flex items-center justify-between gap-1.5 flex-wrap mb-1">
+                          <span className="text-[9px] sm:text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 truncate max-w-[140px]">
                             {complexName}
                           </span>
-                          <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center gap-1 flex-shrink-0 ml-auto">
+                          <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center gap-1 shrink-0">
                             ⏱️ <QuickTimer expiresAt={p.expiresAt} />
                           </span>
                         </div>
 
-                        <h2 className="font-bold text-sm sm:text-base text-foreground truncate mb-1">
+                        <h2 className="font-bold text-xs sm:text-base text-foreground truncate mb-0.5">
                           {p.name}
                         </h2>
 
-                        {/* Renderizado dinámico de todas las horas encontradas */}
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
+                        <div className="flex items-center gap-1 text-[11px] text-muted-foreground flex-wrap">
                           <span>Horas:</span>
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex flex-wrap gap-1 min-w-0">
                             {slotsList.length > 0 ? (
                               slotsList.map((s, idx) => (
-                                <span key={idx} className="font-bold text-foreground bg-amber-500/10 px-1.5 py-0.5 rounded text-[11px]">
+                                <span key={idx} className="font-bold text-foreground bg-amber-500/10 px-1.5 py-0.5 rounded text-[10px]">
                                   {formatSlotHour(s)}
                                 </span>
                               ))
                             ) : (
-                              <span className="font-bold text-foreground">No especificada</span>
+                              <span className="font-bold text-foreground text-[10px]">No especificada</span>
                             )}
                           </div>
                         </div>
 
-                        <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold block mt-1">
+                        <span className="text-[9px] text-amber-600 dark:text-amber-400 font-semibold block mt-1">
                           Bloqueo de seguridad activo
                         </span>
                       </div>
@@ -1574,7 +1578,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                     <button
                       type="button"
                       onClick={() => onOpen(p)}
-                      className="w-full sm:w-auto px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold text-xs rounded-xl transition-colors cursor-pointer text-center flex-shrink-0 border border-amber-500/20"
+                      className="w-full sm:w-auto px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold text-xs rounded-xl transition-colors cursor-pointer text-center shrink-0 border border-amber-500/20"
                     >
                       Ver cancha
                     </button>

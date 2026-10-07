@@ -1597,14 +1597,25 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                                 <div className="flex items-center gap-2 pt-0.5">
                                   <label className="text-[11px] font-bold text-primary hover:underline cursor-pointer bg-primary/10 px-2.5 py-0.5 rounded-lg transition-all">
                                     <span>Cambiar</span>
-                                    <input type="file" accept="image/*,.pdf" className="hidden" onChange={e => setFile(e.target.files?.[0] || null)} />
+                                    <input
+                                      type="file"
+                                      accept="image/*,.pdf"
+                                      className="hidden"
+                                      onChange={e => setFile(e.target.files?.[0] || null)}
+                                    />
                                   </label>
+
                                   <button
                                     type="button"
-                                    onClick={() => setFile(null)}
-                                    className="text-[11px] font-bold text-red-600 hover:text-red-700 bg-red-500/10 px-2.5 py-0.5 rounded-lg transition-all"
+                                    onClick={() => {
+                                      if (file) {
+                                        const fileUrl = URL.createObjectURL(file);
+                                        window.open(fileUrl, '_blank');
+                                      }
+                                    }}
+                                    className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 bg-emerald-500/10 px-2.5 py-0.5 rounded-lg transition-all cursor-pointer"
                                   >
-                                    Eliminar
+                                    Ver
                                   </button>
                                 </div>
                               </div>

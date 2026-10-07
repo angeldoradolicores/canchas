@@ -198,7 +198,7 @@ export function ExpiredBookingFloatingBanner() {
             {/* Datos: Complejo, Cancha y Horas */}
             <div className="mt-1 space-y-0.5">
               <p className="text-[11px] font-bold text-foreground truncate uppercase">
-                {snapshot.complexName} · <span className="text-primary font-semibold lowercase capitalize">{snapshot.pitchName}</span>
+                {snapshot.complexName} · <span className="text-primary font-semibold  capitalize">{snapshot.pitchName}</span>
               </p>
               <p className="text-[10px] text-muted-foreground truncate">
                 📅 {dateFormatted} · 🕒 {visibleTimes}{extraCount}

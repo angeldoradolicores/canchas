@@ -60,12 +60,12 @@ export function ReservationsNotificationProvider({ children }: { children: React
     isCheckingRef.current = true;
 
     try {
-      let currentBookings: { id: string; status: string; updated_at?: string }[] = [];
+      let currentBookings: { id: string; status: string }[] = [];
 
       if (user?.id) {
         const { data, error } = await supabase
           .from('bookings')
-          .select('id, status, updated_at')
+          .select('id, status')
           .eq('user_id', user.id);
 
         if (!error && Array.isArray(data)) {
@@ -83,13 +83,16 @@ export function ReservationsNotificationProvider({ children }: { children: React
         }
 
         if (guestIds.length > 0) {
-          const { data, error } = await supabase
-            .from('bookings')
-            .select('id, status, updated_at')
-            .in('id', guestIds);
-
-          if (!error && Array.isArray(data)) {
-            currentBookings = data;
+          try {
+            const res = await fetch(`/api/bookings?ids=${guestIds.join(',')}`);
+            if (res.ok) {
+              const resJson = await res.json();
+              if (resJson.success && Array.isArray(resJson.data)) {
+                currentBookings = resJson.data.map((b: any) => ({ id: b.id, status: b.status }));
+              }
+            }
+          } catch (err) {
+            console.warn('[checkReservationStatuses guest fetch error]', err);
           }
         }
       }

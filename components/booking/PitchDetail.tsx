@@ -1517,11 +1517,11 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                 <>
                   {pitchAny.custom_pricing?.booking_type === 'fixed' ? (
                     <span>
-                      {`Reservar ${selectedTimes.length}h ($${Number((pitchAny.custom_pricing.booking_fixed || 0) * selectedTimes.length).toLocaleString('es-CO')})`}
+                      {`Reservar ${selectedTimes.length}h`}
                     </span>
                   ) : pitchAny.booking_percentage ? (
                     <span>
-                      {`Reservar ${selectedTimes.length}h ($${Number((pitchAny.booking_percentage * totalPrice) / 100 || 0).toLocaleString('es-CO')})`}
+                      {`Reservar ${selectedTimes.length}h`}
                     </span>
                   ) : (
                     <span>{`Reservar ${selectedTimes.length}h`}</span>

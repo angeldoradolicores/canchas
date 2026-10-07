@@ -9,16 +9,16 @@ export default function TerminosPage() {
       icon: <Users size={18} className="text-emerald-500" />,
       title: '1. Aceptación de los Términos',
       content: [
-        'Al acceder y utilizar la plataforma Canchas Pasto, usted acepta cumplir y estar sujeto a los presentes Términos y Condiciones de Uso.',
+        'Al acceder y utilizar la plataforma Cancheros, usted acepta cumplir y estar sujeto a los presentes Términos y Condiciones de Uso.',
         'Si no está de acuerdo con alguna parte de estos términos, le pedimos que no utilice nuestros servicios.',
         'Nos reservamos el derecho de actualizar estos términos en cualquier momento. Los cambios entrarán en vigor una vez publicados en la plataforma.',
       ],
     },
     {
-      icon: <MapPin size={18} className="text-emerald-500" />,
+      icon: <ScrollText size={18} className="text-emerald-500" />,
       title: '2. Descripción del Servicio',
       content: [
-        'Canchas Pasto es una plataforma digital que facilita la reserva de canchas de fútbol y espacios deportivos en Pasto, Colombia.',
+        'Cancheros es una plataforma digital que facilita la reserva de canchas de fútbol y espacios deportivos en Pasto, Colombia.',
         'Actuamos como intermediarios entre los usuarios y los propietarios de los complejos deportivos. La plataforma no es propietaria de ninguna cancha.',
         'La disponibilidad de los espacios está sujeta a la agenda de cada complejo deportivo registrado en nuestra plataforma.',
       ],
@@ -28,7 +28,6 @@ export default function TerminosPage() {
       title: '3. Reservas y Cancelaciones',
       content: [
         'Una reserva se considera confirmada únicamente cuando el propietario del complejo aprueba el comprobante de pago cargado por el usuario.',
-        'El usuario tiene hasta 30 minutos desde el inicio del proceso de reserva para completar el pago y cargar el comprobante.',
         'Las cancelaciones deben notificarse con al menos 24 horas de anticipación. Las cancelaciones tardías pueden estar sujetas a penalizaciones según las políticas de cada complejo.',
         'Los reembolsos por cancelaciones aceptadas serán procesados de acuerdo con las políticas del complejo deportivo correspondiente.',
       ],
@@ -38,7 +37,7 @@ export default function TerminosPage() {
       title: '4. Pagos y Abonos',
       content: [
         'Los pagos se realizan directamente al complejo deportivo mediante transferencias a las cuentas autorizadas (Nequi, Daviplata, Bancolombia u otras indicadas).',
-        'Canchas Pasto no procesa ni almacena información de tarjetas de crédito o datos bancarios de los usuarios.',
+        'Cancheros no procesa ni almacena información de tarjetas de crédito o datos bancarios de los usuarios.',
         'El abono requerido corresponde al porcentaje o monto fijo establecido por cada propietario de cancha. El saldo restante se cancela en el lugar el día del partido.',
         'Es responsabilidad del usuario conservar el comprobante de pago y verificar que los datos (valor y fecha) sean legibles antes de cargarlo.',
       ],
@@ -57,7 +56,7 @@ export default function TerminosPage() {
       icon: <AlertTriangle size={18} className="text-amber-500" />,
       title: '6. Limitación de Responsabilidad',
       content: [
-        'Canchas Pasto no se hace responsable por daños, lesiones o pérdidas ocurridas durante la práctica deportiva en los complejos registrados.',
+        'Cancheros no se hace responsable por daños, lesiones o pérdidas ocurridas durante la práctica deportiva en los complejos registrados.',
         'No garantizamos la disponibilidad ininterrumpida de la plataforma y no somos responsables por interrupciones técnicas.',
         'No somos responsables por discrepancias entre la información publicada por los complejos y las condiciones reales de las instalaciones.',
       ],
@@ -90,9 +89,7 @@ export default function TerminosPage() {
           </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-black text-foreground">Términos y Condiciones</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Última actualización: Octubre 2025 · Versión 1.0
-            </p>
+
           </div>
         </div>
 
@@ -131,7 +128,7 @@ export default function TerminosPage() {
       {/* Footer legal */}
       <div className="mt-8 p-4 bg-card border border-border rounded-2xl text-center">
         <p className="text-xs text-muted-foreground">
-          © {new Date().getFullYear()} Canchas Pasto · Pasto, Nariño, Colombia
+          © {new Date().getFullYear()} Cancheros · Pasto, Nariño, Colombia
         </p>
         <p className="text-xs text-muted-foreground mt-1">
           Todos los derechos reservados. Uso exclusivo en el territorio colombiano.

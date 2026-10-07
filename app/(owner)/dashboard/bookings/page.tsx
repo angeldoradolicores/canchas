@@ -1249,7 +1249,7 @@ export default function BookingsPage() {
                 className="flex-1 py-3 rounded-xl bg-green-600 hover:bg-green-700 active:scale-98 text-white text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
               >
                 {batchApproving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                <span>{batchApproving ? 'Confirmando todas...' : `Sí, confirmar todas (${batchApproveConfirm.ids.length})`}</span>
+                <span>{batchApproving ? 'Confirmando todas...' : `Confirmar todas`}</span>
               </button>
               <button
                 type="button"

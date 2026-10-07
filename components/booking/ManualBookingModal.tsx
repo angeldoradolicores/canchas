@@ -452,9 +452,9 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
                           <div className="flex items-baseline gap-1 whitespace-nowrap">
                             <span className="text-sm font-extrabold leading-none">{h12}:00</span>
                             <span className="text-[10px] uppercase opacity-75 font-semibold">{ampm}</span>
-                            {hasCustomPrice && !isSel && (
+                            {/* {hasCustomPrice && !isSel && (
                               <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-orange-400 rounded-full" title="Precio especial" />
-                            )}
+                            )} */}
                           </div>
                         )}
                       </button>
