@@ -9,7 +9,7 @@ const rawEvoUrl = process.env.EVOLUTION_API_URL || 'http://127.0.0.1:8080';
 const evoUrl = rawEvoUrl.replace('localhost', '127.0.0.1');
 const evoApiKey = process.env.EVOLUTION_API_KEY || process.env.EVOLUTION_GLOBAL_APIKEY || 'TusClavesSecretasDeEvolution123';
 
-const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://canchas-mino.vercel.app').replace(/\/$/, '');
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://cancheros.site').replace(/\/$/, '');
 const OWNER_DEFAULT_PHONE = '573006577286';
 
 // Instancia central oficial conectada al número 3006577286

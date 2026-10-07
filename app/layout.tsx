@@ -8,6 +8,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 import './globals.css'
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://cancheros.site'),
   title: 'Canchas Pasto | Reserva tu próximo partido',
   description: 'Encuentra y reserva canchas sintéticas en Pasto, Nariño. Juega con tu gente.',
   generator: 'v0.app',
