@@ -343,9 +343,9 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
       .select(`
         id, customer_name, customer_phone, start_time, end_time, payment_proof_url, created_at, user_id,
         pitches!inner (
-          id, name, type, price_per_hour, lat, lng,place_id,place_name,
+          id, name, type, price_per_hour,
           companies!inner (
-            id, name, address, zone, whatsapp_instance_name
+            id, name, address, zone, whatsapp_instance_name, lat, lng, place_id, place_name
           )
         )
       `)
@@ -421,8 +421,8 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
         `${pitchNames.toUpperCase()}\n` +
         `📅 *FECHA:* ${fechaLarga}\n` +
         `⏰ *HORARIO:* ${horasStr}\n` +
+        // `📍 *DIRECCIÓN:* ${address}\n` +
         `📍 *VER EN MAPS:* ${mapsUrl}\n`;
-      // ` *DIRECCIÓN:* ${address}\n`;
 
       await sendEvolutionWhatsAppText(instanceName, b.customer_phone, ticketMsg);
     } else {
