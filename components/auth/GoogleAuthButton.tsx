@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -12,12 +12,12 @@ interface GoogleAuthButtonProps {
   onError?: (error: string) => void;
   onLoadingChange?: (loading: boolean) => void;
   disabled?: boolean;
+  className?: string;
 }
 
 declare global {
   interface Window {
     google?: any;
-    __gsiInitialized?: boolean;
   }
 }
 
@@ -29,8 +29,8 @@ export function GoogleAuthButton({
   onError,
   onLoadingChange,
   disabled = false,
+  className,
 }: GoogleAuthButtonProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
   const [isGsiReady, setIsGsiReady] = useState(false);
   const supabase = createClient();
@@ -38,7 +38,7 @@ export function GoogleAuthButton({
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   const isGISAvailable = Boolean(clientId && clientId.trim() !== '');
 
-  // 1. Cargar el script de Google Identity Services si está configurado el Client ID
+  // 1. Cargar el script de Google Identity Services en segundo plano si hay Client ID
   useEffect(() => {
     if (!isGISAvailable) return;
 
@@ -60,7 +60,7 @@ export function GoogleAuthButton({
         setIsGsiReady(true);
       };
       script.onerror = () => {
-        console.error('Error al cargar Google Identity Services');
+        console.warn('No se pudo cargar Google Identity Services, usando fallback.');
       };
       document.body.appendChild(script);
     } else {
@@ -69,75 +69,76 @@ export function GoogleAuthButton({
           setIsGsiReady(true);
           clearInterval(checkInterval);
         }
-      }, 100);
+      }, 150);
       return () => clearInterval(checkInterval);
     }
   }, [isGISAvailable]);
 
-  // 2. Manejador de credencial de Google Identity Services
-  const handleCredentialResponse = async (response: any) => {
-    try {
-      setLoading(true);
-      onLoadingChange?.(true);
-      onError?.('');
+  // 2. Manejador de credencial de Google Identity Services (Token JWT directo)
+  const handleCredentialResponse = useCallback(
+    async (response: any) => {
+      try {
+        setLoading(true);
+        onLoadingChange?.(true);
+        onError?.('');
 
-      const idToken = response.credential;
-      if (!idToken) {
-        throw new Error('No se recibió la credencial de Google');
-      }
-
-      const targetPath = role === 'owner' ? '/dashboard' : redirectPath;
-
-      // Guardar preferencias temporales en cookies y localStorage
-      if (typeof document !== 'undefined') {
-        document.cookie = `sb_pending_role=${role}; path=/; max-age=600; SameSite=Lax`;
-        document.cookie = `sb_pending_next=${encodeURIComponent(targetPath)}; path=/; max-age=600; SameSite=Lax`;
-        if (fullName.trim()) {
-          document.cookie = `sb_pending_company=${encodeURIComponent(fullName.trim())}; path=/; max-age=600; SameSite=Lax`;
+        const idToken = response.credential;
+        if (!idToken) {
+          throw new Error('No se recibió la credencial de Google');
         }
-      }
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('sb_pending_role', role);
-        localStorage.setItem('sb_pending_next', targetPath);
-        if (fullName.trim()) {
-          localStorage.setItem('sb_pending_company', fullName.trim());
+
+        const targetPath = role === 'owner' ? '/dashboard' : redirectPath;
+
+        // Guardar preferencias temporales en cookies y localStorage
+        if (typeof document !== 'undefined') {
+          document.cookie = `sb_pending_role=${role}; path=/; max-age=600; SameSite=Lax`;
+          document.cookie = `sb_pending_next=${encodeURIComponent(targetPath)}; path=/; max-age=600; SameSite=Lax`;
+          if (fullName.trim()) {
+            document.cookie = `sb_pending_company=${encodeURIComponent(fullName.trim())}; path=/; max-age=600; SameSite=Lax`;
+          }
         }
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('sb_pending_role', role);
+          localStorage.setItem('sb_pending_next', targetPath);
+          if (fullName.trim()) {
+            localStorage.setItem('sb_pending_company', fullName.trim());
+          }
+        }
+
+        // Autenticar en Supabase usando el ID Token nativo de Google (asociado a cancheros.site)
+        const { error } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: idToken,
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        // Redirigir al callback para asegurar sincronización de perfiles y empresas
+        const params = new URLSearchParams({
+          role,
+          next: targetPath,
+        });
+        if (fullName.trim()) {
+          params.set('company_name', fullName.trim());
+        }
+
+        window.location.href = `/auth/callback?${params.toString()}`;
+      } catch (err: any) {
+        console.error('Google ID token auth error:', err);
+        const msg = err?.message || 'Error al autenticar con Google.';
+        onError?.(msg);
+        setLoading(false);
+        onLoadingChange?.(false);
       }
+    },
+    [role, fullName, redirectPath, onError, onLoadingChange, supabase]
+  );
 
-      // Autenticar en Supabase usando el ID Token nativo de Google (100% white label cancheros.site)
-      const { data, error } = await supabase.auth.signInWithIdToken({
-        provider: 'google',
-        token: idToken,
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      // Redirigir al callback para asegurar sincronización de perfiles y empresas
-      const params = new URLSearchParams({
-        role,
-        next: targetPath,
-      });
-      if (fullName.trim()) {
-        params.set('company_name', fullName.trim());
-      }
-
-      window.location.href = `/auth/callback?${params.toString()}`;
-    } catch (err: any) {
-      console.error('Google ID token auth error:', err);
-      const msg = err?.message || 'Error al autenticar con Google.';
-      onError?.(msg);
-      setLoading(false);
-      onLoadingChange?.(false);
-    }
-  };
-
-  // 3. Renderizar botón oficial de Google cuando GIS esté listo
+  // Inicializar Google Identity Services cuando el script esté listo
   useEffect(() => {
-    if (!isGISAvailable || !isGsiReady || !containerRef.current || !window.google?.accounts?.id) {
-      return;
-    }
+    if (!isGISAvailable || !isGsiReady || !window.google?.accounts?.id) return;
 
     try {
       window.google.accounts.id.initialize({
@@ -146,28 +147,13 @@ export function GoogleAuthButton({
         auto_select: false,
         cancel_on_tap_outside: true,
       });
-
-      containerRef.current.innerHTML = '';
-      window.google.accounts.id.renderButton(containerRef.current, {
-        type: 'standard',
-        shape: 'rectangular',
-        theme: 'outline',
-        text: mode === 'login' ? 'signin_with' : 'signup_with',
-        size: 'large',
-        logo_alignment: 'left',
-        width: containerRef.current.clientWidth || 340,
-      });
     } catch (e) {
-      console.warn('Error al renderizar botón de Google GIS:', e);
+      console.warn('Error al inicializar Google Identity Services:', e);
     }
-  }, [isGISAvailable, isGsiReady, mode, role, fullName, clientId]);
+  }, [isGISAvailable, isGsiReady, clientId, handleCredentialResponse]);
 
-  // 4. Fallback tradicional si no se ha configurado aún NEXT_PUBLIC_GOOGLE_CLIENT_ID
+  // 3. Fallback tradicional OAuth si One Tap no está disponible o es bloqueado
   const handleFallbackOAuth = async () => {
-    onError?.('');
-    setLoading(true);
-    onLoadingChange?.(true);
-
     try {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       const targetPath = role === 'owner' ? '/dashboard' : redirectPath;
@@ -201,7 +187,6 @@ export function GoogleAuthButton({
           redirectTo: callbackUrl,
           queryParams: {
             access_type: 'offline',
-            prompt: 'select_account',
           },
         },
       });
@@ -218,32 +203,48 @@ export function GoogleAuthButton({
     }
   };
 
-  // Si GIS está disponible y listo, mostramos el contenedor del botón nativo
-  if (isGISAvailable) {
-    return (
-      <div className="w-full flex flex-col items-center justify-center">
-        {loading ? (
-          <div className="w-full py-2.5 px-4 bg-card border border-border rounded-xl flex items-center justify-center gap-2 text-sm text-muted-foreground">
-            <Loader2 size={16} className="animate-spin text-emerald-600" />
-            <span>Iniciando sesión con Google...</span>
-          </div>
-        ) : (
-          <div
-            ref={containerRef}
-            className="w-full flex justify-center [&>div]:!w-full [&_iframe]:!w-full min-h-[44px]"
-          />
-        )}
-      </div>
-    );
-  }
+  // 4. Click en el botón de Google (tu botón original con diseño exacto)
+  const handleClick = async () => {
+    onError?.('');
+    setLoading(true);
+    onLoadingChange?.(true);
 
-  // Si aún no se colocó el Client ID, renderizamos el botón con el fallback seguro
+    // Si GIS está disponible y listo en el navegador, intentar abrir el selector nativo de Google
+    if (isGISAvailable && window.google?.accounts?.id) {
+      try {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: handleCredentialResponse,
+          auto_select: false,
+          cancel_on_tap_outside: true,
+        });
+
+        window.google.accounts.id.prompt((notification: any) => {
+          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            console.log('Google One Tap no se mostró, activando login OAuth estándar.');
+            handleFallbackOAuth();
+          }
+        });
+        return;
+      } catch (err) {
+        console.warn('Excepción al abrir Google GIS prompt, pasando a OAuth:', err);
+      }
+    }
+
+    // Fallback directo si no hay GIS
+    await handleFallbackOAuth();
+  };
+
+  // Estilos por defecto idénticos a los originales del proyecto
+  const defaultClasses =
+    'w-full py-2.5 px-4 bg-card border border-border hover:border-emerald-500/50 hover:bg-secondary/70 text-foreground font-semibold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-xs cursor-pointer active:scale-98 disabled:opacity-60';
+
   return (
     <button
       type="button"
-      onClick={handleFallbackOAuth}
+      onClick={handleClick}
       disabled={disabled || loading}
-      className="w-full py-2.5 px-4 bg-card border border-border hover:border-emerald-500/50 hover:bg-secondary/70 text-foreground font-semibold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-xs cursor-pointer active:scale-98 disabled:opacity-60"
+      className={className || defaultClasses}
     >
       {loading ? (
         <Loader2 size={16} className="animate-spin text-emerald-600" />

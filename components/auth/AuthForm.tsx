@@ -282,6 +282,7 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
           onError={(err) => setError(err)}
           onLoadingChange={(isLoading) => setGoogleLoading(isLoading)}
           disabled={googleLoading || loading}
+          className="w-full py-3 px-4 bg-secondary/50 hover:bg-secondary border border-border/80 hover:border-emerald-500/40 text-foreground font-semibold text-sm rounded-2xl flex items-center justify-center gap-3 transition-all duration-200 shadow-xs active:scale-[0.98] disabled:opacity-60 cursor-pointer"
         />
 
         <div className="relative flex items-center justify-center my-2">
