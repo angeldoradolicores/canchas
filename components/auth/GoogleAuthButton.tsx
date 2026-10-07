@@ -187,6 +187,7 @@ export function GoogleAuthButton({
           redirectTo: callbackUrl,
           queryParams: {
             access_type: 'offline',
+            prompt: 'select_account', // Fuerza siempre el selector de cuenta de Google
           },
         },
       });

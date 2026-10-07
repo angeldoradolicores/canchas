@@ -352,12 +352,28 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
       .eq('id', bookingId)
       .single();
 
-    if (error || !b || !b.customer_phone) return;
+    if (error) {
+      console.error('[notifyBookingStatusChange] Error al buscar reserva:', bookingId, error);
+      return;
+    }
+    if (!b) {
+      console.warn('[notifyBookingStatusChange] Reserva no encontrada:', bookingId);
+      return;
+    }
+    if (!b.customer_phone) {
+      console.warn('[notifyBookingStatusChange] Reserva sin customer_phone, no se puede enviar WhatsApp:', bookingId);
+      return;
+    }
 
     const pitch = (b as any).pitches;
     const company = pitch?.companies;
     const instanceName = company?.whatsapp_instance_name;
-    if (!instanceName) return;
+    if (!instanceName) {
+      console.warn('[notifyBookingStatusChange] Empresa sin whatsapp_instance_name, no se envía:', bookingId, company?.name);
+      return;
+    }
+
+    console.log('[notifyBookingStatusChange] Enviando notificacion', { bookingId, newStatus, instanceName, phone: b.customer_phone });
 
     // Buscar si hay horas hermanas para incluirlas todas en un solo ticket
     let siblingBookings: any[] = [b];
@@ -382,10 +398,10 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
 
     siblingBookings.sort((a, c) => new Date(a.start_time).getTime() - new Date(c.start_time).getTime());
 
-    // Deduplicación para no enviar múltiples tickets al cliente en reservas de varias horas
-    const leaderId = siblingBookings[0]?.id || b.id;
-    const dedupKey = `status_${newStatus}_${b.payment_proof_url || leaderId}_${b.customer_phone}`;
-    if (isDuplicate(dedupKey, 15000)) {
+    // Deduplicación: se basa en el bookingId exacto para no bloquear otros bookings del mismo cliente
+    const dedupKey = `status_${newStatus}_${bookingId}`;
+    if (isDuplicate(dedupKey, 60000)) {
+      console.log('[notifyBookingStatusChange] Descartado por dedup:', dedupKey);
       return;
     }
 
