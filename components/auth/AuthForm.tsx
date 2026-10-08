@@ -29,14 +29,17 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
   const router = useRouter();
   const supabase = createClient();
 
-  // Restaurar estado de carga si el usuario retrocede con el navegador desde Google
+  // Restaurar estado de carga si el usuario cierra el popup de Google o retrocede
   useEffect(() => {
     const handlePageShow = () => {
       setGoogleLoading(false);
       setLoading(false);
     };
     const handleFocus = () => {
-      setGoogleLoading(false);
+      // Usar el mismo delay que GoogleAuthButton (800ms) para sincronizar ambos estados
+      setTimeout(() => {
+        setGoogleLoading(false);
+      }, 900);
     };
     window.addEventListener('pageshow', handlePageShow);
     window.addEventListener('focus', handleFocus);

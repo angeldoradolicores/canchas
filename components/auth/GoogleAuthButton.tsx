@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -21,6 +21,30 @@ declare global {
   }
 }
 
+/**
+ * Genera un nonce aleatorio y devuelve:
+ * - rawNonce: el valor en claro para pasarlo a GIS
+ * - hashedNonce: su SHA-256 en hex para pasarlo a Supabase signInWithIdToken
+ *
+ * El protocolo exige que el nonce incluido en el id_token (por Google)
+ * coincida con el hash que Supabase espera verificar.
+ */
+async function generateNonce(): Promise<{ rawNonce: string; hashedNonce: string }> {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  const rawNonce = Array.from(array)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  const encoder = new TextEncoder();
+  const data = encoder.encode(rawNonce);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashedNonce = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+
+  return { rawNonce, hashedNonce };
+}
+
 export function GoogleAuthButton({
   mode = 'login',
   role = 'player',
@@ -34,11 +58,21 @@ export function GoogleAuthButton({
   const [loading, setLoading] = useState(false);
   const [isGsiReady, setIsGsiReady] = useState(false);
   const supabase = createClient();
+  const loadingRef = useRef(false); // ref para evitar closures obsoletos
 
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   const isGISAvailable = Boolean(clientId && clientId.trim() !== '');
 
-  // 1. Cargar el script de Google Identity Services en segundo plano si hay Client ID
+  const setLoadingState = useCallback(
+    (val: boolean) => {
+      loadingRef.current = val;
+      setLoading(val);
+      onLoadingChange?.(val);
+    },
+    [onLoadingChange]
+  );
+
+  // ── 1. Cargar el script de Google Identity Services ──────────────────────
   useEffect(() => {
     if (!isGISAvailable) return;
 
@@ -56,11 +90,9 @@ export function GoogleAuthButton({
       script.src = 'https://accounts.google.com/gsi/client';
       script.async = true;
       script.defer = true;
-      script.onload = () => {
-        setIsGsiReady(true);
-      };
+      script.onload = () => setIsGsiReady(true);
       script.onerror = () => {
-        console.warn('No se pudo cargar Google Identity Services, usando fallback.');
+        console.warn('No se pudo cargar Google Identity Services.');
       };
       document.body.appendChild(script);
     } else {
@@ -74,112 +106,126 @@ export function GoogleAuthButton({
     }
   }, [isGISAvailable]);
 
-  // 2. Manejador de credencial de Google Identity Services (Token JWT directo)
-  const handleCredentialResponse = useCallback(
-    async (response: any) => {
-      try {
-        setLoading(true);
-        onLoadingChange?.(true);
-        onError?.('');
+  // ── 2. Resetear estado de carga cuando la ventana recupera el foco ───────
+  // Esto cubre el caso de cerrar el popup de Google sin completar el login.
+  useEffect(() => {
+    const handleFocus = () => {
+      // Dar 800ms para que GIS procese el callback antes de resetear
+      setTimeout(() => {
+        if (loadingRef.current) {
+          setLoadingState(false);
+        }
+      }, 800);
+    };
+    const handlePageShow = () => {
+      setLoadingState(false);
+    };
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('pageshow', handlePageShow);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pageshow', handlePageShow);
+    };
+  }, [setLoadingState]);
 
-        const idToken = response.credential;
+  // ── 3. Manejador principal: recibe el id_token de GIS ───────────────────
+  const handleCredentialResponse = useCallback(
+    async (response: any, rawNonce: string) => {
+      try {
+        const idToken = response?.credential;
         if (!idToken) {
           throw new Error('No se recibió la credencial de Google');
         }
 
         const targetPath = role === 'owner' ? '/dashboard' : redirectPath;
 
-        // Guardar preferencias temporales en cookies y localStorage
-        if (typeof document !== 'undefined') {
-          document.cookie = `sb_pending_role=${role}; path=/; max-age=600; SameSite=Lax`;
-          document.cookie = `sb_pending_next=${encodeURIComponent(targetPath)}; path=/; max-age=600; SameSite=Lax`;
-          if (fullName.trim()) {
-            document.cookie = `sb_pending_company=${encodeURIComponent(fullName.trim())}; path=/; max-age=600; SameSite=Lax`;
-          }
-        }
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('sb_pending_role', role);
-          localStorage.setItem('sb_pending_next', targetPath);
-          if (fullName.trim()) {
-            localStorage.setItem('sb_pending_company', fullName.trim());
-          }
-        }
-
-        // Autenticar en Supabase usando el ID Token nativo de Google (asociado a cancheros.site)
-        const { error } = await supabase.auth.signInWithIdToken({
-          provider: 'google',
-          token: idToken,
-        });
-
-        if (error) {
-          throw error;
-        }
-
-        // Redirigir al callback para asegurar sincronización de perfiles y empresas
-        const params = new URLSearchParams({
-          role,
-          next: targetPath,
-        });
-        if (fullName.trim()) {
-          params.set('company_name', fullName.trim());
-        }
-
-        window.location.href = `/auth/callback?${params.toString()}`;
-      } catch (err: any) {
-        console.error('Google ID token auth error:', err);
-        const msg = err?.message || 'Error al autenticar con Google.';
-        onError?.(msg);
-        setLoading(false);
-        onLoadingChange?.(false);
-      }
-    },
-    [role, fullName, redirectPath, onError, onLoadingChange, supabase]
-  );
-
-  // Inicializar Google Identity Services cuando el script esté listo
-  useEffect(() => {
-    if (!isGISAvailable || !isGsiReady || !window.google?.accounts?.id) return;
-
-    try {
-      window.google.accounts.id.initialize({
-        client_id: clientId,
-        callback: handleCredentialResponse,
-        auto_select: false,
-        cancel_on_tap_outside: true,
-      });
-    } catch (e) {
-      console.warn('Error al inicializar Google Identity Services:', e);
-    }
-  }, [isGISAvailable, isGsiReady, clientId, handleCredentialResponse]);
-
-  // 3. Fallback tradicional OAuth si One Tap no está disponible o es bloqueado
-  const handleFallbackOAuth = async () => {
-    try {
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      const targetPath = role === 'owner' ? '/dashboard' : redirectPath;
-      const params = new URLSearchParams({
-        role,
-        next: targetPath,
-      });
-      if (fullName.trim()) {
-        params.set('company_name', fullName.trim());
-      }
-      const callbackUrl = `${origin}/auth/callback?${params.toString()}`;
-
-      if (typeof document !== 'undefined') {
+        // Guardar preferencias temporales
         document.cookie = `sb_pending_role=${role}; path=/; max-age=600; SameSite=Lax`;
         document.cookie = `sb_pending_next=${encodeURIComponent(targetPath)}; path=/; max-age=600; SameSite=Lax`;
         if (fullName.trim()) {
           document.cookie = `sb_pending_company=${encodeURIComponent(fullName.trim())}; path=/; max-age=600; SameSite=Lax`;
         }
-      }
-      if (typeof window !== 'undefined') {
         localStorage.setItem('sb_pending_role', role);
         localStorage.setItem('sb_pending_next', targetPath);
         if (fullName.trim()) {
           localStorage.setItem('sb_pending_company', fullName.trim());
         }
+
+        // ✅ Pasar el rawNonce para que Supabase pueda verificar el hash
+        // incluido en el id_token generado por Google GIS
+        const { error } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: idToken,
+          nonce: rawNonce,
+        });
+
+        if (error) throw error;
+
+        // Redirigir al callback de la aplicación (no a supabase.co)
+        const params = new URLSearchParams({ role, next: targetPath });
+        if (fullName.trim()) params.set('company_name', fullName.trim());
+        window.location.href = `/auth/callback?${params.toString()}`;
+      } catch (err: any) {
+        console.error('Google ID token auth error:', err);
+        onError?.(err?.message || 'Error al autenticar con Google.');
+        setLoadingState(false);
       }
+    },
+    [role, fullName, redirectPath, onError, supabase, setLoadingState]
+  );
+
+  // ── 4. Flujo principal con GIS (nonce correcto + detección de dismiss) ──
+  const handleGISLogin = useCallback(async () => {
+    if (!window.google?.accounts?.id || !clientId) return false;
+
+    try {
+      const { rawNonce, hashedNonce } = await generateNonce();
+
+      // Re-inicializar GIS con el nonce nuevo en cada intento
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: (response: any) => handleCredentialResponse(response, rawNonce),
+        auto_select: false,
+        cancel_on_tap_outside: true,
+        // Pasar el nonce hasheado para que Google lo incluya firmado en el id_token
+        nonce: hashedNonce,
+      });
+
+      window.google.accounts.id.prompt((notification: any) => {
+        if (
+          notification.isNotDisplayed() ||
+          notification.isSkippedMoment() ||
+          notification.isDismissedMoment()
+        ) {
+          // El usuario cerró el popup o fue bloqueado → resetear estado
+          setLoadingState(false);
+        }
+      });
+
+      return true;
+    } catch (err) {
+      console.warn('Error al inicializar GIS:', err);
+      return false;
+    }
+  }, [clientId, handleCredentialResponse, setLoadingState]);
+
+  // ── 5. Fallback OAuth estándar (redirige a cancheros.site, no a supabase.co) ──
+  const handleFallbackOAuth = useCallback(async () => {
+    try {
+      const origin = window.location.origin;
+      const targetPath = role === 'owner' ? '/dashboard' : redirectPath;
+      const params = new URLSearchParams({ role, next: targetPath });
+      if (fullName.trim()) params.set('company_name', fullName.trim());
+      const callbackUrl = `${origin}/auth/callback?${params.toString()}`;
+
+      document.cookie = `sb_pending_role=${role}; path=/; max-age=600; SameSite=Lax`;
+      document.cookie = `sb_pending_next=${encodeURIComponent(targetPath)}; path=/; max-age=600; SameSite=Lax`;
+      if (fullName.trim()) {
+        document.cookie = `sb_pending_company=${encodeURIComponent(fullName.trim())}; path=/; max-age=600; SameSite=Lax`;
+      }
+      localStorage.setItem('sb_pending_role', role);
+      localStorage.setItem('sb_pending_next', targetPath);
+      if (fullName.trim()) localStorage.setItem('sb_pending_company', fullName.trim());
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -187,56 +233,36 @@ export function GoogleAuthButton({
           redirectTo: callbackUrl,
           queryParams: {
             access_type: 'offline',
-            prompt: 'select_account', // Fuerza siempre el selector de cuenta de Google
+            prompt: 'select_account',
           },
         },
       });
 
       if (error) {
         onError?.(error.message || 'Error al iniciar con Google.');
-        setLoading(false);
-        onLoadingChange?.(false);
+        setLoadingState(false);
       }
+      // Si no hay error, el navegador redirigirá, no resetear loading
     } catch (err: any) {
       onError?.(err?.message || 'Error de conexión con Google.');
-      setLoading(false);
-      onLoadingChange?.(false);
+      setLoadingState(false);
     }
-  };
+  }, [role, fullName, redirectPath, onError, supabase, setLoadingState]);
 
-  // 4. Click en el botón de Google (tu botón original con diseño exacto)
+  // ── 6. Click del botón ───────────────────────────────────────────────────
   const handleClick = async () => {
     onError?.('');
-    setLoading(true);
-    onLoadingChange?.(true);
+    setLoadingState(true);
 
-    // Si GIS está disponible y listo en el navegador, intentar abrir el selector nativo de Google
-    if (isGISAvailable && window.google?.accounts?.id) {
-      try {
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: handleCredentialResponse,
-          auto_select: false,
-          cancel_on_tap_outside: true,
-        });
-
-        window.google.accounts.id.prompt((notification: any) => {
-          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            console.log('Google One Tap no se mostró, activando login OAuth estándar.');
-            handleFallbackOAuth();
-          }
-        });
-        return;
-      } catch (err) {
-        console.warn('Excepción al abrir Google GIS prompt, pasando a OAuth:', err);
-      }
+    if (isGISAvailable && isGsiReady && window.google?.accounts?.id) {
+      const used = await handleGISLogin();
+      if (used) return;
     }
 
-    // Fallback directo si no hay GIS
+    // GIS no disponible o bloqueado → OAuth estándar
     await handleFallbackOAuth();
   };
 
-  // Estilos por defecto idénticos a los originales del proyecto
   const defaultClasses =
     'w-full py-2.5 px-4 bg-card border border-border hover:border-emerald-500/50 hover:bg-secondary/70 text-foreground font-semibold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-xs cursor-pointer active:scale-98 disabled:opacity-60';
 
