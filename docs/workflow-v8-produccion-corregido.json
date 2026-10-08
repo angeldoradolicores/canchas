@@ -396,13 +396,13 @@
     },
     {
       "parameters": {
-        "jsCode": "const company = $('Get Company Details').item.json;\nconst items = $input.all();\nconst pitches = items.map(it => it.json);\nconst baseUrl = 'https://cancheros.site';\n\nconst nowCo = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }));\nconst yyyy = nowCo.getFullYear();\nconst mm = String(nowCo.getMonth() + 1).padStart(2, '0');\nconst dd = String(nowCo.getDate()).padStart(2, '0');\nconst todayDate = `${yyyy}-${mm}-${dd}`;\n\nconst tomorrowDateObj = new Date(nowCo.getTime() + 24 * 60 * 60 * 1000);\nconst tomorrowYyyy = tomorrowDateObj.getFullYear();\nconst tomorrowMm = String(tomorrowDateObj.getMonth() + 1).padStart(2, '0');\nconst tomorrowDd = String(tomorrowDateObj.getDate()).padStart(2, '0');\nconst tomorrowDate = `${tomorrowYyyy}-${tomorrowMm}-${tomorrowDd}`;\n\nconst currentHour = nowCo.getHours();\nconst currentMinutes = nowCo.getMinutes();\nconst currentTimeFormatted = nowCo.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true });\n\nconst pitchesFormatted = pitches.map(p => ({\n  id: p.id,\n  name: p.name,\n  type: p.type || 'Fútbol',\n  surface: p.surface || 'Sintética',\n  price: p.price_per_hour || 0,\n  priceFormatted: `$${(p.price_per_hour || 0).toLocaleString('es-CO')}`,\n  link: `${baseUrl}/cancha/${p.id}`\n}));\n\nconst pitchLinksGuide = pitchesFormatted.map(p => \n  `• Cancha: \"${p.name}\" (${p.type}, ${p.surface}, ${p.priceFormatted}/hr) -> Link único: ${p.link}`\n).join('\\n');\n\nreturn [{\n  json: {\n    companyId: company.id,\n    companyName: company.name,\n    todayDate,\n    tomorrowDate,\n    currentHour,\n    currentMinutes,\n    currentTimeFormatted,\n    totalPitches: pitches.length,\n    pitchLinksGuide,\n    pitchesFormatted,\n    baseUrl\n  }\n}];\n"
+        "jsCode": "const company = $('Get Company Details').item.json;\nconst items = $input.all();\nconst pitches = items.map(it => it.json);\nconst baseUrl = 'https://cancheros.site';\n\n// Fecha y hora exacta en Colombia (America/Bogota, UTC-5)\nconst nowBogota = new Date();\nconst todayDate = nowBogota.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });\n\nconst tomorrowObj = new Date(nowBogota.toLocaleString('en-US', { timeZone: 'America/Bogota' }));\ntomorrowObj.setDate(tomorrowObj.getDate() + 1);\nconst tomorrowDate = tomorrowObj.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });\n\nconst timeFormatter = new Intl.DateTimeFormat('en-US', {\n  timeZone: 'America/Bogota',\n  hour: 'numeric',\n  minute: 'numeric',\n  hour12: false\n});\nconst timeParts = timeFormatter.formatToParts(nowBogota);\nconst currentHour = parseInt(timeParts.find(p => p.type === 'hour').value, 10);\nconst currentMinutes = parseInt(timeParts.find(p => p.type === 'minute').value, 10);\n\nconst currentTimeFormatted = nowBogota.toLocaleTimeString('es-CO', {\n  timeZone: 'America/Bogota',\n  hour: '2-digit',\n  minute: '2-digit',\n  hour12: true\n});\n\nconst pitchesFormatted = pitches.map(p => ({\n  id: p.id,\n  name: p.name,\n  type: p.type || 'Fútbol',\n  surface: p.surface || 'Sintética',\n  price: p.price_per_hour || 0,\n  priceFormatted: `$${(p.price_per_hour || 0).toLocaleString('es-CO')}`,\n  link: `${baseUrl}/cancha/${p.id}`\n}));\n\nconst pitchLinksGuide = pitchesFormatted.map(p => \n  `• Cancha: \"${p.name}\" (${p.type}, ${p.surface}, ${p.priceFormatted}/hr)\n  👉 Link oficial para reservar: ${p.link}`\n).join('\n');\n\nreturn [{\n  json: {\n    companyId: company.id,\n    companyName: company.name,\n    todayDate,\n    tomorrowDate,\n    currentHour,\n    currentMinutes,\n    currentTimeFormatted,\n    totalPitches: pitches.length,\n    pitchLinksGuide,\n    pitchesFormatted,\n    baseUrl\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        128,
-        48
+        256,
+        -176
       ],
       "id": "cb967031-7172-4bd4-9694-1c83b2df3291",
       "name": "Format Pitches Context"
@@ -412,14 +412,14 @@
         "promptType": "define",
         "text": "={{ $('Normalize Incoming Message').item.json.messageText }}",
         "options": {
-          "systemMessage": "Eres el anfitrión de WhatsApp de \"{{ $('Format Availability Context').item.json.companyName }}\".\nTrato HUMANO, cálido, cercano. Escribe en párrafos cortos (3-5 líneas máx).\nNUNCA suenes como bot.\n\n══════════════════════════\nHORA ACTUAL (COLOMBIA):\n══════════════════════════\n• HOY: {{ $('Format Availability Context').item.json.todayDate }}\n• MAÑANA: {{ $('Format Availability Context').item.json.tomorrowDate }}\n• Hora exacta: {{ $('Format Availability Context').item.json.currentTimeFormatted }}\n\n══════════════════════════\nDISPONIBILIDAD REAL (YA VERIFICADA):\n══════════════════════════\n{{ $('Format Availability Context').item.json.availabilityContext }}\n\n══════════════════════════\nREGLAS OBLIGATORIAS:\n══════════════════════════\n1. USA SOLO la disponibilidad real de arriba. NUNCA inventes horas libres.\n2. Recomienda MÁXIMO 1 cancha con 2-3 horarios. Sin listas largas.\n3. SIEMPRE incluye el link de la cancha al recomendar:\n   👉 Reserva aquí: canchas-mino.vercel.app/[link de esa cancha]\n4. Si el cliente saluda solo (Hola, Buenas): saluda amablemente y pregunta para qué día quiere jugar. Sin mostrar datos todavía.\n5. Si preguntan por una fecha distinta a hoy/mañana, diles que te confirmen el día exacto (formato DD/MM) para verificar.\n6. Si una hora está ocupada: díselo con calidez y ofrece la más cercana disponible."
+          "systemMessage": "Eres el anfitrión y administrador de WhatsApp de \"{{ $('Format Availability Context').item.json.companyName }}\".\nTu trato es 100% HUMANO, amable, cálido, cercano y entusiasta, como una persona real que atiende las canchas en Colombia (usa expresiones naturales como \"¡Hola! ¿Cómo vas?\", \"¡Qué más! Claro que sí con gusto ⚽\").\nNUNCA suenes como un bot ni des respuestas kilométricas. Escribe en párrafos cortos de WhatsApp (máximo 3 a 4 líneas por mensaje).\n\n══════════════════════════════════════════\nFECHA Y HORA ACTUAL (COLOMBIA / BOGOTÁ):\n══════════════════════════════════════════\n• Hoy: {{ $('Format Availability Context').item.json.todayDate }}\n• Mañana: {{ $('Format Availability Context').item.json.tomorrowDate }}\n• Hora exacta: {{ $('Format Availability Context').item.json.currentTimeFormatted }}\n\n══════════════════════════════════════════\nDISPONIBILIDAD REAL DE CANCHAS (DATOS 100% CONFIRMADOS):\n══════════════════════════════════════════\n{{ $('Format Availability Context').item.json.availabilityContext }}\n\n══════════════════════════════════════════\nREGLAS OBLIGATORIAS:\n══════════════════════════════════════════\n\n1. 🔒 DATOS REALES ÚNICOS (PROHIBIDO ALUCINAR O INVENTAR):\n- USA EXCLUSIVAMENTE los horarios, precios y enlaces que aparecen en \"DISPONIBILIDAD REAL DE CANCHAS\" arriba.\n- ESTÁ TOTALMENTE PROHIBIDO INVENTAR PRECIOS (como $90.000), HORARIOS FALSOS O LINKS INVENTADOS (como /cancha/11790).\n- Cada cancha tiene su precio real (ej: $70.000) y su enlace oficial https://cancheros.site/cancha/[UUID].\n\n2. 🎯 NO SATURAR AL CLIENTE (MÍNIMO 3 HORAS DE LA PRIMERA CANCHA DISPONIBLE):\n- NUNCA envíes una lista gigante de todas las canchas ni de todas las horas del día.\n- Revisa la \"RECOMENDACIÓN PRIORITARIA\" del día consultado (hoy o mañana).\n- Ofrécele MÍNIMO 3 horarios disponibles de esa primera cancha con sus precios reales (por ejemplo: 10:00 AM, 11:00 AM y 12:00 PM - $70.000 c/u) y su link oficial.\n- Ejemplo de respuesta ideal:\n  \"¡Hola! Claro que sí, con gusto te ayudo a programar tu partido para mañana. ⚽\n\n  Para mañana en la *Cancha 1* te tengo disponibles estos horarios:\n  • 10:00 AM - $70.000\n  • 11:00 AM - $70.000\n  • 12:00 PM - $70.000\n\n  ¿Cuál de estos te acomoda mejor?\n\n  👉 Reserva tu turno aquí: https://cancheros.site/cancha/73223c8a-47bd-4fdb-9b41-c37e0414b88c\"\n- Solo si el cliente pide otra cancha específica o no le sirven esos horarios, ofrécele las opciones de las demás canchas.\n\n3. ⛔ ESTRICTAMENTE PROHIBIDO OFRECER HORAS OCUPADAS / RESERVADAS:\n- Revisa las horas marcadas como \"⛔ HORAS OCUPADAS (NO OFRECER)\".\n- NUNCA ofrezcas una hora que esté reservada u ocupada.\n- Si el cliente te pide una hora específica que está ocupada (ejemplo: \"¿tienen a las 6:00 PM o 7:00 PM?\"):\n  Dile amablemente que a esa hora ya está reservada ⚽, y ofrécele de inmediato las opciones disponibles más cercanas.\n\n4. 🔗 ENLACE EXACTO DE RESERVA (CANCHEROS.SITE):\n- Al final de tu recomendación, incluye SIEMPRE el enlace exacto que aparece en la recomendación:\n  👉 Reserva tu turno aquí: [link_oficial_de_esa_cancha]\n- El enlace SIEMPRE debe ser https://cancheros.site/cancha/[UUID]. NUNCA uses enlaces con vercel.app ni números inventados.\n\n5. ⏰ FILTRO DE HORA DEL DÍA DE HOY:\n- Si el cliente pregunta para HOY, ten en cuenta la hora actual ({{ $('Format Availability Context').item.json.currentTimeFormatted }}).\n- NUNCA ofrezcas horas que ya pasaron hoy.\n\n6. 🔍 OTRAS FECHAS (DIFERENTES A HOY O MAÑANA):\n- Si el cliente pregunta por una fecha futura distinta a hoy o mañana (ej: \"tienen para el sábado 12?\"), usa la herramienta \"Check Availability Tool\" pasando la fecha YYYY-MM-DD.\n\n7. 👋 SALUDOS:\n- Si el cliente ÚNICAMENTE saluda (\"Hola\", \"Buenas\"): salúdalo con entusiasmo y amabilidad en 1 o 2 líneas, y pregúntale para qué día y hora le gustaría jugar."
         }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.7,
       "position": [
-        944,
-        80
+        1056,
+        -176
       ],
       "id": "ba5c105c-1b59-4572-9cf5-b97d5ec8a567",
       "name": "Gemini AI Agent"
@@ -434,8 +434,8 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        880,
-        432
+        1056,
+        48
       ],
       "id": "dbe64cc2-3e93-4363-89aa-0ae537f80052",
       "name": "Google Gemini 1.5 Flash",
@@ -455,15 +455,15 @@
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.3,
       "position": [
-        1008,
-        288
+        912,
+        48
       ],
       "id": "23da6344-79d0-4cad-9466-6d6e20da87c8",
       "name": "Window Buffer Memory"
     },
     {
       "parameters": {
-        "toolDescription": "Usa esta herramienta SOLO si el cliente pregunta por una fecha DISTINTA a hoy y manana. Pasa p_date en formato YYYY-MM-DD. El ano actual es 2026. Del resultado informa SOLO status=available.",
+        "toolDescription": "OBLIGATORIO: Usa esta herramienta SIEMPRE que consulten disponibilidad, horas libres o precios (para HOY o cualquier fecha). Pasa 'p_date' en formato YYYY-MM-DD (Usa 2026 como año actual). Retorna la lista de canchas con sus slots (available, booked, being_booked) y sus precios. IMPORTANTE: Solo ofrece horarios con status = 'available'. NUNCA ofrezcas 'booked' ni 'being_booked'.",
         "method": "POST",
         "url": "https://rxykieyrzaqnfasouwke.supabase.co/rest/v1/rpc/check_pitch_availability_n8nn",
         "sendHeaders": true,
@@ -487,7 +487,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "{\"p_company_id\": \"={{ $('Get Company Details').item.json.id }}\", \"p_date\": \"{p_date}\"}",
+        "jsonBody": "={{ JSON.stringify({ p_company_id: $('Get Company Details').item.json.id, p_date: '{p_date}' }) }}",
         "placeholderDefinitions": {
           "values": [
             {
@@ -501,8 +501,8 @@
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
       "position": [
-        1136,
-        288
+        1200,
+        48
       ],
       "id": "2dd25c82-44fb-4035-9e4d-796f259bcabb",
       "name": "Check Availability Tool"
@@ -532,8 +532,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1424,
-        176
+        1344,
+        -176
       ],
       "id": "c0d4210c-8419-4ebc-bea5-6abd7d13943b",
       "name": "Send WhatsApp via Evolution"
@@ -631,8 +631,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        272,
-        -208
+        448,
+        -176
       ],
       "id": "0150da3a-0b8f-4960-be12-6085faa56cd9",
       "name": "Get Today Availability"
@@ -666,21 +666,21 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        288,
-        288
+        640,
+        -176
       ],
       "id": "eb8af7b7-6671-49b6-84c6-ae234cfa719e",
       "name": "Get Tomorrow Availability"
     },
     {
       "parameters": {
-        "jsCode": "\nconst pitchesCtx = $('Format Pitches Context').item.json;\nconst currentHour = pitchesCtx.currentHour;\nconst currentMinutes = pitchesCtx.currentMinutes;\nconst todayDate = pitchesCtx.todayDate;\nconst tomorrowDate = pitchesCtx.tomorrowDate;\nconst baseUrl = 'https://cancheros.site';\n\nfunction formatSlots(pitchesData, isToday) {\n  if (!Array.isArray(pitchesData) || pitchesData.length === 0) return 'Sin datos de disponibilidad.';\n  \n  let result = '';\n  for (const pitch of pitchesData) {\n    const available = (pitch.slots || []).filter(s => {\n      if (s.status !== 'available') return false;\n      if (isToday) {\n        // Filtrar horas pasadas de hoy\n        const [h] = s.time.split(':').map(Number);\n        if (h < currentHour) return false;\n        if (h === currentHour && currentMinutes > 30) return false;\n      }\n      return true;\n    });\n    \n    if (available.length === 0) {\n      result += `• ${pitch.pitch_name}: SIN DISPONIBILIDAD\\n`;\n    } else {\n      const slots = available.slice(0, 6).map(s => {\n        const price = (s.price || pitch.price_per_hour || 0).toLocaleString('es-CO');\n        return `${s.time} ($${price}/hr)`;\n      }).join(', ');\n      const link = `${baseUrl}${pitch.profile_url || '/cancha/' + pitch.pitch_id}`;\n      result += `• ${pitch.pitch_name}: ${slots}\\n  Link: ${link}\\n`;\n    }\n  }\n  return result.trim();\n}\n\nlet todayData = [];\nlet tomorrowData = [];\n\ntry {\n  const todayRaw = $('Get Today Availability').item.json;\n  todayData = Array.isArray(todayRaw) ? todayRaw : [];\n} catch(e) { todayData = []; }\n\ntry {\n  const tomorrowRaw = $('Get Tomorrow Availability').item.json;\n  tomorrowData = Array.isArray(tomorrowRaw) ? tomorrowRaw : [];\n} catch(e) { tomorrowData = []; }\n\nconst todayAvailText = formatSlots(todayData, true);\nconst tomorrowAvailText = formatSlots(tomorrowData, false);\n\nreturn [{\n  json: {\n    ...pitchesCtx,\n    todayAvailText,\n    tomorrowAvailText,\n    availabilityContext: `DISPONIBILIDAD HOY (${todayDate}):\\n${todayAvailText}\\n\\nDISPONIBILIDAD MANANA (${tomorrowDate}):\\n${tomorrowAvailText}`\n  }\n}];\n"
+        "jsCode": "const pitchesCtx = $('Format Pitches Context').item.json;\nconst currentHour = pitchesCtx.currentHour;\nconst currentMinutes = pitchesCtx.currentMinutes;\nconst todayDate = pitchesCtx.todayDate;\nconst tomorrowDate = pitchesCtx.tomorrowDate;\nconst baseUrl = 'https://cancheros.site';\n\nfunction formatTime12(timeStr) {\n  if (!timeStr) return '';\n  const [h, m] = timeStr.split(':').map(Number);\n  const period = h >= 12 ? 'PM' : 'AM';\n  const h12 = h % 12 === 0 ? 12 : h % 12;\n  return `${h12}:${String(m || 0).padStart(2, '0')} ${period}`;\n}\n\nfunction getUniquePitches(rawItems) {\n  const map = new Map();\n  for (const item of rawItems) {\n    const list = Array.isArray(item) ? item : [item];\n    for (const p of list) {\n      if (p && p.pitch_id && !map.has(p.pitch_id)) {\n        map.set(p.pitch_id, p);\n      }\n    }\n  }\n  return Array.from(map.values());\n}\n\nfunction processDayAvailability(dayTitle, dateStr, rawItems, isToday) {\n  const pitches = getUniquePitches(rawItems);\n\n  if (pitches.length === 0) {\n    return `${dayTitle} (${dateStr}): Sin datos de canchas disponibles.\n`;\n  }\n\n  const parsed = [];\n  for (const p of pitches) {\n    const avail = [];\n    const booked = [];\n\n    for (const s of (p.slots || [])) {\n      if (s.status !== 'available') {\n        booked.push(formatTime12(s.time));\n        continue;\n      }\n      if (isToday) {\n        const [h] = s.time.split(':').map(Number);\n        if (h < currentHour || (h === currentHour && currentMinutes > 20)) {\n          continue; // Ya pasó hoy\n        }\n      }\n      avail.push(s);\n    }\n\n    parsed.push({\n      id: p.pitch_id,\n      name: p.pitch_name,\n      type: p.pitch_type || 'Fútbol',\n      surface: p.surface || 'Sintética',\n      price: p.price_per_hour || 70000,\n      link: `${baseUrl}/cancha/${p.pitch_id}`,\n      avail,\n      booked\n    });\n  }\n\n  const firstAvail = parsed.find(p => p.avail.length > 0);\n\n  let out = `══════════════════════════════════════════\n`;\n  out += `📅 ${dayTitle} (${dateStr})\n`;\n  out += `══════════════════════════════════════════\n`;\n\n  if (firstAvail) {\n    const suggestedCount = Math.min(Math.max(firstAvail.avail.length, 3), 4);\n    const suggestedSlots = firstAvail.avail.slice(0, suggestedCount).map(s => {\n      const priceFormatted = (s.price || firstAvail.price || 0).toLocaleString('es-CO');\n      return `${formatTime12(s.time)} ($${priceFormatted})`;\n    }).join(', ');\n\n    out += `⭐ RECOMENDACIÓN PRIORITARIA (PRIMERA CANCHA DISPONIBLE - OFRECE ESTA):\n`;\n    out += `• Cancha: \"${firstAvail.name}\" (${firstAvail.type}, ${firstAvail.surface})\n`;\n    out += `• Horarios disponibles sugeridos: ${suggestedSlots}\n`;\n    out += `• Link oficial de reserva: ${firstAvail.link}\n\n`;\n  } else {\n    out += `⚠️ TODAS LAS CANCHAS ESTÁN OCUPADAS / RESERVADAS PARA ESTA FECHA.\n\n`;\n  }\n\n  out += `📋 DETALLE DE CANCHAS Y HORARIOS DISPONIBLES:\n`;\n  for (const p of parsed) {\n    if (p.avail.length === 0) {\n      out += `• ${p.name}: SIN DISPONIBILIDAD (TODO RESERVADO)\n`;\n    } else {\n      const slotsList = p.avail.map(s => {\n        const priceFormatted = (s.price || p.price || 0).toLocaleString('es-CO');\n        return `${formatTime12(s.time)} ($${priceFormatted})`;\n      }).join(', ');\n      out += `• ${p.name}: ${slotsList}\n  Link: ${p.link}\n`;\n    }\n    if (p.booked.length > 0) {\n      out += `  ⛔ HORAS OCUPADAS (NO OFRECER): ${p.booked.join(', ')}\n`;\n    }\n  }\n\n  return out;\n}\n\nlet todayRaw = [];\nlet tomorrowRaw = [];\n\ntry {\n  todayRaw = $('Get Today Availability').all().map(i => i.json);\n} catch (e) {\n  todayRaw = [];\n}\n\ntry {\n  tomorrowRaw = $('Get Tomorrow Availability').all().map(i => i.json);\n} catch (e) {\n  tomorrowRaw = [];\n}\n\nconst todayBlock = processDayAvailability('DISPONIBILIDAD HOY', todayDate, todayRaw, true);\nconst tomorrowBlock = processDayAvailability('DISPONIBILIDAD MAÑANA', tomorrowDate, tomorrowRaw, false);\n\nreturn [{\n  json: {\n    ...pitchesCtx,\n    availabilityContext: `${todayBlock}\n\n${tomorrowBlock}`\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        624,
-        -112
+        832,
+        -176
       ],
       "id": "96abedf0-c944-40f9-9307-b794a0e45d88",
       "name": "Format Availability Context"
@@ -850,11 +850,6 @@
             "node": "Get Today Availability",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Get Tomorrow Availability",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -936,7 +931,7 @@
       "main": [
         [
           {
-            "node": "Format Availability Context",
+            "node": "Get Tomorrow Availability",
             "type": "main",
             "index": 0
           }
