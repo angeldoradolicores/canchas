@@ -29,23 +29,26 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
   const router = useRouter();
   const supabase = createClient();
 
-  // Restaurar estado de carga si el usuario cierra el popup de Google o retrocede
+  // Resetear estado de carga cuando la página vuelve a ser visible
+  // (cubre: cerrar popup, botón atrás, bfcache)
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setTimeout(() => {
+          setGoogleLoading(false);
+          setLoading(false);
+        }, 600);
+      }
+    };
     const handlePageShow = () => {
       setGoogleLoading(false);
       setLoading(false);
     };
-    const handleFocus = () => {
-      // Usar el mismo delay que GoogleAuthButton (800ms) para sincronizar ambos estados
-      setTimeout(() => {
-        setGoogleLoading(false);
-      }, 900);
-    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('pageshow', handlePageShow);
-    window.addEventListener('focus', handleFocus);
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pageshow', handlePageShow);
-      window.removeEventListener('focus', handleFocus);
     };
   }, []);
 
