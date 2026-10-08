@@ -31,14 +31,16 @@ export async function POST(req: NextRequest) {
     if (!file) return NextResponse.json({ error: 'No se recibió ningún archivo' }, { status: 400 });
 
     const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const allowed = ['jpg', 'jpeg', 'png', 'webp'];
-    if (!allowed.includes(ext)) {
-      return NextResponse.json({ error: 'Formato no permitido. Solo se aceptan JPG, PNG o WebP.' }, { status: 400 });
+    const allowedExts = ['jpg', 'jpeg', 'png', 'webp'];
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+
+    if (!allowedExts.includes(ext) || (file.type && !allowedMimes.includes(file.type))) {
+      return NextResponse.json({ error: 'Formato no permitido. Solo se aceptan imágenes JPG, PNG o WebP.' }, { status: 400 });
     }
 
-    // Límite de 8MB
-    if (file.size > 8 * 1024 * 1024) {
-      return NextResponse.json({ error: 'La imagen no puede superar los 8 MB' }, { status: 400 });
+    // Límite de 4MB (las imágenes comprimidas en el cliente pesan ~150KB - 250KB)
+    if (file.size > 4 * 1024 * 1024) {
+      return NextResponse.json({ error: 'La imagen excede el límite permitido de 4 MB' }, { status: 400 });
     }
 
     const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
@@ -53,13 +55,13 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       console.error('[upload-school-image error]', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: 'No se pudo guardar la imagen en el almacenamiento seguro' }, { status: 500 });
     }
 
     const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(fileName);
     return NextResponse.json({ success: true, url: urlData.publicUrl });
   } catch (err: any) {
     console.error('[upload-school-image catch]', err);
-    return NextResponse.json({ error: err.message || 'Error al procesar la imagen' }, { status: 500 });
+    return NextResponse.json({ error: 'Error procesando la imagen' }, { status: 500 });
   }
 }

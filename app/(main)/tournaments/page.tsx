@@ -12,6 +12,7 @@ import {
 import Link from 'next/link';
 import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
 import { CustomMonthCalendar } from '@/components/explore/CustomMonthCalendar';
+import { compressImageFile } from '@/lib/image-compression';
 
 interface Tournament {
   id: string;
@@ -232,9 +233,11 @@ export default function TournamentsPage() {
     const newUrls: string[] = [];
 
     for (const file of Array.from(files)) {
-      const ext = file.name.split('.').pop();
+      // Compresión automática de imágenes antes de la subida a Storage
+      const optimizedFile = await compressImageFile(file, { maxWidth: 1200, quality: 0.8 });
+      const ext = optimizedFile.name.split('.').pop() || 'jpg';
       const fileName = `tournaments/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { data, error } = await supabase.storage.from('pitch-images').upload(fileName, file, { upsert: true });
+      const { data, error } = await supabase.storage.from('pitch-images').upload(fileName, optimizedFile, { upsert: true, contentType: optimizedFile.type });
       if (error) {
         setFormError('Error al subir imagen.');
         break;

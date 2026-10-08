@@ -16,6 +16,7 @@ import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/client';
 import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
 import { AuthModal } from '@/components/auth/AuthModal';
+import { compressImageFile } from '@/lib/image-compression';
 
 // ────────── Tipos ──────────
 interface School {
@@ -316,8 +317,10 @@ export default function SchoolsPage() {
 
       const uploadedUrls: string[] = [];
       for (const file of files) {
+        // Compresión automática de imágenes antes de subirlas (ahorra 95% de peso)
+        const optimizedFile = await compressImageFile(file, { maxWidth: 1200, quality: 0.8 });
         const fd = new FormData();
-        fd.append('file', file);
+        fd.append('file', optimizedFile);
         const res = await fetch('/api/upload-school-image', {
           method: 'POST',
           headers,
