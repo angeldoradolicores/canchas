@@ -1,6 +1,7 @@
 import { Analytics } from '@vercel/analytics/next'
 import { Inter } from 'next/font/google'
 import type { Metadata, Viewport } from 'next'
+import Script from 'next/script'
 import { ThemeProvider } from '@/lib/theme-context'
 // import { AppSplashScreen } from '@/components/layout/AppSplashScreen'
 
@@ -56,6 +57,7 @@ export default function RootLayout({
         <ThemeProvider>
           {children}
         </ThemeProvider>
+        <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
