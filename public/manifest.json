@@ -1,21 +1,28 @@
 {
-  "name": "Cancheros Pasto",
+  "name": "Cancheros - Reserva Canchas Sintéticas en Pasto",
   "short_name": "Cancheros",
-  "description": "Encuentra y reserva canchas sintéticas en Pasto, Nariño. Juega con tu gente.",
+  "description": "La plataforma líder para encontrar y reservar canchas sintéticas en Pasto, Nariño. Disponibilidad en tiempo real y reserva 100% segura.",
   "start_url": "/",
+  "id": "/",
   "display": "standalone",
   "background_color": "#054D27",
   "theme_color": "#007A3D",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/cancheros_app.png",
+      "src": "/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "/cancheros_app.png",
+      "src": "/icon-256x256.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/cancheros.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
