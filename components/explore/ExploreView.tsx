@@ -896,8 +896,8 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
 
       <div className="page-heading">
         <div>
-          <p className="eyebrow accent-label">RESERVA TU CANCHA</p>
-          <h1>CANCHEROS</h1>
+          <p className="eyebrow accent-label">CANCHEROS</p>
+          <h1>RESERVA TU CANCHA</h1>
           <p className="lead">Encuentra, compara disponibilidad en vivo y reserva canchas sintéticas de forma rápida y segura.</p>
         </div>
       </div>

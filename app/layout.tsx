@@ -12,31 +12,32 @@ import './globals.css'
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://cancheros.site'),
   title: {
-    default: 'Cancheros | Canchas Sintéticas en Pasto - Reserva tu Cancha Online',
-    template: '%s | Cancheros Pasto',
+    default: 'Cancheros – Reserva Canchas Sintéticas en Pasto, Nariño',
+    template: '%s | Cancheros',
   },
   description:
-    'Cancheros es la plataforma  para consultar y reservar canchas sintéticas de fútbol. Encuentra complejos deportivos, verifica horarios en tiempo real y reserva de forma inmediata.',
+    'Cancheros: la plataforma oficial para reservar canchas sintéticas de fútbol en Pasto, Nariño. Consulta disponibilidad en tiempo real, compara precios y reserva en segundos. Fútbol 5, 6, 7 y 11.',
   applicationName: 'Cancheros',
   authors: [{ name: 'Cancheros' }],
   creator: 'Cancheros',
   publisher: 'Cancheros',
   keywords: [
     'Cancheros',
+    'cancheros.site',
     'Cancheros Pasto',
-    'canchas sinteticas en pasto',
     'canchas sinteticas pasto',
-    'reserva canchas pasto',
-    'alquiler canchas sinteticas pasto',
+    'reservar cancha pasto',
     'canchas de futbol pasto',
+    'futbol pasto nariño',
+    'canchas sinteticas en pasto nariño',
+    'alquiler canchas sinteticas pasto',
     'futbol 5 pasto',
     'futbol 6 pasto',
     'futbol 7 pasto',
     'futbol 11 pasto',
-    'cancheros nariño',
     'complejos deportivos pasto',
     'torneos futbol pasto',
-    'canchas pasto nariño',
+    'reserva cancha online colombia',
   ],
   alternates: {
     canonical: 'https://cancheros.site',
@@ -84,9 +85,9 @@ export const metadata: Metadata = {
     locale: 'es_CO',
     url: 'https://cancheros.site',
     siteName: 'Cancheros',
-    title: 'Cancheros | Canchas Sintéticas en Pasto - Reserva tu Cancha Online',
+    title: 'Cancheros – Reserva Canchas Sintéticas en Pasto, Nariño',
     description:
-      'La plataforma líder y segura de canchas sintéticas. Encuentra tu cancha, verifica horarios en tiempo real y reserva de forma inmediata.',
+      'Cancheros: reserva canchas sintéticas en Pasto con disponibilidad en tiempo real. Fútbol 5, 6, 7 y 11. Rápido, seguro y confiable.',
     images: [
       {
         url: '/og-image.jpg',
@@ -98,9 +99,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Cancheros | Reserva Canchas Sintéticas en Pasto',
+    title: 'Cancheros – Reserva Canchas Sintéticas en Pasto',
     description:
-      'Reserva canchas sintéticas en tiempo real. Rápido, seguro y confiable.',
+      'Cancheros: reserva canchas sintéticas en tiempo real. Rápido, seguro y confiable.',
     images: ['/og-image.jpg'],
   },
   robots: {

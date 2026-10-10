@@ -31,7 +31,7 @@ export function JsonLd() {
         '@type': 'Organization',
         '@id': 'https://cancheros.site/#organization',
         name: 'Cancheros',
-        alternateName: 'Cancheros Pasto',
+        alternateName: ['Cancheros Pasto', 'cancheros.site'],
         url: 'https://cancheros.site',
         logo: {
           '@type': 'ImageObject',
@@ -41,7 +41,7 @@ export function JsonLd() {
           caption: 'Cancheros - Reserva Canchas Sintéticas en Pasto'
         },
         image: 'https://cancheros.site/og-image.jpg',
-        description: 'Plataforma oficial con trayectoria y seguridad para la reserva de canchas sintéticas de fútbol en Pasto, Nariño.',
+        description: 'Cancheros: plataforma oficial para reservar canchas sintéticas de fútbol en Pasto, Nariño. Fútbol 5, 6, 7 y 11 con disponibilidad en tiempo real.',
         address: {
           '@type': 'PostalAddress',
           addressLocality: 'Pasto',
@@ -51,14 +51,15 @@ export function JsonLd() {
         areaServed: {
           '@type': 'City',
           name: 'Pasto'
-        }
+        },
+        sameAs: ['https://cancheros.site']
       },
       {
         '@type': 'SportsActivityLocation',
         '@id': 'https://cancheros.site/#service',
         name: 'Cancheros - Canchas Sintéticas en Pasto',
         url: 'https://cancheros.site',
-        image: 'https://cancheros.site/cancheros.png',
+        image: 'https://cancheros.site/og-image.jpg',
         description: 'Encuentra y reserva canchas sintéticas de fútbol 5, fútbol 6, fútbol 7 y fútbol 11 en Pasto. Horarios en tiempo real y reserva 100% segura.',
         address: {
           '@type': 'PostalAddress',

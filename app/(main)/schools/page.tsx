@@ -1225,14 +1225,14 @@ export default function SchoolsPage() {
                             Portada
                           </span>
                         )}
-                        {/* Botón eliminar */}
+                        {/* Botón eliminar — siempre visible (móvil táctil no tiene hover) */}
                         <button
                           type="button"
                           onClick={() => removeImage(idx)}
-                          className="absolute top-1 right-1 bg-black/70 hover:bg-rose-600 text-white p-1 rounded-lg transition opacity-0 group-hover/img:opacity-100 cursor-pointer"
+                          className="absolute top-1 right-1 bg-black/70 hover:bg-rose-600 active:bg-rose-700 text-white p-1.5 rounded-lg transition-colors cursor-pointer shadow-md"
                           title="Eliminar foto"
                         >
-                          <X size={12} />
+                          <X size={13} />
                         </button>
                       </div>
                     ))}
