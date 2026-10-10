@@ -737,13 +737,18 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
                         Abrir en Google Maps ↗
                       </button>
                     </div>
-                    <div className="w-full h-44 sm:h-52 rounded-2xl overflow-hidden border border-border shadow-xs">
+                    <div className="w-full h-44 sm:h-52 rounded-2xl overflow-hidden border border-border shadow-xs relative bg-muted/70">
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/80 text-muted-foreground gap-1.5 z-0 animate-pulse pointer-events-none">
+                        <MapPin size={22} className="text-emerald-500 animate-bounce" />
+                        <span className="text-[11px] font-bold text-muted-foreground">Cargando mapa...</span>
+                      </div>
                       <iframe
-                        title="map-preview"
+                        title="google-map-preview"
                         width="100%"
                         height="100%"
                         loading="lazy"
                         src={`https://maps.google.com/maps?q=${pitch.lat},${pitch.lng}&z=15&output=embed`}
+                        className="google-map-embed w-full h-full relative z-[1] border-0"
                       />
                     </div>
                     {loc.fullAddress && (

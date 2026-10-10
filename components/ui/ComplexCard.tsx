@@ -440,7 +440,12 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
                   </h4>
                   <div className="w-full rounded-2xl overflow-hidden border border-border shadow-xs">
                     {/* Mapa de Google con marcador fijo y controles de zoom activos */}
-                    <div className="w-full h-40 relative bg-muted overflow-hidden">
+                    <div className="w-full h-40 relative bg-muted/70 overflow-hidden">
+                      {/* Placeholder esqueleto de carga inmediata */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/80 text-muted-foreground gap-1.5 z-0 animate-pulse pointer-events-none">
+                        <MapPin size={22} className="text-emerald-500 animate-bounce" />
+                        <span className="text-[11px] font-bold text-muted-foreground">Cargando mapa...</span>
+                      </div>
                       <iframe
                         title="google-map-preview"
                         width="100%"
@@ -449,6 +454,7 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
                         loading="eager"
                         referrerPolicy="no-referrer-when-downgrade"
                         src={`https://maps.google.com/maps?q=${(currentPitch as any).lat},${(currentPitch as any).lng}&z=16&output=embed&maptype=roadmap`}
+                        className="google-map-embed w-full h-full relative z-[1] transition-opacity duration-300"
                       />
                       {/* Capa que bloquea interacción — el pin queda fijo */}
                       <div className="absolute inset-0 z-10 cursor-default" aria-hidden="true" />

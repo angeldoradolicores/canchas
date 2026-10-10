@@ -147,6 +147,8 @@ export default function RootLayout({
         <meta property="og:image:height" content="630" />
         <meta property="og:image:type" content="image/jpeg" />
         <meta name="twitter:image" content="https://cancheros.site/og-image.jpg" />
+        <link rel="preconnect" href="https://maps.google.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://maps.google.com" />
       </head>
       <body className={`${inter.variable} antialiased`}>
         <JsonLd />

@@ -428,20 +428,20 @@ export default function WhatsAppConnectionPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="wp-card md:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-4 border-b border-zinc-100 mb-6">
+            <div className="flex items-center justify-between pb-4 border-b border-border mb-6">
               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Estado de Vinculación</span>
               {status === 'connected' && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-green-100 text-green-700">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border dark:border-emerald-800/60">
                   <CheckCircle2 size={14} /> Conectado
                 </span>
               )}
               {status === 'connecting' && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-amber-100 text-amber-700 animate-pulse">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400 dark:border dark:border-amber-800/60 animate-pulse">
                   <RefreshCw size={14} className="animate-spin" /> Esperando escaneo...
                 </span>
               )}
               {status === 'disconnected' && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-red-100 text-red-700">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-400 dark:border dark:border-red-800/60">
                   <XCircle size={14} /> Desconectado
                 </span>
               )}
@@ -450,26 +450,30 @@ export default function WhatsAppConnectionPage() {
             {/* ESTADO CONECTADO */}
             {status === 'connected' && (
               <div className="space-y-4">
-                <div className="flex items-center gap-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200">
-                  <div className="w-12 h-12 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xl">
+                <div className="flex items-center gap-4 p-4 rounded-2xl bg-emerald-50/90 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 shadow-xs transition-colors">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-600 dark:bg-emerald-500 text-white flex items-center justify-center font-bold text-xl shadow-md shrink-0">
                     📱
                   </div>
-                  <div>
-                    <strong className="text-base block font-bold text-foreground">
+                  <div className="min-w-0">
+                    <strong className="text-base block font-bold text-foreground truncate">
                       {formatDisplayPhone(connectedPhone) ||
                         formatDisplayPhone(company?.whatsapp_connected_phone) ||
                         formatDisplayPhone(company?.owner_phone) ||
                         formatDisplayPhone(profile?.phone) ||
                         'Número no registrado'}
                     </strong>
-                    <p className="text-xs text-muted-foreground">Sesión activa · Vinculado a <strong> {company?.name || 'Mi Complejo'}</strong></p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Sesión activa · Vinculado a <strong className="text-foreground">{company?.name || 'Mi Complejo'}</strong>
+                    </p>
                   </div>
                 </div>
 
-                <div className="bg-secondary/60 p-4 rounded-xl space-y-2 text-xs border border-border">
-                  <div className="flex justify-between">
+                <div className="bg-secondary/60 dark:bg-muted/40 p-4 rounded-xl space-y-2 text-xs border border-border">
+                  <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Instancia activa:</span>
-                    <code className="font-mono font-bold text-emerald-600">{instanceName}</code>
+                    <code className="font-mono font-bold text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200/60 dark:border-emerald-800/40">
+                      {instanceName}
+                    </code>
                   </div>
                 </div>
 
@@ -595,7 +599,7 @@ export default function WhatsAppConnectionPage() {
               <button
                 onClick={handleDisconnect}
                 disabled={generating}
-                className="text-xs font-bold text-red-600 hover:bg-red-50 px-4 py-2 rounded-xl border border-red-200 transition-colors flex items-center gap-1.5"
+                className="text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 px-4 py-2 rounded-xl border border-red-200 dark:border-red-900/60 transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <LogOut size={14} /> Desconectar mi WhatsApp
               </button>

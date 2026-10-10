@@ -156,6 +156,14 @@ button {
 .dark .leaflet-container {
   background: oklch(.18 .02 160) !important;
 }
+
+/* Google Maps Embed Dark Mode Filter */
+.dark iframe[title="google-map-preview"],
+.dark iframe[title="google-map-location"],
+.dark iframe.google-map-embed {
+  filter: invert(0.92) hue-rotate(180deg) brightness(0.88) contrast(1.15) !important;
+  background-color: #0d1a12 !important;
+}
 .dark .leaflet-control-zoom a {
   background: oklch(.24 .03 160) !important;
   color: oklch(.90 .02 160) !important;

@@ -949,7 +949,12 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
             {pitchAny.lat && pitchAny.lng ? (
               <div className="rounded-2xl overflow-hidden border border-border shadow-xs">
                 {/* Contenedor del mapa de Google con marcador fijo y controles de zoom activos */}
-                <div className="w-full h-52 relative bg-muted overflow-hidden">
+                <div className="w-full h-52 relative bg-muted/70 overflow-hidden">
+                  {/* Placeholder esqueleto de carga inmediata */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/80 text-muted-foreground gap-1.5 z-0 animate-pulse pointer-events-none">
+                    <MapPin size={24} className="text-emerald-500 animate-bounce" />
+                    <span className="text-[11px] font-bold text-muted-foreground">Cargando mapa...</span>
+                  </div>
                   <iframe
                     title="google-map-location"
                     width="100%"
@@ -958,6 +963,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                     loading="eager"
                     referrerPolicy="no-referrer-when-downgrade"
                     src={`https://maps.google.com/maps?q=${pitchAny.lat},${pitchAny.lng}&z=16&output=embed&maptype=roadmap`}
+                    className="google-map-embed w-full h-full relative z-[1] transition-opacity duration-300"
                   />
                   {/* Capa transparente para bloquear interacción del usuario con el mapa (pin fijo) */}
                   <div className="absolute inset-0 z-10 cursor-default" aria-hidden="true" />

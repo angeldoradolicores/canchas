@@ -205,6 +205,11 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
     const onGps = (e: any) => {
       if (e.detail?.lat && e.detail?.lng) {
         setUserCoords(e.detail);
+        setTimeout(() => {
+          if (horizontalScrollRef.current) {
+            horizontalScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+          }
+        }, 60);
       }
     };
     window.addEventListener('gpsCoords', onGps);
@@ -230,6 +235,14 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
   const [alertState, setAlertState] = useState<AlertModalState>({ isOpen: false, type: 'info', title: '', message: '' });
   const { startLock, lockError, activeBooking } = useActiveBooking();
   const handleSearchRef = useRef<(silent?: boolean) => void>(() => { });
+  const horizontalScrollRef = useRef<HTMLDivElement>(null);
+
+  // Cuando cambian las coordenadas del usuario (GPS), resetear desplazamiento horizontal al inicio
+  useEffect(() => {
+    if (userCoords && horizontalScrollRef.current) {
+      horizontalScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+    }
+  }, [userCoords]);
 
   const handleBook = useCallback((pitch: Pitch, preselectedTime?: string | string[], preselectedDate?: string) => {
     // ── BLOQUEO RESERVA ACTIVA: verificar ANTES de continuar ──
@@ -1627,7 +1640,10 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                 </button>
               </div>
             ) : (
-              <div className="flex md:grid overflow-x-auto md:overflow-visible gap-4 pb-4 md:pb-0 scrollbar-hide snap-x snap-mandatory md:grid-cols-2 lg:grid-cols-3 items-stretch">
+              <div
+                ref={horizontalScrollRef}
+                className="flex md:grid overflow-x-auto md:overflow-visible gap-4 pb-4 md:pb-0 scrollbar-hide snap-x snap-mandatory md:grid-cols-2 lg:grid-cols-3 items-stretch"
+              >
                 {popularComplexes.map((complex) => (
                   <div
                     key={complex.id}
