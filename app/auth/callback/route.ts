@@ -76,12 +76,25 @@ export async function GET(request: Request) {
   }
 
   if (!authSuccess) {
+    if (type === 'recovery' || next === '/reset-password') {
+      return NextResponse.redirect(`${origin}/reset-password?error=expired`);
+    }
     return NextResponse.redirect(`${origin}/login?error=auth_failed`);
   }
 
   // ── Si es un flujo de recuperación de contraseña, ir directo a /reset-password ──
-  if (type === 'recovery') {
-    return NextResponse.redirect(`${origin}/reset-password`);
+  const isRecovery = type === 'recovery' || next === '/reset-password' || searchParams.get('type') === 'recovery';
+  if (isRecovery) {
+    const response = NextResponse.redirect(`${origin}/reset-password`);
+    // Inyectar todas las cookies de sesión en la respuesta para que el usuario llegue autenticado a /reset-password
+    cookiesToSetOnResponse.forEach(({ name, value, options }) => {
+      response.cookies.set(name, value, options);
+    });
+    // Limpiar cookies temporales
+    response.cookies.delete('sb_pending_role');
+    response.cookies.delete('sb_pending_next');
+    response.cookies.delete('sb_pending_company');
+    return response;
   }
 
   // Obtener usuario autenticado

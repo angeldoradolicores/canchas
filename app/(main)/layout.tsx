@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Search, CalendarDays, Trophy, Users, LayoutDashboard, ShieldCheck, Smartphone, Heart, Swords, GraduationCap, User } from 'lucide-react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
@@ -21,6 +21,12 @@ import { ExpiredBookingFloatingBanner } from '@/components/booking/ExpiredBookin
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+
+  useEffect(() => {
+    const handleOpenMenu = () => setMobileOpen(true);
+    window.addEventListener('open-mobile-menu', handleOpenMenu);
+    return () => window.removeEventListener('open-mobile-menu', handleOpenMenu);
+  }, []);
 
   return (
     <AuthProvider>
@@ -74,7 +80,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               {children}
             </div>
 
-            <MobileNav />
+            <MobileNav onMenu={() => setMobileOpen(true)} />
 
             {/* Cronómetro flotante persistente en toda la navegación */}
             <FloatingBookingTimer />

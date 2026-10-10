@@ -1,8 +1,9 @@
 'use client';
 
-import { ChevronDown, LogOut, MapPin, Menu, Bell, Settings, User, Check, Trash2, LayoutDashboard, Navigation } from 'lucide-react';
+import { ChevronDown, LogOut, MapPin, Menu, Bell, Settings, User, Check, Trash2, LayoutDashboard, Navigation, Sun, Moon } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { useTheme } from '@/lib/theme-context';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -15,6 +16,7 @@ interface HeaderProps {
 
 export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
   const { user, profile, signOut } = useAuth();
+  const { resolvedTheme, toggleTheme } = useTheme();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -227,13 +229,14 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
       className={`topbar relative flex items-center justify-between px-3 sm:px-4 py-3 bg-background border-b border-border transition-all ${isAnyMenuOpen ? 'z-[9999]' : 'z-10'
         }`}
     >
-      <div className="flex lg:hidden items-center gap-2">
+      <div className="flex lg:hidden items-center">
         <button
           onClick={onMenu}
-          className="icon-button p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-          aria-label="Abrir/Cerrar menú"
+          className="flex items-center justify-center w-11 h-11 rounded-2xl bg-card hover:bg-muted/80 active:scale-95 border-2 border-border/90 text-foreground shadow-xs transition-all duration-200 cursor-pointer"
+          aria-label="Abrir menú de navegación"
+          title="Menú"
         >
-          <Menu size={22} />
+          <Menu size={26} strokeWidth={2.4} className="text-foreground" />
         </button>
       </div>
 
@@ -290,7 +293,7 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
       </div>
 
       {/* ── Derecha: Acciones, Notificaciones y Perfil ── */}
-      <div className="header-actions flex items-center gap-2 ml-auto">
+      <div className="header-actions flex items-center gap-1.5 sm:gap-2 ml-auto">
         {user && profile?.role === 'owner' && (
           <Link
             href="/dashboard"
@@ -299,6 +302,21 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
             <LayoutDashboard size={15} /> Panel de Dueño
           </Link>
         )}
+
+        {/* Botón de cambio de apariencia Claro / Oscuro (móvil y PC) */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={resolvedTheme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+          title={resolvedTheme === 'dark' ? 'Activar modo claro' : 'Activar modo oscuro'}
+          className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-card hover:bg-muted active:scale-95 border border-border/80 text-foreground shadow-xs transition-all duration-200 cursor-pointer"
+        >
+          {resolvedTheme === 'dark' ? (
+            <Sun size={19} className="text-amber-400 transition-transform duration-300 hover:rotate-45" />
+          ) : (
+            <Moon size={19} className="text-slate-700 dark:text-slate-300 transition-transform duration-300 hover:-rotate-12" />
+          )}
+        </button>
 
         {user && (
           <div className="relative">

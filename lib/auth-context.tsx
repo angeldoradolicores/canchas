@@ -33,6 +33,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const supabase = createClient();
 
   useEffect(() => {
+    // Si viene con hash o query param de recuperación y no estamos en /reset-password
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+      const isRecovery =
+        hash.includes('type=recovery') ||
+        search.includes('type=recovery') ||
+        search.includes('token_hash=');
+      if (isRecovery && !window.location.pathname.startsWith('/reset-password')) {
+        window.location.href = `/reset-password${search}${hash}`;
+        return;
+      }
+    }
+
     supabase.auth.getSession()
       .then(({ data, error }) => {
         if (error) {
@@ -60,6 +74,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/reset-password')) {
+          window.location.href = '/reset-password';
+          return;
+        }
+      }
+
       if (event === 'SIGNED_OUT' || !currentSession) {
         setSession(null);
         setUser(null);

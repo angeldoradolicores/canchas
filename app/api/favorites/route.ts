@@ -31,16 +31,26 @@ export async function GET(req: NextRequest) {
     const supabase = getAdminSupabase();
     const { data, error } = await supabase
       .from('pitch_favorites')
-      .select('pitch_id')
+      .select('pitch_id, pitches(company_id)')
       .eq('user_id', userId);
 
     if (error) {
       console.error('[Favorites GET error]', error);
-      return NextResponse.json({ favorites: [] });
+      return NextResponse.json({ favorites: [], favorite_companies: [] });
     }
 
+    const favorites = (data || []).map((row: any) => row.pitch_id).filter(Boolean);
+    const favoriteCompanies = Array.from(
+      new Set(
+        (data || [])
+          .map((row: any) => row.pitches?.company_id)
+          .filter(Boolean)
+      )
+    );
+
     return NextResponse.json({
-      favorites: (data || []).map((row: any) => row.pitch_id),
+      favorites,
+      favorite_companies: favoriteCompanies,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -79,37 +89,52 @@ export async function POST(req: NextRequest) {
     }
 
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!UUID_REGEX.test(pitch_id)) {
-      // Clave personalizada o de complejo no-UUID: se confirma éxito para almacenamiento local
+    let targetPitchId = pitch_id;
+
+    // Si viene como identificador de complejo 'companyUUID_pasto_loc_1', extraer el UUID base
+    if (!UUID_REGEX.test(targetPitchId)) {
+      const firstPart = targetPitchId.split('_')[0];
+      if (UUID_REGEX.test(firstPart)) {
+        targetPitchId = firstPart;
+      }
+    }
+
+    const supabase = getAdminSupabase();
+
+    // 1. Si targetPitchId no es UUID directo, intentar buscar por nombre de complejo o compañía
+    let resolvedPitchId: string | null = null;
+
+    if (UUID_REGEX.test(targetPitchId)) {
+      // 1.1 Verificar si es ID directo de cancha
+      const { data: pitchRow } = await supabase
+        .from('pitches')
+        .select('id')
+        .eq('id', targetPitchId)
+        .maybeSingle();
+
+      if (pitchRow?.id) {
+        resolvedPitchId = pitchRow.id;
+      } else {
+        // 1.2 Si es ID de compañía / complejo, asociar la primera cancha activa de ese complejo
+        const { data: compPitch } = await supabase
+          .from('pitches')
+          .select('id')
+          .eq('company_id', targetPitchId)
+          .limit(1)
+          .maybeSingle();
+
+        if (compPitch?.id) {
+          resolvedPitchId = compPitch.id;
+        }
+      }
+    }
+
+    if (!resolvedPitchId) {
+      // Identificador no encontrado en DB, almacenar localmente
       return NextResponse.json({ success: true, isFavorite: action === 'add', localOnly: true });
     }
 
-    let targetPitchId = pitch_id;
-    const supabase = getAdminSupabase();
-
-    // 1. Verificar si targetPitchId existe directamente en la tabla pitches
-    const { data: pitchRow } = await supabase
-      .from('pitches')
-      .select('id')
-      .eq('id', targetPitchId)
-      .maybeSingle();
-
-    if (!pitchRow) {
-      // 2. Si no es un ID de cancha, verificar si es el ID de un complejo/empresa
-      const { data: compPitch } = await supabase
-        .from('pitches')
-        .select('id')
-        .eq('company_id', targetPitchId)
-        .limit(1)
-        .maybeSingle();
-
-      if (compPitch?.id) {
-        targetPitchId = compPitch.id;
-      } else {
-        // No existe en la base de datos (es un identificador local o cancha borrada)
-        return NextResponse.json({ success: true, isFavorite: action === 'add', localOnly: true });
-      }
-    }
+    targetPitchId = resolvedPitchId;
 
     const { data: existing, error: checkError } = await supabase
       .from('pitch_favorites')

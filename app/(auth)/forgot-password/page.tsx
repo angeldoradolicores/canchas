@@ -25,9 +25,9 @@ export default function ForgotPasswordPage() {
     try {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        // Supabase agrega el token en el hash (#access_token=...) del URL
-        // /reset-password detecta el evento PASSWORD_RECOVERY en el cliente
-        redirectTo: `${origin}/reset-password`,
+        // PKCE: Supabase envía code como query param → /auth/callback lo intercambia
+        // El callback detecta type=recovery y redirige a /reset-password con sesión activa
+        redirectTo: `${origin}/auth/callback?type=recovery&next=/reset-password`,
       });
 
       if (error) {

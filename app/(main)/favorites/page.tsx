@@ -12,7 +12,7 @@ import { Pitch } from '@/lib/types';
 
 export default function FavoritesPage() {
   const { user } = useAuth();
-  const { favoriteComplexIds, toggleFavoriteComplex } = useFavorites();
+  const { favoriteComplexIds, favoriteIds, toggleFavoriteComplex } = useFavorites();
   const supabase = createClient();
 
   const [allPitches, setAllPitches] = useState<Pitch[]>([]);
@@ -57,8 +57,13 @@ export default function FavoritesPage() {
   const favoriteComplexes = useMemo(() => {
     if (allPitches.length === 0) return [];
     const allComplexes = groupPitchesByComplex(allPitches);
-    return allComplexes.filter(c => favoriteComplexIds.has(c.id));
-  }, [allPitches, favoriteComplexIds]);
+    return allComplexes.filter(c => 
+      favoriteComplexIds.has(c.id) ||
+      (c.baseId && favoriteComplexIds.has(c.baseId)) ||
+      (c.id.includes('_') && favoriteComplexIds.has(c.id.split('_')[0])) ||
+      c.pitches.some(p => favoriteIds.has(p.id))
+    );
+  }, [allPitches, favoriteComplexIds, favoriteIds]);
 
   const handleOpen = (pitch: any) => {
     if (typeof window !== 'undefined') {

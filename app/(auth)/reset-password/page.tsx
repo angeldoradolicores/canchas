@@ -20,27 +20,76 @@ export default function ResetPasswordPage() {
   const supabase = createClient();
 
   useEffect(() => {
-    // Supabase envía el token en el hash del URL (#access_token=...&type=recovery)
-    // onAuthStateChange detecta esto automáticamente y dispara PASSWORD_RECOVERY
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setPageState('ready');
-      } else if (event === 'SIGNED_IN' && session) {
-        setPageState('ready');
-      }
-    });
+    let resolved = false;
 
-    // Si ya hay sesión activa (usuario recargó la página)
+    const resolve = (state: PageState) => {
+      if (!resolved) {
+        resolved = true;
+        setPageState(state);
+      }
+    };
+
+    // ── Caso 0: Parámetros de error explícitos ──
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      const hash = window.location.hash || '';
+      if (sp.get('error') || hash.includes('error=')) {
+        resolve('expired');
+        return;
+      }
+
+      // ── Caso 1: token_hash en query params (enlaces directos o fallback) ──
+      const tokenHash = sp.get('token_hash');
+      const typeParam = sp.get('type') as any;
+      if (tokenHash && typeParam === 'recovery') {
+        supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' })
+          .then(({ data, error }) => {
+            if (!error && data.session) {
+              resolve('ready');
+            } else {
+              resolve('expired');
+            }
+          })
+          .catch(() => resolve('expired'));
+        return;
+      }
+
+      // ── Caso 2: code en query params (si llegó directo sin pasar por callback) ──
+      const codeParam = sp.get('code');
+      if (codeParam) {
+        supabase.auth.exchangeCodeForSession(codeParam)
+          .then(({ data, error }) => {
+            if (!error && data.session) {
+              resolve('ready');
+            } else {
+              resolve('expired');
+            }
+          })
+          .catch(() => resolve('expired'));
+        return;
+      }
+    }
+
+    // ── Caso 3: PKCE (flujo principal con @supabase/ssr) ──
+    // El /auth/callback ya intercambió el code y estableció la sesión en cookies.
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        setPageState('ready');
+        resolve('ready');
       }
     });
 
-    // Si en 8s no llega el evento, el enlace expiró
+    // ── Caso 4: Flujo implícito / hash ──
+    // Supabase pone el token en el hash (#access_token=...&type=recovery)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
+        resolve('ready');
+      }
+    });
+
+    // ── Caso 5: Timeout — enlace expirado o inválido ──
     const timeout = setTimeout(() => {
-      setPageState(prev => prev === 'loading' ? 'expired' : prev);
-    }, 8000);
+      resolve('expired');
+    }, 6000);
 
     return () => {
       subscription.unsubscribe();
@@ -66,7 +115,7 @@ export default function ResetPasswordPage() {
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) {
-        if (error.message.includes('expired') || error.message.includes('invalid')) {
+        if (error.message.toLowerCase().includes('expired') || error.message.toLowerCase().includes('invalid')) {
           setPageState('expired');
         } else {
           setError(error.message || 'Error al actualizar la contraseña.');
@@ -90,9 +139,9 @@ export default function ResetPasswordPage() {
     <div className="min-h-[85vh] w-full flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-card border border-border/80 rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-xl shadow-black/5 min-w-0 overflow-hidden transition-all">
 
-        {/* ── Estado: Cargando / Verificando enlace ── */}
+        {/* ── Cargando ── */}
         {pageState === 'loading' && (
-          <div className="py-8 text-center space-y-4 animate-in fade-in duration-200">
+          <div className="py-10 text-center space-y-4 animate-in fade-in duration-200">
             <div className="w-14 h-14 mx-auto rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
               <Loader2 size={28} className="animate-spin text-primary" />
             </div>
@@ -103,7 +152,7 @@ export default function ResetPasswordPage() {
           </div>
         )}
 
-        {/* ── Estado: Enlace Expirado ── */}
+        {/* ── Enlace expirado ── */}
         {pageState === 'expired' && (
           <div className="py-4 text-center space-y-5 animate-in fade-in zoom-in-95 duration-200">
             <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500">
@@ -112,12 +161,12 @@ export default function ResetPasswordPage() {
             <div className="space-y-1">
               <h2 className="text-xl font-black text-foreground uppercase tracking-tight">Enlace expirado</h2>
               <p className="text-xs sm:text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
-                Este enlace de recuperación ya no es válido o expiró. Solicita uno nuevo desde la pantalla de inicio de sesión.
+                Este enlace de recuperación ya no es válido. Solicita uno nuevo desde la pantalla de inicio de sesión.
               </p>
             </div>
             <Link
               href="/forgot-password"
-              className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer"
+              className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               Solicitar nuevo enlace
             </Link>
@@ -130,7 +179,7 @@ export default function ResetPasswordPage() {
           </div>
         )}
 
-        {/* ── Estado: Éxito ── */}
+        {/* ── Éxito ── */}
         {pageState === 'success' && (
           <div className="py-2 text-center space-y-5 animate-in fade-in zoom-in-95 duration-200">
             <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
@@ -145,7 +194,7 @@ export default function ResetPasswordPage() {
             <button
               type="button"
               onClick={() => router.push('/login')}
-              className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer"
+              className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <span>Iniciar Sesión</span>
               <ArrowRight size={16} />
@@ -153,7 +202,7 @@ export default function ResetPasswordPage() {
           </div>
         )}
 
-        {/* ── Estado: Formulario listo ── */}
+        {/* ── Formulario ── */}
         {pageState === 'ready' && (
           <>
             <div className="text-center space-y-2 mb-6">
@@ -169,7 +218,8 @@ export default function ResetPasswordPage() {
             </div>
 
             <form onSubmit={handleUpdate} className="space-y-4">
-              {/* Campo: Nueva Contraseña */}
+
+              {/* Nueva Contraseña */}
               <div className="space-y-1.5 text-left">
                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   Nueva Contraseña
@@ -210,7 +260,7 @@ export default function ResetPasswordPage() {
                 )}
               </div>
 
-              {/* Campo: Confirmar Contraseña */}
+              {/* Confirmar Contraseña */}
               <div className="space-y-1.5 text-left">
                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   Confirmar Contraseña
@@ -247,11 +297,11 @@ export default function ResetPasswordPage() {
                 </div>
               )}
 
-              {/* Botón guardar */}
+              {/* Botón */}
               <button
                 type="submit"
                 disabled={saving || password !== confirmPassword || password.length < 8}
-                className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer"
+                className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
               >
                 {saving ? (
                   <>

@@ -1,11 +1,15 @@
 'use client';
 
-import { CalendarDays, Heart, Search, User } from 'lucide-react';
+import { CalendarDays, Heart, Search, User, Menu } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useReservationsNotifications } from '@/lib/reservations-notification-context';
 
-export function MobileNav() {
+interface MobileNavProps {
+  onMenu?: () => void;
+}
+
+export function MobileNav({ onMenu }: MobileNavProps) {
   const pathname = usePathname() || '/';
   const router = useRouter();
   const { hasReservationUpdates } = useReservationsNotifications();
@@ -27,6 +31,13 @@ export function MobileNav() {
     }
   };
 
+  const handleMenuClick = () => {
+    if (onMenu) onMenu();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('open-mobile-menu'));
+    }
+  };
+
   return (
     <nav className="mobile-bottom-nav">
       {items.map(({ label, Icon, path, isReservas }) => {
@@ -40,7 +51,7 @@ export function MobileNav() {
             onClick={isExplorar ? handleExplorarClick : undefined}
             id={path === '/favorites' ? 'nav-favorites-mobile' : undefined}
             data-favorites-nav={path === '/favorites' ? 'mobile' : undefined}
-            className={`flex flex-col items-center gap-1 min-w-[58px] text-[9px] text-muted-foreground ${isActive ? 'active text-primary' : ''}`}
+            className={`flex flex-col items-center gap-1 min-w-[54px] text-[9px] text-muted-foreground ${isActive ? 'active text-primary font-bold' : ''}`}
           >
             <span className="relative">
               <Icon size={22} className={isActive ? 'drop-shadow-md' : ''} />
@@ -55,6 +66,19 @@ export function MobileNav() {
           </Link>
         );
       })}
+
+      {/* Botón para abrir el panel completo desde la barra inferior con el pulgar */}
+      <button
+        type="button"
+        onClick={handleMenuClick}
+        aria-label="Abrir panel y más opciones"
+        className="flex flex-col items-center gap-1 min-w-[54px] text-[9px] text-muted-foreground hover:text-primary active:scale-95 transition-all cursor-pointer"
+      >
+        <span className="relative flex items-center justify-center">
+          <Menu size={22} />
+        </span>
+        <span>Menú</span>
+      </button>
     </nav>
   );
 }

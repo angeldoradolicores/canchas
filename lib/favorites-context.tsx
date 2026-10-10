@@ -76,13 +76,14 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
         const data = await res.json();
         if (!cancelled && Array.isArray(data.favorites)) {
           fetchedUserRef.current = userId;
-          const backendIds: string[] = data.favorites;
+          const backendIds: string[] = data.favorites || [];
+          const backendCompanyIds: string[] = data.favorite_companies || [];
 
-          const merged = new Set([...localPitches, ...backendIds]);
-          setFavoriteIds(merged);
-          saveStored(LOCAL_PITCH_KEY, Array.from(merged));
+          const mergedPitches = new Set([...localPitches, ...backendIds]);
+          setFavoriteIds(mergedPitches);
+          saveStored(LOCAL_PITCH_KEY, Array.from(mergedPitches));
 
-          const mergedComplexes = new Set([...localComplexes, ...backendIds]);
+          const mergedComplexes = new Set([...localComplexes, ...backendIds, ...backendCompanyIds]);
           setFavoriteComplexIds(mergedComplexes);
           saveStored(LOCAL_COMPLEX_KEY, Array.from(mergedComplexes));
         }
@@ -99,25 +100,50 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
 
   // ── Complex-level favorites ──
   const isFavoriteComplex = useCallback(
-    (complexId: string) => favoriteComplexIds.has(complexId),
-    [favoriteComplexIds]
+    (complexId: string) => {
+      if (!complexId) return false;
+      if (favoriteComplexIds.has(complexId)) return true;
+      if (favoriteIds.has(complexId)) return true;
+      if (complexId.includes('_')) {
+        const base = complexId.split('_')[0];
+        if (favoriteComplexIds.has(base) || favoriteIds.has(base)) return true;
+      }
+      return false;
+    },
+    [favoriteComplexIds, favoriteIds]
   );
 
   const toggleFavoriteComplex = useCallback(
-    async (complexId: string): Promise<boolean> => {
-      const willBeFav = !favoriteComplexIds.has(complexId);
+    async (complexId: string, pitchId?: string): Promise<boolean> => {
+      const willBeFav = !isFavoriteComplex(complexId);
+      const baseId = complexId.includes('_') ? complexId.split('_')[0] : complexId;
 
       setFavoriteComplexIds(prev => {
         const next = new Set(prev);
-        if (willBeFav) next.add(complexId);
-        else next.delete(complexId);
+        if (willBeFav) {
+          next.add(complexId);
+          if (baseId) next.add(baseId);
+        } else {
+          next.delete(complexId);
+          if (baseId) next.delete(baseId);
+        }
         saveStored(LOCAL_COMPLEX_KEY, Array.from(next));
         return next;
       });
 
+      if (pitchId) {
+        setFavoriteIds(prev => {
+          const next = new Set(prev);
+          if (willBeFav) next.add(pitchId);
+          else next.delete(pitchId);
+          saveStored(LOCAL_PITCH_KEY, Array.from(next));
+          return next;
+        });
+      }
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('favorites-updated', {
-          detail: { complexId, isFavorite: willBeFav }
+          detail: { complexId, baseId, isFavorite: willBeFav }
         }));
       }
 
@@ -127,11 +153,12 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
+        const targetToSend = pitchId || baseId || complexId;
         const res = await fetch('/api/favorites', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            pitch_id: complexId, // stored using complexId as key
+            pitch_id: targetToSend,
             user_id: user.id,
             action: willBeFav ? 'add' : 'remove',
           }),
@@ -146,7 +173,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
 
       return willBeFav;
     },
-    [favoriteComplexIds, user?.id]
+    [isFavoriteComplex, user?.id]
   );
 
   // ── Pitch-level favorites (backward compat) ──

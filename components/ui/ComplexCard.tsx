@@ -43,8 +43,10 @@ interface ComplexCardProps {
 }
 
 export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }: ComplexCardProps) {
-  const { isFavoriteComplex, toggleFavoriteComplex } = useFavorites();
-  const isFavorite = isFavoriteComplex(complex.id);
+  const { isFavoriteComplex, toggleFavoriteComplex, isFavorite: isFavPitch } = useFavorites();
+  const isFavorite = isFavoriteComplex(complex.id) ||
+    (complex.baseId ? isFavoriteComplex(complex.baseId) : false) ||
+    complex.pitches.some(p => isFavPitch(p.id));
 
   const [loadingFavorite, setLoadingFavorite] = useState(false);
   const [showFlyAnim, setShowFlyAnim] = useState(false);
@@ -104,7 +106,8 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
 
     setLoadingFavorite(true);
     try {
-      await toggleFavoriteComplex(complex.id);
+      const primaryPitchId = complex.featuredPitch?.id || complex.pitches?.[0]?.id;
+      await toggleFavoriteComplex(complex.id, primaryPitchId);
     } finally {
       setLoadingFavorite(false);
     }
