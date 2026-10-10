@@ -128,7 +128,7 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
   };
 
   const [citiesList, setCitiesList] = useState<string[]>([
-    'Pasto', 'Bogotá', 'Cali', 'Medellín', 'Popayán', 'Ipiales', 'Barranquilla', 'Todas'
+    'Pasto', 'Ipiales', 'Popayán', 'Cali', 'Bogotá', 'Medellín', 'Todas'
   ]);
   const [selectedCity, setSelectedCity] = useState('Pasto');
   const [showCityDropdown, setShowCityDropdown] = useState(false);
@@ -186,7 +186,7 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
 
           try {
             localStorage.setItem('userCoords', JSON.stringify(coords));
-          } catch {}
+          } catch { }
 
           // Notificar coordenadas al resto de la app
           window.dispatchEvent(new CustomEvent('gpsCoords', { detail: coords }));
@@ -236,7 +236,7 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
           aria-label="Abrir menú de navegación"
           title="Menú"
         >
-          <Menu size={26} strokeWidth={2.4} className="text-foreground" />
+          <Menu size={24} strokeWidth={2.4} className="text-foreground" />
         </button>
       </div>
 

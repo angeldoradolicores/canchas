@@ -18,7 +18,7 @@ export function MobileNav({ onMenu }: MobileNavProps) {
     { label: 'Explorar', Icon: Search, path: '/' as const },
     { label: 'Reservas', Icon: CalendarDays, path: '/reservations' as const, isReservas: true },
     { label: 'Favoritos', Icon: Heart, path: '/favorites' as const },
-    { label: 'Perfil', Icon: User, path: '/profile' as const },
+    // { label: 'Perfil', Icon: User, path: '/profile' as const },
   ];
 
   const handleExplorarClick = () => {
