@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CircleHelp,
   Heart,
+  ImagePlay,
   LayoutDashboard,
   MoreHorizontal,
   Search,
@@ -81,6 +82,14 @@ export function Sidebar() {
             >
               <Smartphone size={19} />
               <span>Conectar WhatsApp</span>
+            </Link>
+
+            <Link
+              href="/dashboard/status"
+              className={`nav-item ${pathname === '/dashboard/status' ? 'active' : ''}`}
+            >
+              <ImagePlay size={19} />
+              <span>Crear Publicación</span>
             </Link>
 
             {/* <Link

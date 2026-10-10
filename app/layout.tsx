@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     template: '%s | Cancheros',
   },
   description:
-    'Cancheros: la plataforma oficial para reservar canchas sintéticas de fútbol en Pasto, Nariño. Consulta disponibilidad en tiempo real, compara precios y reserva en segundos. Fútbol 5, 6, 7 y 11.',
+    'Cancheros: la plataforma oficial para reservar canchas sintéticas. Consulta disponibilidad en tiempo real, compara precios y reserva en segundos.',
   applicationName: 'Cancheros',
   authors: [{ name: 'Cancheros' }],
   creator: 'Cancheros',

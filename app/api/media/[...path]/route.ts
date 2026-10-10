@@ -6,10 +6,11 @@ export const runtime = 'nodejs';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { path: string[] } }
+  { params }: { params: Promise<{ path: string[] }> }
 ) {
   try {
-    const key = (params.path || []).join('/');
+    const { path } = await params;
+    const key = (path || []).join('/');
     if (!key) {
       return new NextResponse('Not found', { status: 404 });
     }

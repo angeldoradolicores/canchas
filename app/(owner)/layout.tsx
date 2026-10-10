@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, LayoutDashboard, CalendarDays, Map, ShieldCheck, LogOut, Smartphone, Loader2, ShieldAlert } from 'lucide-react';
+import { X, LayoutDashboard, CalendarDays, Map, ShieldCheck, LogOut, Smartphone, Loader2, ShieldAlert, ImagePlay } from 'lucide-react';
 import { Logo } from '@/components/layout/Logo';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
@@ -109,6 +109,7 @@ function OwnerLayoutInner({ children }: { children: React.ReactNode }) {
     ['Mis Canchas', Map, '/dashboard/pitches'],
     ['Reservas', CalendarDays, '/dashboard/bookings'],
     ['Conectar WhatsApp', Smartphone, '/dashboard/whatsapp'],
+    ['Crear Publicación', ImagePlay, '/dashboard/status'],
   ] as const;
 
   const handleLogout = async () => {
