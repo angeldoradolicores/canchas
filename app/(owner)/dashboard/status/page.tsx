@@ -69,11 +69,11 @@ const LOGO = '';
 const STORE = 'cancheros-status-v4';
 
 const DEFAULTS: Cfg = {
-  format: 'story', pattern: 'pitch', cardStyle: 'round', logoStyle: 'badge',
+  format: 'story', pattern: 'pitch', cardStyle: 'round', logoStyle: 'original',
   logoSize: 140, nameSize: 64, align: 'left', padding: 70,
   order: ['header', 'title', 'hours', 'message', 'footer'], hidden: [],
-  name: '', address: '', title: 'Canchas Disponibles',
-  tag: '', message: '', phone: '', cta: 'Reserva ahora', website: 'cancheros.site',
+  name: '', address: '', title: 'Horarios Disponibles',
+  tag: '', message: '', phone: '', cta: 'Reserva ahora', website: 'CANCHEROS.SITE',
   pal: PRESETS[0].p,
 };
 
@@ -909,7 +909,7 @@ export default function CreateStatusPage() {
       {[
         { label: 'Nombre del complejo', key: 'name' as const, ph: company?.name || 'Mi Complejo', max: 40 },
         { label: 'Dirección o barrio', key: 'address' as const, ph: company?.address || 'Pasto, Nariño', max: 50 },
-        { label: 'Título del póster', key: 'title' as const, ph: '⚡ Canchas Disponibles', max: 32 },
+        { label: 'Título del póster', key: 'title' as const, ph: 'Horarios Disponibles', max: 32 },
         { label: 'Etiqueta superior', key: 'tag' as const, ph: '¡Últimos cupos!', max: 28 },
         { label: 'Llamado a la acción (botón)', key: 'cta' as const, ph: 'Reserva ahora', max: 24 },
         { label: 'Teléfono / WhatsApp', key: 'phone' as const, ph: '3001234567', max: 20 },
@@ -977,12 +977,12 @@ export default function CreateStatusPage() {
               r.readAsDataURL(f);
             }} />
         </label>
-        {customLogo && (
+        {/* {customLogo && (
           <button onClick={() => setCustomLogo(null)}
             className="w-full py-1.5 text-xs font-bold text-zinc-400 hover:text-white border border-zinc-800 rounded-xl">
             Usar logo predeterminado
           </button>
-        )}
+        )} */}
       </div>
 
       <div className="space-y-3">
