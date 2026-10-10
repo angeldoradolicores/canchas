@@ -1735,14 +1735,14 @@ function NewPitchForm() {
             {/* Cabecera de Ubicación */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-border pb-3">
               <h2 className="font-bold text-base text-foreground">Ubicación en el Mapa</h2>
-              <button
+              {/* <button
                 type="button"
                 onClick={getCurrentLocation}
                 className="self-start sm:self-auto text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-xl border border-emerald-500/20 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
               >
                 <MapPin size={14} className="shrink-0" />
                 <span>Usar mi GPS Actual</span>
-              </button>
+              </button> */}
             </div>
 
             <p className="text-xs text-muted-foreground leading-relaxed">

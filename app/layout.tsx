@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     template: '%s | Cancheros Pasto',
   },
   description:
-    'Cancheros es la plataforma oficial y más segura para consultar y reservar canchas sintéticas de fútbol en Pasto, Nariño. Encuentra complejos deportivos, verifica horarios en tiempo real y reserva de forma inmediata.',
+    'Cancheros es la plataforma  para consultar y reservar canchas sintéticas de fútbol. Encuentra complejos deportivos, verifica horarios en tiempo real y reserva de forma inmediata.',
   applicationName: 'Cancheros',
   authors: [{ name: 'Cancheros' }],
   creator: 'Cancheros',
@@ -86,21 +86,21 @@ export const metadata: Metadata = {
     siteName: 'Cancheros',
     title: 'Cancheros | Canchas Sintéticas en Pasto - Reserva tu Cancha Online',
     description:
-      'La plataforma líder y más segura de canchas sintéticas en Pasto, Nariño. Encuentra tu cancha, verifica horarios en tiempo real y reserva de forma inmediata.',
+      'La plataforma líder y segura de canchas sintéticas. Encuentra tu cancha, verifica horarios en tiempo real y reserva de forma inmediata.',
     images: [
       {
         url: '/cancheros.png',
         width: 1254,
         height: 1254,
-        alt: 'Cancheros - Plataforma Oficial de Canchas Sintéticas en Pasto',
+        alt: 'Cancheros - Plataforma Oficial de Reservas de Canchas Sintéticas',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Cancheros | Canchas Sintéticas en Pasto',
+    title: 'Cancheros | Reserva Canchas Sintéticas en Pasto',
     description:
-      'Reserva canchas sintéticas en Pasto en tiempo real. Rápido, seguro y confiable.',
+      'Reserva canchas sintéticas en tiempo real. Rápido, seguro y confiable.',
     images: ['/cancheros.png'],
   },
   robots: {

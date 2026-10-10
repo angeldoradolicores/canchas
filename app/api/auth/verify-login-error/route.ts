@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     if (!user) {
       return NextResponse.json({
         exists: false,
-        message: 'Esta cuenta no está registrada. Verifica tu correo o regístrate para continuar.',
+        message: 'Correo no encontrado. Este correo no está registrado en Cancheros. ¿Quieres crear una cuenta?',
       });
     }
 

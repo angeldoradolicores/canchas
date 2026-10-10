@@ -79,6 +79,11 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/login?error=auth_failed`);
   }
 
+  // ── Si es un flujo de recuperación de contraseña, ir directo a /reset-password ──
+  if (type === 'recovery') {
+    return NextResponse.redirect(`${origin}/reset-password`);
+  }
+
   // Obtener usuario autenticado
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {

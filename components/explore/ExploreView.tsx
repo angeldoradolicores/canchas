@@ -896,9 +896,9 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
 
       <div className="page-heading">
         <div>
-          <p className="eyebrow accent-label">CANCHEROS • PLATAFORMA OFICIAL EN PASTO</p>
-          <h1>Canchas Sintéticas en Pasto</h1>
-          <p className="lead">Encuentra, compara disponibilidad en vivo y reserva canchas sintéticas en Pasto de forma rápida y 100% segura.</p>
+          <p className="eyebrow accent-label">RESERVA TU CANCHA</p>
+          <h1>CANCHEROS</h1>
+          <p className="lead">Encuentra, compara disponibilidad en vivo y reserva canchas sintéticas de forma rápida y segura.</p>
         </div>
       </div>
 

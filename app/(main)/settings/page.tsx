@@ -50,8 +50,8 @@ function ThemeSelector() {
           key={value}
           onClick={() => setTheme(value)}
           className={`flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 transition-all duration-200 ${theme === value
-              ? 'border-primary bg-primary/10 text-primary shadow-sm'
-              : 'border-border bg-secondary/40 text-muted-foreground hover:border-primary/40 hover:bg-secondary'
+            ? 'border-primary bg-primary/10 text-primary shadow-sm'
+            : 'border-border bg-secondary/40 text-muted-foreground hover:border-primary/40 hover:bg-secondary'
             }`}
         >
           <Icon size={18} />
@@ -130,7 +130,9 @@ function PasswordModal({ onClose }: { onClose: () => void }) {
                   placeholder="Mínimo 6 caracteres"
                   className="w-full bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-sm pr-10 focus:outline-none focus:ring-2 focus:ring-ring"
                 />
-                <button onClick={() => setShowNext(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <button
+                  type="button"
+                  onClick={() => setShowNext(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   {showNext ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
               </div>
@@ -347,13 +349,13 @@ export default function SettingsPage() {
                 icon: <ShieldCheck size={15} className="text-emerald-500" />,
                 color: 'bg-emerald-500/10',
               },
-              {
-                key: 'recordatorios' as const,
-                label: 'Recordatorios de partido',
-                desc: 'Te avisamos 2 horas antes de jugar',
-                icon: <Bell size={15} className="text-blue-500" />,
-                color: 'bg-blue-500/10',
-              },
+              // {
+              //   key: 'recordatorios' as const,
+              //   label: 'Recordatorios de partido',
+              //   desc: 'Te avisamos 2 horas antes de jugar',
+              //   icon: <Bell size={15} className="text-blue-500" />,
+              //   color: 'bg-blue-500/10',
+              // },
             ].map(({ key, label, desc, icon, color }) => (
               <div key={key} className="flex items-center justify-between p-3 -mx-1 rounded-xl hover:bg-secondary/50 transition-colors">
                 <div className="flex items-center gap-3">
