@@ -8,26 +8,22 @@ const supabase = createClient(
 
 const TZ = 'America/Bogota';
 
-/** Convierte una fecha ISO a la hora local de Colombia en formato "H:00 AM/PM" */
-function isoToLocalHourLabel(iso: string): string {
-  const date = new Date(iso);
-  const hour = Number(
-    new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', hour12: false }).format(date)
+function isoToLocalHour(iso: string): number {
+  return Number(
+    new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', hour12: false }).format(new Date(iso))
   ) % 24;
-  const suffix = hour >= 12 ? 'PM' : 'AM';
-  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+}
+
+function hourLabel(h: number): string {
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${h12}:00 ${suffix}`;
 }
 
-/** Genera todas las franjas horarias de un día (6 AM a 10 PM) */
-function allDaySlots(): string[] {
-  const slots: string[] = [];
-  for (let h = 6; h <= 22; h++) {
-    const suffix = h >= 12 ? 'PM' : 'AM';
-    const h12 = h % 12 === 0 ? 12 : h % 12;
-    slots.push(`${h12}:00 ${suffix}`);
-  }
-  return slots;
+function allSlots(): string[] {
+  const out: string[] = [];
+  for (let h = 6; h <= 22; h++) out.push(hourLabel(h));
+  return out;
 }
 
 export async function POST(req: NextRequest) {
@@ -39,7 +35,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'companyId requerido' }, { status: 400 });
     }
 
-    // 1. Verificar empresa y obtener nombre
+    // 1. Verificar empresa
     const { data: company, error: compErr } = await supabase
       .from('companies')
       .select('id, name, address, zone')
@@ -50,102 +46,102 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Complejo no encontrado' }, { status: 404 });
     }
 
-    // 2. Calcular fecha objetivo en zona horaria de Colombia
+    // 2. Calcular fecha objetivo (Colombia UTC-5)
     let targetDate = date as string | undefined;
     if (!targetDate) {
       const parts = new Intl.DateTimeFormat('en-CA', {
         timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
       }).formatToParts(new Date());
-      const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '0';
+      const get = (t: string) => parts.find(p => p.type === t)?.value ?? '0';
       const ymd = `${get('year')}-${get('month')}-${get('day')}`;
       if (forTomorrow) {
         const [y, m, d] = ymd.split('-').map(Number);
-        const tomorrow = new Date(Date.UTC(y, m - 1, d + 1));
-        targetDate = tomorrow.toISOString().slice(0, 10);
+        targetDate = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
       } else {
         targetDate = ymd;
       }
     }
 
-    // Rango del día en UTC (Colombia es UTC-5)
-    const startUTC = `${targetDate}T05:00:00Z`; // 00:00 COT
-    const endUTC   = `${targetDate}T28:59:59Z`; // usando next day T04:59 COT — simplificamos con rango amplio
-
-    // 3. Obtener canchas del complejo (filtrar por una si se especificó)
-    let pitchQuery = supabase
+    // 3. Todas las canchas activas del complejo
+    const { data: allPitches } = await supabase
       .from('pitches')
-      .select('id, name, custom_pricing')
+      .select('id, name')
       .eq('company_id', companyId)
-      .eq('is_active', true);
+      .eq('is_active', true)
+      .order('name');
 
-    if (pitchId && pitchId !== 'all') {
-      pitchQuery = pitchQuery.eq('id', pitchId);
-    }
+    const pitches = allPitches ?? [];
 
-    const { data: pitches, error: pitchErr } = await pitchQuery;
-
-    if (pitchErr || !pitches || pitches.length === 0) {
+    if (pitches.length === 0) {
       return NextResponse.json({
         success: true,
-        data: { availableHours: allDaySlots(), pitches: [], companyName: company.name },
-        message: 'No hay canchas activas; mostrando todas las franjas posibles.',
+        data: {
+          pitches: [],
+          freeHours: allSlots(),
+          bookedHours: [],
+          companyName: company.name,
+          targetDate,
+        },
       });
     }
 
-    const pitchIds = pitches.map((p: any) => p.id);
+    // 4. Filtrar por cancha seleccionada o todas
+    const targetIds = pitchId && pitchId !== 'all'
+      ? [pitchId]
+      : pitches.map((p: any) => p.id);
 
-    // 4. Obtener reservas del día (confirmadas o pendientes)
+    // 5. Obtener reservas del día en zona Colombia
     const { data: bookings } = await supabase
       .from('bookings')
       .select('start_time, end_time, pitch_id, status')
-      .in('pitch_id', pitchIds)
-      .gte('start_time', startUTC)
-      .lte('start_time', `${targetDate}T23:59:00-05:00`)
+      .in('pitch_id', targetIds)
+      .gte('start_time', `${targetDate}T05:00:00Z`)   // 00:00 COT
+      .lt('start_time', `${targetDate}T29:00:00Z`)    // rango generoso
       .in('status', ['confirmed', 'pending']);
 
-    // 5. Construir un mapa: hora → pitches ocupadas esa hora
-    const bookedByHour = new Map<string, Set<string>>();
+    // 6. Mapear horas ocupadas por pitch
+    const bookedByHour = new Map<string, Set<string>>(); // label → Set<pitchId>
     for (const b of bookings ?? []) {
-      const label = isoToLocalHourLabel(b.start_time);
+      const h = isoToLocalHour(b.start_time);
+      if (h < 6 || h > 22) continue;
+      const label = hourLabel(h);
       if (!bookedByHour.has(label)) bookedByHour.set(label, new Set());
       bookedByHour.get(label)!.add(b.pitch_id);
     }
 
-    // 6. Calcular horas disponibles:
-    //    - Si es UNA cancha: hora libre si no tiene reserva esa hora
-    //    - Si son TODAS: hora libre si AL MENOS UNA cancha no tiene reserva esa hora
-    const allSlots = allDaySlots();
-    const availableHours: string[] = [];
+    // 7. Clasificar cada franja
+    const freeHours: string[] = [];
+    const bookedHours: string[] = [];
 
-    for (const slot of allSlots) {
-      const occupiedPitches = bookedByHour.get(slot) ?? new Set();
+    for (const slot of allSlots()) {
+      const occupied = bookedByHour.get(slot) ?? new Set();
+
       if (pitchId && pitchId !== 'all') {
-        // Cancha específica
-        if (!occupiedPitches.has(pitchId)) {
-          availableHours.push(slot);
-        }
+        // Cancha específica: libre si NO tiene reserva
+        if (occupied.has(pitchId)) bookedHours.push(slot);
+        else freeHours.push(slot);
       } else {
-        // Todas: libre si al menos una no está ocupada
-        const hasFreePitch = pitchIds.some((id: string) => !occupiedPitches.has(id));
-        if (hasFreePitch) {
-          availableHours.push(slot);
-        }
+        // Todas: libre si AL MENOS UNA cancha está libre
+        const allOccupied = targetIds.every((id: string) => occupied.has(id));
+        if (allOccupied) bookedHours.push(slot);
+        else freeHours.push(slot);
       }
     }
 
     return NextResponse.json({
       success: true,
       data: {
+        pitches,
+        freeHours,
+        bookedHours,
         companyName: company.name,
         address: company.address || company.zone || '',
-        availableHours,
-        pitches: pitches.map((p: any) => ({ id: p.id, name: p.name })),
         targetDate,
         forTomorrow,
       },
     });
   } catch (err: any) {
-    console.error('[generate-status] Error:', err);
+    console.error('[generate-status]', err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
