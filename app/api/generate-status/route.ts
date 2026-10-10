@@ -62,15 +62,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Todas las canchas activas del complejo
-    const { data: allPitches } = await supabase
+    // 3. Todas las canchas del complejo
+    const { data: allPitches, error: pitchErr } = await supabase
       .from('pitches')
-      .select('id, name')
+      .select('id, name, is_active')
       .eq('company_id', companyId)
-      .eq('is_active', true)
       .order('name');
 
-    const pitches = allPitches ?? [];
+    if (pitchErr) {
+      console.error('[generate-status] Error fetching pitches:', pitchErr);
+    }
+
+    // Filtrar solo las que no estén explícitamente inactivas (si existe el campo)
+    const pitches = (allPitches ?? []).filter((p: any) => p.is_active !== false);
 
     if (pitches.length === 0) {
       return NextResponse.json({
@@ -80,6 +84,7 @@ export async function POST(req: NextRequest) {
           freeHours: allSlots(),
           bookedHours: [],
           companyName: company.name,
+          address: company.address || company.zone || '',
           targetDate,
         },
       });
@@ -90,14 +95,21 @@ export async function POST(req: NextRequest) {
       ? [pitchId]
       : pitches.map((p: any) => p.id);
 
-    // 5. Obtener reservas del día en zona Colombia
-    const { data: bookings } = await supabase
+    // 5. Obtener reservas del día en zona Colombia (UTC-5)
+    const startDate = `${targetDate}T00:00:00-05:00`;
+    const endDate = `${targetDate}T23:59:59-05:00`;
+
+    const { data: bookings, error: bookErr } = await supabase
       .from('bookings')
       .select('start_time, end_time, pitch_id, status')
       .in('pitch_id', targetIds)
-      .gte('start_time', `${targetDate}T05:00:00Z`)   // 00:00 COT
-      .lt('start_time', `${targetDate}T29:00:00Z`)    // rango generoso
+      .gte('start_time', startDate)
+      .lte('start_time', endDate)
       .in('status', ['confirmed', 'pending']);
+
+    if (bookErr) {
+      console.error('[generate-status] Error fetching bookings:', bookErr);
+    }
 
     // 6. Mapear horas ocupadas por pitch
     const bookedByHour = new Map<string, Set<string>>(); // label → Set<pitchId>
