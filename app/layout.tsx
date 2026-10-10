@@ -89,10 +89,10 @@ export const metadata: Metadata = {
       'La plataforma líder y segura de canchas sintéticas. Encuentra tu cancha, verifica horarios en tiempo real y reserva de forma inmediata.',
     images: [
       {
-        url: '/cancheros.png',
-        width: 1254,
-        height: 1254,
-        alt: 'Cancheros - Plataforma Oficial de Reservas de Canchas Sintéticas',
+        url: '/og-image.jpg',
+        width: 1200,
+        height: 630,
+        alt: 'Cancheros - Reserva Canchas Sintéticas en Pasto, Nariño',
       },
     ],
   },
@@ -101,7 +101,7 @@ export const metadata: Metadata = {
     title: 'Cancheros | Reserva Canchas Sintéticas en Pasto',
     description:
       'Reserva canchas sintéticas en tiempo real. Rápido, seguro y confiable.',
-    images: ['/cancheros.png'],
+    images: ['/og-image.jpg'],
   },
   robots: {
     index: true,

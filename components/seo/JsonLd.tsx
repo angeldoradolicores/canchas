@@ -35,10 +35,12 @@ export function JsonLd() {
         url: 'https://cancheros.site',
         logo: {
           '@type': 'ImageObject',
-          url: 'https://cancheros.site/cancheros.png',
-          caption: 'Cancheros Logo Oficial'
+          url: 'https://cancheros.site/og-image.jpg',
+          width: 1200,
+          height: 630,
+          caption: 'Cancheros - Reserva Canchas Sintéticas en Pasto'
         },
-        image: 'https://cancheros.site/cancheros.png',
+        image: 'https://cancheros.site/og-image.jpg',
         description: 'Plataforma oficial con trayectoria y seguridad para la reserva de canchas sintéticas de fútbol en Pasto, Nariño.',
         address: {
           '@type': 'PostalAddress',

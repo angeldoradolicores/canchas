@@ -1169,6 +1169,82 @@ export default function SchoolsPage() {
                   className="w-full bg-secondary/60 border border-border rounded-2xl px-4 py-3 text-sm font-bold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
                 />
               </div>
+
+              {/* ── Imágenes de la Escuela ── */}
+              <div>
+                <label className="block text-xs font-black uppercase tracking-wider text-primary mb-2">
+                  Fotos de la Escuela
+                </label>
+
+                {/* Input oculto */}
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  className="hidden"
+                  onChange={handleFilesChange}
+                />
+
+                {/* Botón de subida */}
+                <button
+                  type="button"
+                  disabled={uploading}
+                  onClick={() => fileRef.current?.click()}
+                  className="w-full border-2 border-dashed border-primary/40 hover:border-primary bg-primary/5 hover:bg-primary/10 rounded-2xl py-5 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 size={22} className="animate-spin text-primary" />
+                      <span className="text-xs font-black text-primary uppercase tracking-wider">Subiendo imagen...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ImageIcon size={22} className="text-primary/70" />
+                      <span className="text-xs font-black text-primary uppercase tracking-wider">
+                        {form.images.length > 0 ? 'Agregar más fotos' : 'Subir fotos de la escuela'}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-medium">JPG, PNG o WebP · Máx. 4 MB por foto</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Preview de imágenes subidas */}
+                {form.images.length > 0 && (
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {form.images.map((url, idx) => (
+                      <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-border group/img">
+                        <img
+                          src={url}
+                          alt={`Foto ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        {/* Badge primera imagen = portada */}
+                        {idx === 0 && (
+                          <span className="absolute top-1 left-1 bg-primary text-white text-[9px] font-black px-1.5 py-0.5 rounded-lg uppercase tracking-wider shadow">
+                            Portada
+                          </span>
+                        )}
+                        {/* Botón eliminar */}
+                        <button
+                          type="button"
+                          onClick={() => removeImage(idx)}
+                          className="absolute top-1 right-1 bg-black/70 hover:bg-rose-600 text-white p-1 rounded-lg transition opacity-0 group-hover/img:opacity-100 cursor-pointer"
+                          title="Eliminar foto"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {form.images.length > 0 && (
+                  <p className="text-[10px] text-muted-foreground font-medium mt-1.5">
+                    💡 La primera foto es la portada principal. Mantén presionada para reordenar.
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* Acciones Modal */}
