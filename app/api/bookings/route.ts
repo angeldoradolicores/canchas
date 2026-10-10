@@ -9,6 +9,7 @@ import {
 } from '@/lib/validations/api-schemas';
 import { notifyBookingSubmitted } from '@/lib/whatsapp-notifications';
 import { fetchConflictingPitchIds } from '@/lib/combined-pitch-utils';
+import { uploadToR2, isR2Configured } from '@/lib/storage/r2';
 
 function getAdminSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -425,15 +426,31 @@ export async function POST(req: NextRequest) {
           const safeExt = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
           const filePath = `receipts/${effectiveUserId || 'guest'}_${Date.now()}.${safeExt}`;
 
-          const { error: uploadErr } = await supabase.storage
-            .from('payment-proofs')
-            .upload(filePath, buffer, { contentType, upsert: true });
+          if (isR2Configured()) {
+            try {
+              const { url } = await uploadToR2({
+                buffer,
+                key: `comprobantes/${filePath}`,
+                contentType,
+                isPrivate: true,
+              });
+              paymentProofUrl = url;
+            } catch (r2Err) {
+              console.error('[R2 payment-proof upload error, falling back to Supabase]', r2Err);
+            }
+          }
 
-          if (!uploadErr) {
-            const { data: publicUrlData } = supabase.storage.from('payment-proofs').getPublicUrl(filePath);
-            paymentProofUrl = publicUrlData?.publicUrl || null;
-          } else {
-            console.error('[payment-proof upload error]', uploadErr);
+          if (!paymentProofUrl) {
+            const { error: uploadErr } = await supabase.storage
+              .from('payment-proofs')
+              .upload(filePath, buffer, { contentType, upsert: true });
+
+            if (!uploadErr) {
+              const { data: publicUrlData } = supabase.storage.from('payment-proofs').getPublicUrl(filePath);
+              paymentProofUrl = publicUrlData?.publicUrl || null;
+            } else {
+              console.error('[payment-proof upload error]', uploadErr);
+            }
           }
         } catch (err) {
           console.error('[payment-proof processing error]', err);

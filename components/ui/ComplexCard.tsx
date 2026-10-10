@@ -11,6 +11,7 @@ import { cleanAddress } from '@/lib/complex-utils';
 
 export interface ComplexData {
   id: string;
+  baseId?: string;
   name: string;
   address?: string | null;
   zone?: string | null;
@@ -106,8 +107,7 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
 
     setLoadingFavorite(true);
     try {
-      const primaryPitchId = complex.featuredPitch?.id || complex.pitches?.[0]?.id;
-      await toggleFavoriteComplex(complex.id, primaryPitchId);
+      await toggleFavoriteComplex(complex.id);
     } finally {
       setLoadingFavorite(false);
     }

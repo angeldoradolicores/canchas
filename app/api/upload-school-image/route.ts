@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
 import { getAuthenticatedUser } from '@/lib/auth-guard';
+import { uploadToR2, isR2Configured } from '@/lib/storage/r2';
 
 const BUCKET = 'school-images';
 
@@ -46,10 +47,26 @@ export async function POST(req: NextRequest) {
     const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    const contentType = file.type || `image/${ext}`;
+
+    // ── Si Cloudflare R2 está configurado, usar R2 ──
+    if (isR2Configured()) {
+      try {
+        const { url } = await uploadToR2({
+          buffer,
+          key: `schools/${fileName}`,
+          contentType,
+          isPrivate: false,
+        });
+        return NextResponse.json({ success: true, url, storage: 'r2' });
+      } catch (r2Err) {
+        console.error('[R2 upload school error, falling back to Supabase]', r2Err);
+      }
+    }
 
     const supabase = getServiceSupabase();
     const { error } = await supabase.storage.from(BUCKET).upload(fileName, buffer, {
-      contentType: file.type || `image/${ext}`,
+      contentType,
       upsert: true,
     });
 
@@ -59,7 +76,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(fileName);
-    return NextResponse.json({ success: true, url: urlData.publicUrl });
+    return NextResponse.json({ success: true, url: urlData.publicUrl, storage: 'supabase' });
   } catch (err: any) {
     console.error('[upload-school-image catch]', err);
     return NextResponse.json({ error: 'Error procesando la imagen' }, { status: 500 });

@@ -483,7 +483,7 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
     });
   };
 
-  // Subida de archivos Multimedia a Supabase Storage
+  // Subida de archivos Multimedia a Cloudflare R2 / Storage
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -495,18 +495,33 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const isVideo = file.type.startsWith('video/');
-        const ext = file.name.split('.').pop();
-        const path = `pitch-images/${user?.id || 'anon'}/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
 
-        const { error } = await supabase.storage.from('pitch-images').upload(path, file);
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('type', 'pitch');
 
-        if (error) {
-          // Si el bucket no existe en supabase, cae en fallback local temporal
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData?.session?.access_token;
+
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            body: formData,
+          });
+
+          const json = await res.json();
+          if (res.ok && json.url) {
+            newItems.push({ type: isVideo ? 'video' : 'photo', url: json.url });
+          } else {
+            console.error('[Upload error]', json.error);
+            const objectUrl = URL.createObjectURL(file);
+            newItems.push({ type: isVideo ? 'video' : 'photo', url: objectUrl });
+          }
+        } catch (uploadErr) {
+          console.error('[Upload exception]', uploadErr);
           const objectUrl = URL.createObjectURL(file);
           newItems.push({ type: isVideo ? 'video' : 'photo', url: objectUrl });
-        } else {
-          const { data: publicData } = supabase.storage.from('pitch-images').getPublicUrl(path);
-          newItems.push({ type: isVideo ? 'video' : 'photo', url: publicData.publicUrl });
         }
       }
 
@@ -516,7 +531,6 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
     } finally {
       setUploadingMedia(false);
     }
-
   };
   //combo box seleccion hora
   const [isOpen, setIsOpen] = useState(false);

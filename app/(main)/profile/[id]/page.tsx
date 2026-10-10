@@ -168,13 +168,25 @@ export default function PublicProfilePage() {
 
     setUploadingAvatar(true);
     try {
-      const ext = file.name.split('.').pop();
-      const filePath = `avatars/${user.id}.${ext}`;
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', 'avatar');
 
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file, { upsert: true });
-      if (uploadError) throw uploadError;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
 
-      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.url) {
+        throw new Error(json.error || 'Error al subir imagen de perfil');
+      }
+
+      const publicUrl = json.url;
       await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', user.id);
       setProfile((prev: any) => ({ ...prev, avatar_url: publicUrl }));
       await refreshProfile();
@@ -185,13 +197,13 @@ export default function PublicProfilePage() {
         message: 'Tu foto de perfil se actualizó correctamente.',
         confirmText: 'Entendido',
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error subiendo avatar', err);
       setAlertState({
         isOpen: true,
         type: 'error',
         title: 'Error',
-        message: 'No se pudo actualizar la foto de perfil.',
+        message: err.message || 'No se pudo actualizar la foto de perfil.',
         confirmText: 'Aceptar',
       });
     } finally {

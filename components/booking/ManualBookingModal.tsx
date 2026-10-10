@@ -221,13 +221,22 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
 
       // Subir comprobante si aplica
       if (file && data.booking_ids?.length > 0) {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}_manual.${fileExt}`;
-        const filePath = `${selectedPitch.id}/${fileName}`;
-        const { error: uploadError } = await supabase.storage.from('payment-proofs').upload(filePath, file);
-        if (!uploadError) {
-          const { data: { publicUrl } } = supabase.storage.from('payment-proofs').getPublicUrl(filePath);
-          await supabase.from('bookings').update({ payment_proof_url: publicUrl, payment_status: 'submitted' }).in('id', data.booking_ids);
+        try {
+          const uploadData = new FormData();
+          uploadData.append('file', file);
+          uploadData.append('type', 'receipt');
+
+          const uploadRes = await fetch('/api/upload', {
+            method: 'POST',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            body: uploadData,
+          });
+          const uploadJson = await uploadRes.json();
+          if (uploadJson.success && uploadJson.url) {
+            await supabase.from('bookings').update({ payment_proof_url: uploadJson.url, payment_status: 'submitted' }).in('id', data.booking_ids);
+          }
+        } catch (uploadErr) {
+          console.error('[ManualBooking payment proof upload error]', uploadErr);
         }
       }
 

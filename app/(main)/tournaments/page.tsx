@@ -235,15 +235,31 @@ export default function TournamentsPage() {
     for (const file of Array.from(files)) {
       // Compresión automática de imágenes antes de la subida a Storage
       const optimizedFile = await compressImageFile(file, { maxWidth: 1200, quality: 0.8 });
-      const ext = optimizedFile.name.split('.').pop() || 'jpg';
-      const fileName = `tournaments/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { data, error } = await supabase.storage.from('pitch-images').upload(fileName, optimizedFile, { upsert: true, contentType: optimizedFile.type });
-      if (error) {
+      try {
+        const formData = new FormData();
+        formData.append('file', optimizedFile);
+        formData.append('type', 'tournament');
+
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData,
+        });
+
+        const json = await res.json();
+        if (res.ok && json.url) {
+          newUrls.push(json.url);
+        } else {
+          setFormError(json.error || 'Error al subir imagen.');
+          break;
+        }
+      } catch (err) {
+        console.error('[Tournament upload error]', err);
         setFormError('Error al subir imagen.');
         break;
-      } else if (data) {
-        const { data: urlData } = supabase.storage.from('pitch-images').getPublicUrl(fileName);
-        newUrls.push(urlData.publicUrl);
       }
     }
     if (newUrls.length > 0) setForm(f => ({ ...f, media_urls: [...f.media_urls, ...newUrls] }));
