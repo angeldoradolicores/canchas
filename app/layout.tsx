@@ -4,6 +4,7 @@ import type { Metadata, Viewport } from 'next'
 import Script from 'next/script'
 import { ThemeProvider } from '@/lib/theme-context'
 import { JsonLd } from '@/components/seo/JsonLd'
+import { NewRelicBrowserScript } from '@/components/monitoring/NewRelicBrowserScript'
 // import { AppSplashScreen } from '@/components/layout/AppSplashScreen'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
@@ -134,6 +135,8 @@ export default function RootLayout({
   return (
     <html lang="es" className="bg-background" suppressHydrationWarning>
       <head>
+        {/* ── New Relic Browser Monitoring (RUM + Core Web Vitals) ── */}
+        <NewRelicBrowserScript />
         <link rel="icon" href="/favicon.ico" sizes="48x48" />
         <link rel="icon" href="/cancheros.png" type="image/png" sizes="512x512" />
         <link rel="icon" href="/icon-192x192.png" type="image/png" sizes="192x192" />
