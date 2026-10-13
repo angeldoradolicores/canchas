@@ -23,6 +23,18 @@ export function RemainingPaymentModal({
   onSuccess,
 }: RemainingPaymentModalProps) {
   const targetBooking = bookingGroup || booking;
+
+  // ⚠️ TODOS los hooks deben estar ANTES de cualquier return condicional (Rules of Hooks)
+  const [method, setMethod] = useState<PaymentMethod>('cash');
+  const [amount, setAmount] = useState<string>('');
+  const [notes, setNotes] = useState<string>('');
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Retorno temprano DESPUÉS de todos los hooks
   if (!isOpen || !targetBooking) return null;
 
   const bookingsList = targetBooking.bookings || [targetBooking];
@@ -30,17 +42,6 @@ export function RemainingPaymentModal({
 
   const totalPrice = Number(targetBooking.total_price || 0);
   const depositAmount = Number(targetBooking.deposit_amount || 0);
-  const defaultRemaining = Math.max(0, totalPrice - depositAmount);
-
-  const [method, setMethod] = useState<PaymentMethod>('cash');
-  const [amount, setAmount] = useState<string>(String(defaultRemaining));
-  const [notes, setNotes] = useState<string>('');
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -174,7 +175,7 @@ export function RemainingPaymentModal({
               </div>
               <div className="text-right shrink-0">
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
-                  {bookingGroup.status === 'confirmed' ? 'Confirmada' : 'Pendiente'}
+                  {targetBooking.status === 'confirmed' ? 'Confirmada' : 'Pendiente'}
                 </span>
               </div>
             </div>
@@ -195,7 +196,7 @@ export function RemainingPaymentModal({
               <div className="bg-emerald-500/10 rounded-xl p-2 border border-emerald-500/30">
                 <p className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold">Saldo a Cobrar</p>
                 <p className="text-xs sm:text-sm font-black text-emerald-700 dark:text-emerald-300 mt-0.5">
-                  ${defaultRemaining.toLocaleString('es-CO')}
+                  ${Math.max(0, totalPrice - depositAmount).toLocaleString('es-CO')}
                 </p>
               </div>
             </div>
@@ -217,7 +218,7 @@ export function RemainingPaymentModal({
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   required
-                  placeholder="Ej: 40000"
+                  placeholder={String(Math.max(0, totalPrice - depositAmount))}
                   className="w-full pl-8 pr-4 py-2.5 bg-background border border-border focus:border-emerald-500 rounded-xl text-sm font-black text-foreground focus:outline-hidden transition-colors"
                 />
               </div>
