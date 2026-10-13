@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { createClient } from '@/lib/supabase/client';
 import {
   Download, Share2, Loader2, Sparkles, Clock, CalendarDays,
   CheckCircle2, XCircle, Palette, LayoutTemplate,
@@ -328,6 +329,7 @@ function Poster({ innerRef, cfg, hours, dayLabel, dateStr, logoSrc, pitchName }:
 ══════════════════════════════════════════════════════════ */
 export default function CreateStatusPage() {
   const { user, profile, session, loading: authLoading } = useAuth();
+  const supabase = createClient();
 
   const [company, setCompany] = useState<any>(null);
   const [pitches, setPitches] = useState<{ id: string; name: string }[]>([]);
@@ -484,6 +486,33 @@ export default function CreateStatusPage() {
     (async () => { let o = base; if (cfg.logoStyle === 'tint') o = await tintLogo(base, cfg.pal.accent); if (!c) setLogoSrc(o); })();
     return () => { c = true; };
   }, [cfg.logoStyle, cfg.pal.accent, customLogo]);
+
+  /* — Realtime: refrescar horas cuando cambian reservas — */
+  useEffect(() => {
+    if (!company?.id) return;
+    const pitchIds: string[] = pitches.map((p: { id: string; name: string }) => p.id);
+    if (pitchIds.length === 0) return;
+
+    const channel = supabase
+      .channel(`status-bookings-${company.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'bookings',
+          filter: `pitch_id=in.(${pitchIds.join(',')})`,
+        },
+        () => {
+          // Refrescar disponibilidad silenciosamente
+          fetchHours(selPitch, forTomorrow, company.id);
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [company?.id, pitches.length, selPitch, forTomorrow]);
 
   /* — datos derivados — */
   const dims = FMT[cfg.format];
@@ -876,7 +905,7 @@ export default function CreateStatusPage() {
                 className={`relative h-12 rounded-xl border-2 transition-all overflow-hidden flex items-end p-1.5 ${active ? 'border-emerald-400 scale-[1.03] shadow-lg ring-1 ring-emerald-400' : 'border-transparent opacity-80 hover:opacity-100'
                   }`}
                 style={{ background: `linear-gradient(${p.p.angle}deg, ${p.p.bg1}, ${p.p.bg2})` }}>
-                <span className="text-[10px] font-bold text-white drop-shadow-md truncate">{p.label}</span>
+                <span className="text-[10px] font-bold drop-shadow-md truncate" style={{ color: p.p.text }}>{p.label}</span>
                 <span className="absolute top-1 right-1 h-3 w-3 rounded-full ring-1 ring-white/50" style={{ background: p.p.accent }} />
               </button>
             );

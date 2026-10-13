@@ -72,18 +72,24 @@ export function AuthModal({ isOpen = true, onClose, defaultMode = 'login', defau
           }
         }
       } else {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', data.user.id)
-          .maybeSingle();
-
-        const userRole = profile?.role || data.user.user_metadata?.role;
+        // Intentar leer rol directamente del JWT (sin round-trip a DB)
+        const quickRole = data.user.user_metadata?.role as string | undefined;
         onClose();
-        if (userRole === 'owner') {
-          router.push('/dashboard');
-        } else if (userRole === 'superadmin') {
-          router.push('/admin');
+        if (quickRole === 'owner' || quickRole === 'superadmin') {
+          if (quickRole === 'superadmin') router.push('/admin');
+          else router.push('/dashboard');
+        } else if (!quickRole || quickRole === 'player') {
+          // Solo hacer DB query si el JWT no tiene rol de owner/admin
+          if (!quickRole) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', data.user.id)
+              .maybeSingle();
+            const userRole = profile?.role;
+            if (userRole === 'owner') router.push('/dashboard');
+            else if (userRole === 'superadmin') router.push('/admin');
+          }
         }
       }
     } else {

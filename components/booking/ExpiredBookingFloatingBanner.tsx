@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Clock, ArrowRight, X, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { useActiveBooking, EXPIRED_GRACE_KEY, GRACE_PERIOD_SECONDS } from '@/lib/active-booking-context';
 import { useRouter, usePathname } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 
 export interface ExpiredGraceSnapshot {
   pitch: any;
@@ -18,10 +19,77 @@ export function ExpiredBookingFloatingBanner() {
   const { activeBooking, secondsLeft } = useActiveBooking();
   const router = useRouter();
   const pathname = usePathname();
+  const supabase = createClient();
 
   const [snapshot, setSnapshot] = useState<ExpiredGraceSnapshot | null>(null);
   const [remainingGrace, setRemainingGrace] = useState<number>(0);
   const [dismissed, setDismissed] = useState(false);
+
+  /** Verifica contra Supabase si alguno de los slots ya fue reservado por otra persona */
+  const checkSlotAvailability = useCallback(async (snap: ExpiredGraceSnapshot): Promise<boolean> => {
+    try {
+      const pitchId = snap.pitch?.id;
+      if (!pitchId || !snap.selectedDate || !snap.selectedTimes?.length) return false;
+
+      // Construir rango de fechas para el día seleccionado (UTC-5)
+      const dayStart = `${snap.selectedDate}T00:00:00-05:00`;
+      const dayEnd = `${snap.selectedDate}T23:59:59-05:00`;
+
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('start_time, status, expires_at')
+        .eq('pitch_id', pitchId)
+        .gte('start_time', dayStart)
+        .lte('start_time', dayEnd)
+        .in('status', ['confirmed', 'pending']);
+
+      if (error || !data) return false;
+
+      // Convertir los tiempos seleccionados a horas locales para comparar
+      const bookedHours = new Set<number>();
+      for (const b of data) {
+        try {
+          const d = new Date(b.start_time);
+          const localH = (d.getUTCHours() - 5 + 24) % 24;
+          bookedHours.add(localH);
+        } catch { /* ignorar */ }
+      }
+
+      // Verificar si alguno de los selectedTimes ya está confirmado por alguien
+      for (const t of snap.selectedTimes) {
+        const str = String(t).trim();
+        // Puede ser "7pm", "07:00", o "7"
+        let hourNum = -1;
+        const ampm = str.match(/^(\d+)(am|pm)$/i);
+        if (ampm) {
+          hourNum = parseInt(ampm[1], 10);
+          if (ampm[2].toLowerCase() === 'pm' && hourNum !== 12) hourNum += 12;
+          if (ampm[2].toLowerCase() === 'am' && hourNum === 12) hourNum = 0;
+        } else if (str.includes(':')) {
+          hourNum = parseInt(str.split(':')[0], 10);
+        } else {
+          hourNum = parseInt(str, 10);
+        }
+
+        if (hourNum >= 0 && bookedHours.has(hourNum)) {
+          return true; // Al menos un slot ya está tomado
+        }
+      }
+
+      return false;
+    } catch {
+      return false;
+    }
+  }, [supabase]);
+
+  const dismissIfTaken = useCallback(async (snap: ExpiredGraceSnapshot) => {
+    const taken = await checkSlotAvailability(snap);
+    if (taken) {
+      localStorage.removeItem(EXPIRED_GRACE_KEY);
+      setSnapshot(null);
+      setRemainingGrace(0);
+    }
+  }, [checkSlotAvailability]);
 
   // Cargar snapshot desde localStorage
   const checkSnapshot = useCallback(() => {
@@ -41,6 +109,8 @@ export function ExpiredBookingFloatingBanner() {
       if (left > 0) {
         setSnapshot(parsed);
         setRemainingGrace(left);
+        // Verificar disponibilidad real con Supabase
+        dismissIfTaken(parsed);
       } else {
         // Excedió los 4 minutos posteriores a los 5 minutos: eliminar y no mostrar
         localStorage.removeItem(EXPIRED_GRACE_KEY);
@@ -51,7 +121,7 @@ export function ExpiredBookingFloatingBanner() {
       setSnapshot(null);
       setRemainingGrace(0);
     }
-  }, []);
+  }, [dismissIfTaken]);
 
   useEffect(() => {
     checkSnapshot();
@@ -66,6 +136,30 @@ export function ExpiredBookingFloatingBanner() {
       window.removeEventListener('storage', handleUpdate);
     };
   }, [checkSnapshot]);
+
+  // Suscripción realtime: cuando cambia un booking del pitch, verificar disponibilidad
+  useEffect(() => {
+    if (!snapshot?.pitch?.id) return;
+
+    const channel = supabase
+      .channel(`grace-banner-${snapshot.pitch.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'bookings',
+          filter: `pitch_id=eq.${snapshot.pitch.id}`,
+        },
+        () => {
+          // Alguien modificó una reserva de esta cancha: verificar si ya está tomada
+          dismissIfTaken(snapshot);
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [snapshot?.pitch?.id, dismissIfTaken, supabase]);
 
   // Contador regresivo de los 4 minutos de gracia
   useEffect(() => {

@@ -508,7 +508,12 @@ export default function WhatsAppConnectionPage() {
                 <div className="p-5 bg-white rounded-2xl shadow-lg border-2 border-emerald-500/20 inline-block">
                   {qrCode ? (
                     <div className="bg-white p-2 rounded-xl">
-                      <img src={qrCode} alt="Código QR WhatsApp" className="w-64 h-64 sm:w-72 sm:h-72 object-contain mx-auto" />
+                      <img
+                        src={qrCode}
+                        alt="Código QR WhatsApp"
+                        className="w-64 h-64 sm:w-72 sm:h-72 object-contain mx-auto"
+                        style={{ filter: 'invert(1) sepia(1) saturate(10) hue-rotate(90deg) invert(1)' }}
+                      />
                     </div>
                   ) : (
                     <div className="w-56 h-56 flex flex-col items-center justify-center bg-zinc-50 text-zinc-400 gap-3 p-4">
