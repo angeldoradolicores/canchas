@@ -25,7 +25,7 @@ export const PAYMENT_METHODS: { id: PaymentMethod; label: string; icon: string; 
   { id: 'cash', label: 'Efectivo', icon: '💵', shortLabel: 'Efectivo' },
   { id: 'transfer', label: 'Transferencia / Nequi', icon: '📲', shortLabel: 'Transferencia' },
   { id: 'card', label: 'Tarjeta / Datáfono', icon: '💳', shortLabel: 'Tarjeta' },
-  { id: 'other', label: 'Otro Medio', icon: '📝', shortLabel: 'Otro' },
+  { id: 'other', label: 'Otro Medio', icon: '', shortLabel: 'Otro' },
 ];
 
 /**

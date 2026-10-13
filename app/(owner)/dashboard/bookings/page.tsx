@@ -168,7 +168,7 @@ export default function BookingsPage() {
           .select(`*, pitches!inner (name, company_id, price_per_hour, custom_pricing, booking_percentage)`)
           .eq('pitches.company_id', company.id)
           .neq('status', 'draft')
-          .order('start_time', { ascending: false });
+          .order('created_at', { ascending: false });
 
         if (bookingsData) setBookings(bookingsData);
       }
@@ -239,17 +239,17 @@ export default function BookingsPage() {
                 name: cName,
                 time: payload.new?.start_time
                   ? new Date(payload.new.start_time).toLocaleTimeString('es-CO', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      timeZone: 'America/Bogota',
-                    })
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    timeZone: 'America/Bogota',
+                  })
                   : '',
                 date: payload.new?.start_time
                   ? new Date(payload.new.start_time).toLocaleDateString('es-CO', {
-                      day: 'numeric',
-                      month: 'short',
-                      timeZone: 'America/Bogota',
-                    })
+                    day: 'numeric',
+                    month: 'short',
+                    timeZone: 'America/Bogota',
+                  })
                   : '',
               });
             }
@@ -519,8 +519,8 @@ export default function BookingsPage() {
     const targetIds = Array.isArray(bookingIds)
       ? bookingIds
       : Array.isArray(updatedData?.bookingIds)
-      ? updatedData.bookingIds
-      : [];
+        ? updatedData.bookingIds
+        : [];
 
     if (targetIds.length > 0) {
       setBookings(prev =>
@@ -732,6 +732,9 @@ export default function BookingsPage() {
         if (new Date(b.start_time) < new Date(existingGroup.start_time)) {
           existingGroup.start_time = b.start_time;
         }
+        if (b.created_at && (!existingGroup.created_at || new Date(b.created_at).getTime() > new Date(existingGroup.created_at).getTime())) {
+          existingGroup.created_at = b.created_at;
+        }
       } else {
         const key = `${b.pitch_id}-${b.customer_name || 'Anon'}-${bDateStr}-${b.status}-${bProof || b.id}`;
         groupsList.push({
@@ -758,12 +761,17 @@ export default function BookingsPage() {
       }
     });
 
-    // Ordenar reservas dentro de cada grupo por start_time
+    // Ordenar reservas dentro de cada grupo por start_time para mostrar las horas consecutivas en orden
     groupsList.forEach(g => {
       g.bookings.sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
     });
 
-    return groupsList.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
+    // Ordenar los grupos según vayan llegando (created_at más reciente siempre arriba primero)
+    return groupsList.sort((a, b) => {
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : new Date(a.start_time).getTime();
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : new Date(b.start_time).getTime();
+      return timeB - timeA;
+    });
   }, [filteredBookings]);
 
   const formatSelectedDateText = (dateStr: string) => {
@@ -1047,9 +1055,8 @@ export default function BookingsPage() {
                 return (
                   <div
                     key={group.key}
-                    className={`bg-card rounded-2xl border border-border border-t-4 ${statusBorderColor} sm:border-t-border shadow-sm p-3.5 sm:p-4 flex flex-col gap-3 transition-all ${
-                      isNewlyArrived ? 'ring-2 ring-amber-500 shadow-lg shadow-amber-500/10' : ''
-                    }`}
+                    className={`bg-card rounded-2xl border border-border border-t-4 ${statusBorderColor} sm:border-t-border shadow-sm p-3.5 sm:p-4 flex flex-col gap-3 transition-all ${isNewlyArrived ? 'ring-2 ring-amber-500 shadow-lg shadow-amber-500/10' : ''
+                      }`}
                   >
                     {/* Alerta de Nueva Reserva Entrante en Vivo */}
                     {isNewlyArrived && (
@@ -1233,7 +1240,7 @@ export default function BookingsPage() {
                       </div>
 
                       {/* Acciones para Reservas Pendientes (Tanto 1 hora como múltiples horas) */}
-                      {group.status === 'pending' && (
+                      {/* {group.status === 'pending' && (
                         <div className="flex flex-wrap sm:flex-nowrap gap-2 pt-2 border-t border-border/40 justify-end items-center">
                           {originalProof && (
                             <button
@@ -1283,7 +1290,7 @@ export default function BookingsPage() {
                             Rechazar
                           </button>
                         </div>
-                      )}
+                      )} */}
 
                       {/* Cancelar confirmadas grupales */}
                       {group.status === 'confirmed' && group.bookings.length > 1 && (

@@ -5,8 +5,11 @@ import { useAuth } from '@/lib/auth-context';
 
 interface FavoritesContextType {
   favoriteComplexIds: Set<string>;
-  isFavoriteComplex: (complexId: string) => boolean;
-  toggleFavoriteComplex: (complexId: string) => Promise<boolean>;
+  isFavoriteComplex: (complexId: string, pitchIds?: string[]) => boolean;
+  toggleFavoriteComplex: (
+    complexId: string,
+    extra?: { pitchIds?: string[]; currentlyFavorite?: boolean; baseId?: string } | string[] | string
+  ) => Promise<boolean>;
   // Backward compat: pitch-level API (used by PitchCard outside explore)
   favoriteIds: Set<string>;
   isFavorite: (pitchId: string) => boolean;
@@ -100,7 +103,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
 
   // ── Complex-level favorites ──
   const isFavoriteComplex = useCallback(
-    (complexId: string) => {
+    (complexId: string, pitchIds?: string[]) => {
       if (!complexId) return false;
       if (favoriteComplexIds.has(complexId)) return true;
       if (favoriteIds.has(complexId)) return true;
@@ -108,34 +111,71 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
         const base = complexId.split('_')[0];
         if (favoriteComplexIds.has(base) || favoriteIds.has(base)) return true;
       }
+      if (Array.isArray(pitchIds) && pitchIds.some(pid => favoriteIds.has(pid))) {
+        return true;
+      }
       return false;
     },
     [favoriteComplexIds, favoriteIds]
   );
 
   const toggleFavoriteComplex = useCallback(
-    async (complexId: string, pitchId?: string): Promise<boolean> => {
-      const willBeFav = !isFavoriteComplex(complexId);
-      const baseId = complexId.includes('_') ? complexId.split('_')[0] : complexId;
+    async (
+      complexId: string,
+      extra?: { pitchIds?: string[]; currentlyFavorite?: boolean; baseId?: string } | string[] | string
+    ): Promise<boolean> => {
+      let pitchIds: string[] = [];
+      let baseId: string = complexId.includes('_') ? complexId.split('_')[0] : complexId;
+      let explicitFav: boolean | undefined = undefined;
 
-      setFavoriteComplexIds(prev => {
-        const next = new Set(prev);
-        if (willBeFav) {
+      if (Array.isArray(extra)) {
+        pitchIds = extra;
+      } else if (typeof extra === 'string') {
+        pitchIds = [extra];
+      } else if (extra && typeof extra === 'object') {
+        if (Array.isArray(extra.pitchIds)) pitchIds = extra.pitchIds;
+        if (extra.baseId) baseId = extra.baseId;
+        if (typeof extra.currentlyFavorite === 'boolean') explicitFav = extra.currentlyFavorite;
+      }
+
+      // Si explicitFav fue proporcionado, usarlo directamente; de lo contrario verificar si ya es favorito
+      const isCurFav = explicitFav !== undefined
+        ? explicitFav
+        : (isFavoriteComplex(complexId) || (baseId ? isFavoriteComplex(baseId) : false) || pitchIds.some(pid => favoriteIds.has(pid)));
+
+      const willBeFav = !isCurFav;
+
+      const allIds = Array.from(new Set([complexId, baseId, ...pitchIds].filter(Boolean)));
+
+      if (willBeFav) {
+        // AGREGAR A FAVORITOS
+        setFavoriteComplexIds(prev => {
+          const next = new Set(prev);
           next.add(complexId);
           if (baseId) next.add(baseId);
-        } else {
-          next.delete(complexId);
-          if (baseId) next.delete(baseId);
+          saveStored(LOCAL_COMPLEX_KEY, Array.from(next));
+          return next;
+        });
+        if (pitchIds.length > 0) {
+          setFavoriteIds(prev => {
+            const next = new Set(prev);
+            pitchIds.forEach(pid => next.add(pid));
+            saveStored(LOCAL_PITCH_KEY, Array.from(next));
+            return next;
+          });
         }
-        saveStored(LOCAL_COMPLEX_KEY, Array.from(next));
-        return next;
-      });
+      } else {
+        // QUITAR DE FAVORITOS: limpiar de AMBOS conjuntos para asegurar que desparezca de favoritos
+        setFavoriteComplexIds(prev => {
+          const next = new Set(prev);
+          allIds.forEach(id => next.delete(id));
+          saveStored(LOCAL_COMPLEX_KEY, Array.from(next));
+          return next;
+        });
 
-      if (pitchId) {
         setFavoriteIds(prev => {
           const next = new Set(prev);
-          if (willBeFav) next.add(pitchId);
-          else next.delete(pitchId);
+          allIds.forEach(id => next.delete(id));
           saveStored(LOCAL_PITCH_KEY, Array.from(next));
           return next;
         });
@@ -143,7 +183,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('favorites-updated', {
-          detail: { complexId, baseId, isFavorite: willBeFav }
+          detail: { complexId, baseId, pitchIds, isFavorite: willBeFav }
         }));
       }
 
@@ -153,12 +193,15 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const targetToSend = pitchId || baseId || complexId;
+        const targetToSend = pitchIds[0] || baseId || complexId;
         const res = await fetch('/api/favorites', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             pitch_id: targetToSend,
+            complex_id: complexId,
+            base_id: baseId,
+            pitch_ids: pitchIds,
             user_id: user.id,
             action: willBeFav ? 'add' : 'remove',
           }),
@@ -173,7 +216,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
 
       return willBeFav;
     },
-    [isFavoriteComplex, user?.id]
+    [isFavoriteComplex, favoriteIds, user?.id]
   );
 
   // ── Pitch-level favorites (backward compat) ──

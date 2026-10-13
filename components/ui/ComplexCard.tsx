@@ -107,7 +107,12 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
 
     setLoadingFavorite(true);
     try {
-      await toggleFavoriteComplex(complex.id);
+      const pitchIds = complex.pitches?.map(p => p.id) || [];
+      await toggleFavoriteComplex(complex.id, {
+        pitchIds,
+        currentlyFavorite: isFavorite,
+        baseId: complex.baseId,
+      });
     } finally {
       setLoadingFavorite(false);
     }
@@ -154,7 +159,7 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
             ? 'bg-emerald-500 text-white'
             : 'bg-black/40 hover:bg-black/60 text-white border border-white/20'
             }`}
-          title="Guardar complejo en favoritos"
+          title={isFavorite ? "Quitar de favoritos" : "Guardar en favoritos"}
         >
           <Heart size={18} className={isFavorite ? 'fill-current text-white' : 'text-white'} />
         </button>

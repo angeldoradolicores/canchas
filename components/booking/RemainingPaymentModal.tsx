@@ -289,7 +289,7 @@ export function RemainingPaymentModal({
   return (
     <div className="fixed inset-0 z-[220] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-card w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl border border-border overflow-hidden max-h-[92vh] flex flex-col animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
-        
+
         {/* Cabecera compacta y moderna */}
         <div className="bg-gradient-to-r from-emerald-600 via-emerald-700 to-green-700 p-4 text-white shrink-0">
           <div className="flex items-center justify-between">
@@ -299,7 +299,7 @@ export function RemainingPaymentModal({
               </div>
               <div>
                 <h2 className="text-base font-black leading-tight">Cobrar Saldo Restante</h2>
-                <p className="text-[11px] text-white/80 truncate max-w-[220px]">
+                <p className="text-[11px] text-white/80 truncate max-w-[220px] capitalize">
                   {pitchName} • {clientName}
                 </p>
               </div>
@@ -333,11 +333,14 @@ export function RemainingPaymentModal({
               </p>
             </div>
             <div className="text-center">
-              <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Saldo</p>
-              <p className="text-xs sm:text-sm font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+              <p className="text-[10px] font-black text-amber-500 dark:text-amber-400 uppercase tracking-wider">
+                Saldo
+              </p>
+              <p className="text-xs sm:text-sm font-black text-amber-500 dark:text-amber-400 mt-0.5">
                 ${remainingToCollect.toLocaleString('es-CO')}
               </p>
             </div>
+
           </div>
 
           {/* ── 2. Métodos de Pago Simplificados (Permite Escoger Más de 1) ── */}
@@ -367,11 +370,10 @@ export function RemainingPaymentModal({
                     key={m.id}
                     type="button"
                     onClick={() => toggleMethod(m.id)}
-                    className={`flex items-center gap-2 p-2.5 rounded-xl border text-left transition-all ${
-                      isSelected
-                        ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold shadow-2xs'
-                        : 'border-border bg-card hover:bg-secondary/40 text-foreground font-medium'
-                    }`}
+                    className={`flex items-center gap-2 p-2.5 rounded-xl border text-left transition-all ${isSelected
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold shadow-2xs'
+                      : 'border-border bg-card hover:bg-secondary/40 text-foreground font-medium'
+                      }`}
                   >
                     <span className="text-lg leading-none">{m.icon}</span>
                     <span className="text-xs truncate">{m.label}</span>
@@ -390,16 +392,25 @@ export function RemainingPaymentModal({
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-sm">$</span>
                 <input
-                  type="number"
-                  min="0"
-                  step="1000"
-                  value={methodAmounts[selectedMethods[0]] || ''}
-                  onChange={(e) => handleAmountChange(selectedMethods[0], e.target.value)}
+                  type="text"
+                  inputMode="numeric" /* Muestra el teclado numérico en celulares */
+                  value={
+                    methodAmounts[selectedMethods[0]]
+                      ? Number(methodAmounts[selectedMethods[0]]).toLocaleString('es-CO')
+                      : ''
+                  }
+                  onChange={(e) => {
+                    // 1. Elimina todo lo que no sea un número
+                    const rawValue = e.target.value.replace(/\D/g, '');
+                    // 2. Guarda el valor como un número puro en tu estado
+                    handleAmountChange(selectedMethods[0], rawValue);
+                  }}
                   required
-                  placeholder={String(remainingToCollect)}
+                  placeholder={Number(remainingToCollect).toLocaleString('es-CO')}
                   className="w-full pl-8 pr-3 py-2 text-sm font-bold bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-foreground"
                 />
               </div>
+
             </div>
           ) : (
             <div className="space-y-2 bg-secondary/30 p-3 rounded-2xl border border-border">
@@ -534,7 +545,7 @@ export function RemainingPaymentModal({
                 </>
               ) : (
                 <>
-                  <CheckCircle2 size={16} />
+                  {/* <CheckCircle2 size={16} /> */}
                   <span>Confirmar Cobro de ${totalEntered.toLocaleString('es-CO')}</span>
                 </>
               )}

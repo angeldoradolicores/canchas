@@ -129,6 +129,51 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 1.3 Manejo robusto de eliminación de favoritos
+    if (action === 'remove') {
+      const idsToDelete = new Set<string>();
+      if (pitch_id) idsToDelete.add(pitch_id);
+      if (body.complex_id) idsToDelete.add(body.complex_id);
+      if (body.base_id) idsToDelete.add(body.base_id);
+      if (Array.isArray(body.pitch_ids)) {
+        body.pitch_ids.forEach((pid: any) => {
+          if (typeof pid === 'string') idsToDelete.add(pid);
+        });
+      }
+      if (resolvedPitchId) idsToDelete.add(resolvedPitchId);
+
+      // Si alguno es un company_id UUID, obtener todas sus canchas asociadas
+      const companyCandidates = [pitch_id, body.complex_id, body.base_id]
+        .filter(Boolean)
+        .map((id: string) => id.includes('_') ? id.split('_')[0] : id)
+        .filter((id: string) => UUID_REGEX.test(id));
+
+      for (const compId of companyCandidates) {
+        const { data: compPitches } = await supabase
+          .from('pitches')
+          .select('id')
+          .eq('company_id', compId);
+        if (compPitches && compPitches.length > 0) {
+          compPitches.forEach((p: any) => idsToDelete.add(p.id));
+        }
+      }
+
+      const finalIds = Array.from(idsToDelete).filter(id => UUID_REGEX.test(id));
+      if (finalIds.length > 0) {
+        const { error: delError } = await supabase
+          .from('pitch_favorites')
+          .delete()
+          .eq('user_id', effectiveUserId)
+          .in('pitch_id', finalIds);
+
+        if (delError) {
+          console.warn('[Favorites multi-delete warning]', delError.message);
+        }
+      }
+
+      return NextResponse.json({ success: true, isFavorite: false });
+    }
+
     if (!resolvedPitchId) {
       // Identificador no encontrado en DB, almacenar localmente
       return NextResponse.json({ success: true, isFavorite: action === 'add', localOnly: true });
@@ -149,7 +194,7 @@ export async function POST(req: NextRequest) {
 
     const isCurrentlyFav = !!existing;
 
-    if (action === 'remove' || (action === 'toggle' && isCurrentlyFav) || (!action && isCurrentlyFav)) {
+    if ((action === 'toggle' && isCurrentlyFav) || (!action && isCurrentlyFav)) {
       const { error: delError } = await supabase
         .from('pitch_favorites')
         .delete()
