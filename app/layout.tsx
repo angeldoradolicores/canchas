@@ -47,35 +47,30 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
-        url: '/favicon.ico',
-        sizes: '48x48',
-        type: 'image/x-icon',
-      },
-      {
-        url: '/cancheros.png',
+        url: '/cancheros.png?v=3',
         sizes: '512x512',
         type: 'image/png',
       },
       {
-        url: '/icon-192x192.png',
+        url: '/icon-192x192.png?v=3',
         sizes: '192x192',
         type: 'image/png',
       },
       {
-        url: '/icon-96x96.png',
-        sizes: '96x96',
-        type: 'image/png',
-      },
-      {
-        url: '/icon-48x48.png',
+        url: '/icon-48x48.png?v=3',
         sizes: '48x48',
         type: 'image/png',
       },
+      {
+        url: '/favicon.ico?v=3',
+        sizes: '48x48',
+        type: 'image/x-icon',
+      },
     ],
-    shortcut: '/cancheros.png',
+    shortcut: '/cancheros.png?v=3',
     apple: [
       {
-        url: '/apple-icon.png',
+        url: '/apple-icon.png?v=3',
         sizes: '180x180',
         type: 'image/png',
       },
@@ -137,11 +132,12 @@ export default function RootLayout({
       <head>
         {/* ── New Relic Browser Monitoring (RUM + Core Web Vitals) ── */}
         <NewRelicBrowserScript />
-        <link rel="icon" href="/favicon.ico" sizes="48x48" />
-        <link rel="icon" href="/cancheros.png" type="image/png" sizes="512x512" />
-        <link rel="icon" href="/icon-192x192.png" type="image/png" sizes="192x192" />
-        <link rel="icon" href="/icon-48x48.png" type="image/png" sizes="48x48" />
-        <link rel="apple-touch-icon" href="/apple-icon.png" sizes="180x180" />
+        <link rel="icon" href="/cancheros.png?v=3" type="image/png" sizes="512x512" />
+        <link rel="shortcut icon" href="/cancheros.png?v=3" type="image/png" />
+        <link rel="icon" href="/icon-192x192.png?v=3" type="image/png" sizes="192x192" />
+        <link rel="icon" href="/icon-48x48.png?v=3" type="image/png" sizes="48x48" />
+        <link rel="icon" href="/favicon.ico?v=3" sizes="48x48" />
+        <link rel="apple-touch-icon" href="/apple-icon.png?v=3" sizes="180x180" />
         <link rel="image_src" href="https://cancheros.site/og-image.jpg" />
         <meta name="thumbnail" content="https://cancheros.site/og-image.jpg" />
         <meta property="og:image" content="https://cancheros.site/og-image.jpg" />
