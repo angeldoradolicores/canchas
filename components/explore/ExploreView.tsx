@@ -1555,7 +1555,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1.5 flex-wrap mb-1">
-                          <span className="text-[9px] sm:text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 truncate max-w-[140px]">
+                          <span className="text-[9px] sm:text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 max-w-[140px]">
                             {complexName}
                           </span>
                           <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center gap-1 shrink-0">

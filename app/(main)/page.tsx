@@ -84,7 +84,7 @@ export default function ExplorePage() {
             isOpen: true,
             type: 'error',
             title: 'Horario no disponible',
-            message: 'El tiempo de gracia ha terminado o la cancha fue reservada por otro jugador mientras tanto. Por favor selecciona otro horario.',
+            message: 'El tiempo extra ha terminado o la cancha fue reservada por otro jugador mientras tanto. Por favor selecciona otro horario.',
           });
         }
       } catch (e: any) {
@@ -114,7 +114,7 @@ export default function ExplorePage() {
         localStorage.removeItem('canchas_resume_grace_booking');
         try {
           handleResumeGrace(JSON.parse(savedGrace));
-        } catch {}
+        } catch { }
       }
     }
 

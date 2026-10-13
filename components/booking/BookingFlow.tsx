@@ -1691,7 +1691,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
           <div className="space-y-0 mt-3 text-sm">
             <div className="summary-line flex justify-between items-center">
               <span className="text-muted-foreground font-medium">Complejo</span>
-              <strong className="uppercase font-black text-foreground text-right max-w-[55%] truncate text-xs">{complexDisplayName}</strong>
+              <strong className="uppercase font-black text-foreground text-right max-w-[55%]  text-xs">{complexDisplayName}</strong>
             </div>
 
             <div className="summary-line flex justify-between items-center">

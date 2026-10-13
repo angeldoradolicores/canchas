@@ -511,7 +511,7 @@ export default function CreateStatusPage() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [company?.id, pitches.length, selPitch, forTomorrow]);
 
   /* — datos derivados — */
@@ -1319,7 +1319,7 @@ export default function CreateStatusPage() {
                 { id: 'colors' as const, label: 'Colores & Fondo', icon: '', desc: 'Fondo y tema' },
                 { id: 'texts' as const, label: 'Textos & Datos', icon: '', desc: 'WhatsApp y CTA' },
                 { id: 'design' as const, label: 'Logo & Formato', icon: '', desc: `${FMT[cfg.format].label}` },
-              ].map((s, idx) => {
+              ].map((s) => {
                 const isActive = desktopTab === s.id;
                 return (
                   <button
@@ -1332,11 +1332,11 @@ export default function CreateStatusPage() {
                   >
                     <div className="flex items-center justify-between text-sm">
                       <span>{s.icon}</span>
-                      <span className="text-[10px] font-mono text-muted-foreground">0{idx + 1}</span>
+                      {/* Se eliminó el span con el número 01, 02... */}
                     </div>
-                    <div className="mt-1">
-                      <p className="text-xs truncate font-bold leading-tight">{s.label}</p>
-                      <p className="text-[10px] opacity-70 truncate mt-0.5">{s.desc}</p>
+                    <div className="mt-1 w-full overflow-hidden">
+                      <p className="text-xs font-bold leading-tight break-words">{s.label}</p>
+                      <p className="text-[10px] opacity-70 mt-0.5 break-words">{s.desc}</p>
                     </div>
                   </button>
                 );
