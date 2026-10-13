@@ -117,29 +117,33 @@ export async function GET(request: Request) {
       // 1. Asegurar o actualizar perfil como 'owner'
       const { data: existingProfile } = await adminSupabase
         .from('profiles')
-        .select('id, full_name, role')
+        .select('id, full_name, role, phone')
         .eq('id', user.id)
         .maybeSingle();
 
       const finalName = existingProfile?.full_name || companyName || user.email?.split('@')[0] || 'Dueño';
+
+      const phoneFromMeta = user.user_metadata?.phone || null;
 
       if (!existingProfile) {
         await adminSupabase.from('profiles').insert({
           id: user.id,
           full_name: finalName,
           role: 'owner',
+          phone: phoneFromMeta,
         });
-      } else if (existingProfile.role !== 'owner') {
+      } else {
         await adminSupabase.from('profiles').update({
           role: 'owner',
           ...(finalName ? { full_name: finalName } : {}),
+          ...(phoneFromMeta && !existingProfile.phone ? { phone: phoneFromMeta } : {}),
         }).eq('id', user.id);
       }
 
       // 2. Asegurar empresa / complejo deportivo en 'companies'
       const { data: existingComp } = await adminSupabase
         .from('companies')
-        .select('id')
+        .select('id, owner_phone')
         .eq('owner_id', user.id)
         .limit(1);
 
@@ -149,8 +153,13 @@ export async function GET(request: Request) {
           name: companyName.trim() || 'Mi Complejo Deportivo',
           address: 'Pasto, Nariño',
           zone: 'Norte',
+          owner_phone: phoneFromMeta,
           whatsapp_status: 'disconnected',
         });
+      } else if (phoneFromMeta && !existingComp[0].owner_phone) {
+        await adminSupabase.from('companies').update({
+          owner_phone: phoneFromMeta,
+        }).eq('id', existingComp[0].id);
       }
 
       // 3. Sincronizar metadata en auth.users si es necesario

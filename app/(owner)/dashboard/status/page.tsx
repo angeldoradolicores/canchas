@@ -516,16 +516,35 @@ export default function CreateStatusPage() {
     return () => window.removeEventListener('resize', updateScale);
   }, [dims.w, dims.h, loading]);
 
-  /* — Ancho preview desktop — */
+  /* — Escalado armónico del preview desktop — */
+  const [deskScale, setDeskScale] = useState(0.32);
+  const [desktopTab, setDesktopTab] = useState<'pitches' | 'hours' | 'colors' | 'texts' | 'design'>('pitches');
+
   useEffect(() => {
     const el = desktopPvRef.current;
     if (!el) return;
-    const upd = () => setDeskW(Math.max(260, el.clientWidth));
+    const upd = () => {
+      const w = el.clientWidth;
+      if (w <= 0) return;
+      // Ancho disponible con padding seguro
+      const availW = Math.max(240, w - 48);
+      // Alto disponible: según ventana visible para que quepa 100% sin scroll forzado ni recortes
+      const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+      const availH = Math.max(380, vh - 240);
+      const sX = availW / dims.w;
+      const sY = availH / dims.h;
+      setDeskScale(Math.min(sX, sY));
+      setDeskW(w);
+    };
     upd();
     const ro = new ResizeObserver(upd);
     ro.observe(el);
-    return () => ro.disconnect();
-  }, [loading]);
+    window.addEventListener('resize', upd);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', upd);
+    };
+  }, [dims.w, dims.h, loading]);
 
   /* ══ Cargar horas automáticamente al cambiar cancha o día ══ */
   const fetchHours = useCallback(async (pitchId: string, tomorrow: boolean, companyId: string) => {
@@ -717,30 +736,30 @@ export default function CreateStatusPage() {
     <div className="space-y-4">
       {/* Selector Hoy / Mañana */}
       <div className="space-y-2">
-        <label className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
-          <CalendarDays size={14} className="text-emerald-400" /> Fecha de disponibilidad
+        <label className="text-xs font-bold text-foreground dark:text-zinc-300 flex items-center gap-1.5">
+          <CalendarDays size={14} className="text-emerald-500" /> Fecha de disponibilidad
         </label>
         <div className="grid grid-cols-2 gap-2">
           {([false, true] as const).map(v => (
             <button key={String(v)} onClick={() => handleToggleDay(v)}
               className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${forTomorrow === v
                 ? 'bg-emerald-600 text-white border-emerald-500 shadow-md'
-                : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700'
+                : 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
                 }`}>
               {v ? 'Mañana' : 'Hoy'}
             </button>
           ))}
         </div>
-        <p className="text-[11px] text-zinc-400">{dateStr}</p>
+        <p className="text-[11px] text-muted-foreground">{dateStr}</p>
       </div>
 
       {/* Selector de Canchas */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
-            <span></span> Seleccionar Cancha
+          <label className="text-xs font-bold text-foreground dark:text-zinc-300 flex items-center gap-1.5">
+            <span>⚽</span> Seleccionar Cancha
           </label>
-          <span className="text-[11px] text-zinc-400">{pitches.length} {pitches.length === 1 ? 'cancha' : 'canchas'}</span>
+          <span className="text-[11px] text-muted-foreground">{pitches.length} {pitches.length === 1 ? 'cancha' : 'canchas'}</span>
         </div>
 
         {pitches.length > 0 ? (
@@ -748,9 +767,9 @@ export default function CreateStatusPage() {
             <button onClick={() => handleSelectPitch('all')}
               className={`w-full py-2.5 px-3 rounded-xl text-xs font-bold border text-left transition-all flex items-center gap-2 ${selPitch === 'all'
                 ? 'bg-emerald-600 text-white border-emerald-500 shadow-md'
-                : 'bg-zinc-800/90 text-zinc-200 border-zinc-700 hover:bg-zinc-700'
+                : 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800/90 dark:text-zinc-200 dark:border-zinc-700'
                 }`}>
-              <span className="text-base"></span>
+              <span className="text-base">🏟️</span>
               <span className="flex-1 truncate">Todas las canchas (General)</span>
               {selPitch === 'all' && <CheckCircle2 size={15} className="ml-auto text-white" />}
             </button>
@@ -759,17 +778,17 @@ export default function CreateStatusPage() {
               <button key={p.id} onClick={() => handleSelectPitch(p.id)}
                 className={`w-full py-2.5 px-3 rounded-xl text-xs font-bold border text-left transition-all flex items-center gap-2 ${selPitch === p.id
                   ? 'bg-emerald-600 text-white border-emerald-500 shadow-md'
-                  : 'bg-zinc-800/90 text-zinc-200 border-zinc-700 hover:bg-zinc-700'
+                  : 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800/90 dark:text-zinc-200 dark:border-zinc-700'
                   }`}>
-                <span className="text-base"></span>
+                <span className="text-base">⚽</span>
                 <span className="flex-1 truncate">{p.name}</span>
                 {selPitch === p.id && <CheckCircle2 size={15} className="ml-auto text-white" />}
               </button>
             ))}
           </div>
         ) : (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center space-y-2">
-            <p className="text-xs text-zinc-400">No se encontraron canchas en el complejo.</p>
+          <div className="bg-secondary/40 border border-border rounded-xl p-3 text-center space-y-2">
+            <p className="text-xs text-muted-foreground">No se encontraron canchas en el complejo.</p>
             <Link href="/dashboard/pitches/new"
               className="inline-block px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">
               + Crear Cancha
@@ -790,11 +809,11 @@ export default function CreateStatusPage() {
   const HoursSection = (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <label className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
-          <Clock size={14} className="text-emerald-400" /> Franjas ({hours.length}/{MAX_H})
+        <label className="text-xs font-bold text-foreground dark:text-zinc-300 flex items-center gap-1.5">
+          <Clock size={14} className="text-emerald-500" /> Franjas ({hours.length}/{MAX_H})
         </label>
         {hours.length > 0 && (
-          <button onClick={() => setHours([])} className="text-xs font-bold text-red-400 hover:text-red-300 flex items-center gap-1">
+          <button onClick={() => setHours([])} className="text-xs font-bold text-rose-500 hover:text-rose-600 flex items-center gap-1">
             <XCircle size={12} /> Limpiar
           </button>
         )}
@@ -810,34 +829,34 @@ export default function CreateStatusPage() {
               className={`relative py-2 px-1 rounded-xl text-[11px] font-bold border transition-all ${isSelected
                 ? 'bg-emerald-600 text-white border-emerald-500 shadow-md ring-1 ring-emerald-400'
                 : isBooked
-                  ? 'bg-red-950/30 text-red-400/60 border-red-900/40 opacity-50 cursor-not-allowed line-through'
+                  ? 'bg-rose-500/10 text-rose-500/60 border-rose-500/20 opacity-50 cursor-not-allowed line-through'
                   : isFree
-                    ? 'bg-emerald-950/40 text-emerald-300 border-emerald-700 hover:bg-emerald-900/60'
-                    : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700'
+                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
+                    : 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
                 }`}>
               {isSelected && <CheckCircle2 size={10} className="inline mr-1 text-white" />}
               {h}
-              {isBooked && <span className="absolute top-0.5 right-1 text-[8px] font-black text-red-400">✗</span>}
+              {isBooked && <span className="absolute top-0.5 right-1 text-[8px] font-black text-rose-500">✗</span>}
               {isFree && !isSelected && !isBooked && (
-                <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-emerald-500" />
               )}
             </button>
           );
         })}
       </div>
 
-      <div className="flex items-center gap-3 text-[10px] text-zinc-400">
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-400" />Libre</span>
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500" />Ocupada</span>
+      <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />Libre</span>
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" />Ocupada</span>
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-600" />En póster</span>
       </div>
 
       {/* Hora personalizada */}
-      <div className="flex gap-2 pt-2 border-t border-zinc-800">
+      <div className="flex gap-2 pt-2 border-t border-border">
         <input type="time" value={customTime} onChange={e => setCustomTime(e.target.value)}
-          className="flex-1 px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-xs text-white outline-none focus:border-emerald-500" />
+          className="flex-1 px-3 py-2 bg-background border border-border rounded-xl text-xs text-foreground outline-none focus:border-emerald-500" />
         <button onClick={addCustomTime} disabled={!customTime || hours.length >= MAX_H}
-          className="py-2 px-3 rounded-xl text-xs font-bold bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 border border-zinc-700 flex items-center gap-1">
+          className="py-2 px-3 rounded-xl text-xs font-bold bg-secondary hover:bg-secondary/80 disabled:opacity-50 text-foreground border border-border flex items-center gap-1">
           <Plus size={12} /> Añadir
         </button>
       </div>
@@ -847,8 +866,8 @@ export default function CreateStatusPage() {
   const ColorsSection = (
     <div className="space-y-4">
       <div className="space-y-2">
-        <label className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
-          <Palette size={14} className="text-emerald-400" /> Paletas Destacadas
+        <label className="text-xs font-bold text-foreground dark:text-zinc-300 flex items-center gap-1.5">
+          <Palette size={14} className="text-emerald-500" /> Paletas Destacadas
         </label>
         <div className="grid grid-cols-3 gap-2">
           {PRESETS.map(p => {
@@ -865,17 +884,17 @@ export default function CreateStatusPage() {
           })}
         </div>
         <button onClick={surprise}
-          className="w-full py-2.5 rounded-xl text-xs font-bold border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 flex items-center justify-center gap-1.5 shadow-sm">
-          <Shuffle size={13} className="text-violet-400" /> Mezclar Colores (Sorpréndeme)
+          className="w-full py-2.5 rounded-xl text-xs font-bold border border-border bg-secondary hover:bg-secondary/80 text-foreground flex items-center justify-center gap-1.5 shadow-xs transition-colors">
+          <Shuffle size={13} className="text-violet-500" /> Mezclar Colores (Sorpréndeme)
         </button>
       </div>
 
       <div className="space-y-2">
-        <label className="text-xs font-bold text-zinc-300">Color Acento</label>
+        <label className="text-xs font-bold text-foreground dark:text-zinc-300">Color Acento</label>
         <div className="flex flex-wrap gap-2">
           {QUICK_ACCENT.map(c => (
             <button key={c} onClick={() => setPal({ accent: c })}
-              className={`h-8 w-8 rounded-full border-2 transition-all ${cfg.pal.accent.toLowerCase() === c.toLowerCase() ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-80 hover:opacity-100'
+              className={`h-8 w-8 rounded-full border-2 transition-all ${cfg.pal.accent.toLowerCase() === c.toLowerCase() ? 'border-foreground dark:border-white scale-110 shadow-lg' : 'border-transparent opacity-80 hover:opacity-100'
                 }`}
               style={{ background: c }} />
           ))}
@@ -883,7 +902,7 @@ export default function CreateStatusPage() {
       </div>
 
       <div className="space-y-2">
-        <label className="text-xs font-bold text-zinc-300">Textura de Fondo</label>
+        <label className="text-xs font-bold text-foreground dark:text-zinc-300">Textura de Fondo</label>
         <div className="grid grid-cols-2 gap-2">
           {[
             { v: 'pitch' as const, label: 'Cancha' },
@@ -894,7 +913,7 @@ export default function CreateStatusPage() {
             <button key={o.v} onClick={() => set('pattern', o.v)}
               className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${cfg.pattern === o.v
                 ? 'bg-emerald-600 text-white border-emerald-500'
-                : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700'
+                : 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
                 }`}>
               {o.label}
             </button>
@@ -915,22 +934,22 @@ export default function CreateStatusPage() {
         { label: 'Teléfono / WhatsApp', key: 'phone' as const, ph: '3001234567', max: 20 },
       ].map(f => (
         <div key={f.key}>
-          <label className="text-xs font-bold text-zinc-300 block mb-1">{f.label}</label>
-          <input className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-xs text-white outline-none focus:border-emerald-500"
+          <label className="text-xs font-bold text-foreground dark:text-zinc-300 block mb-1">{f.label}</label>
+          <input className="w-full px-3 py-2 bg-background border border-border rounded-xl text-xs text-foreground outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
             value={cfg[f.key]} maxLength={f.max}
             onChange={e => set(f.key, e.target.value)} placeholder={f.ph} />
         </div>
       ))}
       <div>
-        <label className="text-xs font-bold text-zinc-300 block mb-1">Mensaje destacado</label>
+        <label className="text-xs font-bold text-foreground dark:text-zinc-300 block mb-1">Mensaje destacado</label>
         <textarea value={cfg.message} maxLength={80} rows={2}
           onChange={e => set('message', e.target.value)}
           placeholder="¡Reserva ya y asegura tu partido!"
-          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-xs text-white outline-none focus:border-emerald-500 resize-none" />
-        <p className="text-[10px] text-zinc-500 text-right mt-0.5">{cfg.message.length}/80</p>
+          className="w-full px-3 py-2 bg-background border border-border rounded-xl text-xs text-foreground outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 resize-none" />
+        <p className="text-[10px] text-muted-foreground text-right mt-0.5">{cfg.message.length}/80</p>
       </div>
       <div>
-        <label className="text-xs font-bold text-zinc-300 block mb-1">Alineación de Título</label>
+        <label className="text-xs font-bold text-foreground dark:text-zinc-300 block mb-1">Alineación de Título</label>
         <div className="grid grid-cols-3 gap-2">
           {[
             { v: 'left' as const, label: <><AlignLeft size={13} /> Izq</> },
@@ -938,7 +957,9 @@ export default function CreateStatusPage() {
             { v: 'right' as const, label: <><AlignRight size={13} /> Der</> },
           ].map(o => (
             <button key={o.v} onClick={() => set('align', o.v)}
-              className={`py-2 rounded-xl text-xs font-bold border flex items-center justify-center gap-1 ${cfg.align === o.v ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800 text-zinc-300 border-zinc-700'
+              className={`py-2 rounded-xl text-xs font-bold border flex items-center justify-center gap-1 ${cfg.align === o.v
+                ? 'bg-emerald-600 text-white border-emerald-500'
+                : 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
                 }`}>
               {o.label}
             </button>
@@ -951,7 +972,7 @@ export default function CreateStatusPage() {
   const DesignSection = (
     <div className="space-y-4">
       <div className="space-y-2">
-        <label className="text-xs font-bold text-zinc-300">Estilo del Logo</label>
+        <label className="text-xs font-bold text-foreground dark:text-zinc-300">Estilo del Logo</label>
         <div className="grid grid-cols-3 gap-2">
           {[
             { v: 'badge' as const, label: 'Medallón' },
@@ -959,14 +980,16 @@ export default function CreateStatusPage() {
             { v: 'original' as const, label: 'Original' },
           ].map(o => (
             <button key={o.v} onClick={() => set('logoStyle', o.v)}
-              className={`py-2 rounded-xl text-xs font-bold border transition-all ${cfg.logoStyle === o.v ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800 text-zinc-300 border-zinc-700'
+              className={`py-2 rounded-xl text-xs font-bold border transition-all ${cfg.logoStyle === o.v
+                ? 'bg-emerald-600 text-white border-emerald-500'
+                : 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
                 }`}>
               {o.label}
             </button>
           ))}
         </div>
 
-        <label className="cursor-pointer w-full py-2.5 rounded-xl text-xs font-bold border border-dashed border-emerald-500/50 bg-emerald-950/20 text-emerald-400 flex items-center justify-center gap-1.5 mt-2">
+        <label className="cursor-pointer w-full py-2.5 rounded-xl text-xs font-bold border border-dashed border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1.5 mt-2 hover:bg-emerald-500/20 transition-colors">
           <Upload size={13} /> Subir mi propio logo
           <input type="file" accept="image/*" className="hidden"
             onChange={e => {
@@ -977,24 +1000,18 @@ export default function CreateStatusPage() {
               r.readAsDataURL(f);
             }} />
         </label>
-        {/* {customLogo && (
-          <button onClick={() => setCustomLogo(null)}
-            className="w-full py-1.5 text-xs font-bold text-zinc-400 hover:text-white border border-zinc-800 rounded-xl">
-            Usar logo predeterminado
-          </button>
-        )} */}
       </div>
 
       <div className="space-y-3">
         <label className="block space-y-1">
-          <div className="flex justify-between text-xs font-semibold text-zinc-300">
+          <div className="flex justify-between text-xs font-semibold text-foreground dark:text-zinc-300">
             <span>Zoom del logo</span><span>{cfg.logoSize}px</span>
           </div>
           <input type="range" min={80} max={260} value={cfg.logoSize} onChange={e => set('logoSize', Number(e.target.value))}
             className="w-full accent-emerald-500" />
         </label>
         <label className="block space-y-1">
-          <div className="flex justify-between text-xs font-semibold text-zinc-300">
+          <div className="flex justify-between text-xs font-semibold text-foreground dark:text-zinc-300">
             <span>Tamaño del nombre</span><span>{cfg.nameSize}px</span>
           </div>
           <input type="range" min={36} max={96} value={cfg.nameSize} onChange={e => set('nameSize', Number(e.target.value))}
@@ -1003,7 +1020,7 @@ export default function CreateStatusPage() {
       </div>
 
       <div className="space-y-2">
-        <label className="text-xs font-bold text-zinc-300">Estilo de Tarjetas de Horas</label>
+        <label className="text-xs font-bold text-foreground dark:text-zinc-300">Estilo de Tarjetas de Horas</label>
         <div className="grid grid-cols-3 gap-2">
           {[
             { v: 'round' as const, label: 'Redondas' },
@@ -1011,7 +1028,9 @@ export default function CreateStatusPage() {
             { v: 'solid' as const, label: 'Rellenas' },
           ].map(o => (
             <button key={o.v} onClick={() => set('cardStyle', o.v)}
-              className={`py-2 rounded-xl text-xs font-bold border ${cfg.cardStyle === o.v ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800 text-zinc-300 border-zinc-700'
+              className={`py-2 rounded-xl text-xs font-bold border transition-all ${cfg.cardStyle === o.v
+                ? 'bg-emerald-600 text-white border-emerald-500'
+                : 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
                 }`}>
               {o.label}
             </button>
@@ -1023,13 +1042,13 @@ export default function CreateStatusPage() {
 
   const FormatSection = (
     <div className="space-y-3">
-      <label className="text-xs font-bold text-zinc-300">Formato del Póster</label>
+      <label className="text-xs font-bold text-foreground dark:text-zinc-300">Formato del Póster</label>
       <div className="space-y-2">
         {(Object.keys(FMT) as FormatId[]).map(fid => (
           <button key={fid} onClick={() => set('format', fid)}
             className={`w-full py-3 px-4 rounded-xl text-xs font-bold border text-left flex items-center justify-between transition-all ${cfg.format === fid
               ? 'bg-emerald-600 text-white border-emerald-500 shadow-md'
-              : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700'
+              : 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
               }`}>
             <span>{FMT[fid].label}</span>
             <span className="text-[11px] opacity-75">{FMT[fid].w}×{FMT[fid].h}px</span>
@@ -1237,106 +1256,259 @@ export default function CreateStatusPage() {
       {/* ════════════════════════════════════════════════════════════
           VISTA DESKTOP (PC) PROFESIONAL EN 2 COLUMNAS
       ════════════════════════════════════════════════════════════ */}
-      <div className="hidden lg:grid lg:grid-cols-[1fr_390px] lg:gap-8 max-w-6xl mx-auto p-6 items-start">
-        {/* Columna Izquierda: Editor Organizado */}
-        <div className="space-y-6">
-          <div className="flex items-center justify-between pb-4 border-b border-border">
-            <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-600">Marketing & Estados WhatsApp</p>
-              <h1 className="text-2xl font-black text-foreground mt-0.5 flex items-center gap-2">
-                <span>🎨</span> Creador de Publicaciones & Estados
-              </h1>
+      {/* ════════════════════════════════════════════════════════════
+          VISTA DESKTOP (PC) PROFESIONAL EN 2 COLUMNAS (ESTUDIO)
+      ════════════════════════════════════════════════════════════ */}
+      <div className="hidden lg:block max-w-7xl mx-auto p-6 xl:p-8">
+        <div className="grid lg:grid-cols-[1fr_420px] xl:grid-cols-[1.1fr_460px] gap-8 items-start">
+          {/* Columna Izquierda: Editor Organizado por Pestañas */}
+          <div className="space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b border-border">
+              <div>
+                <p className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-600">Marketing & Redes Sociales</p>
+                <h1 className="text-2xl font-black text-foreground mt-0.5 flex items-center gap-2">
+                  <span>🎨</span> Creador de Publicaciones & Estados
+                </h1>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Genera pósters y estados listos para publicar en WhatsApp e Instagram con alta resolución.
+                </p>
+              </div>
+              <button
+                onClick={() => { setCfg(DEFAULTS); setHours([]); setNotice(null); }}
+                className="text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-secondary/60 transition-all"
+              >
+                <RotateCcw size={13} /> Restablecer
+              </button>
             </div>
-            <button onClick={() => { setCfg(DEFAULTS); setHours([]); setNotice(null); }}
-              className="text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border">
-              <RotateCcw size={13} /> Restablecer
-            </button>
-          </div>
 
-          {NoticeBanner}
+            {NoticeBanner}
 
-          {/* Bloque 1: Canchas y Fecha */}
-          <div className="bg-card border border-border rounded-2xl p-5 space-y-4 shadow-sm">
-            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <span className="text-base"></span> Canchas & Fecha de Disponibilidad
-            </h2>
-            {PitchesSection}
-          </div>
-
-          {/* Bloque 2: Franjas Horarias */}
-          <div className="bg-card border border-border rounded-2xl p-5 space-y-4 shadow-sm">
-            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Clock size={16} className="text-emerald-600" /> Horas a Publicar
-            </h2>
-            {HoursSection}
-          </div>
-
-          {/* Bloque 3: Colores y Apariencia */}
-          <div className="bg-card border border-border rounded-2xl p-5 space-y-4 shadow-sm">
-            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Palette size={16} className="text-emerald-600" /> Paleta de Colores & Textura
-            </h2>
-            {ColorsSection}
-          </div>
-
-          {/* Bloque 4: Textos y Datos de Contacto */}
-          <div className="bg-card border border-border rounded-2xl p-5 space-y-4 shadow-sm">
-            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Type size={16} className="text-emerald-600" /> Textos & Mensajes
-            </h2>
-            {TextsSection}
-          </div>
-
-          {/* Bloque 5: Logo y Diseño */}
-          <div className="bg-card border border-border rounded-2xl p-5 space-y-4 shadow-sm">
-            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <LayoutTemplate size={16} className="text-emerald-600" /> Logo & Formato
-            </h2>
-            {DesignSection}
-            <div className="pt-3 border-t border-border">
-              {FormatSection}
+            {/* Navegación de Pestañas tipo Estudio */}
+            <div className="grid grid-cols-5 gap-2 p-1.5 bg-muted/60 dark:bg-zinc-900/60 rounded-2xl border border-border">
+              {[
+                { id: 'pitches' as const, label: 'Canchas & Fecha', icon: '⚽', desc: 'Cancha y día' },
+                { id: 'hours' as const, label: 'Horarios', icon: '⏰', desc: `${sortedH.length} horas` },
+                { id: 'colors' as const, label: 'Colores & Fondo', icon: '🎨', desc: 'Fondo y tema' },
+                { id: 'texts' as const, label: 'Textos & Datos', icon: '✍️', desc: 'WhatsApp y CTA' },
+                { id: 'design' as const, label: 'Logo & Formato', icon: '📐', desc: `${FMT[cfg.format].label}` },
+              ].map((s, idx) => {
+                const isActive = desktopTab === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setDesktopTab(s.id)}
+                    className={`py-2.5 px-3 rounded-xl text-left transition-all flex flex-col justify-between ${
+                      isActive
+                        ? 'bg-card text-foreground shadow-md border border-border font-bold'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-card/50 font-medium'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-sm">
+                      <span>{s.icon}</span>
+                      <span className="text-[10px] font-mono text-muted-foreground">0{idx + 1}</span>
+                    </div>
+                    <div className="mt-1">
+                      <p className="text-xs truncate font-bold leading-tight">{s.label}</p>
+                      <p className="text-[10px] opacity-70 truncate mt-0.5">{s.desc}</p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-          </div>
-        </div>
 
-        {/* Columna Derecha: Sticky Preview */}
-        <div className="sticky top-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <span>👁️</span> Vista Previa en Vivo
-            </p>
-            <span className="text-[11px] font-mono text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md font-bold">
-              {dims.w}×{dims.h}px
-            </span>
-          </div>
+            {/* Contenedor del contenido de la pestaña activa */}
+            <div className="bg-card border border-border rounded-3xl p-6 shadow-sm min-h-[460px] flex flex-col justify-between">
+              <div>
+                {desktopTab === 'pitches' && (
+                  <div className="space-y-4 animate-in fade-in-50 duration-200">
+                    <div className="border-b border-border pb-3">
+                      <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                        <span>⚽</span> Canchas & Fecha del Póster
+                      </h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Selecciona la cancha específica o muestra todas las canchas para el día elegido.
+                      </p>
+                    </div>
+                    {PitchesSection}
+                  </div>
+                )}
 
-          <div ref={desktopPvRef} className="w-full">
-            <div className="rounded-2xl overflow-hidden shadow-2xl border border-border w-full bg-zinc-950 flex items-center justify-center p-2"
-              style={{ aspectRatio: dims.ar }}>
-              <div style={{
-                width: dims.w,
-                height: dims.h,
-                transform: `scale(${deskW / dims.w})`,
-                transformOrigin: 'top left',
-                pointerEvents: 'none',
-              }}>
-                <Poster cfg={cfg} hours={sortedH} dayLabel={dayLabel} dateStr={dateStr} logoSrc={logoSrc} pitchName={selPitchName} />
+                {desktopTab === 'hours' && (
+                  <div className="space-y-4 animate-in fade-in-50 duration-200">
+                    <div className="border-b border-border pb-3">
+                      <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                        <Clock size={18} className="text-emerald-600" /> Horas Disponibles a Promocionar
+                      </h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Agrega o activa las franjas horarias libres que desees mostrar a tus clientes.
+                      </p>
+                    </div>
+                    {HoursSection}
+                  </div>
+                )}
+
+                {desktopTab === 'colors' && (
+                  <div className="space-y-4 animate-in fade-in-50 duration-200">
+                    <div className="border-b border-border pb-3">
+                      <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                        <Palette size={18} className="text-emerald-600" /> Paleta de Colores & Textura
+                      </h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Elige el tema de color y textura de fondo que mejor contraste con tu marca.
+                      </p>
+                    </div>
+                    {ColorsSection}
+                  </div>
+                )}
+
+                {desktopTab === 'texts' && (
+                  <div className="space-y-4 animate-in fade-in-50 duration-200">
+                    <div className="border-b border-border pb-3">
+                      <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                        <Type size={18} className="text-emerald-600" /> Títulos, Mensaje & Contacto
+                      </h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Define el llamado a la acción y número de WhatsApp para que te escriban de inmediato.
+                      </p>
+                    </div>
+                    {TextsSection}
+                  </div>
+                )}
+
+                {desktopTab === 'design' && (
+                  <div className="space-y-6 animate-in fade-in-50 duration-200">
+                    <div className="border-b border-border pb-3">
+                      <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                        <LayoutTemplate size={18} className="text-emerald-600" /> Logo & Formato de Exportación
+                      </h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Ajusta el logo de tu complejo y el formato optimizado para historias o feeds.
+                      </p>
+                    </div>
+                    {DesignSection}
+                    <div className="pt-4 border-t border-border">
+                      {FormatSection}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Paginación de pestañas para avanzar cómodamente */}
+              <div className="flex items-center justify-between pt-6 mt-6 border-t border-border">
+                <button
+                  type="button"
+                  disabled={desktopTab === 'pitches'}
+                  onClick={() => {
+                    const tabs = ['pitches', 'hours', 'colors', 'texts', 'design'] as const;
+                    const idx = tabs.indexOf(desktopTab);
+                    if (idx > 0) setDesktopTab(tabs[idx - 1]);
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-bold border border-border text-foreground hover:bg-secondary/60 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  ← Anterior
+                </button>
+
+                <button
+                  type="button"
+                  disabled={desktopTab === 'design'}
+                  onClick={() => {
+                    const tabs = ['pitches', 'hours', 'colors', 'texts', 'design'] as const;
+                    const idx = tabs.indexOf(desktopTab);
+                    if (idx < tabs.length - 1) setDesktopTab(tabs[idx + 1]);
+                  }}
+                  className="px-5 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition-all"
+                >
+                  Siguiente Paso →
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Botones de acción principales */}
-          <div className="flex gap-2.5 pt-2">
-            <button onClick={handleDownload} disabled={!!busy}
-              className="flex-1 py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white transition-all shadow-md">
-              {busy === 'dl' ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-              Descargar
-            </button>
-            <button onClick={handleShare} disabled={!!busy}
-              className="flex-1 py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20ba59] disabled:opacity-60 text-white transition-all shadow-md font-black">
-              {busy === 'share' ? <Loader2 size={16} className="animate-spin" /> : <Share2 size={16} />}
-              WhatsApp
-            </button>
+          {/* Columna Derecha: Sticky Preview Stage */}
+          <div className="sticky top-6 space-y-4">
+            <div className="bg-card border border-border rounded-3xl p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <h3 className="text-xs font-black tracking-wider uppercase text-foreground">Vista Previa en Vivo</h3>
+                </div>
+                <div className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 rounded-full text-[11px] font-bold">
+                  <span>{FMT[cfg.format].label}</span>
+                  <span>•</span>
+                  <span className="font-mono">{dims.w}×{dims.h}px</span>
+                </div>
+              </div>
+
+              {/* Stage Box: neutral studio backdrop that centers scaled poster perfectly */}
+              <div
+                ref={desktopPvRef}
+                className="w-full bg-zinc-950/95 dark:bg-black rounded-2xl border border-border/60 p-4 flex items-center justify-center min-h-[500px] xl:min-h-[560px] overflow-hidden relative shadow-inner"
+                style={{
+                  backgroundImage: 'radial-gradient(circle at 50% 30%, rgba(16, 185, 129, 0.08) 0%, transparent 75%)',
+                }}
+              >
+                <div
+                  className="relative transition-all duration-300 ease-out flex-shrink-0"
+                  style={{
+                    width: Math.round(dims.w * deskScale),
+                    height: Math.round(dims.h * deskScale),
+                    borderRadius: Math.round(24 * deskScale),
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.12)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: dims.w,
+                      height: dims.h,
+                      transform: `scale(${deskScale})`,
+                      transformOrigin: 'top left',
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    <Poster cfg={cfg} hours={sortedH} dayLabel={dayLabel} dateStr={dateStr} logoSrc={logoSrc} pitchName={selPitchName} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Format Switcher Buttons */}
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                {(Object.keys(FMT) as FormatId[]).map(fid => (
+                  <button
+                    key={fid}
+                    onClick={() => set('format', fid)}
+                    className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition-all flex flex-col items-center justify-center text-center ${
+                      cfg.format === fid
+                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                        : 'bg-secondary/60 hover:bg-secondary text-foreground border-border'
+                    }`}
+                  >
+                    <span>{FMT[fid].label}</span>
+                    <span className="text-[9px] opacity-75 font-mono">{FMT[fid].w}×{FMT[fid].h}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Botones de acción principales */}
+              <div className="flex gap-2.5 pt-2 border-t border-border">
+                <button
+                  onClick={handleDownload}
+                  disabled={!!busy}
+                  className="flex-1 py-3.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white transition-all shadow-md active:scale-95"
+                >
+                  {busy === 'dl' ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                  Descargar HD
+                </button>
+                <button
+                  onClick={handleShare}
+                  disabled={!!busy}
+                  className="flex-1 py-3.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20ba59] disabled:opacity-60 text-white transition-all shadow-md active:scale-95"
+                >
+                  {busy === 'share' ? <Loader2 size={16} className="animate-spin" /> : <Share2 size={16} />}
+                  WhatsApp
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

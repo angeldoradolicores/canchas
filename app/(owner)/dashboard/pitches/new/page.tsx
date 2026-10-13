@@ -216,7 +216,7 @@ function NewPitchForm() {
 
       if (comps && comps.length > 0) {
         setOwnerCompanyName(comps[0].name);
-        const compIds = comps.map(c => c.id);
+        const compIds = comps.map((c: any) => c.id);
         const { data: pList } = await supabase
           .from('pitches')
           .select('*, companies(*)')
@@ -231,6 +231,18 @@ function NewPitchForm() {
             setLinkedPitchIds([validPitches[0].id, validPitches[1].id]);
           }
         }
+      }
+
+      // Pre-cargar número de contacto del perfil/complejo registrado para que aparezca por defecto
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('phone')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const defaultPhone = prof?.phone || comps?.[0]?.owner_phone || user.user_metadata?.phone || '';
+      if (defaultPhone) {
+        setContactPhone(prev => prev || defaultPhone);
       }
     };
     fetchExisting();
@@ -391,11 +403,13 @@ function NewPitchForm() {
   };
 
   // Load duplicate pitch data from URL params
+  const duplicateLoadedRef = useRef(false);
   useEffect(() => {
     const duplicateId = searchParams.get('duplicate');
-    if (!duplicateId || !user?.id) return;
+    if (!duplicateId || !user?.id || duplicateLoadedRef.current) return;
 
     const loadDuplicate = async () => {
+      duplicateLoadedRef.current = true;
       const { data, error } = await supabase
         .from('pitches')
         .select('*, companies(*)')
@@ -423,6 +437,10 @@ function NewPitchForm() {
       setAddress(dupAddress);
       setCity(data.city || (data as any)?.companies?.city || 'Pasto');
       setDepartment(data.department || (data as any)?.companies?.department || 'Nariño');
+
+      // Preservar el barrio al duplicar la cancha
+      const dupNeighborhood = data.custom_pricing?.neighborhood || data.custom_pricing?.barrio || data.zone || (data as any)?.companies?.zone || '';
+      setNeighborhood(dupNeighborhood);
 
       const dupLat = (typeof data.lat === 'number' && !isNaN(data.lat)) ? data.lat : (Number(data.custom_pricing?.lat) || Number((data as any)?.companies?.lat) || 1.2136);
       const dupLng = (typeof data.lng === 'number' && !isNaN(data.lng)) ? data.lng : (Number(data.custom_pricing?.lng) || Number((data as any)?.companies?.lng) || -77.2811);
@@ -730,6 +748,9 @@ function NewPitchForm() {
     if (!address?.trim() || lat === null || lat === undefined || lng === null || lng === undefined) {
       return triggerError('Es obligatorio indicar la dirección y ubicación exacta de la cancha en el mapa.');
     }
+    if (!neighborhood?.trim()) {
+      return triggerError('El barrio o sector de la cancha es obligatorio.');
+    }
 
     setLoading(true);
     setErrorMsg('');
@@ -968,7 +989,7 @@ function NewPitchForm() {
       {activeSection === 'basic' && (
         <div className="space-y-6 animate-in fade-in">
           {/* Tarjeta de Cancha Combinada / Modular */}
-          {(existingPitches.length >= 1 || isCombined) && (
+          {(existingPitches.length >= 2 || isCombined) && (
             <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-2xl p-5 space-y-4 shadow-xs">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -1789,7 +1810,7 @@ function NewPitchForm() {
                   className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium"
                 />
               </div>
-              <div className="space-y-1.5 sm:col-span-1">
+              {/* <div className="space-y-1.5 sm:col-span-1">
                 <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1">
                   <MapPin size={12} className="text-emerald-500" />
                   <span>Dirección (Calle / Nomenclatura) *</span>
@@ -1801,12 +1822,12 @@ function NewPitchForm() {
                   onChange={e => setAddress(e.target.value)}
                   className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium shadow-xs"
                 />
-              </div>
+              </div> */}
 
               <div className="space-y-1.5 sm:col-span-1">
                 <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1">
                   <MapPin size={12} className="text-emerald-500" />
-                  <span>Barrio / Sector</span>
+                  <span>Barrio / Sector *</span>
                 </label>
                 <input
                   type="text"

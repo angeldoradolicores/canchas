@@ -129,7 +129,15 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
       } else {
         if (data.user) {
           try {
-            await supabase.from('profiles').update({ phone: cleanPhone, full_name: fullName }).eq('id', data.user.id);
+            await supabase.from('profiles').upsert({
+              id: data.user.id,
+              phone: cleanPhone,
+              full_name: fullName,
+              role: forcedRole
+            }, { onConflict: 'id' });
+            if (forcedRole === 'owner') {
+              await supabase.from('companies').update({ owner_phone: cleanPhone }).eq('owner_id', data.user.id);
+            }
           } catch { }
         }
         if (data.session) {
