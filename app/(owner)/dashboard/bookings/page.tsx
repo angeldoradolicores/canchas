@@ -673,10 +673,10 @@ export default function BookingsPage() {
       }
 
       const remainingInfo = getBookingRemainingPayment(b);
-      const bRemainingPaid = Number(remainingInfo.remaining_amount_paid || 0);
-      const bRemainingMethod = remainingInfo.remaining_payment_method || null;
-      const bRemainingProof = remainingInfo.remaining_payment_proof_url || null;
-      const bRemainingPaidAt = remainingInfo.remaining_paid_at || null;
+      const bRemainingPaid = Number(remainingInfo?.amount || 0);
+      const bRemainingMethod = remainingInfo?.method || null;
+      const bRemainingProof = remainingInfo?.proofUrl || null;
+      const bRemainingPaidAt = remainingInfo?.at || null;
 
       if (existingGroup) {
         existingGroup.bookings.push(b);
@@ -1313,7 +1313,7 @@ export default function BookingsPage() {
                     allPitches={pitches}
                     onCancel={updateStatus}
                     onCancelRequest={handleCancelRequest}
-                    onViewProof={(url: string) => setProofUrl(url)}
+                    onViewProof={(url: string) => setProofModalData({ url, title: 'Comprobante de Pago' })}
                   />
                 ) : (
                   <PitchGridMatrixCard
@@ -1323,7 +1323,7 @@ export default function BookingsPage() {
                     supabase={supabase}
                     allPitches={pitches}
                     onDayClick={(dateStr: string) => { setSelectedDate(dateStr); setCalView('day'); }}
-                    onViewProof={(url: string) => setProofUrl(url)}
+                    onViewProof={(url: string) => setProofModalData({ url, title: 'Comprobante de Pago' })}
                   />
                 )
               ))}
@@ -1589,10 +1589,10 @@ export default function BookingsPage() {
       )}
 
       {/* Modal de Comprobantes (Anticipo / Saldo Restante) */}
-      {(proofModalData || proofUrl) && (
+      {proofModalData && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-3 sm:p-4"
-          onClick={() => { setProofModalData(null); setProofUrl(''); }}
+          onClick={() => setProofModalData(null)}
         >
           <div
             className="relative max-w-2xl w-full flex flex-col items-center bg-zinc-900 border border-zinc-800 rounded-3xl p-4 shadow-2xl"
@@ -1601,11 +1601,11 @@ export default function BookingsPage() {
             <div className="w-full flex items-center justify-between pb-3 border-b border-zinc-800 mb-3">
               <span className="text-sm font-bold text-white flex items-center gap-2 truncate pr-2">
                 <FileText size={16} className="text-primary shrink-0" />
-                <span className="truncate">{proofModalData?.title || 'Comprobante de Pago'}</span>
+                <span className="truncate">{proofModalData.title || 'Comprobante de Pago'}</span>
               </span>
               <div className="flex items-center gap-2 shrink-0">
                 <a
-                  href={proofModalData?.url || proofUrl}
+                  href={proofModalData.url}
                   download="comprobante"
                   target="_blank"
                   rel="noreferrer"
@@ -1615,7 +1615,7 @@ export default function BookingsPage() {
                   <Download size={18} />
                 </a>
                 <button
-                  onClick={() => { setProofModalData(null); setProofUrl(''); }}
+                  onClick={() => setProofModalData(null)}
                   className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
                   title="Cerrar"
                 >
@@ -1625,8 +1625,8 @@ export default function BookingsPage() {
             </div>
             <div className="w-full flex items-center justify-center max-h-[75vh] overflow-auto rounded-2xl bg-black/50 p-2">
               <img
-                src={proofModalData?.url || proofUrl}
-                alt={proofModalData?.title || 'Comprobante'}
+                src={proofModalData.url}
+                alt={proofModalData.title || 'Comprobante'}
                 className="max-w-full max-h-[70vh] object-contain rounded-xl shadow-lg"
               />
             </div>
