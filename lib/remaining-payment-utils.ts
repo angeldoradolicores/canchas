@@ -106,11 +106,14 @@ export function getBookingRemainingPayment(booking: any): RemainingPaymentData |
 }
 
 /**
- * Obtiene el enlace del comprobante inicial de anticipo (descartando el sufijo de saldo si existe)
+ * Obtiene el enlace del comprobante inicial de anticipo (descartando el sufijo de saldo si existe).
+ * Acepta tanto un objeto booking/group como una URL directa en string.
  */
-export function getBookingOriginalProof(booking: any): string | null {
-  if (!booking || !booking.payment_proof_url) return null;
-  const raw = String(booking.payment_proof_url).trim();
+export function getBookingOriginalProof(target: any): string | null {
+  if (!target) return null;
+  const rawUrl = typeof target === 'string' ? target : target.payment_proof_url;
+  if (!rawUrl || typeof rawUrl !== 'string') return null;
+  const raw = rawUrl.trim();
   if (raw.includes('###remaining:')) {
     const original = raw.split('###remaining:')[0].trim();
     return original.length > 0 ? original : null;

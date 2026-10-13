@@ -513,28 +513,33 @@ export default function BookingsPage() {
     setBatchCancelConfirm(null);
   };
 
-  // Manejar actualización exitosa del pago restante en local físico
-  const handleRemainingPaymentSuccess = (updatedData: {
-    bookingIds: string[];
-    remaining_amount_paid: number;
-    remaining_payment_method: string;
-    remaining_payment_proof_url: string | null;
-    remaining_paid_at: string;
-    payment_proof_url?: string;
-  }) => {
-    setBookings(prev =>
-      prev.map(b => {
-        if (!updatedData.bookingIds.includes(b.id)) return b;
-        return {
-          ...b,
-          remaining_amount_paid: updatedData.remaining_amount_paid,
-          remaining_payment_method: updatedData.remaining_payment_method,
-          remaining_payment_proof_url: updatedData.remaining_payment_proof_url,
-          remaining_paid_at: updatedData.remaining_paid_at,
-          payment_proof_url: updatedData.payment_proof_url || b.payment_proof_url,
-        };
-      })
-    );
+  // Manejar actualización exitosa del pago restante en local físico sin caídas
+  const handleRemainingPaymentSuccess = (updatedData: any, bookingIds?: string[]) => {
+    setSelectedBookingForRemainingPayment(null);
+    const targetIds = Array.isArray(bookingIds)
+      ? bookingIds
+      : Array.isArray(updatedData?.bookingIds)
+      ? updatedData.bookingIds
+      : [];
+
+    if (targetIds.length > 0) {
+      setBookings(prev =>
+        prev.map(b => {
+          if (!targetIds.includes(b.id)) return b;
+          return {
+            ...b,
+            remaining_payment_status: 'completed',
+            remaining_amount_paid: updatedData?.amount || b.remaining_amount_paid,
+            remaining_payment_method: updatedData?.method || b.remaining_payment_method,
+            remaining_payment_proof_url: updatedData?.proofUrl || updatedData?.proof_url || b.remaining_payment_proof_url,
+            remaining_paid_at: updatedData?.at || new Date().toISOString(),
+          };
+        })
+      );
+    }
+
+    // Recargar datos en segundo plano para sincronizar al 100% con Supabase
+    fetchBookingsRef.current(true);
   };
 
   // Genera el rango de fechas continuas "YYYY-MM-DD" sin errores de zona horaria
@@ -570,12 +575,30 @@ export default function BookingsPage() {
     const rangeDates = getDaysRange(selectedDate, calView);
 
     return bookings.filter(b => {
-      // 1. Filtro por estado / origen
+      // 1. Filtro por estado / categoría
       let matchStatus = true;
       if (filterStatus === 'manual') {
         matchStatus = b.source === 'owner_panel';
-      } else if (filterStatus !== 'all') {
-        matchStatus = b.status === filterStatus;
+      } else if (filterStatus === 'pending') {
+        matchStatus = b.status === 'pending';
+      } else if (filterStatus === 'pending_payment') {
+        // Reservas confirmadas con saldo pendiente por cobrar en el local
+        const tPrice = Number(b.pitches?.price_per_hour || 0);
+        const pct = b.pitches?.booking_percentage ?? 50;
+        const dAmount = (tPrice * Number(pct)) / 100;
+        const remInfo = getBookingRemainingPayment(b);
+        const remPaid = Number(remInfo?.amount || 0);
+        const bal = calculateRemainingBalance(tPrice, dAmount, remPaid);
+        matchStatus = b.status === 'confirmed' && bal > 0;
+      } else if (filterStatus === 'paid') {
+        // Reservas confirmadas con saldo 100% cubierto / pagado
+        const remInfo = getBookingRemainingPayment(b);
+        const remPaid = Number(remInfo?.amount || 0);
+        matchStatus = b.status === 'confirmed' && remPaid > 0;
+      } else if (filterStatus === 'confirmed') {
+        matchStatus = b.status === 'confirmed';
+      } else if (filterStatus === 'cancelled') {
+        matchStatus = b.status === 'cancelled';
       }
 
       // 2. Filtro por Fecha con Zona Horaria Exacta
@@ -688,6 +711,9 @@ export default function BookingsPage() {
         existingGroup.bookings.push(b);
         existingGroup.total_price += tPrice;
         existingGroup.deposit_amount += dAmount;
+        if (b.payment_proof_url && !existingGroup.payment_proof_url) {
+          existingGroup.payment_proof_url = b.payment_proof_url;
+        }
         if (bRemainingPaid > 0) {
           existingGroup.remaining_amount_paid = (existingGroup.remaining_amount_paid || 0) + bRemainingPaid;
         }
@@ -884,23 +910,43 @@ export default function BookingsPage() {
               />
             </div>
 
-            {/* Pills de Estado */}
-            <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+            {/* Pills de Estado / Categorías Amigables */}
+            <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
               {[
                 { key: 'all', label: 'Todas' },
                 { key: 'pending', label: 'Pendientes', color: 'bg-amber-500' },
-                { key: 'confirmed', label: 'Confirmadas', color: 'bg-emerald-500' },
-                { key: 'manual', label: 'Manuales', color: 'bg-purple-500' },
+                { key: 'pending_payment', label: 'Por Cobrar', color: 'bg-orange-500' },
+                { key: 'paid', label: 'Cobradas', color: 'bg-emerald-500' },
                 { key: 'cancelled', label: 'Canceladas', color: 'bg-rose-500' },
-
               ].map((st) => {
                 const isActive = filterStatus === st.key;
                 const rangeDates = getDaysRange(selectedDate, calView);
 
                 const count = bookings.filter(b => {
-                  const matchSt = st.key === 'manual' ? b.source === 'owner_panel' : st.key === 'all' || b.status === st.key;
-                  let matchDt = true;
+                  let matchSt = false;
+                  if (st.key === 'all') {
+                    matchSt = true;
+                  } else if (st.key === 'manual') {
+                    matchSt = b.source === 'owner_panel';
+                  } else if (st.key === 'pending') {
+                    matchSt = b.status === 'pending';
+                  } else if (st.key === 'pending_payment') {
+                    const tPrice = Number(b.pitches?.price_per_hour || 0);
+                    const pct = b.pitches?.booking_percentage ?? 50;
+                    const dAmount = (tPrice * Number(pct)) / 100;
+                    const remInfo = getBookingRemainingPayment(b);
+                    const remPaid = Number(remInfo?.amount || 0);
+                    const bal = calculateRemainingBalance(tPrice, dAmount, remPaid);
+                    matchSt = b.status === 'confirmed' && bal > 0;
+                  } else if (st.key === 'paid') {
+                    const remInfo = getBookingRemainingPayment(b);
+                    const remPaid = Number(remInfo?.amount || 0);
+                    matchSt = b.status === 'confirmed' && remPaid > 0;
+                  } else {
+                    matchSt = b.status === st.key;
+                  }
 
+                  let matchDt = true;
                   if (listDateFilter === 'selected' && selectedDate) {
                     const bDate = getLocalDateString(b.start_time);
                     const bCreated = b.created_at ? getLocalDateString(b.created_at) : '';
@@ -918,7 +964,7 @@ export default function BookingsPage() {
                   <button
                     key={st.key}
                     onClick={() => setFilterStatus(st.key)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap border ${isActive
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap border cursor-pointer ${isActive
                       ? 'bg-primary text-white border-primary shadow-sm'
                       : 'bg-secondary/40 border-transparent text-muted-foreground hover:bg-secondary hover:text-foreground'
                       }`}
@@ -988,7 +1034,9 @@ export default function BookingsPage() {
 
                 const tPrice = group.total_price;
                 const dAmount = group.deposit_amount;
-                const originalProof = getBookingOriginalProof(group.payment_proof_url);
+                const originalProof =
+                  getBookingOriginalProof(group.payment_proof_url) ||
+                  getBookingOriginalProof(group.bookings?.find((b: any) => b.payment_proof_url)?.payment_proof_url);
                 const remainingPaid = group.remaining_amount_paid || 0;
                 const balance = calculateRemainingBalance(tPrice, dAmount, remainingPaid);
                 const isFullyPaid = balance <= 0 || remainingPaid > 0;
@@ -1026,12 +1074,28 @@ export default function BookingsPage() {
                       </div>
                     )}
 
-                    {/* Header Superior Móvil: Estado y Badges */}
+                    {/* Header Superior: Estado, Categoría y Comprobantes */}
                     <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-border/50 sm:pb-0 sm:border-b-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border ${statusColors[group.status as keyof typeof statusColors] || statusColors.cancelled}`}>
-                          {group.status === 'pending' ? <><Clock size={12} /> Pendiente</> : group.status === 'confirmed' ? <><CheckCircle size={12} /> Confirmadas ({group.bookings.length})</> : <><XCircle size={12} /> Canceladas ({group.bookings.length})</>}
-                        </span>
+                        {group.status === 'pending' ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">
+                            <Clock size={12} /> Pendiente de Aprobación
+                          </span>
+                        ) : group.status === 'confirmed' ? (
+                          isFullyPaid ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800">
+                              <CheckCircle size={12} /> Totalmente Aprobada ({group.bookings.length})
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800">
+                              <DollarSign size={12} /> Pendiente de Cobro ({group.bookings.length})
+                            </span>
+                          )
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border bg-red-100 text-red-600 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800">
+                            <XCircle size={12} /> Canceladas ({group.bookings.length})
+                          </span>
+                        )}
 
                         {isManual && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-lg">
@@ -1168,40 +1232,68 @@ export default function BookingsPage() {
                         </div>
                       </div>
 
-                      {/* Acciones Grupales (Confirmar / Rechazar Todas) */}
-                      {((group.status === 'pending' || group.status === 'confirmed') && group.bookings.length > 1) && (
-                        <div className="flex sm:flex-col gap-2 pt-2 sm:pt-0 border-t border-border/40 sm:border-t-0 justify-end">
-                          {group.status === 'pending' && (
-                            <>
-                              <button
-                                onClick={() => handleBatchApproveRequest(
+                      {/* Acciones para Reservas Pendientes (Tanto 1 hora como múltiples horas) */}
+                      {group.status === 'pending' && (
+                        <div className="flex flex-wrap sm:flex-nowrap gap-2 pt-2 border-t border-border/40 justify-end items-center">
+                          {originalProof && (
+                            <button
+                              type="button"
+                              onClick={() => setProofModalData({
+                                url: originalProof,
+                                title: `Comprobante de Reserva - ${group.customer_name || 'Cliente'}`
+                              })}
+                              className="text-xs px-3.5 py-2 font-bold bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                              title="Ver comprobante de pago de la reserva"
+                            >
+                              <FileText size={14} />
+                              <span>Ver Comprobante</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (group.bookings.length === 1) {
+                                handleApproveRequest(group.bookings[0]);
+                              } else {
+                                handleBatchApproveRequest(
                                   group.bookings,
                                   group.customer_name,
                                   group.pitches?.name,
                                   tPrice,
                                   dAmount
-                                )}
-                                className="flex-1 sm:flex-initial text-xs px-3.5 py-2 font-bold bg-green-600 hover:bg-green-700 active:scale-95 text-white rounded-xl transition-all shadow-sm text-center flex items-center justify-center gap-1.5"
-                              >
-                                <CheckCircle size={14} />
-                                <span>Confirmar Todas ({group.bookings.filter((b: any) => b.status === 'pending').length})</span>
-                              </button>
-                              <button
-                                onClick={() => handleBatchCancelRequest(group.bookings, `las ${group.bookings.length} horas de ${group.customer_name || 'esta reserva'}`)}
-                                className="flex-1 sm:flex-initial text-xs px-3 py-2 font-bold bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 rounded-xl transition-colors text-center"
-                              >
-                                Rechazar Todas
-                              </button>
-                            </>
-                          )}
-                          {group.status === 'confirmed' && (
-                            <button
-                              onClick={() => handleBatchCancelRequest(group.bookings, `las ${group.bookings.length} horas confirmadas de ${group.customer_name || 'esta reserva'}`)}
-                              className="w-full sm:w-auto text-xs px-3 py-2 font-bold bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 rounded-xl transition-colors text-center"
-                            >
-                              Cancelar Todas
-                            </button>
-                          )}
+                                );
+                              }
+                            }}
+                            className="flex-1 sm:flex-initial text-xs px-4 py-2 font-bold bg-green-600 hover:bg-green-700 active:scale-95 text-white rounded-xl transition-all shadow-sm text-center flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <CheckCircle size={14} />
+                            <span>Confirmar {group.bookings.length > 1 ? `Todas (${group.bookings.length})` : 'Reserva'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (group.bookings.length === 1) {
+                                handleCancelRequest(group.bookings[0]);
+                              } else {
+                                handleBatchCancelRequest(group.bookings, `las ${group.bookings.length} horas de ${group.customer_name || 'esta reserva'}`);
+                              }
+                            }}
+                            className="text-xs px-3 py-2 font-bold bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 rounded-xl transition-colors text-center cursor-pointer"
+                          >
+                            Rechazar
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Cancelar confirmadas grupales */}
+                      {group.status === 'confirmed' && group.bookings.length > 1 && (
+                        <div className="flex pt-2 sm:pt-0 border-t border-border/40 sm:border-t-0 justify-end">
+                          <button
+                            onClick={() => handleBatchCancelRequest(group.bookings, `las ${group.bookings.length} horas confirmadas de ${group.customer_name || 'esta reserva'}`)}
+                            className="w-full sm:w-auto text-xs px-3 py-2 font-bold bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 rounded-xl transition-colors text-center cursor-pointer"
+                          >
+                            Cancelar Todas
+                          </button>
                         </div>
                       )}
                     </div>
