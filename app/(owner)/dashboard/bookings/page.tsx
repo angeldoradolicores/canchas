@@ -97,6 +97,7 @@ export default function BookingsPage() {
   // Sistema de Notificaciones en Vivo y Resaltado de Nuevas Reservas
   const [newlyArrivedIds, setNewlyArrivedIds] = useState<Set<string>>(new Set());
   const [liveNotification, setLiveNotification] = useState<{ id: string; name: string; time: string; date: string } | null>(null);
+  const notifiedPendingIdsRef = useRef<Set<string>>(new Set());
 
   // Estados de Filtros
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -218,11 +219,16 @@ export default function BookingsPage() {
             console.log('[Realtime Event on Bookings]', payload.eventType, payload.new?.id);
 
             const newStatus = payload.new?.status;
-            const isNewPending =
-              payload.eventType === 'INSERT' ||
-              (payload.eventType === 'UPDATE' && newStatus === 'pending');
+            const hasProof = Boolean(payload.new?.payment_proof_url);
+            // El usuario pidió expresamente:
+            // "la notificacion de nueva reserva recibida debe ser unicamente cuando el cliente sube la foto del comprobante y presiona el boton reservar de lo contrario no salga"
+            const isSubmittedPending = newStatus === 'pending' && hasProof;
+            const isFreshArrival =
+              (payload.eventType === 'INSERT' && isSubmittedPending) ||
+              (payload.eventType === 'UPDATE' && isSubmittedPending && payload.old?.status !== 'pending');
 
-            if (isNewPending && payload.new?.id) {
+            if (isFreshArrival && payload.new?.id && !notifiedPendingIdsRef.current.has(payload.new.id)) {
+              notifiedPendingIdsRef.current.add(payload.new.id);
               // Resaltar la nueva reserva y sonar la alerta auditiva
               setNewlyArrivedIds(prev => new Set(prev).add(payload.new.id));
               playNotificationSound();
@@ -694,6 +700,9 @@ export default function BookingsPage() {
         if (bRemainingPaidAt && !existingGroup.remaining_paid_at) {
           existingGroup.remaining_paid_at = bRemainingPaidAt;
         }
+        if (remainingInfo?.splits && !existingGroup.remaining_payment_splits) {
+          existingGroup.remaining_payment_splits = remainingInfo.splits;
+        }
         if (new Date(b.start_time) < new Date(existingGroup.start_time)) {
           existingGroup.start_time = b.start_time;
         }
@@ -714,6 +723,7 @@ export default function BookingsPage() {
           remaining_payment_method: bRemainingMethod,
           remaining_payment_proof_url: bRemainingProof,
           remaining_paid_at: bRemainingPaidAt,
+          remaining_payment_splits: remainingInfo?.splits || null,
           created_at: b.created_at,
           bookings: [b],
           total_price: tPrice,
@@ -1036,12 +1046,12 @@ export default function BookingsPage() {
                             type="button"
                             onClick={() => setProofModalData({
                               url: originalProof,
-                              title: `Comprobante de Anticipo - ${group.customer_name || 'Cliente'}`
+                              title: `Comprobante de Reserva - ${group.customer_name || 'Cliente'}`
                             })}
                             className="inline-flex items-center gap-1 text-[11px] font-bold text-primary border border-primary/30 bg-primary/10 hover:bg-primary/20 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                            title="Ver comprobante de anticipo / seña"
+                            title="Ver comprobante de pago de la reserva"
                           >
-                            <FileText size={12} /> Anticipo
+                            <FileText size={12} /> Ver Comprobante
                           </button>
                         )}
 
@@ -1050,10 +1060,10 @@ export default function BookingsPage() {
                             type="button"
                             onClick={() => setProofModalData({
                               url: group.remaining_payment_proof_url,
-                              title: `Comprobante de Saldo (${formatPaymentMethod(group.remaining_payment_method)}) - ${group.customer_name || 'Cliente'}`
+                              title: `Comprobante de Saldo (${formatPaymentMethod(group.remaining_payment_method, group.remaining_payment_splits)}) - ${group.customer_name || 'Cliente'}`
                             })}
                             className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                            title="Ver foto del comprobante de saldo"
+                            title="Ver foto del comprobante de saldo restante"
                           >
                             <Receipt size={12} /> Comprobante Saldo
                           </button>
@@ -1128,7 +1138,7 @@ export default function BookingsPage() {
                               <div>
                                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg">
                                   <CheckCircle size={10} />
-                                  <span>Saldo pago {group.remaining_payment_method ? `(${formatPaymentMethod(group.remaining_payment_method)})` : ''}</span>
+                                  <span>Saldo pago {group.remaining_payment_method ? `(${formatPaymentMethod(group.remaining_payment_method, group.remaining_payment_splits)})` : ''}</span>
                                 </span>
                                 <button
                                   type="button"

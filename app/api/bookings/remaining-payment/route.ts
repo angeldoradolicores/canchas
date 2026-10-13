@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
       amount,
       proof_url = null,
       notes = '',
+      splits = null,
     } = body;
 
     const ids: string[] = Array.isArray(booking_ids)
@@ -76,6 +77,7 @@ export async function POST(req: NextRequest) {
       remaining_payment_notes: notes ? notes.trim() : null,
       remaining_payment_at: timestamp,
       remaining_payment_by: user.id,
+      ...(splits ? { remaining_payment_splits: splits } : {}),
     };
 
     // 2. Intentar actualizar con las columnas nativas de Supabase
@@ -96,6 +98,7 @@ export async function POST(req: NextRequest) {
           notes,
           at: timestamp,
           by: user.id,
+          splits,
         },
       });
     }
@@ -111,6 +114,7 @@ export async function POST(req: NextRequest) {
       notes: notes ? notes.trim() : '',
       at: timestamp,
       by: user.id,
+      splits,
     };
 
     const remainingString = `###remaining:${JSON.stringify(remainingData)}`;
@@ -137,6 +141,7 @@ export async function POST(req: NextRequest) {
         notes,
         at: timestamp,
         by: user.id,
+        splits,
       },
     });
   } catch (err: any) {
