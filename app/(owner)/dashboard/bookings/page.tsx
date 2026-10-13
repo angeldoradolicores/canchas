@@ -6,12 +6,20 @@ import { useAuth } from '@/lib/auth-context';
 import {
   Loader2, CheckCircle, XCircle, FileText, CalendarDays,
   LayoutList, Calendar as CalendarIcon, Plus, X, Download, Clock,
-  ChevronLeft, ChevronRight, Wrench, Search, AlertTriangle, Bell
+  ChevronLeft, ChevronRight, Wrench, Search, AlertTriangle, Bell,
+  Receipt, DollarSign, Sparkles, Camera
 } from 'lucide-react';
 import { useToday } from '@/lib/use-today';
 import { ManualBookingModal } from '@/components/booking/ManualBookingModal';
 import { CustomMonthCalendar } from '@/components/explore/CustomMonthCalendar';
 import { isCombinedPitch, getConflictingPitchIds } from '@/lib/combined-pitch-utils';
+import { RemainingPaymentModal } from '@/components/booking/RemainingPaymentModal';
+import {
+  getBookingRemainingPayment,
+  getBookingOriginalProof,
+  formatPaymentMethod,
+  calculateRemainingBalance,
+} from '@/lib/remaining-payment-utils';
 
 const TIME_SLOTS = [
   '06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00',
@@ -32,6 +40,40 @@ function getLocalDateString(dateInput: string | Date): string {
   }).format(d);
 }
 
+// Reproductor de sonido nativo (campanita/ding-dong sutil de recepción con Web Audio API)
+function playNotificationSound() {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+
+    // Tono 1: 587.33 Hz (D5)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(587.33, ctx.currentTime);
+    gain1.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(ctx.currentTime);
+    osc1.stop(ctx.currentTime + 0.35);
+
+    // Tono 2: 880 Hz (A5) para generar efecto ding-dong armónico
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(880, ctx.currentTime + 0.12);
+    gain2.gain.setValueAtTime(0.18, ctx.currentTime + 0.12);
+    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(ctx.currentTime + 0.12);
+    osc2.stop(ctx.currentTime + 0.55);
+  } catch (err) {
+    console.warn('[AudioContext sound error]', err);
+  }
+}
 
 export default function BookingsPage() {
   const [bookings, setBookings] = useState<any[]>([]);
@@ -45,7 +87,16 @@ export default function BookingsPage() {
   const [calView, setCalView] = useState<CalendarView>('day');
   const [selectedDate, setSelectedDate] = useState('');
   const [showManualBooking, setShowManualBooking] = useState(false);
-  const [proofUrl, setProofUrl] = useState('');
+
+  // Modal de visualización de comprobante enriquecido (Anticipo y Saldo)
+  const [proofModalData, setProofModalData] = useState<{ url: string; title: string } | null>(null);
+
+  // Modal para registrar el pago restante en el local físico
+  const [selectedBookingForRemainingPayment, setSelectedBookingForRemainingPayment] = useState<any | null>(null);
+
+  // Sistema de Notificaciones en Vivo y Resaltado de Nuevas Reservas
+  const [newlyArrivedIds, setNewlyArrivedIds] = useState<Set<string>>(new Set());
+  const [liveNotification, setLiveNotification] = useState<{ id: string; name: string; time: string; date: string } | null>(null);
 
   // Estados de Filtros
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -78,10 +129,6 @@ export default function BookingsPage() {
   }, []);
 
   useEffect(() => {
-    if (user) fetchBookingsAndPitches();
-  }, [user]);
-
-  useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (calendarRef.current && !calendarRef.current.contains(event.target as Node)) {
         setIsCalendarOpen(false);
@@ -91,9 +138,9 @@ export default function BookingsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fetchBookingsAndPitches = useCallback(async () => {
+  const fetchBookingsAndPitches = useCallback(async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const { data: company } = await supabase
         .from('companies')
         .select('id')
@@ -119,9 +166,90 @@ export default function BookingsPage() {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, [user, supabase]);
+
+  // Sincronización en Tiempo Real con Supabase (Realtime WebSockets) + Polling de Respaldo
+  useEffect(() => {
+    if (!user) return;
+    fetchBookingsAndPitches(false);
+
+    let channel: any = null;
+    let pollTimer: any = null;
+
+    const setupLiveSync = async () => {
+      const { data: company } = await supabase
+        .from('companies')
+        .select('id')
+        .eq('owner_id', user.id)
+        .single();
+
+      if (!company) return;
+
+      // 1. Suscripción Realtime a cambios en la tabla 'bookings'
+      channel = supabase
+        .channel(`owner-bookings-live-${company.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'bookings',
+          },
+          (payload: any) => {
+            console.log('[Realtime Event on Bookings]', payload.eventType, payload.new?.id);
+
+            const newStatus = payload.new?.status;
+            const isNewPending =
+              payload.eventType === 'INSERT' ||
+              (payload.eventType === 'UPDATE' && newStatus === 'pending');
+
+            if (isNewPending && payload.new?.id) {
+              // Resaltar la nueva reserva y sonar la alerta auditiva
+              setNewlyArrivedIds(prev => new Set(prev).add(payload.new.id));
+              playNotificationSound();
+
+              const cName = payload.new?.customer_name || 'Nuevo cliente';
+              setLiveNotification({
+                id: payload.new.id,
+                name: cName,
+                time: payload.new?.start_time
+                  ? new Date(payload.new.start_time).toLocaleTimeString('es-CO', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      timeZone: 'America/Bogota',
+                    })
+                  : '',
+                date: payload.new?.start_time
+                  ? new Date(payload.new.start_time).toLocaleDateString('es-CO', {
+                      day: 'numeric',
+                      month: 'short',
+                      timeZone: 'America/Bogota',
+                    })
+                  : '',
+              });
+            }
+
+            // Recargar silenciosamente las reservas para actualizar la vista sin recargar la página
+            fetchBookingsAndPitches(true);
+          }
+        )
+        .subscribe();
+
+      // 2. Polling de respaldo cada 25 segundos (asegura actualización 100% garantizada)
+      pollTimer = setInterval(() => {
+        fetchBookingsAndPitches(true);
+      }, 25000);
+    };
+
+    setupLiveSync();
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+      if (pollTimer) clearInterval(pollTimer);
+    };
+  }, [user, fetchBookingsAndPitches, supabase]);
 
   const [cancelConfirm, setCancelConfirm] = useState<{ id: string; name: string; time: string; total_price?: number; deposit_amount?: number } | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -362,6 +490,30 @@ export default function BookingsPage() {
     setBatchCancelConfirm(null);
   };
 
+  // Manejar actualización exitosa del pago restante en local físico
+  const handleRemainingPaymentSuccess = (updatedData: {
+    bookingIds: string[];
+    remaining_amount_paid: number;
+    remaining_payment_method: string;
+    remaining_payment_proof_url: string | null;
+    remaining_paid_at: string;
+    payment_proof_url?: string;
+  }) => {
+    setBookings(prev =>
+      prev.map(b => {
+        if (!updatedData.bookingIds.includes(b.id)) return b;
+        return {
+          ...b,
+          remaining_amount_paid: updatedData.remaining_amount_paid,
+          remaining_payment_method: updatedData.remaining_payment_method,
+          remaining_payment_proof_url: updatedData.remaining_payment_proof_url,
+          remaining_paid_at: updatedData.remaining_paid_at,
+          payment_proof_url: updatedData.payment_proof_url || b.payment_proof_url,
+        };
+      })
+    );
+  };
+
   // Genera el rango de fechas continuas "YYYY-MM-DD" sin errores de zona horaria
   const getDaysRange = useCallback((startDate: string, view: CalendarView): string[] => {
     if (view === 'month') return [];
@@ -503,10 +655,28 @@ export default function BookingsPage() {
         }
       }
 
+      const remainingInfo = getBookingRemainingPayment(b);
+      const bRemainingPaid = Number(remainingInfo.remaining_amount_paid || 0);
+      const bRemainingMethod = remainingInfo.remaining_payment_method || null;
+      const bRemainingProof = remainingInfo.remaining_payment_proof_url || null;
+      const bRemainingPaidAt = remainingInfo.remaining_paid_at || null;
+
       if (existingGroup) {
         existingGroup.bookings.push(b);
         existingGroup.total_price += tPrice;
         existingGroup.deposit_amount += dAmount;
+        if (bRemainingPaid > 0) {
+          existingGroup.remaining_amount_paid = (existingGroup.remaining_amount_paid || 0) + bRemainingPaid;
+        }
+        if (bRemainingMethod && !existingGroup.remaining_payment_method) {
+          existingGroup.remaining_payment_method = bRemainingMethod;
+        }
+        if (bRemainingProof && !existingGroup.remaining_payment_proof_url) {
+          existingGroup.remaining_payment_proof_url = bRemainingProof;
+        }
+        if (bRemainingPaidAt && !existingGroup.remaining_paid_at) {
+          existingGroup.remaining_paid_at = bRemainingPaidAt;
+        }
         if (new Date(b.start_time) < new Date(existingGroup.start_time)) {
           existingGroup.start_time = b.start_time;
         }
@@ -523,6 +693,10 @@ export default function BookingsPage() {
           start_time: b.start_time,
           source: b.source,
           payment_proof_url: b.payment_proof_url,
+          remaining_amount_paid: bRemainingPaid,
+          remaining_payment_method: bRemainingMethod,
+          remaining_payment_proof_url: bRemainingProof,
+          remaining_paid_at: bRemainingPaidAt,
           created_at: b.created_at,
           bookings: [b],
           total_price: tPrice,
@@ -787,10 +961,43 @@ export default function BookingsPage() {
 
                 const tPrice = group.total_price;
                 const dAmount = group.deposit_amount;
+                const originalProof = getBookingOriginalProof(group.payment_proof_url);
+                const remainingPaid = group.remaining_amount_paid || 0;
+                const balance = calculateRemainingBalance(tPrice, dAmount, remainingPaid);
+                const isFullyPaid = balance <= 0 || remainingPaid > 0;
+                const isNewlyArrived = group.bookings.some((b: any) => newlyArrivedIds.has(b.id));
+
                 const statusBorderColor = group.status === 'confirmed' ? 'border-t-green-500' : group.status === 'pending' ? 'border-t-purple-500' : 'border-t-red-400';
 
                 return (
-                  <div key={group.key} className={`bg-card rounded-2xl border border-border border-t-4 ${statusBorderColor} sm:border-t-border shadow-sm p-3.5 sm:p-4 flex flex-col gap-3`}>
+                  <div
+                    key={group.key}
+                    className={`bg-card rounded-2xl border border-border border-t-4 ${statusBorderColor} sm:border-t-border shadow-sm p-3.5 sm:p-4 flex flex-col gap-3 transition-all ${
+                      isNewlyArrived ? 'ring-2 ring-amber-500 shadow-lg shadow-amber-500/10' : ''
+                    }`}
+                  >
+                    {/* Alerta de Nueva Reserva Entrante en Vivo */}
+                    {isNewlyArrived && (
+                      <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs font-bold animate-pulse">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <Sparkles size={14} className="text-amber-500 shrink-0" />
+                          <span className="truncate">¡NUEVA RESERVA RECIBIDA EN VIVO!</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewlyArrivedIds(prev => {
+                              const next = new Set(prev);
+                              group.bookings.forEach((b: any) => next.delete(b.id));
+                              return next;
+                            });
+                          }}
+                          className="text-[11px] underline hover:no-underline font-semibold text-amber-700 dark:text-amber-300 shrink-0 cursor-pointer"
+                        >
+                          Marcar vista
+                        </button>
+                      </div>
+                    )}
 
                     {/* Header Superior Móvil: Estado y Badges */}
                     <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-border/50 sm:pb-0 sm:border-b-0">
@@ -806,14 +1013,35 @@ export default function BookingsPage() {
                         )}
                       </div>
 
-                      {group.payment_proof_url && (
-                        <button
-                          onClick={() => setProofUrl(group.payment_proof_url)}
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-primary border border-primary/30 bg-primary/10 hover:bg-primary/20 px-2.5 py-1 rounded-lg transition-colors ml-auto sm:ml-0"
-                        >
-                          <FileText size={12} /> Comprobante
-                        </button>
-                      )}
+                      <div className="flex items-center gap-1.5 flex-wrap ml-auto sm:ml-0">
+                        {originalProof && (
+                          <button
+                            type="button"
+                            onClick={() => setProofModalData({
+                              url: originalProof,
+                              title: `Comprobante de Anticipo - ${group.customer_name || 'Cliente'}`
+                            })}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-primary border border-primary/30 bg-primary/10 hover:bg-primary/20 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                            title="Ver comprobante de anticipo / seña"
+                          >
+                            <FileText size={12} /> Anticipo
+                          </button>
+                        )}
+
+                        {group.remaining_payment_proof_url && (
+                          <button
+                            type="button"
+                            onClick={() => setProofModalData({
+                              url: group.remaining_payment_proof_url,
+                              title: `Comprobante de Saldo (${formatPaymentMethod(group.remaining_payment_method)}) - ${group.customer_name || 'Cliente'}`
+                            })}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                            title="Ver foto del comprobante de saldo"
+                          >
+                            <Receipt size={12} /> Comprobante Saldo
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -868,13 +1096,48 @@ export default function BookingsPage() {
                           )}
                         </div>
 
-                        {/* Precio y Abono */}
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Pago</p>
-                          <p className="font-bold text-xs sm:text-sm text-foreground leading-tight">${tPrice.toLocaleString('es-CO')}</p>
-                          {dAmount > 0 && (
-                            <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">Abono: ${dAmount.toLocaleString('es-CO')}</p>
-                          )}
+                        {/* Precio, Abono y Saldo */}
+                        <div className="min-w-0 flex flex-col justify-between">
+                          <div>
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Liquidación</p>
+                            <p className="font-bold text-xs sm:text-sm text-foreground leading-tight">${tPrice.toLocaleString('es-CO')}</p>
+                            {dAmount > 0 && (
+                              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">Abono: ${dAmount.toLocaleString('es-CO')}</p>
+                            )}
+                          </div>
+
+                          <div className="mt-1.5">
+                            {isFullyPaid ? (
+                              <div>
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg">
+                                  <CheckCircle size={10} />
+                                  <span>Saldo pago {group.remaining_payment_method ? `(${formatPaymentMethod(group.remaining_payment_method)})` : ''}</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedBookingForRemainingPayment(group)}
+                                  className="text-[10px] text-muted-foreground hover:text-foreground mt-0.5 underline block cursor-pointer"
+                                >
+                                  Editar pago
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-1 items-start">
+                                <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                                  Saldo: ${balance.toLocaleString('es-CO')}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedBookingForRemainingPayment(group)}
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 text-amber-800 dark:text-amber-300 border border-amber-500/30 rounded-lg transition-all cursor-pointer"
+                                  title="Registrar cobro de saldo en físico"
+                                >
+                                  <DollarSign size={11} />
+                                  <span>Cobrar saldo</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -1308,18 +1571,106 @@ export default function BookingsPage() {
         </div>
       )}
 
-      {proofUrl && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="absolute top-4 right-4 flex gap-2">
-            <a href={proofUrl} download="comprobante" target="_blank" rel="noreferrer" className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors" title="Descargar">
-              <Download size={20} />
-            </a>
-            <button onClick={() => setProofUrl('')} className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors">
-              <X size={20} />
-            </button>
+      {/* Modal de Comprobantes (Anticipo / Saldo Restante) */}
+      {(proofModalData || proofUrl) && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-3 sm:p-4"
+          onClick={() => { setProofModalData(null); setProofUrl(''); }}
+        >
+          <div
+            className="relative max-w-2xl w-full flex flex-col items-center bg-zinc-900 border border-zinc-800 rounded-3xl p-4 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-full flex items-center justify-between pb-3 border-b border-zinc-800 mb-3">
+              <span className="text-sm font-bold text-white flex items-center gap-2 truncate pr-2">
+                <FileText size={16} className="text-primary shrink-0" />
+                <span className="truncate">{proofModalData?.title || 'Comprobante de Pago'}</span>
+              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={proofModalData?.url || proofUrl}
+                  download="comprobante"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+                  title="Descargar / Abrir en pestaña nueva"
+                >
+                  <Download size={18} />
+                </a>
+                <button
+                  onClick={() => { setProofModalData(null); setProofUrl(''); }}
+                  className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+                  title="Cerrar"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="w-full flex items-center justify-center max-h-[75vh] overflow-auto rounded-2xl bg-black/50 p-2">
+              <img
+                src={proofModalData?.url || proofUrl}
+                alt={proofModalData?.title || 'Comprobante'}
+                className="max-w-full max-h-[70vh] object-contain rounded-xl shadow-lg"
+              />
+            </div>
           </div>
-          <img src={proofUrl} alt="Comprobante" className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl" />
         </div>
+      )}
+
+      {/* Modal de Registro de Pago Restante en Local Físico */}
+      {selectedBookingForRemainingPayment && (
+        <RemainingPaymentModal
+          isOpen={!!selectedBookingForRemainingPayment}
+          onClose={() => setSelectedBookingForRemainingPayment(null)}
+          booking={selectedBookingForRemainingPayment}
+          onSuccess={handleRemainingPaymentSuccess}
+        />
+      )}
+
+      {/* Notificación Flotante Toast para Nuevas Reservas Entrantes en Tiempo Real */}
+      {liveNotification && (
+        <aside
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 right-4 sm:right-6 z-[90] max-w-sm w-[calc(100vw-2rem)] bg-zinc-950/95 dark:bg-zinc-900/95 text-white border-2 border-amber-500 rounded-2xl p-4 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom duration-300"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0 text-amber-400">
+              <Bell size={20} className="animate-bounce" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[11px] font-black uppercase tracking-wider text-amber-400">
+                  ¡Nueva Reserva Recibida!
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setLiveNotification(null)}
+                  className="text-zinc-400 hover:text-white transition-colors p-0.5 rounded-lg cursor-pointer"
+                  title="Cerrar notificación"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <p className="text-sm font-bold truncate mt-0.5 text-white">{liveNotification.name}</p>
+              <p className="text-xs text-zinc-300 mt-0.5">
+                {liveNotification.date} • {liveNotification.time}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterStatus('pending');
+                  setListDateFilter('all');
+                  setLiveNotification(null);
+                }}
+                className="mt-2 text-xs font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 underline"
+              >
+                <span>Ver en la lista</span>
+                <ChevronRight size={13} />
+              </button>
+            </div>
+          </div>
+        </aside>
       )}
     </div>
   );
