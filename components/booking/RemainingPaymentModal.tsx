@@ -10,23 +10,26 @@ import { PAYMENT_METHODS, PaymentMethod } from '@/lib/remaining-payment-utils';
 interface RemainingPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  bookingGroup: any; // Group or single booking object
-  onSuccess: (updatedPayment: any, bookingIds: string[]) => void;
+  bookingGroup?: any;
+  booking?: any;
+  onSuccess: (updatedPayment: any, bookingIds?: string[]) => void;
 }
 
 export function RemainingPaymentModal({
   isOpen,
   onClose,
   bookingGroup,
+  booking,
   onSuccess,
 }: RemainingPaymentModalProps) {
-  if (!isOpen || !bookingGroup) return null;
+  const targetBooking = bookingGroup || booking;
+  if (!isOpen || !targetBooking) return null;
 
-  const bookingsList = bookingGroup.bookings || [bookingGroup];
+  const bookingsList = targetBooking.bookings || [targetBooking];
   const bookingIds = bookingsList.map((b: any) => b.id);
 
-  const totalPrice = Number(bookingGroup.total_price || 0);
-  const depositAmount = Number(bookingGroup.deposit_amount || 0);
+  const totalPrice = Number(targetBooking.total_price || 0);
+  const depositAmount = Number(targetBooking.deposit_amount || 0);
   const defaultRemaining = Math.max(0, totalPrice - depositAmount);
 
   const [method, setMethod] = useState<PaymentMethod>('cash');
@@ -128,8 +131,8 @@ export function RemainingPaymentModal({
     }
   };
 
-  const clientName = bookingGroup.customer_name || 'Anónimo';
-  const pitchName = bookingGroup.pitches?.name || 'Cancha';
+  const clientName = targetBooking.customer_name || 'Anónimo';
+  const pitchName = targetBooking.pitches?.name || 'Cancha';
   const hoursCount = bookingsList.length;
 
   return (

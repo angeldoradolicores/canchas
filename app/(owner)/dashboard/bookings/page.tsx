@@ -141,11 +141,19 @@ export default function BookingsPage() {
   const fetchBookingsAndPitches = useCallback(async (isSilent = false) => {
     try {
       if (!isSilent) setLoading(true);
-      const { data: company } = await supabase
+      if (!user?.id) {
+        if (!isSilent) setLoading(false);
+        return;
+      }
+      const { data: company, error: companyErr } = await supabase
         .from('companies')
         .select('id')
-        .eq('owner_id', user!.id)
-        .single();
+        .eq('owner_id', user.id)
+        .maybeSingle();
+
+      if (companyErr) {
+        console.warn('[fetchBookings error fetching company]:', companyErr);
+      }
 
       if (company) {
         const { data: pitchesData } = await supabase
@@ -164,16 +172,25 @@ export default function BookingsPage() {
         if (bookingsData) setBookings(bookingsData);
       }
     } catch (err) {
-      console.error(err);
+      console.error('[fetchBookings error]:', err);
     } finally {
       if (!isSilent) setLoading(false);
     }
-  }, [user, supabase]);
+  }, [user?.id]);
+
+  const fetchBookingsRef = useRef(fetchBookingsAndPitches);
+  useEffect(() => {
+    fetchBookingsRef.current = fetchBookingsAndPitches;
+  }, [fetchBookingsAndPitches]);
 
   // Sincronización en Tiempo Real con Supabase (Realtime WebSockets) + Polling de Respaldo
   useEffect(() => {
-    if (!user) return;
-    fetchBookingsAndPitches(false);
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
+
+    fetchBookingsRef.current(false);
 
     let channel: any = null;
     let pollTimer: any = null;
@@ -183,7 +200,7 @@ export default function BookingsPage() {
         .from('companies')
         .select('id')
         .eq('owner_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (!company) return;
 
@@ -232,14 +249,14 @@ export default function BookingsPage() {
             }
 
             // Recargar silenciosamente las reservas para actualizar la vista sin recargar la página
-            fetchBookingsAndPitches(true);
+            fetchBookingsRef.current(true);
           }
         )
         .subscribe();
 
-      // 2. Polling de respaldo cada 25 segundos (asegura actualización 100% garantizada)
+      // 2. Polling de respaldo cada 25 segundos (asegura actualización garantizada)
       pollTimer = setInterval(() => {
-        fetchBookingsAndPitches(true);
+        fetchBookingsRef.current(true);
       }, 25000);
     };
 
@@ -249,7 +266,7 @@ export default function BookingsPage() {
       if (channel) supabase.removeChannel(channel);
       if (pollTimer) clearInterval(pollTimer);
     };
-  }, [user, fetchBookingsAndPitches, supabase]);
+  }, [user?.id]);
 
   const [cancelConfirm, setCancelConfirm] = useState<{ id: string; name: string; time: string; total_price?: number; deposit_amount?: number } | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -273,7 +290,7 @@ export default function BookingsPage() {
     const updatePayload: Record<string, any> = {
       status: newStatus,
       reviewed_at: new Date().toISOString(),
-      reviewed_by: user!.id,
+      reviewed_by: user?.id || null,
     };
     if (newStatus === 'confirmed') updatePayload.payment_status = 'verified';
     if (newStatus === 'cancelled') updatePayload.payment_status = 'rejected';
@@ -434,7 +451,7 @@ export default function BookingsPage() {
       status: 'confirmed',
       payment_status: 'verified',
       reviewed_at: new Date().toISOString(),
-      reviewed_by: user!.id,
+      reviewed_by: user?.id || null,
     };
 
     const { error } = await supabase.from('bookings').update(updatePayload).in('id', ids);
@@ -470,7 +487,7 @@ export default function BookingsPage() {
       status: 'cancelled',
       payment_status: 'rejected',
       reviewed_at: new Date().toISOString(),
-      reviewed_by: user!.id,
+      reviewed_by: user?.id || null,
     };
     const { error } = await supabase.from('bookings').update(updatePayload).in('id', ids);
     if (!error) {
