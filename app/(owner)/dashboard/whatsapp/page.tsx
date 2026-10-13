@@ -512,7 +512,6 @@ export default function WhatsAppConnectionPage() {
                         src={qrCode}
                         alt="Código QR WhatsApp"
                         className="w-64 h-64 sm:w-72 sm:h-72 object-contain mx-auto"
-                        style={{ filter: 'invert(1) sepia(1) saturate(10) hue-rotate(90deg) invert(1)' }}
                       />
                     </div>
                   ) : (

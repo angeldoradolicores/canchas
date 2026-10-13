@@ -424,6 +424,11 @@ export function RemainingPaymentModal({
               <div className="space-y-1.5">
                 {selectedMethods.map((m) => {
                   const meta = PAYMENT_METHODS.find(item => item.id === m);
+
+                  // Aseguramos formatear el valor actual con puntos de miles para visualizarlo
+                  const rawValue = methodAmounts[m];
+                  const formattedValue = rawValue ? Number(rawValue).toLocaleString('es-CO') : '';
+
                   return (
                     <div key={m} className="flex items-center gap-2">
                       <span className="text-xs font-bold w-28 truncate flex items-center gap-1.5 text-muted-foreground">
@@ -433,11 +438,14 @@ export function RemainingPaymentModal({
                       <div className="relative flex-1">
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-bold">$</span>
                         <input
-                          type="number"
-                          min="0"
-                          step="1000"
-                          value={methodAmounts[m] || ''}
-                          onChange={(e) => handleAmountChange(m, e.target.value)}
+                          type="text"
+                          inputMode="numeric"
+                          value={formattedValue}
+                          onChange={(e) => {
+                            // 1. Quitamos todo lo que no sea número para guardar el valor real limpio (ej: "15000")
+                            const numericValue = e.target.value.replace(/\D/g, '');
+                            handleAmountChange(m, numericValue);
+                          }}
                           placeholder="0"
                           className="w-full pl-6 pr-2 py-1.5 text-xs font-bold bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-foreground"
                         />
