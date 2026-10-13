@@ -8,6 +8,7 @@ import { useFavorites } from '@/lib/favorites-context';
 import { isCombinedPitch } from '@/lib/combined-pitch-utils';
 import { getPitchLocation } from '@/lib/pitch-location';
 import { cleanAddress } from '@/lib/complex-utils';
+import { PaymentMethodLogo } from '@/components/ui/PaymentMethodLogo';
 
 export interface ComplexData {
   id: string;
@@ -429,8 +430,9 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
                   </h4>
                   <div className="flex flex-wrap gap-1.5">
                     {(currentPitch as any).payment_methods.map((pm: any, idx: number) => (
-                      <span key={idx} className="text-xs font-bold px-3 py-1.5 bg-card border border-border rounded-xl text-foreground shadow-2xs">
-                        {pm.label || pm.type}
+                      <span key={idx} className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-card border border-border rounded-xl text-foreground shadow-2xs">
+                        <PaymentMethodLogo method={pm.label || pm.type} size="sm" />
+                        <span>{pm.label || pm.type}</span>
                       </span>
                     ))}
                   </div>

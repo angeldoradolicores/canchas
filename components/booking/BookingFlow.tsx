@@ -12,6 +12,7 @@ import { useActiveBooking } from '@/lib/active-booking-context';
 import { CancelBookingModal } from '@/components/booking/CancelBookingModal';
 import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
 import { isCombinedPitch, getLinkedPitchIds, getConflictingPitchIds } from '@/lib/combined-pitch-utils';
+import { PaymentMethodLogo } from '@/components/ui/PaymentMethodLogo';
 
 
 const DEFAULT_TIME_SLOTS = [
@@ -112,7 +113,6 @@ async function compressImageIfNeeded(file: File): Promise<string> {
 
 function PaymentMethodCard({ pm }: { pm: { type: string; label: string; number: string; name: string } }) {
   const [copied, setCopied] = useState(false);
-  const icons: Record<string, string> = { nequi: '🟣', daviplata: '🔴', bancolombia: '🔵', transferencia: '🏦' };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(pm.number).then(() => {
@@ -123,15 +123,17 @@ function PaymentMethodCard({ pm }: { pm: { type: string; label: string; number: 
 
   return (
     <div className="flex items-center justify-between p-3.5 rounded-2xl border bg-card/90 hover:bg-secondary/40 border-border text-foreground transition-all shadow-2xs">
-      <div className="min-w-0 pr-2">
-        <div className="flex items-center gap-2 font-black text-xs sm:text-sm">
-          <span className="text-base">{icons[pm.type] || '💳'}</span>
-          <span className="uppercase tracking-wide">{pm.label}</span>
+      <div className="min-w-0 pr-2 flex items-center gap-3">
+        <PaymentMethodLogo method={pm.label || pm.type} size="md" />
+        <div className="min-w-0">
+          <div className="font-black text-xs sm:text-sm uppercase tracking-wide truncate">
+            {pm.label}
+          </div>
+          <div className="font-mono font-black text-sm sm:text-base tracking-wider text-foreground mt-0.5 select-all">
+            {pm.number}
+          </div>
+          {pm.name && <div className="text-[11px] text-muted-foreground truncate mt-0.5">Titular: {pm.name}</div>}
         </div>
-        <div className="font-mono font-black text-sm sm:text-base tracking-wider text-foreground mt-0.5 select-all">
-          {pm.number}
-        </div>
-        {pm.name && <div className="text-[11px] text-muted-foreground truncate mt-0.5">Titular: {pm.name}</div>}
       </div>
       <button
         type="button"
@@ -1554,13 +1556,22 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                               </span>
                             </div>
 
-                            <p className="text-[10px] text-muted-foreground max-w-xs mb-2.5">
-                              Nequi, Daviplata, Bancolombia
+                            <p className="text-[10px] text-muted-foreground max-w-xs mb-2">
+                              Aceptamos transferencias por:
                             </p>
 
                             <div className="flex flex-wrap items-center justify-center gap-1.5">
-                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-lg bg-background text-foreground/80 border border-border shadow-xs">
-                                Nequi / Daviplata / Bancolombia / Otros
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-background text-foreground/90 border border-border shadow-2xs">
+                                <PaymentMethodLogo method="nequi" size="xs" /> Nequi
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-background text-foreground/90 border border-border shadow-2xs">
+                                <PaymentMethodLogo method="daviplata" size="xs" /> Daviplata
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-background text-foreground/90 border border-border shadow-2xs">
+                                <PaymentMethodLogo method="bancolombia" size="xs" /> Bancolombia
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-background text-foreground/90 border border-border shadow-2xs">
+                                <PaymentMethodLogo method="bre-b" size="xs" /> Bre-B
                               </span>
                             </div>
                           </label>

@@ -757,7 +757,7 @@ export default function CreateStatusPage() {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <label className="text-xs font-bold text-foreground dark:text-zinc-300 flex items-center gap-1.5">
-            <span>⚽</span> Seleccionar Cancha
+            Seleccionar Cancha
           </label>
           <span className="text-[11px] text-muted-foreground">{pitches.length} {pitches.length === 1 ? 'cancha' : 'canchas'}</span>
         </div>
@@ -769,7 +769,7 @@ export default function CreateStatusPage() {
                 ? 'bg-emerald-600 text-white border-emerald-500 shadow-md'
                 : 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800/90 dark:text-zinc-200 dark:border-zinc-700'
                 }`}>
-              <span className="text-base">🏟️</span>
+              <span className="text-base"></span>
               <span className="flex-1 truncate">Todas las canchas (General)</span>
               {selPitch === 'all' && <CheckCircle2 size={15} className="ml-auto text-white" />}
             </button>
@@ -780,7 +780,7 @@ export default function CreateStatusPage() {
                   ? 'bg-emerald-600 text-white border-emerald-500 shadow-md'
                   : 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800/90 dark:text-zinc-200 dark:border-zinc-700'
                   }`}>
-                <span className="text-base">⚽</span>
+                <span className="text-base"></span>
                 <span className="flex-1 truncate">{p.name}</span>
                 {selPitch === p.id && <CheckCircle2 size={15} className="ml-auto text-white" />}
               </button>
@@ -854,9 +854,8 @@ export default function CreateStatusPage() {
       {/* Hora personalizada */}
       <div className="flex gap-2 pt-2 border-t border-border">
         <input type="time" value={customTime} onChange={e => setCustomTime(e.target.value)}
-          className="flex-1 px-3 py-2 bg-background border border-border rounded-xl text-xs text-foreground outline-none focus:border-emerald-500" />
-        <button onClick={addCustomTime} disabled={!customTime || hours.length >= MAX_H}
-          className="py-2 px-3 rounded-xl text-xs font-bold bg-secondary hover:bg-secondary/80 disabled:opacity-50 text-foreground border border-border flex items-center gap-1">
+          className="flex-1 px-3 py-2 bg-background border border-border rounded-xl text-xs text-black outline-none focus:border-emerald-500" />        <button onClick={addCustomTime} disabled={!customTime || hours.length >= MAX_H}
+            className="py-2 px-3 rounded-xl text-xs font-bold bg-secondary hover:bg-secondary/80 disabled:opacity-50 text-foreground border border-border flex items-center gap-1">
           <Plus size={12} /> Añadir
         </button>
       </div>
@@ -1267,7 +1266,7 @@ export default function CreateStatusPage() {
               <div>
                 <p className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-600">Marketing & Redes Sociales</p>
                 <h1 className="text-2xl font-black text-foreground mt-0.5 flex items-center gap-2">
-                  <span>🎨</span> Creador de Publicaciones & Estados
+                  Creador de Publicaciones & Estados
                 </h1>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Genera pósters y estados listos para publicar en WhatsApp e Instagram con alta resolución.
@@ -1286,22 +1285,21 @@ export default function CreateStatusPage() {
             {/* Navegación de Pestañas tipo Estudio */}
             <div className="grid grid-cols-5 gap-2 p-1.5 bg-muted/60 dark:bg-zinc-900/60 rounded-2xl border border-border">
               {[
-                { id: 'pitches' as const, label: 'Canchas & Fecha', icon: '⚽', desc: 'Cancha y día' },
-                { id: 'hours' as const, label: 'Horarios', icon: '⏰', desc: `${sortedH.length} horas` },
-                { id: 'colors' as const, label: 'Colores & Fondo', icon: '🎨', desc: 'Fondo y tema' },
-                { id: 'texts' as const, label: 'Textos & Datos', icon: '✍️', desc: 'WhatsApp y CTA' },
-                { id: 'design' as const, label: 'Logo & Formato', icon: '📐', desc: `${FMT[cfg.format].label}` },
+                { id: 'pitches' as const, label: 'Canchas & Fecha', icon: '', desc: 'Cancha y día' },
+                { id: 'hours' as const, label: 'Horarios', icon: '', desc: `${sortedH.length} horas` },
+                { id: 'colors' as const, label: 'Colores & Fondo', icon: '', desc: 'Fondo y tema' },
+                { id: 'texts' as const, label: 'Textos & Datos', icon: '', desc: 'WhatsApp y CTA' },
+                { id: 'design' as const, label: 'Logo & Formato', icon: '', desc: `${FMT[cfg.format].label}` },
               ].map((s, idx) => {
                 const isActive = desktopTab === s.id;
                 return (
                   <button
                     key={s.id}
                     onClick={() => setDesktopTab(s.id)}
-                    className={`py-2.5 px-3 rounded-xl text-left transition-all flex flex-col justify-between ${
-                      isActive
-                        ? 'bg-card text-foreground shadow-md border border-border font-bold'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-card/50 font-medium'
-                    }`}
+                    className={`py-2.5 px-3 rounded-xl text-left transition-all flex flex-col justify-between ${isActive
+                      ? 'bg-card text-foreground shadow-md border border-border font-bold'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-card/50 font-medium'
+                      }`}
                   >
                     <div className="flex items-center justify-between text-sm">
                       <span>{s.icon}</span>
@@ -1323,7 +1321,7 @@ export default function CreateStatusPage() {
                   <div className="space-y-4 animate-in fade-in-50 duration-200">
                     <div className="border-b border-border pb-3">
                       <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-                        <span>⚽</span> Canchas & Fecha del Póster
+                        Canchas & Fecha del Póster
                       </h2>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Selecciona la cancha específica o muestra todas las canchas para el día elegido.
@@ -1477,11 +1475,10 @@ export default function CreateStatusPage() {
                   <button
                     key={fid}
                     onClick={() => set('format', fid)}
-                    className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition-all flex flex-col items-center justify-center text-center ${
-                      cfg.format === fid
-                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
-                        : 'bg-secondary/60 hover:bg-secondary text-foreground border-border'
-                    }`}
+                    className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition-all flex flex-col items-center justify-center text-center ${cfg.format === fid
+                      ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                      : 'bg-secondary/60 hover:bg-secondary text-foreground border-border'
+                      }`}
                   >
                     <span>{FMT[fid].label}</span>
                     <span className="text-[9px] opacity-75 font-mono">{FMT[fid].w}×{FMT[fid].h}</span>

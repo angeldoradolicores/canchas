@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { useFavorites } from '@/lib/favorites-context';
 import { isCombinedPitch } from '@/lib/combined-pitch-utils';
 import { getPitchLocation } from '@/lib/pitch-location';
+import { PaymentMethodLogo } from '@/components/ui/PaymentMethodLogo';
 
 export interface PaymentMethod {
   type: string;
@@ -370,9 +371,10 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
                   {paymentMethods.map((pm, idx) => (
                     <span
                       key={idx}
-                      className="text-[9px] font-bold px-2 py-0.5 bg-card border border-border rounded-md text-foreground shadow-2xs"
+                      className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 bg-card border border-border/80 rounded-lg text-foreground shadow-2xs"
                     >
-                      {pm.label}
+                      <PaymentMethodLogo method={pm.label || pm.type} size="xs" />
+                      <span>{pm.label}</span>
                     </span>
                   ))}
                 </div>
@@ -643,18 +645,21 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
                     {paymentMethods.map((pm, idx) => (
                       <div
                         key={idx}
-                        className="p-3 bg-secondary/30 rounded-xl border border-border/70 text-xs flex justify-between items-center gap-2"
+                        className="p-3 bg-secondary/30 rounded-xl border border-border/70 text-xs flex justify-between items-center gap-2.5 shadow-2xs"
                       >
-                        <div className="min-w-0 flex-1">
-                          <p className="font-extrabold text-foreground truncate">{pm.label}</p>
-                          {pm.number && (
-                            <p className="font-mono text-muted-foreground text-[11px] truncate mt-0.5">
-                              {pm.number}
-                            </p>
-                          )}
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <PaymentMethodLogo method={pm.label || pm.type} size="sm" />
+                          <div className="min-w-0 flex-1">
+                            <p className="font-extrabold text-foreground truncate">{pm.label}</p>
+                            {pm.number && (
+                              <p className="font-mono text-muted-foreground text-[11px] truncate mt-0.5 select-all">
+                                {pm.number}
+                              </p>
+                            )}
+                          </div>
                         </div>
                         {pm.name && (
-                          <span className="text-[10px] font-semibold bg-background px-2 py-1 rounded-md border border-border text-muted-foreground shrink-0">
+                          <span className="text-[10px] font-semibold bg-background px-2 py-1 rounded-md border border-border text-muted-foreground shrink-0 truncate max-w-[110px]">
                             {pm.name}
                           </span>
                         )}

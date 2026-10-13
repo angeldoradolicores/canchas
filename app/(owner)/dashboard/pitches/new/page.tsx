@@ -11,6 +11,7 @@ import {
 import Link from 'next/link';
 import nextDynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
+import { PaymentMethodLogo } from '@/components/ui/PaymentMethodLogo';
 
 const LocationPicker = nextDynamic(() => import('@/components/maps/LocationPicker'), {
   ssr: false,
@@ -32,10 +33,10 @@ const TONES = [
 ];
 
 const DEFAULT_PAYMENT_OPTIONS = [
-  { key: 'nequi', label: 'Nequi', icon: '🟣' },
-  { key: 'daviplata', label: 'Daviplata', icon: '🔴' },
-  { key: 'bancolombia', label: 'Bancolombia', icon: '🔵' },
-
+  { key: 'nequi', label: 'Nequi' },
+  { key: 'daviplata', label: 'Daviplata' },
+  { key: 'bancolombia', label: 'Bancolombia' },
+  { key: 'bre-b', label: 'Bre-B' },
 ];
 
 interface PaymentMethod {
@@ -108,9 +109,12 @@ function PreviewCard({ data }: { data: any }) {
         )}
         <p className="pitch-amenity text-xs truncate mt-1">{data.amenityChips.slice(0, 3).join(' · ') || 'Amenidades...'}</p>
         {data.paymentMethods.length > 0 && (
-          <div className="flex gap-1 mt-1 flex-wrap">
+          <div className="flex gap-1.5 mt-1 flex-wrap">
             {data.paymentMethods.map((pm: PaymentMethod) => (
-              <span key={pm.type} className="text-[9px] font-bold px-1.5 py-0.5 bg-secondary rounded-full text-muted-foreground">{pm.label}</span>
+              <span key={pm.type} className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 bg-secondary rounded-lg text-foreground border border-border/60">
+                <PaymentMethodLogo method={pm.label || pm.type} size="xs" />
+                <span>{pm.label}</span>
+              </span>
             ))}
           </div>
         )}
@@ -1236,13 +1240,14 @@ function NewPitchForm() {
                 <div className="space-y-2">
                   {paymentMethods.map((pm, idx) => (
                     <div key={idx} className="flex items-center justify-between p-2.5 bg-secondary/50 border border-border rounded-xl text-xs font-semibold">
-                      <div className="flex items-center gap-2">
-                        <GripVertical size={14} className="text-muted-foreground" />
-                        <span>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <GripVertical size={14} className="text-muted-foreground shrink-0" />
+                        <PaymentMethodLogo method={pm.label || pm.type} size="sm" />
+                        <span className="truncate">
                           <strong>{pm.label}</strong>: {pm.number} {pm.name && `(${pm.name})`}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"
                           onClick={() => movePaymentMethod(idx, 'up')}
@@ -1327,15 +1332,16 @@ function NewPitchForm() {
                       key={opt.key}
                       type="button"
                       onClick={() => setAddingPayment(opt.key)}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-bold bg-card border-border hover:border-primary/40 text-muted-foreground hover:text-foreground"
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold bg-card border-border hover:border-primary/50 text-foreground hover:bg-secondary/60 shadow-2xs transition-all active:scale-95"
                     >
-                      <span>{opt.icon}</span> {opt.label}
+                      <PaymentMethodLogo method={opt.key} size="sm" />
+                      <span>{opt.label}</span>
                     </button>
                   ))}
                   <button
                     type="button"
                     onClick={() => setAddingPayment('custom')}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-dashed text-xs font-bold bg-card border-primary/50 text-primary hover:bg-primary/5"
+                    className="flex items-center gap-1 px-3 py-2 rounded-xl border border-dashed text-xs font-bold bg-card border-primary/50 text-primary hover:bg-primary/5 shadow-2xs transition-all active:scale-95"
                   >
                     <Plus size={12} /> Otro Método
                   </button>

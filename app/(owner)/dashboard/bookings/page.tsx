@@ -99,6 +99,21 @@ export default function BookingsPage() {
   const [liveNotification, setLiveNotification] = useState<{ id: string; name: string; time: string; date: string } | null>(null);
   const notifiedPendingIdsRef = useRef<Set<string>>(new Set());
 
+  // Descartar notificación y resaltado al tocar o interactuar con la reserva
+  const dismissNewArrival = (group: any) => {
+    if (!group) return;
+    if (liveNotification && group.bookings?.some((b: any) => b.id === liveNotification.id)) {
+      setLiveNotification(null);
+    }
+    setNewlyArrivedIds(prev => {
+      const hasAny = group.bookings?.some((b: any) => prev.has(b.id));
+      if (!hasAny) return prev;
+      const next = new Set(prev);
+      group.bookings?.forEach((b: any) => next.delete(b.id));
+      return next;
+    });
+  };
+
   // Estados de Filtros
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -1055,7 +1070,8 @@ export default function BookingsPage() {
                 return (
                   <div
                     key={group.key}
-                    className={`bg-card rounded-2xl border border-border border-t-4 ${statusBorderColor} sm:border-t-border shadow-sm p-3.5 sm:p-4 flex flex-col gap-3 transition-all ${isNewlyArrived ? 'ring-2 ring-amber-500 shadow-lg shadow-amber-500/10' : ''
+                    onClick={() => dismissNewArrival(group)}
+                    className={`bg-card rounded-2xl border border-border border-t-4 ${statusBorderColor} sm:border-t-border shadow-sm p-3.5 sm:p-4 flex flex-col gap-3 transition-all ${isNewlyArrived ? 'ring-2 ring-amber-500 shadow-lg shadow-amber-500/10 cursor-pointer' : ''
                       }`}
                   >
                     {/* Alerta de Nueva Reserva Entrante en Vivo */}
@@ -1111,32 +1127,57 @@ export default function BookingsPage() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1.5 flex-wrap ml-auto sm:ml-0">
-                        {originalProof && (
-                          <button
-                            type="button"
-                            onClick={() => setProofModalData({
-                              url: originalProof,
-                              title: `Comprobante de Reserva - ${group.customer_name || 'Cliente'}`
-                            })}
-                            className="inline-flex items-center gap-1 text-[11px] font-bold text-primary border border-primary/30 bg-primary/10 hover:bg-primary/20 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                            title="Ver comprobante de pago de la reserva"
-                          >
-                            <FileText size={12} /> Ver Comprobante
-                          </button>
-                        )}
+                      <div className="flex flex-col sm:items-end gap-1.5 ml-auto sm:ml-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {originalProof && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                dismissNewArrival(group);
+                                setProofModalData({
+                                  url: originalProof,
+                                  title: `Comprobante de Reserva - ${group.customer_name || 'Cliente'}`
+                                });
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-primary border border-primary/30 bg-primary/10 hover:bg-primary/20 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                              title="Ver comprobante de pago de la reserva"
+                            >
+                              <FileText size={12} /> Ver Comprobante
+                            </button>
+                          )}
 
-                        {group.remaining_payment_proof_url && (
+                          {group.remaining_payment_proof_url && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setProofModalData({
+                                  url: group.remaining_payment_proof_url,
+                                  title: `Comprobante de Saldo (${formatPaymentMethod(group.remaining_payment_method, group.remaining_payment_splits)}) - ${group.customer_name || 'Cliente'}`
+                                });
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                              title="Ver foto del comprobante de saldo restante"
+                            >
+                              <Receipt size={12} /> Comprobante Saldo
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Botón Cobrar Saldo: ÚNICAMENTE cuando está en la pestaña 'Por Cobrar' debajo de Ver Comprobante */}
+                        {filterStatus === 'pending_payment' && !isFullyPaid && (
                           <button
                             type="button"
-                            onClick={() => setProofModalData({
-                              url: group.remaining_payment_proof_url,
-                              title: `Comprobante de Saldo (${formatPaymentMethod(group.remaining_payment_method, group.remaining_payment_splits)}) - ${group.customer_name || 'Cliente'}`
-                            })}
-                            className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                            title="Ver foto del comprobante de saldo restante"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedBookingForRemainingPayment(group);
+                            }}
+                            className="inline-flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-xl shadow-xs transition-all cursor-pointer w-full sm:w-auto"
+                            title="Registrar cobro de saldo en físico"
                           >
-                            <Receipt size={12} /> Comprobante Saldo
+                            <DollarSign size={13} />
+                            <span>Cobrar saldo (${balance.toLocaleString('es-CO')})</span>
                           </button>
                         )}
                       </div>
@@ -1224,73 +1265,81 @@ export default function BookingsPage() {
                                 <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">
                                   Saldo: ${balance.toLocaleString('es-CO')}
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedBookingForRemainingPayment(group)}
-                                  className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 text-amber-800 dark:text-amber-300 border border-amber-500/30 rounded-lg transition-all cursor-pointer"
-                                  title="Registrar cobro de saldo en físico"
-                                >
-                                  <DollarSign size={11} />
-                                  <span>Cobrar saldo</span>
-                                </button>
                               </div>
                             )}
                           </div>
                         </div>
                       </div>
 
-                      {/* Acciones para Reservas Pendientes (Tanto 1 hora como múltiples horas) */}
-                      {/* {group.status === 'pending' && (
+                      {/* Acciones para Reservas Pendientes (Aprobar todas / Rechazar todas cuando son más de 1 hora) */}
+                      {group.status === 'pending' && (
                         <div className="flex flex-wrap sm:flex-nowrap gap-2 pt-2 border-t border-border/40 justify-end items-center">
-                          {originalProof && (
-                            <button
-                              type="button"
-                              onClick={() => setProofModalData({
-                                url: originalProof,
-                                title: `Comprobante de Reserva - ${group.customer_name || 'Cliente'}`
-                              })}
-                              className="text-xs px-3.5 py-2 font-bold bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                              title="Ver comprobante de pago de la reserva"
-                            >
-                              <FileText size={14} />
-                              <span>Ver Comprobante</span>
-                            </button>
+                          {group.bookings.length > 1 ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  dismissNewArrival(group);
+                                  handleBatchApproveRequest(
+                                    group.bookings,
+                                    group.customer_name,
+                                    group.pitches?.name,
+                                    tPrice,
+                                    dAmount
+                                  );
+                                }}
+                                className="flex-1 sm:flex-initial text-xs px-4 py-2 font-bold bg-green-600 hover:bg-green-700 active:scale-95 text-white rounded-xl transition-all shadow-sm text-center flex items-center justify-center gap-1.5 cursor-pointer"
+                              >
+                                <CheckCircle size={14} />
+                                <span>Aprobar todas ({group.bookings.length} horas)</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  dismissNewArrival(group);
+                                  handleBatchCancelRequest(
+                                    group.bookings,
+                                    `las ${group.bookings.length} horas de ${group.customer_name || 'esta reserva'}`
+                                  );
+                                }}
+                                className="text-xs px-3.5 py-2 font-bold bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 rounded-xl transition-colors text-center cursor-pointer flex items-center justify-center gap-1"
+                              >
+                                <XCircle size={14} />
+                                <span>Rechazar todas</span>
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  dismissNewArrival(group);
+                                  handleApproveRequest(group.bookings[0]);
+                                }}
+                                className="flex-1 sm:flex-initial text-xs px-4 py-2 font-bold bg-green-600 hover:bg-green-700 active:scale-95 text-white rounded-xl transition-all shadow-sm text-center flex items-center justify-center gap-1.5 cursor-pointer"
+                              >
+                                <CheckCircle size={14} />
+                                <span>Aprobar reserva</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  dismissNewArrival(group);
+                                  handleCancelRequest(group.bookings[0]);
+                                }}
+                                className="text-xs px-3.5 py-2 font-bold bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 rounded-xl transition-colors text-center cursor-pointer flex items-center justify-center gap-1"
+                              >
+                                <XCircle size={14} />
+                                <span>Rechazar</span>
+                              </button>
+                            </>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (group.bookings.length === 1) {
-                                handleApproveRequest(group.bookings[0]);
-                              } else {
-                                handleBatchApproveRequest(
-                                  group.bookings,
-                                  group.customer_name,
-                                  group.pitches?.name,
-                                  tPrice,
-                                  dAmount
-                                );
-                              }
-                            }}
-                            className="flex-1 sm:flex-initial text-xs px-4 py-2 font-bold bg-green-600 hover:bg-green-700 active:scale-95 text-white rounded-xl transition-all shadow-sm text-center flex items-center justify-center gap-1.5 cursor-pointer"
-                          >
-                            <CheckCircle size={14} />
-                            <span>Confirmar {group.bookings.length > 1 ? `Todas (${group.bookings.length})` : 'Reserva'}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (group.bookings.length === 1) {
-                                handleCancelRequest(group.bookings[0]);
-                              } else {
-                                handleBatchCancelRequest(group.bookings, `las ${group.bookings.length} horas de ${group.customer_name || 'esta reserva'}`);
-                              }
-                            }}
-                            className="text-xs px-3 py-2 font-bold bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 rounded-xl transition-colors text-center cursor-pointer"
-                          >
-                            Rechazar
-                          </button>
                         </div>
-                      )} */}
+                      )}
 
                       {/* Cancelar confirmadas grupales */}
                       {group.status === 'confirmed' && group.bookings.length > 1 && (

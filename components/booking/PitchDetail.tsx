@@ -14,6 +14,8 @@ import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertMo
 import { isCombinedPitch, getLinkedPitchIds, getCombinedPitchNames } from '@/lib/combined-pitch-utils';
 import { getPitchLocation } from '@/lib/pitch-location';
 import { cleanAddress } from '@/lib/complex-utils';
+import { PaymentMethodLogo } from '@/components/ui/PaymentMethodLogo';
+import { CreditCard } from 'lucide-react';
 
 
 interface PitchDetailProps {
@@ -827,6 +829,41 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
               );
             })()}
 
+
+            {/* MÉTODOS DE PAGO ACEPTADOS */}
+            {Array.isArray(pitchAny.payment_methods) && pitchAny.payment_methods.length > 0 && (
+              <div className="mt-3 sm:mt-4 p-4 bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/15 dark:border-emerald-500/20 rounded-3xl sm:rounded-2xl">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <CreditCard size={15} className="text-emerald-600 dark:text-emerald-400" />
+                  <h4 className="text-[10px] sm:text-xs font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider">
+                    Métodos de Pago Aceptados
+                  </h4>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {pitchAny.payment_methods.map((pm: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className="p-2.5 bg-background border border-border/80 rounded-xl flex items-center justify-between gap-2 shadow-2xs"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <PaymentMethodLogo method={pm.label || pm.type} size="sm" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-foreground truncate">{pm.label}</p>
+                          {pm.number && (
+                            <p className="text-[11px] font-mono text-muted-foreground truncate select-all">{pm.number}</p>
+                          )}
+                        </div>
+                      </div>
+                      {pm.name && (
+                        <span className="text-[10px] font-semibold bg-secondary px-1.5 py-0.5 rounded text-muted-foreground shrink-0 max-w-[100px] truncate">
+                          {pm.name}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* CONTENEDOR DEL TELÉFONO CENTRADO */}
             {pitchAny.contact_phone && (
