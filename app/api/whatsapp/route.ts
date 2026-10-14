@@ -264,15 +264,15 @@ export async function POST(req: NextRequest) {
           : `data:image/png;base64,${rawBase64}`;
       } else if (rawCode) {
         try {
-          // La librería qrcode usa hexadecimal con '#'
+          // La librería qrcode con canales alfa completos para evitar inversiones de color
           finalQrImage = await QRCode.toDataURL(rawCode, {
             margin: 2,
             scale: 8,
-            color: { dark: '#16a34a', light: '#FFFFFF' }
+            color: { dark: '#16a34aff', light: '#ffffffff' }
           });
         } catch (e) {
           const qrData = encodeURIComponent(rawCode);
-          // La API externa requiere el color SIN '#' y es recomendable fijar el fondo (bgcolor)
+          // Forzamos formato correcto de color hexadecimal sin el '#' para la API externa
           finalQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${qrData}&color=16a34a&bgcolor=ffffff&margin=10`;
         }
       }
