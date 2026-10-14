@@ -1376,8 +1376,8 @@ export default function BookingsPage() {
                       </div>
                     </div>
 
-                    {/* Desglose de horas si son más de 1 hora (chips compactos, sin botones duplicados) */}
-                    {isMultiHour && (
+                    {/* Desglose de horas - siempre visible (1 hora o más) */}
+                    {group.bookings?.length > 0 && (
                       <div className="flex flex-wrap items-center gap-1.5 pl-1.5">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mr-0.5">
                           Turnos:

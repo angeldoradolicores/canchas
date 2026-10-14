@@ -472,7 +472,7 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
             )}
           </div>
         ) : (
-          <button className="btn-primary btn-sm" onClick={onLoginClick || (() => router.push('/login'))}>
+          <button className="btn-primary btn-sm" onClick={() => router.push('/login')}>
             Ingresar
           </button>
         )}

@@ -603,20 +603,33 @@ export default function CreateStatusPage() {
       }
       const free: string[] = json.data?.freeHours ?? [];
       const booked: string[] = json.data?.bookedHours ?? [];
-      setFreeSet(new Set(free));
-      setBookedSet(new Set(booked));
+      const newFreeSet = new Set(free);
+      const newBookedSet = new Set(booked);
+      setFreeSet(newFreeSet);
+      setBookedSet(newBookedSet);
 
       const minNow = bogotaNow().min;
       const available = tomorrow ? free : free.filter(h => h2min(h) > minNow);
+
+      // Quitar del póster cualquier hora que ya esté reservada u ocupada
+      setHours(prev => {
+        const cleaned = prev.filter(h => !newBookedSet.has(h));
+        return cleaned;
+      });
+
       if (available.length === 0) {
-        setHours([]);
         setNotice({
           k: 'warn',
           t: tomorrow ? 'No hay horas libres para mañana. Selecciona manualmente si deseas.' : 'No hay más horas libres hoy. Elige mañana o selecciona manualmente.'
         });
         return;
       }
-      setHours(available.slice(0, MAX_H));
+      // Solo auto-agregar horas disponibles si el póster está vacío
+      setHours(prev => {
+        if (prev.length === 0) return available.slice(0, MAX_H);
+        // Si ya hay horas en el póster, mantenerlas (menos las ya eliminadas arriba)
+        return prev;
+      });
       setNotice({
         k: 'ok',
         t: `${available.length} hora${available.length !== 1 ? 's' : ''} libre${available.length !== 1 ? 's' : ''} detectada${available.length !== 1 ? 's' : ''}.`
@@ -643,6 +656,8 @@ export default function CreateStatusPage() {
   };
 
   const toggleHour = (h: string) => {
+    // No permitir agregar horas reservadas u ocupadas
+    if (bookedSet.has(h)) return;
     setHours(p => p.includes(h) ? p.filter(x => x !== h) : p.length >= MAX_H ? p : [...p, h]);
   };
 
