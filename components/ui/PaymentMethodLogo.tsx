@@ -25,8 +25,7 @@ interface PaymentMethodLogoProps {
 }
 
 /**
- * Logos Vectoriales Oficiales de Métodos de Pago Colombianos:
- * Nequi, Daviplata, Bancolombia, Bre-B
+ * Logos Vectoriales Oficiales Basados en las Imágenes Proporcionadas
  */
 export function PaymentMethodLogo({
   method,
@@ -53,18 +52,14 @@ export function PaymentMethodLogo({
       labelText = 'Nequi';
       logoElement = (
         <div
-          className={`${currentSize} rounded-lg flex items-center justify-center shrink-0 shadow-xs overflow-hidden`}
-          style={{ background: '#200020' }}
+          className={`${currentSize} rounded-xl flex items-center justify-center shrink-0 shadow-sm overflow-hidden bg-white dark:bg-zinc-900 border border-border/40`}
           title="Nequi"
         >
-          <svg viewBox="0 0 40 40" className="w-[82%] h-[82%]" fill="none" xmlns="http://www.w3.org/2000/svg">
-            {/* Nequi stylized "N" logo mark */}
-            <rect width="40" height="40" rx="8" fill="#200020" />
-            <path
-              d="M10 29.5V10.5H16.2L24.5 22.8V10.5H29.5V29.5H23.5L15 17V29.5H10Z"
-              fill="#FF007A"
-            />
-            <circle cx="30" cy="9.5" r="3" fill="#00E5FF" />
+          {/* Isotipo Nequi: rombos superpuestos (Rosa, Cian y Morado Oscuro) */}
+          <svg viewBox="0 0 100 100" className="w-[85%] h-[85%]" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="25" y="15" width="48" height="48" rx="10" transform="rotate(18 49 39)" fill="#FF007A" />
+            <rect x="20" y="25" width="48" height="48" rx="10" transform="rotate(-15 44 49)" fill="#2BB6D6" />
+            <rect x="26" y="22" width="48" height="48" rx="8" transform="rotate(28 50 46)" fill="#1B002C" />
           </svg>
         </div>
       );
@@ -74,24 +69,16 @@ export function PaymentMethodLogo({
       labelText = 'Daviplata';
       logoElement = (
         <div
-          className={`${currentSize} rounded-lg flex items-center justify-center shrink-0 shadow-xs overflow-hidden`}
-          style={{ background: '#ED1C24' }}
+          className={`${currentSize} rounded-xl flex items-center justify-center shrink-0 shadow-sm overflow-hidden`}
+          style={{ background: '#E31C23' }}
           title="Daviplata"
         >
-          <svg viewBox="0 0 40 40" className="w-[85%] h-[85%]" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="40" height="40" rx="8" fill="#ED1C24" />
-            {/* Daviplata casita / bird smile mark */}
-            <path
-              d="M20 7L8 17.5H12V31H28V17.5H32L20 7Z"
-              fill="white"
-            />
-            <circle cx="20" cy="22" r="3.5" fill="#ED1C24" />
-            <path
-              d="M13 24C16.5 29 23.5 29 27 24"
-              stroke="#ED1C24"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-            />
+          {/* Logo Daviplata: Texto + casita en trazo blanco */}
+          <svg viewBox="0 0 100 100" className="w-[88%] h-[88%]" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <text x="8" y="58" fill="#FFFFFF" fontSize="22" fontFamily="sans-serif" fontWeight="bold" letterSpacing="-1">DAVI</text>
+            <text x="50" y="58" fill="#FFFFFF" fontSize="22" fontFamily="sans-serif">plata</text>
+            {/* Casita outline */}
+            <path d="M52 42 C 55 35, 75 32, 82 38 C 88 42, 85 49, 82 50 C 85 54, 80 62, 70 64 C 60 65, 52 62, 53 54 Z" stroke="#FFFFFF" strokeWidth="2.5" fill="none" />
           </svg>
         </div>
       );
@@ -101,30 +88,17 @@ export function PaymentMethodLogo({
       labelText = 'Bancolombia';
       logoElement = (
         <div
-          className={`${currentSize} rounded-lg flex items-center justify-center shrink-0 shadow-xs overflow-hidden bg-white dark:bg-zinc-900 border border-border/60`}
+          className={`${currentSize} rounded-xl flex items-center justify-center shrink-0 shadow-sm overflow-hidden bg-white dark:bg-zinc-900 border border-border/40`}
           title="Bancolombia"
         >
-          <svg viewBox="0 0 40 40" className="w-[85%] h-[85%]" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="40" height="40" rx="8" fill="transparent" />
-            {/* Bancolombia iconic tricolor stroke ribbons */}
-            <path
-              d="M8 25C13 25 17 21 21 16C25 11 28 9 32 9"
-              stroke="#FDDA24"
-              strokeWidth="4.5"
-              strokeLinecap="round"
-            />
-            <path
-              d="M8 28.5C13 28.5 17 24.5 21 19.5C25 14.5 28 12.5 32 12.5"
-              stroke="#002D62"
-              strokeWidth="4.5"
-              strokeLinecap="round"
-            />
-            <path
-              d="M8 32C13 32 17 28 21 23C25 18 28 16 32 16"
-              stroke="#C8102E"
-              strokeWidth="4.5"
-              strokeLinecap="round"
-            />
+          {/* Isotipo Bancolombia: Barras Azul, Amarilla y Roja inclinadas */}
+          <svg viewBox="0 0 100 100" className="w-[85%] h-[85%]" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {/* Barra Azul */}
+            <rect x="20" y="12" width="65" height="15" rx="5" transform="rotate(-8 52 19)" fill="#002B7F" />
+            {/* Barra Amarilla Central */}
+            <rect x="8" y="38" width="78" height="22" rx="6" transform="rotate(-10 47 49)" fill="#FCD116" />
+            {/* Barra Roja */}
+            <rect x="36" y="70" width="55" height="18" rx="5" transform="rotate(-12 63 79)" fill="#E30613" />
           </svg>
         </div>
       );
@@ -134,22 +108,21 @@ export function PaymentMethodLogo({
       labelText = 'Bre-B';
       logoElement = (
         <div
-          className={`${currentSize} rounded-lg flex items-center justify-center shrink-0 shadow-xs overflow-hidden`}
-          style={{ background: '#0B2545' }}
-          title="Bre-B (Banco de la República)"
+          className={`${currentSize} rounded-xl flex items-center justify-center shrink-0 shadow-sm overflow-hidden`}
+          style={{ background: '#32005A' }}
+          title="Bre-B"
         >
-          <svg viewBox="0 0 40 40" className="w-[88%] h-[88%]" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="40" height="40" rx="8" fill="#0B2545" />
-            {/* Bre-B stylized icon mark */}
-            <circle cx="14" cy="20" r="7.5" stroke="#00D2FF" strokeWidth="3" />
-            <circle cx="26" cy="20" r="7.5" stroke="#00FF87" strokeWidth="3" />
-            <path
-              d="M14 20L26 20"
-              stroke="white"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-            />
-            <circle cx="20" cy="20" r="2.5" fill="white" />
+          {/* Logo Bre-B: Texto estilizado con gradiente de azul a verde */}
+          <svg viewBox="0 0 100 100" className="w-[90%] h-[90%]" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="brebGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#00D2FF" />
+                <stop offset="100%" stopColor="#00FF87" />
+              </linearGradient>
+            </defs>
+            <text x="50%" y="62%" textAnchor="middle" fill="url(#brebGrad)" fontSize="32" fontFamily="sans-serif" fontWeight="900" letterSpacing="-1">
+              Bre-B
+            </text>
           </svg>
         </div>
       );
@@ -159,7 +132,7 @@ export function PaymentMethodLogo({
       labelText = 'Efectivo';
       logoElement = (
         <div
-          className={`${currentSize} rounded-lg flex items-center justify-center shrink-0 shadow-xs bg-emerald-600 text-white font-black`}
+          className={`${currentSize} rounded-xl flex items-center justify-center shrink-0 shadow-sm bg-emerald-600 text-white font-black`}
           title="Efectivo"
         >
           💵
@@ -171,7 +144,7 @@ export function PaymentMethodLogo({
       labelText = 'Tarjeta';
       logoElement = (
         <div
-          className={`${currentSize} rounded-lg flex items-center justify-center shrink-0 shadow-xs bg-indigo-600 text-white font-black`}
+          className={`${currentSize} rounded-xl flex items-center justify-center shrink-0 shadow-sm bg-indigo-600 text-white font-black`}
           title="Tarjeta"
         >
           💳
@@ -183,7 +156,7 @@ export function PaymentMethodLogo({
       labelText = method || 'Transferencia';
       logoElement = (
         <div
-          className={`${currentSize} rounded-lg flex items-center justify-center shrink-0 shadow-xs bg-secondary border border-border text-foreground font-black`}
+          className={`${currentSize} rounded-xl flex items-center justify-center shrink-0 shadow-sm bg-secondary border border-border text-foreground font-black`}
           title={labelText}
         >
           🏦
@@ -205,7 +178,7 @@ export function PaymentMethodLogo({
 }
 
 /**
- * Chip / Pill elegante de método de pago con su logo oficial
+ * Chip / Pill elegante de método de pago
  */
 export function PaymentMethodPill({
   method,
@@ -221,10 +194,10 @@ export function PaymentMethodPill({
   const norm = normalizePaymentType(method);
 
   const brandStyles: Record<KnownPaymentMethod, string> = {
-    nequi: 'bg-[#200020]/5 hover:bg-[#200020]/10 border-[#200020]/20 text-[#200020] dark:bg-[#200020]/30 dark:border-[#FF007A]/40 dark:text-pink-300',
-    daviplata: 'bg-[#ED1C24]/5 hover:bg-[#ED1C24]/10 border-[#ED1C24]/25 text-[#ED1C24] dark:bg-[#ED1C24]/20 dark:border-[#ED1C24]/40 dark:text-red-300',
+    nequi: 'bg-[#1B002C]/5 hover:bg-[#1B002C]/10 border-[#1B002C]/20 text-[#1B002C] dark:bg-[#1B002C]/30 dark:border-[#FF007A]/40 dark:text-pink-300',
+    daviplata: 'bg-[#E31C23]/5 hover:bg-[#E31C23]/10 border-[#E31C23]/25 text-[#E31C23] dark:bg-[#E31C23]/20 dark:border-[#E31C23]/40 dark:text-red-300',
     bancolombia: 'bg-amber-500/10 hover:bg-amber-500/15 border-amber-500/30 text-amber-900 dark:text-amber-200 dark:bg-amber-500/20',
-    'bre-b': 'bg-[#0B2545]/10 hover:bg-[#0B2545]/15 border-[#00D2FF]/30 text-[#0B2545] dark:text-cyan-300 dark:bg-[#0B2545]/40',
+    'bre-b': 'bg-[#32005A]/10 hover:bg-[#32005A]/15 border-[#00D2FF]/30 text-[#32005A] dark:text-cyan-300 dark:bg-[#32005A]/40',
     efectivo: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-800 dark:text-emerald-300',
     tarjeta: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-800 dark:text-indigo-300',
     transferencia: 'bg-secondary/70 border-border text-foreground',

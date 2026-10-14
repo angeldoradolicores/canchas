@@ -7,7 +7,7 @@ import {
   Loader2, CheckCircle, XCircle, FileText, CalendarDays,
   LayoutList, Calendar as CalendarIcon, Plus, X, Download, Clock,
   ChevronLeft, ChevronRight, Wrench, Search, AlertTriangle, Bell,
-  Receipt, DollarSign, Sparkles, Camera
+  Receipt, DollarSign, Sparkles, Camera, Phone
 } from 'lucide-react';
 import { useToday } from '@/lib/use-today';
 import { ManualBookingModal } from '@/components/booking/ManualBookingModal';
@@ -40,14 +40,23 @@ function getLocalDateString(dateInput: string | Date): string {
   }).format(d);
 }
 
-// Reproductor de sonido nativo (campanita/ding-dong sutil de recepción con Web Audio API)
+// ── Shared AudioContext para evitar fuga de recursos ──────────────────────
+let _audioCtx: AudioContext | null = null;
+function getAudioCtx(): AudioContext | null {
+  try {
+    const AC = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AC) return null;
+    if (!_audioCtx || _audioCtx.state === 'closed') _audioCtx = new AC();
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+    return _audioCtx;
+  } catch { return null; }
+}
+
 function playNotificationSound() {
   try {
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
+    const ctx = getAudioCtx();
+    if (!ctx) return;
 
-    // Tono 1: 587.33 Hz (D5)
     const osc1 = ctx.createOscillator();
     const gain1 = ctx.createGain();
     osc1.type = 'sine';
@@ -59,7 +68,6 @@ function playNotificationSound() {
     osc1.start(ctx.currentTime);
     osc1.stop(ctx.currentTime + 0.35);
 
-    // Tono 2: 880 Hz (A5) para generar efecto ding-dong armónico
     const osc2 = ctx.createOscillator();
     const gain2 = ctx.createGain();
     osc2.type = 'sine';
@@ -210,20 +218,29 @@ export default function BookingsPage() {
 
     let channel: any = null;
     let pollTimer: any = null;
+    let isCancelled = false;
 
     const setupLiveSync = async () => {
-      const { data: company } = await supabase
-        .from('companies')
-        .select('id')
-        .eq('owner_id', user.id)
-        .maybeSingle();
+      try {
+        const { data: company } = await supabase
+          .from('companies')
+          .select('id')
+          .eq('owner_id', user.id)
+          .maybeSingle();
 
-      if (!company) return;
+        if (!company || isCancelled) return;
 
-      // 1. Suscripción Realtime a cambios en la tabla 'bookings'
-      channel = supabase
-        .channel(`owner-bookings-live-${company.id}`)
-        .on(
+        // Limpiar canal previo si existía en esta instancia
+        if (channel) {
+          supabase.removeChannel(channel);
+          channel = null;
+        }
+
+        // Canal único por montaje para evitar colisión de callbacks post-subscribe en Supabase Realtime
+        const channelName = `owner-bookings-live-${company.id}-${Math.random().toString(36).slice(2, 8)}`;
+        const newChannel = supabase.channel(channelName);
+
+        newChannel.on(
           'postgres_changes',
           {
             event: '*',
@@ -272,19 +289,33 @@ export default function BookingsPage() {
             // Recargar silenciosamente las reservas para actualizar la vista sin recargar la página
             fetchBookingsRef.current(true);
           }
-        )
-        .subscribe();
+        );
 
-      // 2. Polling de respaldo cada 25 segundos (asegura actualización garantizada)
-      pollTimer = setInterval(() => {
-        fetchBookingsRef.current(true);
-      }, 25000);
+        if (isCancelled) {
+          supabase.removeChannel(newChannel);
+          return;
+        }
+
+        channel = newChannel;
+        newChannel.subscribe();
+
+        // 2. Polling de respaldo cada 25 segundos (asegura actualización garantizada)
+        pollTimer = setInterval(() => {
+          fetchBookingsRef.current(true);
+        }, 25000);
+      } catch (err) {
+        console.error('[setupLiveSync error]:', err);
+      }
     };
 
     setupLiveSync();
 
     return () => {
-      if (channel) supabase.removeChannel(channel);
+      isCancelled = true;
+      if (channel) {
+        supabase.removeChannel(channel);
+        channel = null;
+      }
       if (pollTimer) clearInterval(pollTimer);
     };
   }, [user?.id]);
@@ -308,50 +339,27 @@ export default function BookingsPage() {
   const [batchCancelConfirm, setBatchCancelConfirm] = useState<{ ids: string[]; label: string } | null>(null);
 
   const updateStatus = async (id: string, newStatus: 'confirmed' | 'cancelled') => {
-    const updatePayload: Record<string, any> = {
-      status: newStatus,
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: user?.id || null,
-    };
-    if (newStatus === 'confirmed') updatePayload.payment_status = 'verified';
-    if (newStatus === 'cancelled') updatePayload.payment_status = 'rejected';
-
-    const { error } = await supabase.from('bookings').update(updatePayload).eq('id', id);
-    if (!error) {
-      setBookings(prev => prev.map(b => b.id === id ? { ...b, ...updatePayload } : b));
-
-      // Notificar al cliente inmediatamente a través de la tabla de notificaciones
-      const target = bookings.find(b => b.id === id);
-      if (target?.user_id) {
-        try {
-          const isApproved = newStatus === 'confirmed';
-          const startTime = new Date(target.start_time);
-          const timeStr = startTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
-          const dateStr = startTime.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' });
-
-          await supabase.from('notifications').insert({
-            user_id: target.user_id,
-            sender_id: user?.id,
-            title: isApproved ? '🎉 ¡Reserva Confirmada!' : '⚠️ Reserva Cancelada',
-            message: isApproved
-              ? `Tu reserva para el ${dateStr} a las ${timeStr} fue confirmada por el dueño. ¡A jugar!`
-              : `Tu solicitud de reserva para el ${dateStr} a las ${timeStr} fue cancelada por el establecimiento.`,
-            type: 'booking_status',
-            is_read: false,
-          });
-        } catch (notifErr) {
-          console.error('[Notification insert error]', notifErr);
-        }
-      }
-
-      // Notificar al cliente vía WhatsApp con su ticket o aviso
-      fetch('/api/bookings/notify-status', {
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      const res = await fetch('/api/bookings/batch-action', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: id, status: newStatus }),
-      }).catch(err => console.error('[WhatsApp Status Notification error]', err));
-    } else {
-      alert('Error: ' + error.message);
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ ids: [id], action: newStatus === 'confirmed' ? 'confirm' : 'cancel' }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setBookings(prev => prev.map(b => b.id === id
+          ? { ...b, status: newStatus, payment_status: newStatus === 'confirmed' ? 'verified' : 'rejected', reviewed_at: new Date().toISOString() }
+          : b
+        ));
+      } else {
+        console.error('[updateStatus] error:', json?.error);
+      }
+    } catch (err) {
+      console.error('[updateStatus] unexpected error:', err);
     }
   };
 
@@ -468,26 +476,27 @@ export default function BookingsPage() {
     if (!batchApproveConfirm) return;
     setBatchApproving(true);
     const { ids } = batchApproveConfirm;
-    const updatePayload: Record<string, any> = {
-      status: 'confirmed',
-      payment_status: 'verified',
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: user?.id || null,
-    };
-
-    const { error } = await supabase.from('bookings').update(updatePayload).in('id', ids);
-    if (!error) {
-      setBookings(prev => prev.map(b => ids.includes(b.id) ? { ...b, ...updatePayload } : b));
-      // Notificar al cliente con su ticket digital unificado por WhatsApp
-      if (ids.length > 0) {
-        fetch('/api/bookings/notify-status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bookingId: ids[0], status: 'confirmed' }),
-        }).catch(err => console.error('[WhatsApp batch approve notification error]:', err));
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      const res = await fetch('/api/bookings/batch-action', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ ids, action: 'confirm' }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setBookings(prev => prev.map(b => ids.includes(b.id)
+          ? { ...b, status: 'confirmed', payment_status: 'verified', reviewed_at: new Date().toISOString() }
+          : b
+        ));
+      } else {
+        console.error('[confirmBatchApprove] error:', json?.error);
       }
-    } else {
-      alert('Error al confirmar reservas: ' + error.message);
+    } catch (err) {
+      console.error('[confirmBatchApprove] unexpected error:', err);
     }
     setBatchApproving(false);
     setBatchApproveConfirm(null);
@@ -504,25 +513,27 @@ export default function BookingsPage() {
     if (!batchCancelConfirm) return;
     setBatchCancelling(true);
     const { ids } = batchCancelConfirm;
-    const updatePayload: Record<string, any> = {
-      status: 'cancelled',
-      payment_status: 'rejected',
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: user?.id || null,
-    };
-    const { error } = await supabase.from('bookings').update(updatePayload).in('id', ids);
-    if (!error) {
-      setBookings(prev => prev.map(b => ids.includes(b.id) ? { ...b, ...updatePayload } : b));
-      // Notificar a cada cliente por WhatsApp
-      ids.forEach(id => {
-        fetch('/api/bookings/notify-status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bookingId: id, status: 'cancelled' }),
-        }).catch(() => { });
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      const res = await fetch('/api/bookings/batch-action', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ ids, action: 'cancel' }),
       });
-    } else {
-      alert('Error al rechazar reservas: ' + error.message);
+      const json = await res.json();
+      if (res.ok) {
+        setBookings(prev => prev.map(b => ids.includes(b.id)
+          ? { ...b, status: 'cancelled', payment_status: 'rejected', reviewed_at: new Date().toISOString() }
+          : b
+        ));
+      } else {
+        console.error('[confirmBatchCancel] error:', json?.error);
+      }
+    } catch (err) {
+      console.error('[confirmBatchCancel] unexpected error:', err);
     }
     setBatchCancelling(false);
     setBatchCancelConfirm(null);
@@ -1065,30 +1076,43 @@ export default function BookingsPage() {
                 const isFullyPaid = balance <= 0 || remainingPaid > 0;
                 const isNewlyArrived = group.bookings.some((b: any) => newlyArrivedIds.has(b.id));
 
-                const statusBorderColor = group.status === 'confirmed' ? 'border-t-green-500' : group.status === 'pending' ? 'border-t-purple-500' : 'border-t-red-400';
+                const isMultiHour = group.bookings.length > 1;
+                const lastBooking = group.bookings[group.bookings.length - 1];
+                const lastEnd = lastBooking?.end_time
+                  ? new Date(lastBooking.end_time)
+                  : new Date(new Date(lastBooking?.start_time || group.start_time).getTime() + 60 * 60 * 1000);
 
                 return (
                   <div
                     key={group.key}
                     onClick={() => dismissNewArrival(group)}
-                    className={`bg-card rounded-2xl border border-border border-t-4 ${statusBorderColor} sm:border-t-border shadow-sm p-3.5 sm:p-4 flex flex-col gap-3 transition-all ${isNewlyArrived ? 'ring-2 ring-amber-500 shadow-lg shadow-amber-500/10 cursor-pointer' : ''
-                      }`}
+                    className={`bg-card rounded-2xl border border-border shadow-sm hover:shadow-md transition-all p-3.5 sm:p-4.5 flex flex-col gap-3.5 relative overflow-hidden ${
+                      isNewlyArrived ? 'ring-2 ring-amber-500 shadow-lg shadow-amber-500/10 cursor-pointer' : ''
+                    }`}
                   >
-                    {/* Alerta de Nueva Reserva Entrante en Vivo */}
+                    {/* Indicador sutil de estado en el borde izquierdo */}
+                    <div
+                      className={`absolute left-0 top-0 bottom-0 w-1 ${
+                        group.status === 'confirmed'
+                          ? isFullyPaid ? 'bg-emerald-500' : 'bg-sky-500'
+                          : group.status === 'pending'
+                          ? 'bg-amber-500'
+                          : 'bg-red-400'
+                      }`}
+                    />
+
+                    {/* Alerta de Nueva Reserva Entrante (se descarta al hacer click en cualquier parte de la card) */}
                     {isNewlyArrived && (
                       <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs font-bold animate-pulse">
                         <span className="flex items-center gap-1.5 min-w-0">
-                          <Sparkles size={14} className="text-amber-500 shrink-0" />
-                          <span className="truncate">¡NUEVA RESERVA RECIBIDA EN VIVO!</span>
+                          <Bell size={13} className="text-amber-600 animate-bounce" />
+                          <span className="truncate">¡NUEVA RESERVA RECIBIDA!</span>
                         </span>
                         <button
                           type="button"
-                          onClick={() => {
-                            setNewlyArrivedIds(prev => {
-                              const next = new Set(prev);
-                              group.bookings.forEach((b: any) => next.delete(b.id));
-                              return next;
-                            });
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            dismissNewArrival(group);
                           }}
                           className="text-[11px] underline hover:no-underline font-semibold text-amber-700 dark:text-amber-300 shrink-0 cursor-pointer"
                         >
@@ -1097,75 +1121,192 @@ export default function BookingsPage() {
                       </div>
                     )}
 
-                    {/* Header Superior: Estado, Categoría y Comprobantes */}
-                    <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-border/50 sm:pb-0 sm:border-b-0">
+                    {/* Header: Estado, Categoría, Tipo y Duración */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap pl-1.5">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {group.status === 'pending' ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">
-                            <Clock size={12} /> Pendiente de Aprobación
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60">
+                            <Clock size={12} className="text-amber-600 dark:text-amber-400" />
+                            Pendiente de Aprobación
                           </span>
                         ) : group.status === 'confirmed' ? (
                           isFullyPaid ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800">
-                              <CheckCircle size={12} /> Totalmente Aprobada ({group.bookings.length})
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60">
+                              <CheckCircle size={12} className="text-emerald-600 dark:text-emerald-400" />
+                              Aprobada · Pago Completo
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800">
-                              <DollarSign size={12} /> Pendiente de Cobro ({group.bookings.length})
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg bg-sky-50 text-sky-800 border border-sky-200/80 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/60">
+                              <Receipt size={12} className="text-sky-600 dark:text-sky-400" />
+                              Aprobada · Saldo Pendiente
                             </span>
                           )
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border bg-red-100 text-red-600 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800">
-                            <XCircle size={12} /> Canceladas ({group.bookings.length})
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg bg-red-50 text-red-700 border border-red-200/80 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800/60">
+                            <XCircle size={12} className="text-red-600 dark:text-red-400" />
+                            Cancelada
                           </span>
                         )}
 
                         {isManual && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-lg">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 rounded-lg">
                             <Wrench size={10} /> Manual
                           </span>
                         )}
                       </div>
 
-                      <div className="flex flex-col sm:items-end gap-1.5 ml-auto sm:ml-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {originalProof && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                dismissNewArrival(group);
-                                setProofModalData({
-                                  url: originalProof,
-                                  title: `Comprobante de Reserva - ${group.customer_name || 'Cliente'}`
-                                });
-                              }}
-                              className="inline-flex items-center gap-1 text-[11px] font-bold text-primary border border-primary/30 bg-primary/10 hover:bg-primary/20 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                              title="Ver comprobante de pago de la reserva"
-                            >
-                              <FileText size={12} /> Ver Comprobante
-                            </button>
-                          )}
+                      {/* Badge de Horas */}
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-secondary/80 text-muted-foreground border border-border/50">
+                        {group.bookings.length} {group.bookings.length === 1 ? 'hora' : 'horas'}
+                      </span>
+                    </div>
 
-                          {group.remaining_payment_proof_url && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setProofModalData({
-                                  url: group.remaining_payment_proof_url,
-                                  title: `Comprobante de Saldo (${formatPaymentMethod(group.remaining_payment_method, group.remaining_payment_splits)}) - ${group.customer_name || 'Cliente'}`
-                                });
-                              }}
-                              className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                              title="Ver foto del comprobante de saldo restante"
+                    {/* Información Principal: Cliente, Cancha, Horario, Cobro (Grid Responsivo) */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-secondary/20 p-3 rounded-xl border border-border/40 pl-3">
+                      {/* Cliente */}
+                      <div className="col-span-2 sm:col-span-1">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">Cliente</p>
+                        <p className="font-extrabold text-sm text-foreground capitalize leading-snug break-words">
+                          {group.customer_name || 'Anónimo'}
+                        </p>
+                        {group.customer_phone && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <a
+                              href={`tel:${group.customer_phone}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
                             >
-                              <Receipt size={12} /> Comprobante Saldo
-                            </button>
-                          )}
-                        </div>
+                              <Phone size={11} className="text-muted-foreground" />
+                              <span>{group.customer_phone}</span>
+                            </a>
+                            <a
+                              href={`https://wa.me/57${group.customer_phone.replace(/\D/g, '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline px-1.5 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 rounded border border-emerald-200/50 dark:border-emerald-800/40"
+                              title="Escribir por WhatsApp"
+                            >
+                              WhatsApp
+                            </a>
+                          </div>
+                        )}
+                      </div>
 
-                        {/* Botón Cobrar Saldo: ÚNICAMENTE cuando está en la pestaña 'Por Cobrar' debajo de Ver Comprobante */}
+                      {/* Cancha */}
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">Cancha</p>
+                        <p className="font-bold text-xs sm:text-sm text-foreground break-words leading-snug">
+                          {group.pitches?.name?.toUpperCase() || '—'}
+                        </p>
+                        {group.pitches?.custom_pricing?.is_combined && (
+                          <span className="inline-flex items-center text-[9px] font-extrabold uppercase px-1.5 py-0.2 mt-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300">
+                            Combinada
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Fecha y Horario */}
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">Fecha y Turno</p>
+                        <p className="font-bold text-xs sm:text-sm text-foreground capitalize leading-snug">
+                          {startTime.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
+                        </p>
+                        <p className="text-xs font-semibold text-primary mt-0.5">
+                          {startTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
+                          {' – '}
+                          {lastEnd.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
+                        </p>
+                      </div>
+
+                      {/* Finanzas */}
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">Cobro</p>
+                        <p className="font-extrabold text-xs sm:text-sm text-foreground">
+                          ${tPrice.toLocaleString('es-CO')}
+                        </p>
+                        {dAmount > 0 && (
+                          <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                            Abono: ${dAmount.toLocaleString('es-CO')}
+                          </p>
+                        )}
+                        {group.status === 'confirmed' && (
+                          isFullyPaid ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                              <CheckCircle size={10} /> Saldo pagado
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 mt-0.5 block">
+                              Saldo: ${balance.toLocaleString('es-CO')}
+                            </span>
+                          )
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Desglose de horas si son más de 1 hora (chips compactos, sin botones duplicados) */}
+                    {isMultiHour && (
+                      <div className="flex flex-wrap items-center gap-1.5 pl-1.5">
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mr-0.5">
+                          Turnos:
+                        </span>
+                        {group.bookings.map((b: any, idx: number) => {
+                          const bTime = new Date(b.start_time);
+                          return (
+                            <span
+                              key={b.id}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-secondary/60 text-foreground font-semibold text-[11px] border border-border/50"
+                            >
+                              <span className="w-3.5 h-3.5 rounded-full bg-primary/10 text-primary font-bold text-[9px] flex items-center justify-center">
+                                {idx + 1}
+                              </span>
+                              {bTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Barra de Acciones y Comprobantes (Limpia, organizada, sin sobrecarga visual) */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-border/40 pl-1.5">
+                      {/* Izquierda: Comprobante de Abono, Comprobante de Saldo, y Botón Cobrar Saldo */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {originalProof && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              dismissNewArrival(group);
+                              setProofModalData({
+                                url: originalProof,
+                                title: `Comprobante de Reserva - ${group.customer_name || 'Cliente'}`
+                              });
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-primary border border-primary/30 bg-primary/10 hover:bg-primary/20 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
+                            title="Ver foto del comprobante de abono"
+                          >
+                            <FileText size={12} /> Ver Comprobante
+                          </button>
+                        )}
+
+                        {group.remaining_payment_proof_url && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setProofModalData({
+                                url: group.remaining_payment_proof_url,
+                                title: `Comprobante de Saldo (${formatPaymentMethod(group.remaining_payment_method, group.remaining_payment_splits)}) - ${group.customer_name || 'Cliente'}`
+                              });
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
+                            title="Ver foto del comprobante de saldo restante"
+                          >
+                            <Receipt size={12} /> Comprobante Saldo
+                          </button>
+                        )}
+
+                        {/* Botón Cobrar Saldo: ÚNICAMENTE cuando está en la pestaña 'Por Cobrar' (pending_payment) debajo de los comprobantes, color suave */}
                         {filterStatus === 'pending_payment' && !isFullyPaid && (
                           <button
                             type="button"
@@ -1173,138 +1314,53 @@ export default function BookingsPage() {
                               e.stopPropagation();
                               setSelectedBookingForRemainingPayment(group);
                             }}
-                            className="inline-flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-xl shadow-xs transition-all cursor-pointer w-full sm:w-auto"
+                            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-700/60 rounded-xl shadow-2xs transition-all cursor-pointer"
                             title="Registrar cobro de saldo en físico"
                           >
-                            <DollarSign size={13} />
+                            <DollarSign size={13} className="text-emerald-600 dark:text-emerald-400" />
                             <span>Cobrar saldo (${balance.toLocaleString('es-CO')})</span>
                           </button>
                         )}
-                      </div>
-                    </div>
 
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                      {/* Indicador visual lateral (solo Desktop) */}
-                      <div className={`w-1.5 hidden sm:block self-stretch rounded-full flex-shrink-0 ${group.status === 'confirmed' ? 'bg-green-500' : group.status === 'pending' ? 'bg-purple-500' : 'bg-red-400'}`} />
-
-                      {/* Grid de Información Principal */}
-                      <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-
-                        {/* Cliente */}
-                        <div className="col-span-2 sm:col-span-1 min-w-0">
-                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Cliente</p>
-                          <p className="font-bold text-sm text-foreground capitalize break-words leading-tight">{group.customer_name || 'Anónimo'}</p>
-                          {group.customer_phone && <p className="text-xs text-muted-foreground mt-0.5">{group.customer_phone}</p>}
-                        </div>
-
-                        {/* Cancha */}
-                        <div className="min-w-0 w-full">
-                          {/* Etiqueta de título */}
-                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
-                            Cancha
-                          </p>
-
-                          {/* Nombre completo sin romper palabras a la mitad */}
-                          <p className="font-bold text-xs sm:text-sm text-foreground break-normal leading-snug hyphens-none">
-                            {group.pitches?.name?.toUpperCase() || '—'}
-                          </p>
-
-                          {/* Badge Combinada */}
-                          {group.pitches?.custom_pricing?.is_combined && (
-                            <div className="mt-1">
-                              <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 whitespace-nowrap">
-                                Combinada
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Fecha y Duración */}
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Fecha Partido</p>
-                          <p className="font-bold text-xs sm:text-sm text-foreground capitalize leading-tight">
-                            {startTime.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
-                          </p>
-                          <p className="text-[11px] text-primary font-bold mt-0.5">
-                            {group.bookings.length} {group.bookings.length === 1 ? 'Hora' : 'Horas'}
-                          </p>
-                          {group.created_at && getLocalDateString(group.created_at) !== getLocalDateString(group.start_time) && (
-                            <span className="inline-block mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                              Realizada hoy
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Precio, Abono y Saldo */}
-                        <div className="min-w-0 flex flex-col justify-between">
-                          <div>
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Liquidación</p>
-                            <p className="font-bold text-xs sm:text-sm text-foreground leading-tight">${tPrice.toLocaleString('es-CO')}</p>
-                            {dAmount > 0 && (
-                              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">Abono: ${dAmount.toLocaleString('es-CO')}</p>
-                            )}
-                          </div>
-
-                          <div className="mt-1.5">
-                            {isFullyPaid ? (
-                              <div>
-                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg">
-                                  <CheckCircle size={10} />
-                                  <span>Saldo pago {group.remaining_payment_method ? `(${formatPaymentMethod(group.remaining_payment_method, group.remaining_payment_splits)})` : ''}</span>
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedBookingForRemainingPayment(group)}
-                                  className="text-[10px] text-muted-foreground hover:text-foreground mt-0.5 underline block cursor-pointer"
-                                >
-                                  Editar pago
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex flex-col gap-1 items-start">
-                                <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">
-                                  Saldo: ${balance.toLocaleString('es-CO')}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                        {group.status === 'confirmed' && isFullyPaid && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedBookingForRemainingPayment(group);
+                            }}
+                            className="text-[11px] text-muted-foreground hover:text-foreground underline cursor-pointer"
+                          >
+                            Editar pago
+                          </button>
+                        )}
                       </div>
 
-                      {/* Acciones para Reservas Pendientes (Aprobar todas / Rechazar todas cuando son más de 1 hora) */}
-                      {group.status === 'pending' && (
-                        <div className="flex flex-wrap sm:flex-nowrap gap-2 pt-2 border-t border-border/40 justify-end items-center">
-                          {group.bookings.length > 1 ? (
+                      {/* Derecha: Botones de Decisión (Aprobar / Rechazar / Cancelar) — ÚNICAMENTE un conjunto de botones */}
+                      <div className="flex items-center gap-2 self-end sm:self-auto">
+                        {group.status === 'pending' && (
+                          isMultiHour ? (
                             <>
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   dismissNewArrival(group);
-                                  handleBatchApproveRequest(
-                                    group.bookings,
-                                    group.customer_name,
-                                    group.pitches?.name,
-                                    tPrice,
-                                    dAmount
-                                  );
+                                  handleBatchApproveRequest(group.bookings, group.customer_name, group.pitches?.name, tPrice, dAmount);
                                 }}
-                                className="flex-1 sm:flex-initial text-xs px-4 py-2 font-bold bg-green-600 hover:bg-green-700 active:scale-95 text-white rounded-xl transition-all shadow-sm text-center flex items-center justify-center gap-1.5 cursor-pointer"
+                                className="text-xs px-3.5 py-1.5 font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
                               >
                                 <CheckCircle size={14} />
-                                <span>Aprobar todas ({group.bookings.length} horas)</span>
+                                <span>Aprobar todas ({group.bookings.length}h)</span>
                               </button>
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   dismissNewArrival(group);
-                                  handleBatchCancelRequest(
-                                    group.bookings,
-                                    `las ${group.bookings.length} horas de ${group.customer_name || 'esta reserva'}`
-                                  );
+                                  handleBatchCancelRequest(group.bookings, `las ${group.bookings.length} horas de ${group.customer_name || 'esta reserva'}`);
                                 }}
-                                className="text-xs px-3.5 py-2 font-bold bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 rounded-xl transition-colors text-center cursor-pointer flex items-center justify-center gap-1"
+                                className="text-xs px-3 py-1.5 font-bold text-red-600 dark:text-red-400 bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/40 border border-red-200/60 dark:border-red-800/50 rounded-xl transition-colors flex items-center gap-1 cursor-pointer"
                               >
                                 <XCircle size={14} />
                                 <span>Rechazar todas</span>
@@ -1319,10 +1375,10 @@ export default function BookingsPage() {
                                   dismissNewArrival(group);
                                   handleApproveRequest(group.bookings[0]);
                                 }}
-                                className="flex-1 sm:flex-initial text-xs px-4 py-2 font-bold bg-green-600 hover:bg-green-700 active:scale-95 text-white rounded-xl transition-all shadow-sm text-center flex items-center justify-center gap-1.5 cursor-pointer"
+                                className="text-xs px-3.5 py-1.5 font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
                               >
                                 <CheckCircle size={14} />
-                                <span>Aprobar reserva</span>
+                                <span>Aprobar</span>
                               </button>
                               <button
                                 type="button"
@@ -1331,94 +1387,44 @@ export default function BookingsPage() {
                                   dismissNewArrival(group);
                                   handleCancelRequest(group.bookings[0]);
                                 }}
-                                className="text-xs px-3.5 py-2 font-bold bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 rounded-xl transition-colors text-center cursor-pointer flex items-center justify-center gap-1"
+                                className="text-xs px-3 py-1.5 font-bold text-red-600 dark:text-red-400 bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/40 border border-red-200/60 dark:border-red-800/50 rounded-xl transition-colors flex items-center gap-1 cursor-pointer"
                               >
                                 <XCircle size={14} />
                                 <span>Rechazar</span>
                               </button>
                             </>
-                          )}
-                        </div>
-                      )}
+                          )
+                        )}
 
-                      {/* Cancelar confirmadas grupales */}
-                      {group.status === 'confirmed' && group.bookings.length > 1 && (
-                        <div className="flex pt-2 sm:pt-0 border-t border-border/40 sm:border-t-0 justify-end">
-                          <button
-                            onClick={() => handleBatchCancelRequest(group.bookings, `las ${group.bookings.length} horas confirmadas de ${group.customer_name || 'esta reserva'}`)}
-                            className="w-full sm:w-auto text-xs px-3 py-2 font-bold bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 rounded-xl transition-colors text-center cursor-pointer"
-                          >
-                            Cancelar Todas
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Bloque de Horas Individuales */}
-                    {/* Bloque de Horas Individuales estilo Timeline */}
-                    <div className="bg-secondary/30 rounded-xl p-3 border border-border/50 mt-1 flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
-                          Desglose de Horas ({group.bookings.length})
-                        </span>
-                        <span className="text-[10px] font-bold text-muted-foreground">
-                          Presiona para gestionar individualmente
-                        </span>
-                      </div>
-
-                      <div className="flex flex-col gap-1.5">
-                        {group.bookings.map((b: any, idx: number) => {
-                          const bTime = new Date(b.start_time);
-                          return (
-                            <div
-                              key={b.id}
-                              className="flex items-center justify-between gap-3 bg-background border border-border/70 px-3 py-2 rounded-xl shadow-2xs hover:border-primary/40 transition-colors"
+                        {group.status === 'confirmed' && (
+                          isMultiHour ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleBatchCancelRequest(group.bookings, `las ${group.bookings.length} horas confirmadas de ${group.customer_name || 'esta reserva'}`);
+                              }}
+                              className="text-xs px-3 py-1.5 font-bold text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors flex items-center gap-1 cursor-pointer"
                             >
-                              {/* Indicador de Hora y Número */}
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary font-bold text-[10px]">
-                                  {idx + 1}
-                                </span>
-                                <span className="text-xs font-bold text-foreground tracking-tight">
-                                  {bTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
-                                </span>
-                              </div>
-
-                              {/* Acciones por Hora con Botones Táctiles Grandes */}
-                              {group.status === 'pending' && (
-                                <div className="flex items-center gap-1.5">
-                                  <button
-                                    onClick={() => handleApproveRequest(b)}
-                                    className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500 hover:text-white rounded-lg transition-all"
-                                  >
-                                    <CheckCircle size={13} />
-                                    <span className="hidden min-[380px]:inline">Aprobar</span>
-                                  </button>
-                                  <button
-                                    onClick={() => handleCancelRequest(b)}
-                                    className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500 hover:text-white rounded-lg transition-all"
-                                  >
-                                    <XCircle size={13} />
-                                    <span className="hidden min-[380px]:inline">Rechazar</span>
-                                  </button>
-                                </div>
-                              )}
-
-                              {group.status === 'confirmed' && (
-                                <button
-                                  onClick={() => handleCancelRequest(b)}
-                                  className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                                >
-                                  <XCircle size={13} />
-                                  <span>Cancelar hora</span>
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
+                              <XCircle size={13} />
+                              <span>Cancelar todas las horas</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCancelRequest(group.bookings[0]);
+                              }}
+                              className="text-xs px-3 py-1.5 font-bold text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors flex items-center gap-1 cursor-pointer"
+                            >
+                              <XCircle size={13} />
+                              <span>Cancelar reserva</span>
+                            </button>
+                          )
+                        )}
                       </div>
                     </div>
-
                   </div>
                 );
               })}
@@ -1949,8 +1955,9 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
 
   // Supabase Realtime — cambios inmediatos sin esperar el polling
   useEffect(() => {
+    const channelName = `schedule:${pitch.id}:${selectedDate}-${Math.random().toString(36).slice(2, 8)}`;
     const channel = supabase
-      .channel(`schedule:${pitch.id}:${selectedDate}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'bookings' },
