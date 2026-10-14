@@ -453,10 +453,10 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
           </h3>
           <p className="text-sm text-muted-foreground max-w-md mx-auto mb-4">
             {selectedCity !== 'Todas'
-              ? `Actualmente no hay retos registrados en ${selectedCity}. Puedes ver los retos a nivel nacional o crear el primero.`
+              ? `Actualmente no hay retos registrados en ${selectedCity}.`
               : 'Ajusta los filtros o sé el primero en crear un reto.'}
           </p>
-          {selectedCity !== 'Todas' && (
+          {/* {selectedCity !== 'Todas' && (
             <button
               type="button"
               onClick={() => onSelectCity('Todas')}
@@ -465,7 +465,7 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
               <MapPin size={14} />
               Ver retos en todas las ciudades
             </button>
-          )}
+          )} */}
         </div>
       ) : (
         <div className="grid gap-4">
@@ -959,7 +959,7 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
               ? `Actualmente no hay convocatorias de jugadores registradas en ${selectedCity}. Puedes ver las disponibles a nivel nacional o publicar una.`
               : 'Prueba cambiar los filtros o publica la primera.'}
           </p>
-          {selectedCity !== 'Todas' && (
+          {/* {selectedCity !== 'Todas' && (
             <button
               type="button"
               onClick={() => onSelectCity('Todas')}
@@ -968,7 +968,7 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
               <MapPin size={14} />
               Ver convocatorias en todas las ciudades
             </button>
-          )}
+          )} */}
         </div>
       ) : (
         <div className="grid gap-4">

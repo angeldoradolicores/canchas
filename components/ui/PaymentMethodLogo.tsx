@@ -69,18 +69,18 @@ export function PaymentMethodLogo({
       labelText = 'Daviplata';
       logoElement = (
         <div
-          className={`${currentSize} rounded-2xl flex items-center justify-center shrink-0 shadow-md overflow-hidden p-1.5`}
+          className={`${currentSize} rounded-2xl flex items-center justify-center shrink-0 shadow-md overflow-hidden p-1`}
           style={{ background: '#E31C25' }} // Rojo oficial Davivienda/Daviplata
           title="Daviplata"
         >
-          {/* Logo Daviplata: Tipografía refinada + Casita estilizada en blanco */}
+          {/* Logo Daviplata con ZOOM: Casita estilizada + Texto 'davi' central */}
           <svg
-            viewBox="0 0 160 50"
+            viewBox="10 10 75 40" // Ajuste del viewBox para hacer "zoom" (área más pequeña)
             className="w-full h-full object-contain"
             xmlns="http://www.w3.org/2000/svg"
           >
-            {/* Casita icónica Davivienda / Daviplata */}
-            <g stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none">
+            {/* Casita icónica Davivienda (con grosor de trazo ajustado para el zoom) */}
+            <g stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none">
               {/* Techo */}
               <path d="M16 26 L27 15 L38 26" />
               {/* Paredes de la casa */}
@@ -89,17 +89,17 @@ export function PaymentMethodLogo({
               <path d="M32 18 V14 H35 V21" />
             </g>
 
-            {/* Texto "daviplata" estilizado */}
+            {/* Texto "davi" ampliado (centralizado en el área de zoom) */}
             <text
-              x="46"
-              y="35"
+              x="46" // Posición ajustada para centrar el texto ampliado
+              y="35" // Mismo nivel base de alineación
               fill="#FFFFFF"
-              fontSize="23"
+              fontSize="23" // Tamaño de fuente original (se ve más grande debido al zoom del viewBox)
               fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
               fontWeight="800"
               letterSpacing="-0.5px"
             >
-              davi<tspan fontWeight="400">plata</tspan>
+              davi
             </text>
           </svg>
         </div>
