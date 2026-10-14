@@ -227,12 +227,12 @@ export async function notifyBookingSubmitted(bookingId: string) {
       timeZone: 'America/Bogota', weekday: 'long', day: 'numeric', month: 'long'
     });
 
-    const horasList = siblingBookings.map((s: any) => {
+    const horasList = siblingBookings.map((s: any, idx: number) => {
       const start = new Date(s.start_time).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: true });
       const end = new Date(s.end_time).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: true });
-      return `${start} - ${end}`;
+      return siblingBookings.length > 1 ? `  • Turno ${idx + 1}: ${start} – ${end}` : `${start} – ${end}`;
     });
-    const horasStr = horasList.join(', ');
+    const horasStr = siblingBookings.length > 1 ? `\n${horasList.join('\n')}` : horasList[0] || '';
 
     const customer_name = b.customer_name || 'Jugador';
     const customer_phone = b.customer_phone;
@@ -287,7 +287,7 @@ export async function notifyBookingSubmitted(bookingId: string) {
       `${pitchNameCombined}\n` +
       `*Cliente:* ${customer_name}${customer_phone ? ` (📱 ${customer_phone})` : ''}\n` +
       `📅 *Fecha:* ${fechaCorta}\n` +
-      `⏰ *Horario:* ${horasStr}\n\n` +
+      `⏰ *${siblingBookings.length > 1 ? 'Turnos reservados:' : 'Horario:'}* ${horasStr}\n\n` +
       `*Revisar y aprobar en tu panel:*\n` +
       `👉 ${APP_URL}/dashboard/bookings`;
 
@@ -412,12 +412,12 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
       timeZone: 'America/Bogota', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
     });
 
-    const horasList = siblingBookings.map((s: any) => {
+    const horasList = siblingBookings.map((s: any, idx: number) => {
       const sStart = new Date(s.start_time).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: true });
       const sEnd = new Date(s.end_time).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: true });
-      return `${sStart} - ${sEnd}`;
+      return siblingBookings.length > 1 ? `  • Turno ${idx + 1}: ${sStart} – ${sEnd}` : `${sStart} – ${sEnd}`;
     });
-    const horasStr = horasList.join(', ');
+    const horasStr = siblingBookings.length > 1 ? `\n${horasList.join('\n')}` : horasList[0] || '';
 
     const pitchNames = Array.from(new Set(siblingBookings.map((s: any) => s.pitches?.name).filter(Boolean))).join(' + ') || pitch.name;
     const shortId = (b.id ? b.id.slice(0, 8) : 'REF').toUpperCase();
@@ -432,19 +432,19 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
         `${company.name.toUpperCase()}\n` +
         `${pitchNames.toUpperCase()}\n` +
         `📅 *FECHA:* ${fechaLarga}\n` +
-        `⏰ *HORARIO:* ${horasStr}\n` +
+        `⏰ *${siblingBookings.length > 1 ? 'HORARIOS RESERVADOS:' : 'HORARIO:'}* ${horasStr}\n` +
         // `📍 *DIRECCIÓN:* ${address}\n` +
         `📍 *VER EN MAPS:* ${mapsUrl}\n`;
 
       await sendEvolutionWhatsAppText(instanceName, b.customer_phone, ticketMsg);
     } else {
-      // ── RESERVA CANCELADA ──
+      // ── RESERVA DECLINADA / CANCELADA ──
       const cancelMsg =
         `❌ *RESERVA DECLINADA / CANCELADA*\n\n` +
         `${company.name}\n` +
         `${pitchNames}\n` +
         `📅 *FECHA:* ${fechaLarga}\n` +
-        `⏰ *HORARIO:* ${horasStr}\n\n` +
+        `⏰ *${siblingBookings.length > 1 ? 'HORARIOS:' : 'HORARIO:'}* ${horasStr}\n\n` +
         `Tu solicitud de reserva no pudo ser confirmada por el complejo. Si realizaste un pago o tienes dudas, comunícate directamente con la administración de la cancha.`;
 
       await sendEvolutionWhatsAppText(instanceName, b.customer_phone, cancelMsg);

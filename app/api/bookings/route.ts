@@ -17,6 +17,33 @@ function getAdminSupabase() {
   return createClient(url, key);
 }
 
+/**
+ * Calcula start_time y end_time en ISO con offset -05:00 de Colombia.
+ * Para horas a las 23:00 (11:00 PM), el end_time cruza la medianoche al día siguiente a las 00:00.
+ */
+function computeSlotIsoTimes(selectedDate: string, slot: string) {
+  const [hStr, mStr] = slot.split(':');
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr || '0', 10);
+  const startIso = `${selectedDate}T${slot}:00-05:00`;
+
+  let endIso: string;
+  if (h === 23) {
+    const [y, mon, d] = selectedDate.split('-').map(Number);
+    const nextDay = new Date(Date.UTC(y, mon - 1, d + 1));
+    const nextY = nextDay.getUTCFullYear();
+    const nextM = String(nextDay.getUTCMonth() + 1).padStart(2, '0');
+    const nextD = String(nextDay.getUTCDate()).padStart(2, '0');
+    endIso = `${nextY}-${nextM}-${nextD}T00:00:00-05:00`;
+  } else {
+    const endHourNum = h + 1;
+    const endSlot = endHourNum < 10 ? `0${endHourNum}:00` : `${endHourNum}:00`;
+    endIso = `${selectedDate}T${endSlot}:00-05:00`;
+  }
+
+  return { startIso, endIso };
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -162,14 +189,12 @@ export async function POST(req: NextRequest) {
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutos de bloqueo
 
       const inserts = selected_times.map((slot: string) => {
-        const hourNum = parseInt(slot.split(':')[0], 10);
-        const endHourNum = (hourNum + 1) % 24;
-        const endSlot = endHourNum < 10 ? `0${endHourNum}:00` : `${endHourNum}:00`;
+        const { startIso, endIso } = computeSlotIsoTimes(selected_date, slot);
         return {
           pitch_id,
           user_id: effectiveUserId,
-          start_time: `${selected_date}T${slot}:00-05:00`,
-          end_time: `${selected_date}T${endSlot}:00-05:00`,
+          start_time: startIso,
+          end_time: endIso,
           status: 'draft',
           expires_at: expiresAt,
         };
@@ -504,11 +529,7 @@ export async function POST(req: NextRequest) {
         const conflictingPitchIds = await fetchConflictingPitchIds(supabase, validPitchId);
 
         for (const slot of remainingSlots) {
-          const hourNum = parseInt(slot.split(':')[0], 10);
-          const endHourNum = (hourNum + 1) % 24;
-          const endSlot = endHourNum < 10 ? `0${endHourNum}:00` : `${endHourNum}:00`;
-          const startTimeIso = `${selected_date}T${slot}:00-05:00`;
-          const endTimeIso = `${selected_date}T${endSlot}:00-05:00`;
+          const { startIso: startTimeIso, endIso: endTimeIso } = computeSlotIsoTimes(selected_date, slot);
 
           // Verificar si existe conflicto en la cancha o canchas combinadas/hijas vinculadas
           const { data: conflictRows } = await supabase

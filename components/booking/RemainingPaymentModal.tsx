@@ -3,11 +3,13 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   X, Camera, Upload, CheckCircle2, Loader2, DollarSign,
-  Receipt, AlertCircle, Trash2, ArrowRight, ShieldCheck, Plus, Sparkles
+  Receipt, AlertCircle, Trash2, ArrowRight, ShieldCheck, Plus, Sparkles,
+  FileText, ChevronDown, Eye, ExternalLink
 } from 'lucide-react';
 import {
   PAYMENT_METHODS, PaymentMethod, PaymentSplitItem,
-  calculateRemainingBalance
+  calculateRemainingBalance, getBookingRemainingPayment,
+  getBookingOriginalProof, formatPaymentMethod
 } from '@/lib/remaining-payment-utils';
 
 interface RemainingPaymentModalProps {
@@ -90,22 +92,66 @@ export function RemainingPaymentModal({
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState<boolean>(false);
+  const [viewingImage, setViewingImage] = useState<{ url: string; title: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Calcular montos financieros base
   const totalPrice = Number(targetBooking?.total_price || 0);
   const depositAmount = Number(targetBooking?.deposit_amount || 0);
-  const paidRemaining = Number(targetBooking?.remaining_payment_amount || 0);
+  const paidRemaining = Number(targetBooking?.remaining_payment_amount || targetBooking?.remaining_amount_paid || 0);
   const remainingToCollect = calculateRemainingBalance(totalPrice, depositAmount, paidRemaining);
 
-  // Inicializar o ajustar montos cuando cambia la reserva o el saldo a cobrar
+  // Extraer datos guardados previamente de la reserva
+  const existingPayment = getBookingRemainingPayment(targetBooking);
+  const initialProofUrl =
+    getBookingOriginalProof(targetBooking?.payment_proof_url) ||
+    targetBooking?.bookings?.find((b: any) => b.payment_proof_url)?.payment_proof_url ||
+    null;
+  const savedRemainingProof =
+    targetBooking?.remaining_payment_proof_url ||
+    existingPayment?.proofUrl ||
+    null;
+
+  // Inicializar o restaurar método, monto, comprobante y notas previamente guardados
   useEffect(() => {
-    if (isOpen && remainingToCollect > 0) {
-      if (selectedMethods.length === 1) {
-        setMethodAmounts({ [selectedMethods[0]]: String(remainingToCollect) });
-      }
+    if (!isOpen || !targetBooking) return;
+
+    const prevSplits = targetBooking.remaining_payment_splits || existingPayment?.splits;
+    const prevMethod = targetBooking.remaining_payment_method || existingPayment?.method;
+    const prevProof = targetBooking.remaining_payment_proof_url || existingPayment?.proofUrl || null;
+    const prevNotes = targetBooking.remaining_payment_notes || existingPayment?.notes || '';
+    const prevAmount = Number(targetBooking.remaining_amount_paid || targetBooking.remaining_payment_amount || existingPayment?.amount || 0);
+
+    const amountToSet = remainingToCollect > 0 ? remainingToCollect : prevAmount > 0 ? prevAmount : Math.max(0, totalPrice - depositAmount);
+
+    if (Array.isArray(prevSplits) && prevSplits.length > 0) {
+      setSelectedMethods(prevSplits.map((s: any) => s.method as PaymentMethod));
+      const amountsMap: Record<string, string> = {};
+      prevSplits.forEach((s: any) => {
+        amountsMap[s.method] = String(s.amount || 0);
+      });
+      setMethodAmounts(amountsMap);
+    } else if (prevMethod && prevMethod !== 'split') {
+      setSelectedMethods([prevMethod as PaymentMethod]);
+      setMethodAmounts({ [prevMethod]: String(amountToSet) });
+    } else {
+      setSelectedMethods(['cash']);
+      setMethodAmounts({ cash: String(amountToSet) });
     }
-  }, [isOpen, remainingToCollect]);
+
+    setPhotoPreview(prevProof);
+    setPhotoFile(null);
+    setNotes(prevNotes);
+    setError(null);
+    setShowHistory(false);
+  }, [
+    isOpen,
+    targetBooking?.id,
+    targetBooking?.remaining_payment_at,
+    targetBooking?.remaining_amount_paid,
+    targetBooking?.remaining_payment_method
+  ]);
 
   // Si no está abierto o no hay reserva, no renderizar
   if (!isOpen || !targetBooking) return null;
@@ -126,7 +172,7 @@ export function RemainingPaymentModal({
 
       // Reasignar el total al primer método si queda uno solo
       if (next.length === 1) {
-        setMethodAmounts({ [next[0]]: String(remainingToCollect) });
+        setMethodAmounts({ [next[0]]: String(remainingToCollect > 0 ? remainingToCollect : paidRemaining) });
       }
     } else {
       const next = [...selectedMethods, methodId];
@@ -134,12 +180,13 @@ export function RemainingPaymentModal({
 
       // Si pasa a múltiples métodos, dividir equitativamente por defecto
       if (next.length > 1) {
-        const splitVal = Math.round(remainingToCollect / next.length);
+        const baseAmt = remainingToCollect > 0 ? remainingToCollect : paidRemaining;
+        const splitVal = Math.round(baseAmt / next.length);
         const newAmounts: Record<string, string> = {};
         let accum = 0;
         next.forEach((m, idx) => {
           if (idx === next.length - 1) {
-            newAmounts[m] = String(Math.max(0, remainingToCollect - accum));
+            newAmounts[m] = String(Math.max(0, baseAmt - accum));
           } else {
             newAmounts[m] = String(splitVal);
             accum += splitVal;
@@ -161,12 +208,13 @@ export function RemainingPaymentModal({
   // Botón rápido para repartir en partes iguales
   const handleSplitEqually = () => {
     if (selectedMethods.length <= 1) return;
-    const splitVal = Math.round(remainingToCollect / selectedMethods.length);
+    const baseAmt = remainingToCollect > 0 ? remainingToCollect : paidRemaining;
+    const splitVal = Math.round(baseAmt / selectedMethods.length);
     const newAmounts: Record<string, string> = {};
     let accum = 0;
     selectedMethods.forEach((m, idx) => {
       if (idx === selectedMethods.length - 1) {
-        newAmounts[m] = String(Math.max(0, remainingToCollect - accum));
+        newAmounts[m] = String(Math.max(0, baseAmt - accum));
       } else {
         newAmounts[m] = String(splitVal);
         accum += splitVal;
@@ -181,7 +229,8 @@ export function RemainingPaymentModal({
     return sum + (isNaN(val) ? 0 : val);
   }, 0);
 
-  const difference = totalEntered - remainingToCollect;
+  const baseCompare = remainingToCollect > 0 ? remainingToCollect : paidRemaining;
+  const difference = totalEntered - baseCompare;
 
   // Manejo de foto del comprobante
   const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -208,7 +257,9 @@ export function RemainingPaymentModal({
 
   const handleRemovePhoto = () => {
     setPhotoFile(null);
-    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    if (photoPreview && photoPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(photoPreview);
+    }
     setPhotoPreview(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -226,9 +277,9 @@ export function RemainingPaymentModal({
     setError(null);
 
     try {
-      let uploadedProofUrl: string | null = null;
+      let uploadedProofUrl: string | null = photoPreview;
 
-      // 1. Si adjuntó foto, subirla a Cloudflare R2 / Supabase
+      // 1. Si adjuntó foto nueva desde su dispositivo, subirla a Cloudflare R2 / Supabase
       if (photoFile) {
         const formData = new FormData();
         formData.append('file', photoFile);
@@ -245,6 +296,8 @@ export function RemainingPaymentModal({
         }
 
         uploadedProofUrl = uploadJson.url;
+      } else if (!photoPreview) {
+        uploadedProofUrl = null;
       }
 
       // Preparar estructura de métodos y splits
@@ -340,7 +393,131 @@ export function RemainingPaymentModal({
                 ${remainingToCollect.toLocaleString('es-CO')}
               </p>
             </div>
+          </div>
 
+          {/* ── Botón / Sección: Ver Historial de Pagos e Imágenes Guardadas ── */}
+          <div className="rounded-2xl border border-border/70 overflow-hidden bg-secondary/20">
+            <button
+              type="button"
+              onClick={() => setShowHistory(prev => !prev)}
+              className="w-full flex items-center justify-between p-3 text-xs font-bold text-foreground hover:bg-secondary/40 transition-colors cursor-pointer"
+            >
+              <span className="flex items-center gap-2">
+                <FileText size={15} className="text-primary" />
+                <span>Ver historial de comprobantes y pagos</span>
+              </span>
+              <span className="text-[11px] text-primary flex items-center gap-1 font-semibold">
+                {showHistory ? 'Ocultar historial' : 'Ver historial'}
+                <ChevronDown size={14} className={`transform transition-transform ${showHistory ? 'rotate-180' : ''}`} />
+              </span>
+            </button>
+
+            {showHistory && (
+              <div className="p-3 border-t border-border/60 bg-card space-y-3 text-xs animate-in fade-in duration-150">
+                {/* 1. Comprobante inicial de anticipo / abono */}
+                <div className="p-2.5 rounded-xl bg-secondary/30 border border-border/60 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-[11px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                      <CheckCircle2 size={12} className="text-emerald-500" />
+                      1. Abono Inicial (Reserva)
+                    </span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                      ${depositAmount.toLocaleString('es-CO')}
+                    </span>
+                  </div>
+                  {initialProofUrl ? (
+                    <div className="flex items-center gap-2.5 pt-1">
+                      <img
+                        src={initialProofUrl}
+                        alt="Comprobante inicial"
+                        className="w-14 h-14 object-cover rounded-lg border border-border shadow-2xs shrink-0 cursor-pointer hover:opacity-90"
+                        onClick={() => setViewingImage({ url: initialProofUrl, title: 'Comprobante Abono Inicial' })}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-[11px] text-foreground truncate">Comprobante de Anticipo</p>
+                        <p className="text-[10px] text-muted-foreground">Adjuntado por el cliente</p>
+                        <button
+                          type="button"
+                          onClick={() => setViewingImage({ url: initialProofUrl, title: 'Comprobante Abono Inicial' })}
+                          className="mt-1 text-[10px] text-primary font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <Eye size={11} /> Ver foto completa
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground italic pt-0.5">
+                      Sin foto de comprobante inicial (reserva manual o presencial).
+                    </p>
+                  )}
+                </div>
+
+                {/* 2. Comprobante y método de saldo restante */}
+                <div className="p-2.5 rounded-xl bg-secondary/30 border border-border/60 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-[11px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                      <Receipt size={12} className="text-sky-500" />
+                      2. Saldo Restante Guardado
+                    </span>
+                    <span className="font-bold text-foreground">
+                      ${paidRemaining > 0 ? paidRemaining.toLocaleString('es-CO') : remainingToCollect.toLocaleString('es-CO')}
+                    </span>
+                  </div>
+
+                  <div className="text-[11px] space-y-1 text-muted-foreground pt-0.5">
+                    <p>
+                      <strong className="text-foreground">Método:</strong>{' '}
+                      {formatPaymentMethod(targetBooking.remaining_payment_method, targetBooking.remaining_payment_splits)}
+                    </p>
+                    {targetBooking.remaining_paid_at && (
+                      <p>
+                        <strong className="text-foreground">Fecha registro:</strong>{' '}
+                        {new Date(targetBooking.remaining_paid_at).toLocaleString('es-CO', {
+                          timeZone: 'America/Bogota',
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true
+                        })}
+                      </p>
+                    )}
+                    {targetBooking.remaining_payment_notes && (
+                      <p>
+                        <strong className="text-foreground">Nota:</strong> {targetBooking.remaining_payment_notes}
+                      </p>
+                    )}
+                  </div>
+
+                  {savedRemainingProof ? (
+                    <div className="flex items-center gap-2.5 pt-1">
+                      <img
+                        src={savedRemainingProof}
+                        alt="Comprobante saldo"
+                        className="w-14 h-14 object-cover rounded-lg border border-border shadow-2xs shrink-0 cursor-pointer hover:opacity-90"
+                        onClick={() => setViewingImage({ url: savedRemainingProof, title: 'Comprobante Saldo Restante' })}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-[11px] text-foreground truncate">Comprobante de Saldo</p>
+                        <p className="text-[10px] text-muted-foreground">Guardado previamente</p>
+                        <button
+                          type="button"
+                          onClick={() => setViewingImage({ url: savedRemainingProof, title: 'Comprobante Saldo Restante' })}
+                          className="mt-1 text-[10px] text-primary font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <Eye size={11} /> Ver foto completa
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground italic pt-0.5">
+                      Sin foto de saldo registrada previamente.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ── 2. Métodos de Pago Simplificados (Permite Escoger Más de 1) ── */}
@@ -393,20 +570,18 @@ export function RemainingPaymentModal({
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-sm">$</span>
                 <input
                   type="text"
-                  inputMode="numeric" /* Muestra el teclado numérico en celulares */
+                  inputMode="numeric"
                   value={
                     methodAmounts[selectedMethods[0]]
                       ? Number(methodAmounts[selectedMethods[0]]).toLocaleString('es-CO')
                       : ''
                   }
                   onChange={(e) => {
-                    // 1. Elimina todo lo que no sea un número
                     const rawValue = e.target.value.replace(/\D/g, '');
-                    // 2. Guarda el valor como un número puro en tu estado
                     handleAmountChange(selectedMethods[0], rawValue);
                   }}
                   required
-                  placeholder={Number(remainingToCollect).toLocaleString('es-CO')}
+                  placeholder={Number(remainingToCollect > 0 ? remainingToCollect : paidRemaining).toLocaleString('es-CO')}
                   className="w-full pl-8 pr-3 py-2 text-sm font-bold bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-foreground"
                 />
               </div>
@@ -424,8 +599,6 @@ export function RemainingPaymentModal({
               <div className="space-y-1.5">
                 {selectedMethods.map((m) => {
                   const meta = PAYMENT_METHODS.find(item => item.id === m);
-
-                  // Aseguramos formatear el valor actual con puntos de miles para visualizarlo
                   const rawValue = methodAmounts[m];
                   const formattedValue = rawValue ? Number(rawValue).toLocaleString('es-CO') : '';
 
@@ -442,7 +615,6 @@ export function RemainingPaymentModal({
                           inputMode="numeric"
                           value={formattedValue}
                           onChange={(e) => {
-                            // 1. Quitamos todo lo que no sea número para guardar el valor real limpio (ej: "15000")
                             const numericValue = e.target.value.replace(/\D/g, '');
                             handleAmountChange(m, numericValue);
                           }}
@@ -468,13 +640,13 @@ export function RemainingPaymentModal({
                   <span className="text-[10px] text-muted-foreground font-normal">(opcional)</span>
                 )}
               </label>
-              {photoFile && (
+              {photoPreview && (
                 <button
                   type="button"
                   onClick={handleRemovePhoto}
-                  className="text-[10px] text-red-500 hover:underline flex items-center gap-0.5"
+                  className="text-[10px] text-red-500 hover:underline flex items-center gap-0.5 cursor-pointer"
                 >
-                  <Trash2 size={10} /> Quitar
+                  <Trash2 size={10} /> Quitar foto
                 </button>
               )}
             </div>
@@ -489,29 +661,43 @@ export function RemainingPaymentModal({
             />
 
             {photoPreview ? (
-              <div className="relative rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-2 flex items-center gap-3">
+              <div className="relative rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-2.5 flex items-center gap-3">
                 <img
                   src={photoPreview}
                   alt="Vista previa"
-                  className="w-12 h-12 object-cover rounded-lg border border-border shadow-xs shrink-0"
+                  className="w-13 h-13 object-cover rounded-lg border border-border shadow-xs shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+                  onClick={() => setViewingImage({ url: photoPreview, title: 'Comprobante de Saldo' })}
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-foreground truncate">Foto lista para guardar</p>
-                  <p className="text-[10px] text-muted-foreground">Comprimida y lista para Cloudflare</p>
+                  <p className="text-xs font-bold text-foreground truncate">
+                    {photoFile ? 'Foto nueva seleccionada' : 'Foto guardada previamente'}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {photoFile ? 'Comprimida y lista para guardar' : 'Comprobante actual de saldo'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setViewingImage({ url: photoPreview, title: 'Comprobante de Saldo' })}
+                    className="mt-0.5 text-[10px] text-primary font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <Eye size={10} /> Ver completa
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="text-xs font-bold text-primary px-2.5 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors"
-                >
-                  Cambiar
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-xs font-bold text-primary px-2.5 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer"
+                  >
+                    Cambiar
+                  </button>
+                </div>
               </div>
             ) : (
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border border-dashed border-border hover:border-primary hover:bg-primary/5 transition-all text-muted-foreground hover:text-primary text-xs font-bold"
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border border-dashed border-border hover:border-primary hover:bg-primary/5 transition-all text-muted-foreground hover:text-primary text-xs font-bold cursor-pointer"
               >
                 <Camera size={16} />
                 <span>Tomar foto o subir captura</span>
@@ -549,12 +735,11 @@ export function RemainingPaymentModal({
               {submitting ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  <span>Registrando cobro...</span>
+                  <span>Guardando cobro...</span>
                 </>
               ) : (
                 <>
-                  {/* <CheckCircle2 size={16} /> */}
-                  <span>Confirmar Cobro de ${totalEntered.toLocaleString('es-CO')}</span>
+                  <span>Guardar Cobro de ${totalEntered.toLocaleString('es-CO')}</span>
                 </>
               )}
             </button>
@@ -563,6 +748,47 @@ export function RemainingPaymentModal({
         </form>
 
       </div>
+
+      {/* Modal de Vista Previa de Imagen en Pantalla Completa */}
+      {viewingImage && (
+        <div
+          className="fixed inset-0 z-[260] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in"
+          onClick={() => setViewingImage(null)}
+        >
+          <div
+            className="relative max-w-lg w-full bg-card rounded-2xl overflow-hidden border border-border p-3 shadow-2xl flex flex-col gap-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-border">
+              <span className="text-xs font-bold text-foreground">{viewingImage.title}</span>
+              <button
+                type="button"
+                onClick={() => setViewingImage(null)}
+                className="p-1 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="max-h-[70vh] overflow-auto flex items-center justify-center bg-black/40 rounded-xl">
+              <img
+                src={viewingImage.url}
+                alt={viewingImage.title}
+                className="max-h-[68vh] w-auto object-contain rounded-lg"
+              />
+            </div>
+            <div className="flex justify-end pt-1">
+              <a
+                href={viewingImage.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <ExternalLink size={13} /> Abrir original
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

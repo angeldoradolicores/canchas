@@ -16,6 +16,29 @@ function getSupabase() {
   return createClient(url, key);
 }
 
+function computeSlotIsoTimes(selectedDate: string, slot: string) {
+  const [hStr, mStr] = slot.split(':');
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr || '0', 10);
+  const startIso = `${selectedDate}T${slot}:00-05:00`;
+
+  let endIso: string;
+  if (h === 23) {
+    const [y, mon, d] = selectedDate.split('-').map(Number);
+    const nextDay = new Date(Date.UTC(y, mon - 1, d + 1));
+    const nextY = nextDay.getUTCFullYear();
+    const nextM = String(nextDay.getUTCMonth() + 1).padStart(2, '0');
+    const nextD = String(nextDay.getUTCDate()).padStart(2, '0');
+    endIso = `${nextY}-${nextM}-${nextD}T00:00:00-05:00`;
+  } else {
+    const endHourNum = h + 1;
+    const endSlot = endHourNum < 10 ? `0${endHourNum}:00` : `${endHourNum}:00`;
+    endIso = `${selectedDate}T${endSlot}:00-05:00`;
+  }
+
+  return { startIso, endIso };
+}
+
 export async function POST(req: NextRequest) {
   // ── 1. RATE LIMITING: 40 peticiones por minuto ──
   const rateLimit = checkRateLimit(req, {
@@ -462,16 +485,14 @@ export async function POST(req: NextRequest) {
       }
 
       const inserts = selected_times.map((slot: string) => {
-        const hourNum = parseInt(slot.split(':')[0], 10);
-        const endHourNum = (hourNum + 1) % 24;
-        const endSlot = endHourNum < 10 ? `0${endHourNum}:00` : `${endHourNum}:00`;
+        const { startIso, endIso } = computeSlotIsoTimes(selected_date, slot);
         return {
           pitch_id,
           user_id: ownerId,
           customer_name: customer_name || 'Reserva Interna',
           customer_phone: customer_phone || '',
-          start_time: `${selected_date}T${slot}:00-05:00`,
-          end_time: `${selected_date}T${endSlot}:00-05:00`,
+          start_time: startIso,
+          end_time: endIso,
           status: 'confirmed',
           payment_status: 'verified',
           source: 'owner_panel',

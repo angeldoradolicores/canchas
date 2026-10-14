@@ -104,7 +104,13 @@ export default function BookingsPage() {
 
   // Sistema de Notificaciones en Vivo y Resaltado de Nuevas Reservas
   const [newlyArrivedIds, setNewlyArrivedIds] = useState<Set<string>>(new Set());
-  const [liveNotification, setLiveNotification] = useState<{ id: string; name: string; time: string; date: string } | null>(null);
+  const [liveNotification, setLiveNotification] = useState<{
+    id: string;
+    name: string;
+    time: string;
+    date: string;
+    turns?: string[];
+  } | null>(null);
   const notifiedPendingIdsRef = useRef<Set<string>>(new Set());
 
   // Descartar notificación y resaltado al tocar o interactuar con la reserva
@@ -266,24 +272,74 @@ export default function BookingsPage() {
               playNotificationSound();
 
               const cName = payload.new?.customer_name || 'Nuevo cliente';
+              const sDate = payload.new?.start_time
+                ? new Date(payload.new.start_time).toLocaleDateString('es-CO', {
+                  day: 'numeric',
+                  month: 'short',
+                  weekday: 'short',
+                  timeZone: 'America/Bogota',
+                })
+                : '';
+
+              const singleTurn = payload.new?.start_time && payload.new?.end_time
+                ? `${new Date(payload.new.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })} – ${new Date(payload.new.end_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}`
+                : (payload.new?.start_time ? new Date(payload.new.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' }) : '');
+
               setLiveNotification({
                 id: payload.new.id,
                 name: cName,
-                time: payload.new?.start_time
-                  ? new Date(payload.new.start_time).toLocaleTimeString('es-CO', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    timeZone: 'America/Bogota',
-                  })
-                  : '',
-                date: payload.new?.start_time
-                  ? new Date(payload.new.start_time).toLocaleDateString('es-CO', {
-                    day: 'numeric',
-                    month: 'short',
-                    timeZone: 'America/Bogota',
-                  })
-                  : '',
+                time: singleTurn,
+                date: sDate,
+                turns: singleTurn ? [singleTurn] : [],
               });
+
+              // Si tiene comprobante o usuario, buscar de inmediato reservas hermanas para listar todos los turnos uno por uno en la notificación
+              (async () => {
+                try {
+                  let siblings: any[] = [];
+                  if (payload.new.payment_proof_url) {
+                    const { data } = await supabase
+                      .from('bookings')
+                      .select('id, start_time, end_time')
+                      .eq('payment_proof_url', payload.new.payment_proof_url)
+                      .order('start_time', { ascending: true });
+                    if (data && data.length > 0) siblings = data;
+                  } else if (payload.new.user_id && payload.new.created_at) {
+                    const bTime = new Date(payload.new.created_at).getTime();
+                    const { data } = await supabase
+                      .from('bookings')
+                      .select('id, start_time, end_time')
+                      .eq('user_id', payload.new.user_id)
+                      .gte('created_at', new Date(bTime - 60000).toISOString())
+                      .lte('created_at', new Date(bTime + 60000).toISOString())
+                      .order('start_time', { ascending: true });
+                    if (data && data.length > 0) siblings = data;
+                  }
+
+                  if (siblings.length > 0) {
+                    siblings.forEach(s => {
+                      notifiedPendingIdsRef.current.add(s.id);
+                      setNewlyArrivedIds(prev => new Set(prev).add(s.id));
+                    });
+
+                    const allTurns = siblings.map(s => {
+                      const st = new Date(s.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+                      const et = new Date(s.end_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+                      return `${st} – ${et}`;
+                    });
+
+                    setLiveNotification({
+                      id: payload.new.id,
+                      name: cName,
+                      time: allTurns.join(', '),
+                      date: sDate,
+                      turns: allTurns,
+                    });
+                  }
+                } catch (e) {
+                  console.error('[Live notification sibling fetch error]:', e);
+                }
+              })();
             }
 
             // Recargar silenciosamente las reservas para actualizar la vista sin recargar la página
@@ -949,7 +1005,7 @@ export default function BookingsPage() {
               {[
                 { key: 'all', label: 'Todas' },
                 { key: 'pending', label: 'Pendientes', color: 'bg-amber-500' },
-                { key: 'pending_payment', label: 'Por Cobrar', color: 'bg-orange-500' },
+                { key: 'pending_payment', label: 'Por Cobrar', color: 'bg-sky-500' },
                 { key: 'paid', label: 'Cobradas', color: 'bg-emerald-500' },
                 { key: 'cancelled', label: 'Canceladas', color: 'bg-rose-500' },
               ].map((st) => {
@@ -1086,19 +1142,17 @@ export default function BookingsPage() {
                   <div
                     key={group.key}
                     onClick={() => dismissNewArrival(group)}
-                    className={`bg-card rounded-2xl border border-border shadow-sm hover:shadow-md transition-all p-3.5 sm:p-4.5 flex flex-col gap-3.5 relative overflow-hidden ${
-                      isNewlyArrived ? 'ring-2 ring-amber-500 shadow-lg shadow-amber-500/10 cursor-pointer' : ''
-                    }`}
+                    className={`bg-card rounded-2xl border border-border shadow-sm hover:shadow-md transition-all p-3.5 sm:p-4.5 flex flex-col gap-3.5 relative overflow-hidden ${isNewlyArrived ? 'ring-2 ring-amber-500 shadow-lg shadow-amber-500/10 cursor-pointer' : ''
+                      }`}
                   >
                     {/* Indicador sutil de estado en el borde izquierdo */}
                     <div
-                      className={`absolute left-0 top-0 bottom-0 w-1 ${
-                        group.status === 'confirmed'
-                          ? isFullyPaid ? 'bg-emerald-500' : 'bg-sky-500'
-                          : group.status === 'pending'
+                      className={`absolute left-0 top-0 bottom-0 w-1 ${group.status === 'confirmed'
+                        ? isFullyPaid ? 'bg-emerald-500' : 'bg-sky-500'
+                        : group.status === 'pending'
                           ? 'bg-amber-500'
                           : 'bg-red-400'
-                      }`}
+                        }`}
                     />
 
                     {/* Alerta de Nueva Reserva Entrante (se descarta al hacer click en cualquier parte de la card) */}
@@ -1138,7 +1192,7 @@ export default function BookingsPage() {
                           ) : (
                             <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg bg-sky-50 text-sky-800 border border-sky-200/80 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/60">
                               <Receipt size={12} className="text-sky-600 dark:text-sky-400" />
-                              Aprobada · Saldo Pendiente
+                              Aprobada · Saldo Por Cobrar
                             </span>
                           )
                         ) : (
@@ -1208,15 +1262,36 @@ export default function BookingsPage() {
 
                       {/* Fecha y Horario */}
                       <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">Fecha y Turno</p>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">Fecha</p>
                         <p className="font-bold text-xs sm:text-sm text-foreground capitalize leading-snug">
                           {startTime.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
                         </p>
-                        <p className="text-xs font-semibold text-primary mt-0.5">
-                          {startTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
-                          {' – '}
-                          {lastEnd.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
-                        </p>
+                        {/* {group.bookings && group.bookings.length > 1 ? (
+                          <div className="flex flex-col gap-1 mt-1">
+                            {group.bookings.map((b: any, idx: number) => {
+                              const bStart = new Date(b.start_time);
+                              const bEnd = new Date(b.end_time);
+                              return (
+                                <div key={b.id || idx} className="flex items-center gap-1.5 text-xs font-bold text-primary">
+                                  <span className="w-4 h-4 rounded-full bg-primary/15 text-primary font-bold text-[10px] flex items-center justify-center shrink-0">
+                                    {idx + 1}
+                                  </span>
+                                  <span>
+                                    {bStart.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
+                                    {' – '}
+                                    {bEnd.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-xs font-semibold text-primary mt-0.5">
+                            {startTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
+                            {' – '}
+                            {lastEnd.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
+                          </p>
+                        )} */}
                       </div>
 
                       {/* Finanzas */}
@@ -1251,16 +1326,21 @@ export default function BookingsPage() {
                           Turnos:
                         </span>
                         {group.bookings.map((b: any, idx: number) => {
-                          const bTime = new Date(b.start_time);
+                          const bStart = new Date(b.start_time);
+                          const bEnd = new Date(b.end_time);
                           return (
                             <span
                               key={b.id}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-secondary/60 text-foreground font-semibold text-[11px] border border-border/50"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-secondary/60 text-foreground font-semibold text-[11px] border border-border/50"
                             >
                               <span className="w-3.5 h-3.5 rounded-full bg-primary/10 text-primary font-bold text-[9px] flex items-center justify-center">
                                 {idx + 1}
                               </span>
-                              {bTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
+                              <span>
+                                {bStart.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
+                                {' – '}
+                                {bEnd.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
+                              </span>
                             </span>
                           );
                         })}
@@ -1834,9 +1914,35 @@ export default function BookingsPage() {
                 </button>
               </div>
               <p className="text-sm font-bold truncate mt-0.5 text-white">{liveNotification.name}</p>
-              <p className="text-xs text-zinc-300 mt-0.5">
-                {liveNotification.date} • {liveNotification.time}
+              <p className="text-xs text-zinc-300 mt-0.5 font-medium">
+                {liveNotification.date}
               </p>
+              {liveNotification.turns && liveNotification.turns.length > 0 ? (
+                <div className="mt-1.5 flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-amber-400/90 uppercase tracking-wider">
+                    {liveNotification.turns.length > 1 ? 'Turnos reservados:' : 'Horario:'}
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {liveNotification.turns.map((turn, tIdx) => (
+                      <span
+                        key={tIdx}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-200 border border-amber-500/30 text-xs font-semibold"
+                      >
+                        {liveNotification.turns!.length > 1 && (
+                          <span className="w-3.5 h-3.5 rounded-full bg-amber-500 text-zinc-950 font-black text-[9px] flex items-center justify-center shrink-0">
+                            {tIdx + 1}
+                          </span>
+                        )}
+                        <span>{turn}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-300 mt-0.5">
+                  {liveNotification.time}
+                </p>
+              )}
               <button
                 type="button"
                 onClick={() => {
