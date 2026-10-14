@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GoogleAuthButton } from './GoogleAuthButton';
+import { getFriendlyErrorMessage } from '@/lib/error-handler';
 
 interface AuthModalProps {
   isOpen?: boolean;
@@ -128,7 +129,7 @@ export function AuthModal({ isOpen = true, onClose, defaultMode = 'login', defau
         },
       });
       if (error) {
-        setError(error.message);
+        setError(getFriendlyErrorMessage(error, 'No se pudo crear la cuenta. Por favor verifica tus datos e intenta nuevamente.'));
       } else {
         if (data.session) {
           onClose();

@@ -10,6 +10,7 @@ import {
 import { notifyBookingSubmitted } from '@/lib/whatsapp-notifications';
 import { fetchConflictingPitchIds } from '@/lib/combined-pitch-utils';
 import { uploadToR2, isR2Configured } from '@/lib/storage/r2';
+import { safeServerErrorResponse } from '@/lib/error-handler';
 
 function getAdminSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -80,14 +81,12 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await query;
     if (error) {
-      console.error('[GET /api/bookings error]', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(safeServerErrorResponse(error, 'Error al obtener las reservas.'), { status: 500 });
     }
 
     return NextResponse.json({ success: true, data: data || [] });
   } catch (err: any) {
-    console.error('[GET /api/bookings catch]', err);
-    return NextResponse.json({ error: err.message || 'Error de servidor' }, { status: 500 });
+    return NextResponse.json(safeServerErrorResponse(err, 'Error de servidor al obtener las reservas.'), { status: 500 });
   }
 }
 
@@ -146,8 +145,7 @@ export async function POST(req: NextRequest) {
 
       const { error } = await query;
       if (error) {
-        console.error('[cancel_draft error]', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json(safeServerErrorResponse(error, 'Error al cancelar la reserva temporal.'), { status: 500 });
       }
 
       return NextResponse.json({ success: true, message: 'Reserva temporal cancelada' });
@@ -618,7 +616,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: 'Acción no válida' }, { status: 400 });
   } catch (err: any) {
-    console.error('Error en /api/bookings:', err);
-    return NextResponse.json({ error: err.message || 'Error de servidor' }, { status: 500 });
+    return NextResponse.json(safeServerErrorResponse(err, 'Error de servidor al procesar la reserva.'), { status: 500 });
   }
 }

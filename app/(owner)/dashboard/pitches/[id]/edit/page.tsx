@@ -13,6 +13,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
 import { PaymentMethodLogo } from '@/components/ui/PaymentMethodLogo';
+import { getFriendlyErrorMessage } from '@/lib/error-handler';
 
 const LocationPicker = dynamic(() => import('@/components/maps/LocationPicker'), {
   ssr: false,
@@ -533,7 +534,7 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
 
       setMediaItems(prev => [...prev, ...newItems]);
     } catch (err: any) {
-      alert('Error al procesar archivo: ' + err.message);
+      alert(getFriendlyErrorMessage(err, 'Error al procesar el archivo.'));
     } finally {
       setUploadingMedia(false);
     }

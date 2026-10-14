@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Loader2, CheckCircle2, Lock, ArrowRight, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { getFriendlyErrorMessage } from '@/lib/error-handler';
 import Link from 'next/link';
 
 type PageState = 'loading' | 'ready' | 'success' | 'expired';
@@ -43,8 +44,8 @@ export default function ResetPasswordPage() {
       const typeParam = sp.get('type') as any;
       if (tokenHash && typeParam === 'recovery') {
         supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' })
-          .then(({ data, error }) => {
-            if (!error && data.session) {
+          .then(({ data, error }: { data: any; error: any }) => {
+            if (!error && data?.session) {
               resolve('ready');
             } else {
               resolve('expired');
@@ -58,8 +59,8 @@ export default function ResetPasswordPage() {
       const codeParam = sp.get('code');
       if (codeParam) {
         supabase.auth.exchangeCodeForSession(codeParam)
-          .then(({ data, error }) => {
-            if (!error && data.session) {
+          .then(({ data, error }: { data: any; error: any }) => {
+            if (!error && data?.session) {
               resolve('ready');
             } else {
               resolve('expired');
@@ -72,15 +73,15 @@ export default function ResetPasswordPage() {
 
     // ── Caso 3: PKCE (flujo principal con @supabase/ssr) ──
     // El /auth/callback ya intercambió el code y estableció la sesión en cookies.
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
+    supabase.auth.getSession().then(({ data }: { data: any }) => {
+      if (data?.session) {
         resolve('ready');
       }
     });
 
     // ── Caso 4: Flujo implícito / hash ──
     // Supabase pone el token en el hash (#access_token=...&type=recovery)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: any, session: any) => {
       if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
         resolve('ready');
       }
@@ -118,13 +119,13 @@ export default function ResetPasswordPage() {
         if (error.message.toLowerCase().includes('expired') || error.message.toLowerCase().includes('invalid')) {
           setPageState('expired');
         } else {
-          setError(error.message || 'Error al actualizar la contraseña.');
+          setError(getFriendlyErrorMessage(error, 'Error al actualizar la contraseña.'));
         }
       } else {
         setPageState('success');
       }
     } catch (err: any) {
-      setError(err.message || 'Error inesperado.');
+      setError(getFriendlyErrorMessage(err, 'Ocurrió un error inesperado al actualizar la contraseña.'));
     } finally {
       setSaving(false);
     }

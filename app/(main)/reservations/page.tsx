@@ -482,16 +482,27 @@ export default function UserReservationsPage() {
                         return date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
                       }
 
-                      // Obtener el nombre de la cancha una sola vez
-                      const pitchName = b.bookings[0]?.pitches?.name || b.displayPitchName;
+                      // Extraer las horas ordenadas cronológicamente
+                      const sortedBookings = [...b.bookings].sort((a: any, c: any) =>
+                        new Date(a.start_time).getTime() - new Date(c.start_time).getTime()
+                      );
 
-                      // Extraer solo las horas formateadas
-                      const formattedTimes = b.bookings.map((xb: any) =>
-                        new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
-                      ).join(', ');
+                      // Verificar si hay múltiples canchas distintas
+                      const uniquePitchNames = Array.from(new Set(
+                        sortedBookings.map((xb: any) => xb.pitches?.name).filter(Boolean)
+                      ));
+                      const hasMultiplePitches = uniquePitchNames.length > 1;
 
-                      // Si existe un nombre de cancha, mostrarlo primero seguido de las horas entre paréntesis
-                      return pitchName ? `${pitchName} (${formattedTimes})` : formattedTimes;
+                      // Formato de hora de cada reserva
+                      const timeParts = sortedBookings.map((xb: any) => {
+                        const t = new Date(xb.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+                        // Si hay múltiples canchas, prefijar el nombre de cada cancha
+                        return hasMultiplePitches && xb.pitches?.name
+                          ? `${xb.pitches.name} (${t})`
+                          : t;
+                      });
+
+                      return timeParts.join(', ');
                     })()}
                   </span>
                 </div>

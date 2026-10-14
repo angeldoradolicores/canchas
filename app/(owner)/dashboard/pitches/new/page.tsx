@@ -12,6 +12,7 @@ import Link from 'next/link';
 import nextDynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
 import { PaymentMethodLogo } from '@/components/ui/PaymentMethodLogo';
+import { getFriendlyErrorMessage } from '@/lib/error-handler';
 
 const LocationPicker = nextDynamic(() => import('@/components/maps/LocationPicker'), {
   ssr: false,
@@ -602,7 +603,7 @@ function NewPitchForm() {
 
       setMediaItems(prev => [...prev, ...newItems]);
     } catch (err: any) {
-      alert('Error al procesar archivo: ' + err.message);
+      alert(getFriendlyErrorMessage(err, 'Error al procesar el archivo.'));
     } finally {
       setUploadingMedia(false);
     }

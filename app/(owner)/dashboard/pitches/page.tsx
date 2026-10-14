@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth-context';
 import { Plus, Loader2, AlertCircle, Building2, Edit3, Check, X, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { PitchCard, PitchData } from '@/components/ui/PitchCard';
+import { getFriendlyErrorMessage } from '@/lib/error-handler';
 
 export default function PitchesPage() {
   const { user, session, loading: authLoading } = useAuth();
@@ -83,7 +84,7 @@ export default function PitchesPage() {
       })));
       setEditingName(false);
     } catch (err: any) {
-      alert(err.message || 'No se pudo actualizar el nombre del complejo.');
+      alert(getFriendlyErrorMessage(err, 'No se pudo actualizar el nombre del complejo.'));
     } finally {
       setSavingCompany(false);
     }

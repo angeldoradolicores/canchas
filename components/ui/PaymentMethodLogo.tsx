@@ -69,16 +69,38 @@ export function PaymentMethodLogo({
       labelText = 'Daviplata';
       logoElement = (
         <div
-          className={`${currentSize} rounded-xl flex items-center justify-center shrink-0 shadow-sm overflow-hidden`}
-          style={{ background: '#E31C23' }}
+          className={`${currentSize} rounded-2xl flex items-center justify-center shrink-0 shadow-md overflow-hidden p-1.5`}
+          style={{ background: '#E31C25' }} // Rojo oficial Davivienda/Daviplata
           title="Daviplata"
         >
-          {/* Logo Daviplata: Texto + casita en trazo blanco */}
-          <svg viewBox="0 0 100 100" className="w-[88%] h-[88%]" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <text x="8" y="58" fill="#FFFFFF" fontSize="22" fontFamily="sans-serif" fontWeight="bold" letterSpacing="-1">DAVI</text>
-            <text x="50" y="58" fill="#FFFFFF" fontSize="22" fontFamily="sans-serif">plata</text>
-            {/* Casita outline */}
-            <path d="M52 42 C 55 35, 75 32, 82 38 C 88 42, 85 49, 82 50 C 85 54, 80 62, 70 64 C 60 65, 52 62, 53 54 Z" stroke="#FFFFFF" strokeWidth="2.5" fill="none" />
+          {/* Logo Daviplata: Tipografía refinada + Casita estilizada en blanco */}
+          <svg
+            viewBox="0 0 160 50"
+            className="w-full h-full object-contain"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            {/* Casita icónica Davivienda / Daviplata */}
+            <g stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none">
+              {/* Techo */}
+              <path d="M16 26 L27 15 L38 26" />
+              {/* Paredes de la casa */}
+              <path d="M19 25 V37 H35 V25" />
+              {/* Chimenea / detalle característico */}
+              <path d="M32 18 V14 H35 V21" />
+            </g>
+
+            {/* Texto "daviplata" estilizado */}
+            <text
+              x="46"
+              y="35"
+              fill="#FFFFFF"
+              fontSize="23"
+              fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+              fontWeight="800"
+              letterSpacing="-0.5px"
+            >
+              davi<tspan fontWeight="400">plata</tspan>
+            </text>
           </svg>
         </div>
       );

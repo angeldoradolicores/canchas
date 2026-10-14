@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/auth-guard';
+import { safeServerErrorResponse } from '@/lib/error-handler';
 
 export async function POST(req: NextRequest) {
   try {
@@ -90,13 +91,11 @@ export async function POST(req: NextRequest) {
     // 6. Delete the auth user account (requires service_role)
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
     if (deleteError) {
-      console.error('Error deleting auth user:', deleteError);
-      return NextResponse.json({ error: 'Error al eliminar la cuenta: ' + deleteError.message }, { status: 500 });
+      return NextResponse.json(safeServerErrorResponse(deleteError, 'Error al eliminar la cuenta.'), { status: 500 });
     }
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    console.error('Delete account exception:', err);
-    return NextResponse.json({ error: err.message || 'Error interno del servidor' }, { status: 500 });
+    return NextResponse.json(safeServerErrorResponse(err, 'Error interno del servidor al eliminar la cuenta.'), { status: 500 });
   }
 }

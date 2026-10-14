@@ -16,6 +16,7 @@ import {
   User
 } from 'lucide-react';
 import Link from 'next/link';
+import { getFriendlyErrorMessage } from '@/lib/error-handler';
 
 type Tab = 'retos' | 'buscar-jugador' | 'buscar-equipo';
 
@@ -699,7 +700,7 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
         setConvocatorias(prev => prev.filter(c => c.id !== id));
         showAlert('success', 'Eliminada', 'Convocatoria eliminada con éxito.');
       } else {
-        showAlert('error', 'Error', error.message || 'No se pudo eliminar.');
+        showAlert('error', 'Error', getFriendlyErrorMessage(error, 'No se pudo eliminar la convocatoria.'));
       }
     });
   };
@@ -1707,7 +1708,7 @@ function BuscarEquipoTab({ showAlert }: { showAlert: (type: AlertModalState['typ
         setTeams(prev => prev.filter(t => t.id !== teamId));
         showAlert('success', 'Eliminado', 'Equipo eliminado con éxito.');
       } else {
-        showAlert('error', 'Error', error.message || 'No se pudo eliminar.');
+        showAlert('error', 'Error', getFriendlyErrorMessage(error, 'No se pudo eliminar el equipo.'));
       }
     });
   };
@@ -1860,7 +1861,7 @@ function TeamFormModal({
         showAlert('success', '¡Equipo Actualizado!', 'Los cambios fueron guardados.');
         onSuccess();
       } else {
-        showAlert('error', 'Error', error.message);
+        showAlert('error', 'Error', getFriendlyErrorMessage(error, 'No se pudo actualizar el equipo.'));
       }
     } else {
       const { data: teamData, error: teamError } = await supabase
@@ -1878,7 +1879,7 @@ function TeamFormModal({
         showAlert('success', '¡Equipo Creado!', `El equipo "${name}" ha sido creado con éxito.`);
         onSuccess();
       } else {
-        showAlert('error', 'Error', teamError.message);
+        showAlert('error', 'Error', getFriendlyErrorMessage(teamError, 'No se pudo crear el equipo. Intenta nuevamente.'));
       }
     }
   };

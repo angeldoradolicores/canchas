@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
 import { getAuthenticatedUser } from '@/lib/auth-guard';
+import { safeServerErrorResponse } from '@/lib/error-handler';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -47,10 +48,10 @@ export async function GET(req: NextRequest) {
     }
 
     const { data, error } = await query;
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return NextResponse.json(safeServerErrorResponse(error, 'Error al obtener los torneos.'), { status: 500 });
     return NextResponse.json({ success: true, data: data || [] });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(safeServerErrorResponse(err, 'Error al obtener los torneos.'), { status: 500 });
   }
 }
 
@@ -130,7 +131,7 @@ export async function POST(req: NextRequest) {
         .select()
         .single();
 
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) return NextResponse.json(safeServerErrorResponse(error, 'Error al crear el torneo.'), { status: 500 });
       return NextResponse.json({ success: true, data });
     }
 
@@ -172,7 +173,7 @@ export async function POST(req: NextRequest) {
         .select()
         .single();
 
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) return NextResponse.json(safeServerErrorResponse(error, 'Error al actualizar el torneo.'), { status: 500 });
       return NextResponse.json({ success: true, data });
     }
 
@@ -194,12 +195,12 @@ export async function POST(req: NextRequest) {
       }
 
       const { error } = await supabase.from('tournaments').delete().eq('id', tournament_id);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) return NextResponse.json(safeServerErrorResponse(error, 'Error al eliminar el torneo.'), { status: 500 });
       return NextResponse.json({ success: true });
     }
 
     return NextResponse.json({ error: 'Acción no reconocida' }, { status: 400 });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(safeServerErrorResponse(err, 'Error al procesar la solicitud.'), { status: 500 });
   }
 }

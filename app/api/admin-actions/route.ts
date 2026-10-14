@@ -9,6 +9,7 @@ import {
   AdminManualBookingSchema,
 } from '@/lib/validations/api-schemas';
 import { fetchConflictingPitchIds } from '@/lib/combined-pitch-utils';
+import { safeServerErrorResponse } from '@/lib/error-handler';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
 
         if (error) {
           console.error('Error creando empresa:', error);
-          return NextResponse.json({ error: error.message }, { status: 500 });
+          return NextResponse.json(safeServerErrorResponse(error, 'Error al crear la empresa.'), { status: 500 });
         }
         company = newComp;
       }
@@ -135,7 +136,7 @@ export async function POST(req: NextRequest) {
         .select('*')
         .maybeSingle();
 
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) return NextResponse.json(safeServerErrorResponse(error, 'Error al actualizar la empresa.'), { status: 500 });
       return NextResponse.json({ success: true, data: updated });
     }
 
@@ -163,7 +164,7 @@ export async function POST(req: NextRequest) {
         .in('company_id', companyIds)
         .order('created_at', { ascending: false });
 
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) return NextResponse.json(safeServerErrorResponse(error, 'Error al obtener las canchas.'), { status: 500 });
       return NextResponse.json({ success: true, data: pitches || [], company: companies[0] });
     }
 
@@ -205,7 +206,7 @@ export async function POST(req: NextRequest) {
           .select('id')
           .single();
 
-        if (createErr) return NextResponse.json({ error: 'Error al registrar empresa: ' + createErr.message }, { status: 500 });
+        if (createErr) return NextResponse.json(safeServerErrorResponse(createErr, 'Error al registrar la empresa.'), { status: 500 });
         company = newComp;
       }
 
@@ -289,7 +290,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) return NextResponse.json(safeServerErrorResponse(error, 'Error al crear la cancha.'), { status: 500 });
       return NextResponse.json({ success: true, data: pitch });
     }
 
@@ -380,7 +381,7 @@ export async function POST(req: NextRequest) {
         .select()
         .single();
 
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) return NextResponse.json(safeServerErrorResponse(error, 'Error al actualizar la cancha.'), { status: 500 });
 
       if (payload.address || payload.city || pitchNeighborhood) {
         try {
@@ -431,7 +432,7 @@ export async function POST(req: NextRequest) {
         .delete()
         .eq('id', pitch_id);
 
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) return NextResponse.json(safeServerErrorResponse(error, 'Error al eliminar la cancha.'), { status: 500 });
       return NextResponse.json({ success: true });
     }
 
@@ -567,7 +568,7 @@ export async function POST(req: NextRequest) {
             .single();
 
           if (updateErr) {
-            return NextResponse.json({ error: updateErr.message }, { status: 500 });
+            return NextResponse.json(safeServerErrorResponse(updateErr, 'Error al actualizar la reserva.'), { status: 500 });
           }
           if (updated) createdBookings.push(updated);
         } else {
@@ -582,7 +583,7 @@ export async function POST(req: NextRequest) {
             if (insertErr.code === '23505') {
               return NextResponse.json({ error: `La hora ${item.start_time.substring(11, 16)} ya está ocupada.` }, { status: 400 });
             }
-            return NextResponse.json({ error: insertErr.message }, { status: 500 });
+            return NextResponse.json(safeServerErrorResponse(insertErr, 'Error al crear la reserva.'), { status: 500 });
           }
           if (inserted) createdBookings.push(inserted);
         }
@@ -647,7 +648,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: 'Acción no válida' }, { status: 400 });
   } catch (err: any) {
-    console.error('Error en admin-actions:', err);
-    return NextResponse.json({ error: err.message || 'Error de servidor' }, { status: 500 });
+    return NextResponse.json(safeServerErrorResponse(err, 'Error de servidor al procesar la solicitud.'), { status: 500 });
   }
 }

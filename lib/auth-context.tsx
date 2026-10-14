@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, Session } from '@supabase/supabase-js';
+import { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
 
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     supabase.auth.getSession()
-      .then(({ data, error }) => {
+      .then(({ data, error }: { data: { session: Session | null }; error: any }) => {
         if (error) {
           console.warn('⚠️ Sesión expirada o token inválido, limpiando estado de auth:', error.message);
           supabase.auth.signOut().catch(() => {});
@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const sess = data.session;
+        const sess = data?.session ?? null;
         setSession(sess);
         setUser(sess?.user ?? null);
         if (sess?.user) {
@@ -68,12 +68,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false);
         }
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         console.error('Error en getSession:', err);
         setLoading(false);
       });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, currentSession: Session | null) => {
       if (event === 'PASSWORD_RECOVERY') {
         if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/reset-password')) {
           window.location.href = '/reset-password';
@@ -146,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Si es dueño, asegurar que tenga empresa creada (silenciosamente)
         if (finalProfile.role === 'owner') {
-          supabase.auth.getSession().then(({ data: sessData }) => {
+          supabase.auth.getSession().then(({ data: sessData }: { data: { session: Session | null } }) => {
             const token = sessData?.session?.access_token;
             fetch('/api/admin-actions', {
               method: 'POST',

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
 import { getAuthenticatedUser } from '@/lib/auth-guard';
 import { uploadToR2, isR2Configured } from '@/lib/storage/r2';
+import { safeServerErrorResponse } from '@/lib/error-handler';
 
 function getServiceSupabase() {
   return createClient(
@@ -96,8 +97,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (supaErr) {
-      console.error('[Supabase Storage Fallback error]', supaErr);
-      return NextResponse.json({ error: 'Error al subir el archivo: ' + supaErr.message }, { status: 500 });
+      return NextResponse.json(safeServerErrorResponse(supaErr, 'Error al subir el archivo.'), { status: 500 });
     }
 
     const { data: publicData } = supabase.storage.from(targetBucket).getPublicUrl(filePath);
@@ -111,7 +111,6 @@ export async function POST(req: NextRequest) {
       type: isVideo ? 'video' : 'photo',
     });
   } catch (err: any) {
-    console.error('[api:upload catch]', err);
-    return NextResponse.json({ error: 'Error procesando archivo: ' + (err.message || 'Error desconocido') }, { status: 500 });
+    return NextResponse.json(safeServerErrorResponse(err, 'Error al procesar el archivo.'), { status: 500 });
   }
 }

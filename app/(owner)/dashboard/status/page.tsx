@@ -443,13 +443,22 @@ export default function CreateStatusPage() {
           setPitches(pitchList);
         }
 
-        // Si tenemos compañía, cargar disponibilidad de horas
+        // Si tenemos compañía, cargar disponibilidad de horas para la primera cancha
         if (currentCompany?.id) {
           try {
+            // Elegir la primera cancha específica para mostrar disponibilidad real por cancha
+            const firstPitchId = pitchList.length > 0 ? pitchList[0].id : undefined;
+            if (firstPitchId && isMounted) {
+              setSelPitch(firstPitchId);
+            }
             const hRes = await fetch('/api/generate-status', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ companyId: currentCompany.id, forTomorrow: false }),
+              body: JSON.stringify({
+                companyId: currentCompany.id,
+                pitchId: firstPitchId || 'all',
+                forTomorrow: false,
+              }),
             });
             const hJson = await hRes.json();
             if (hJson?.success && hJson.data) {

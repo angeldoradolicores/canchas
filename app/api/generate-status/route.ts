@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { safeServerErrorResponse } from '@/lib/error-handler';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -195,7 +196,6 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err: any) {
-    console.error('[generate-status]', err);
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return NextResponse.json(safeServerErrorResponse(err, 'Error al generar el reporte de disponibilidad.'), { status: 500 });
   }
 }

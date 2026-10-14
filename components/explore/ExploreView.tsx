@@ -45,12 +45,14 @@ function fmtSlot(slot: string) {
   return `${h12}:00 ${ampm}`;
 }
 
-function QuickTimer({ expiresAt }: { expiresAt: string }) {
+function QuickTimer({ expiresAt, onExpired }: { expiresAt: string; onExpired?: () => void }) {
   const [secs, setSecs] = useState(() => Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000)));
+  const firedRef = useRef(false);
 
   useEffect(() => {
     const diff = Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);
     setSecs(Math.max(0, diff));
+    firedRef.current = false;
   }, [expiresAt]);
 
   useEffect(() => {
@@ -58,6 +60,16 @@ function QuickTimer({ expiresAt }: { expiresAt: string }) {
     const id = setInterval(() => setSecs(s => Math.max(0, s - 1)), 1000);
     return () => clearInterval(id);
   }, [secs]);
+
+  // Cuando el timer llega a 0, disparar refresco con pequeño delay para que la DB se actualice
+  useEffect(() => {
+    if (secs <= 0 && !firedRef.current) {
+      firedRef.current = true;
+      if (onExpired) {
+        setTimeout(onExpired, 2000); // Esperar 2s para que la DB procese la expiración
+      }
+    }
+  }, [secs, onExpired]);
 
   if (secs <= 0) return <span className="text-[10px] text-amber-500 font-bold">Liberando...</span>;
   const m = Math.floor(secs / 60);
@@ -1559,7 +1571,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                             {complexName}
                           </span>
                           <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center gap-1 shrink-0">
-                            ⏱️ <QuickTimer expiresAt={p.expiresAt} />
+                            ⏱️ <QuickTimer expiresAt={p.expiresAt} onExpired={() => handleSearchRef.current(true)} />
                           </span>
                         </div>
 

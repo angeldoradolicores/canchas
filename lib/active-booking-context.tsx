@@ -173,7 +173,7 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
           schema: 'public',
           table: 'bookings',
         },
-        (payload) => {
+        (payload: any) => {
           const deletedId = (payload.old as any)?.id;
           if (!deletedId || bookingIds.includes(deletedId)) {
             // Se liberó la cancha desde otro dispositivo o pestaña

@@ -50,7 +50,7 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
           table: 'notifications',
           filter: `user_id=eq.${user.id}`,
         },
-        (payload) => {
+        (payload: any) => {
           fetchNotifications();
           if (payload.eventType === 'INSERT') {
             setBellShaking(true);
@@ -151,10 +151,10 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
       .from('pitches')
       .select('city')
       .not('city', 'is', null)
-      .then(({ data }) => {
+      .then(({ data }: { data: any }) => {
         if (data && data.length > 0) {
-          const dbCities = Array.from(new Set(data.map((d: any) => d.city).filter(Boolean)));
-          setCitiesList(prev => Array.from(new Set([...prev.filter(c => c !== 'Todas'), ...dbCities, 'Todas'])));
+          const dbCities: string[] = Array.from(new Set(data.map((d: any) => d.city).filter(Boolean)));
+          setCitiesList(prev => Array.from(new Set<string>([...prev.filter(c => c !== 'Todas'), ...dbCities, 'Todas'])));
         }
       });
 
@@ -472,7 +472,7 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
             )}
           </div>
         ) : (
-          <button className="btn-primary btn-sm" onClick={() => router.push('/login')}>
+          <button className="btn-primary btn-sm" onClick={onLoginClick || (() => router.push('/login'))}>
             Ingresar
           </button>
         )}

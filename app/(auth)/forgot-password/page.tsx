@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Mail, ArrowLeft, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { getFriendlyErrorMessage } from '@/lib/error-handler';
 import Link from 'next/link';
 
 export default function ForgotPasswordPage() {
@@ -31,12 +32,12 @@ export default function ForgotPasswordPage() {
       });
 
       if (error) {
-        setError(error.message || 'No se pudo enviar el correo de recuperación.');
+        setError(getFriendlyErrorMessage(error, 'No se pudo enviar el correo de recuperación.'));
       } else {
         setSent(true);
       }
     } catch (err: any) {
-      setError(err.message || 'Ocurrió un error inesperado.');
+      setError(getFriendlyErrorMessage(err, 'Ocurrió un error inesperado.'));
     } finally {
       setLoading(false);
     }

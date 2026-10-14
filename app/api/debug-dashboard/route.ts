@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getAuthenticatedUser } from '@/lib/auth-guard';
+import { safeServerErrorResponse } from '@/lib/error-handler';
 
 export async function GET(req: NextRequest) {
   // Prohibir acceso en producción
@@ -39,6 +40,6 @@ export async function GET(req: NextRequest) {
       pitches: pitchesResult,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(safeServerErrorResponse(err, 'Error interno del servidor.'), { status: 500 });
   }
 }

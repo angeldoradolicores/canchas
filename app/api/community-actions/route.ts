@@ -6,6 +6,7 @@ import {
   CommunityDeleteChallengeSchema,
   CommunityUpdateChallengeSchema,
 } from '@/lib/validations/api-schemas';
+import { safeServerErrorResponse } from '@/lib/error-handler';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
       }
 
       const { error } = await supabase.from('challenges').delete().eq('id', challenge_id);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) return NextResponse.json(safeServerErrorResponse(error, 'Error al eliminar el reto.'), { status: 500 });
       return NextResponse.json({ success: true });
     }
 
@@ -129,7 +130,7 @@ export async function POST(req: NextRequest) {
         .select()
         .single();
 
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) return NextResponse.json(safeServerErrorResponse(error, 'Error al actualizar el reto.'), { status: 500 });
       return NextResponse.json({ success: true, data });
     }
 

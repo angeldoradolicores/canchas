@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getAuthenticatedUser } from '@/lib/auth-guard';
+import { safeServerErrorResponse } from '@/lib/error-handler';
 
 function getServiceSupabase() {
   return createClient(
@@ -145,7 +146,6 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err: any) {
-    console.error('Error en /api/bookings/remaining-payment:', err);
-    return NextResponse.json({ error: err.message || 'Error interno del servidor' }, { status: 500 });
+    return NextResponse.json(safeServerErrorResponse(err, 'Error interno al registrar el pago restante.'), { status: 500 });
   }
 }

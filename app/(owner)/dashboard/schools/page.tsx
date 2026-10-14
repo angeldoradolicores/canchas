@@ -73,7 +73,7 @@ export default function OwnerSchoolsPage() {
         .eq('owner_id', user.id);
 
       if (!companiesData?.length) { setLoading(false); return; }
-      const companyIds = companiesData.map(c => c.id);
+      const companyIds = (companiesData as Array<{ id: string }>).map((c: any) => c.id);
 
       const { data: pitchesData } = await supabase
         .from('pitches')
@@ -85,7 +85,7 @@ export default function OwnerSchoolsPage() {
 
       // Obtener escuelas vinculadas a esas canchas
       if (myPitches.length > 0) {
-        const pitchIds = myPitches.map(p => p.id);
+        const pitchIds = (myPitches as Array<{ id: string }>).map((p: any) => p.id);
         const { data: schoolsData } = await supabase
           .from('schools')
           .select('*, pitches(id, name)')

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
 import { getAuthenticatedUser } from '@/lib/auth-guard';
 import { SchoolCreateSchema, SchoolUpdateSchema } from '@/lib/validations/api-schemas';
+import { safeServerErrorResponse } from '@/lib/error-handler';
 
 function getServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -88,12 +89,12 @@ export async function GET(req: NextRequest) {
     if (pitch_id) query = query.eq('pitch_id', pitch_id);
 
     const { data, error } = await query.order('created_at', { ascending: false });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return NextResponse.json(safeServerErrorResponse(error, 'Error al obtener las escuelas.'), { status: 500 });
 
     const enriched = (data || []).map(enrichSchoolRow);
     return NextResponse.json({ success: true, data: enriched });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(safeServerErrorResponse(err, 'Error al obtener las escuelas.'), { status: 500 });
   }
 }
 
@@ -197,12 +198,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (insertResult.error) {
-      return NextResponse.json({ error: insertResult.error.message }, { status: 500 });
+      return NextResponse.json(safeServerErrorResponse(insertResult.error, 'Error al registrar la escuela.'), { status: 500 });
     }
 
     return NextResponse.json({ success: true, data: enrichSchoolRow(insertResult.data) });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(safeServerErrorResponse(err, 'Error al registrar la escuela.'), { status: 500 });
   }
 }
 
@@ -310,12 +311,12 @@ async function handleUpdate(req: NextRequest) {
     }
 
     if (updateResult.error) {
-      return NextResponse.json({ error: updateResult.error.message }, { status: 500 });
+      return NextResponse.json(safeServerErrorResponse(updateResult.error, 'Error al actualizar la escuela.'), { status: 500 });
     }
 
     return NextResponse.json({ success: true, data: enrichSchoolRow(updateResult.data) });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(safeServerErrorResponse(err, 'Error al actualizar la escuela.'), { status: 500 });
   }
 }
 
@@ -355,9 +356,9 @@ export async function DELETE(req: NextRequest) {
     }
 
     const { error } = await service.from('schools').delete().eq('id', id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return NextResponse.json(safeServerErrorResponse(error, 'Error al eliminar la escuela.'), { status: 500 });
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(safeServerErrorResponse(err, 'Error al eliminar la escuela.'), { status: 500 });
   }
 }

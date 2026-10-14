@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { notifyBookingStatusChange } from '@/lib/whatsapp-notifications';
+import { safeServerErrorResponse } from '@/lib/error-handler';
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,7 +18,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    console.error('Error en /api/bookings/notify-status:', err);
-    return NextResponse.json({ error: err.message || 'Error interno' }, { status: 500 });
+    return NextResponse.json(safeServerErrorResponse(err, 'Error interno al notificar el estado.'), { status: 500 });
   }
 }

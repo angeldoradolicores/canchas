@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
 import { getAuthenticatedUser } from '@/lib/auth-guard';
+import { safeServerErrorResponse } from '@/lib/error-handler';
 
 function getAdminSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest) {
       favorite_companies: favoriteCompanies,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(safeServerErrorResponse(err, 'Error al obtener favoritos.'), { status: 500 });
   }
 }
 
@@ -202,8 +203,7 @@ export async function POST(req: NextRequest) {
         .eq('user_id', effectiveUserId);
 
       if (delError) {
-        console.warn('[Favorites delete warning]', delError.message);
-        return NextResponse.json({ success: true, isFavorite: false, warning: delError.message });
+        return NextResponse.json({ success: true, isFavorite: false });
       }
 
       return NextResponse.json({ success: true, isFavorite: false });
@@ -213,8 +213,7 @@ export async function POST(req: NextRequest) {
         .upsert({ pitch_id: targetPitchId, user_id: effectiveUserId }, { onConflict: 'pitch_id,user_id' });
 
       if (insError) {
-        console.warn('[Favorites insert warning]', insError.message);
-        return NextResponse.json({ success: true, isFavorite: true, warning: insError.message });
+        return NextResponse.json({ success: true, isFavorite: true });
       }
 
       return NextResponse.json({ success: true, isFavorite: true });

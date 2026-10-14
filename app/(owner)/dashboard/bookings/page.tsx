@@ -2231,11 +2231,8 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
                   <div className="truncate text-foreground font-bold text-[9px]" title={effectiveBooking.customer_name}>
                     {effectiveBooking.customer_name || '—'}
                   </div>
-                  {effectiveBooking.pitch_id !== pitch.id ? (
-                    <div className="rounded px-1 py-0.5 inline-block text-[8px] font-black uppercase bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300">
-                      Vinculada
-                    </div>
-                  ) : isManual ? (
+
+                  {isManual ? (
                     <div className="flex items-center gap-0.5 text-purple-600 dark:text-purple-400 justify-center text-[9px]">
                       <Wrench size={8} /> Manual
                     </div>
@@ -2244,6 +2241,7 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
                       {effectiveBooking.status === 'pending' ? 'Pend.' : 'OK'}
                     </div>
                   )}
+
                   {effectiveBooking.payment_proof_url && (
                     <button
                       type="button"
@@ -2257,6 +2255,7 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
                       <FileText size={8} /> Comprobante
                     </button>
                   )}
+
                   {(effectiveBooking.status === 'confirmed' || effectiveBooking.status === 'pending') && (
                     <button
                       onClick={() => {
