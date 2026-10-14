@@ -228,10 +228,10 @@ export default function WhatsAppConnectionPage() {
         setQrCode(data.qr || data.qrCode);
         setStatus('connecting');
       } else {
-        setErrorMsg(data.error || 'No se pudo obtener el código QR de WhatsApp.');
+        setErrorMsg(data.error || 'No fue posible generar el código QR. Intenta de nuevo.');
       }
-    } catch (err: any) {
-      setErrorMsg('Error al conectar con el servidor: ' + err.message);
+    } catch {
+      setErrorMsg('No se pudo conectar con el servicio. Verifica tu conexión a internet e intenta nuevamente.');
     } finally {
       setGenerating(false);
     }
@@ -307,12 +307,12 @@ export default function WhatsAppConnectionPage() {
               confirmText: 'Aceptar',
             });
           }
-        } catch (err: any) {
+        } catch {
           setAlertState({
             isOpen: true,
             type: 'error',
-            title: 'Error',
-            message: 'Error al desconectar: ' + err.message,
+            title: 'Error al desconectar',
+            message: 'No se pudo desconectar el WhatsApp en este momento. Intenta de nuevo.',
             confirmText: 'Aceptar',
           });
         } finally {
@@ -378,13 +378,13 @@ export default function WhatsAppConnectionPage() {
           confirmText: 'Aceptar',
         });
       }
-    } catch (err: any) {
-      setTestResult('❌ Error al enviar mensaje: ' + err.message);
+    } catch {
+      setTestResult('❌ No se pudo enviar el mensaje. Verifica tu conexión.');
       setAlertState({
         isOpen: true,
         type: 'error',
         title: 'Error de conexión',
-        message: 'Error al enviar mensaje: ' + err.message,
+        message: 'No se pudo enviar el mensaje de prueba. Verifica tu conexión a internet e intenta de nuevo.',
         confirmText: 'Aceptar',
       });
     } finally {
@@ -468,14 +468,14 @@ export default function WhatsAppConnectionPage() {
                   </div>
                 </div>
 
-                <div className="bg-secondary/60 dark:bg-muted/40 p-4 rounded-xl space-y-2 text-xs border border-border">
+                {/* <div className="bg-secondary/60 dark:bg-muted/40 p-4 rounded-xl space-y-2 text-xs border border-border">
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Instancia activa:</span>
                     <code className="font-mono font-bold text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200/60 dark:border-emerald-800/40">
                       {instanceName}
                     </code>
                   </div>
-                </div>
+                </div> */}
 
                 {/* <div className="mt-6 pt-4 border-t border-zinc-100">
                   <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-2">
@@ -614,7 +614,7 @@ export default function WhatsAppConnectionPage() {
         <div className="wp-card bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4 flex flex-col justify-between">
           <div className="space-y-3">
             <h3 className="font-bold text-sm flex items-center gap-1.5 text-emerald-600">
-              <Zap size={16} /> ¿Cómo funciona el envío?
+              ¿Cómo funciona el envío?
             </h3>
             <p className="text-xs text-muted-foreground leading-relaxed">
               Cada complejo deportivo en <strong>Cancheros</strong> dispone de una instancia aislada para gestionar sus notificaciones sin interferir con otros negocios.

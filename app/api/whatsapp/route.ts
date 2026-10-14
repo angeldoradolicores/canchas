@@ -258,29 +258,31 @@ export async function POST(req: NextRequest) {
       }
 
       let finalQrImage = '';
-      if (rawBase64) {
-        finalQrImage = rawBase64.startsWith('data:image')
-          ? rawBase64
-          : `data:image/png;base64,${rawBase64}`;
-      } else if (rawCode) {
+      // 1. PRIORIDAD RAÍZ: Generar siempre el QR en color VERDE (#16a34a) nativamente desde rawCode
+      if (rawCode) {
         try {
-          // La librería qrcode con canales alfa completos para evitar inversiones de color
           finalQrImage = await QRCode.toDataURL(rawCode, {
             margin: 2,
             scale: 8,
-            color: { dark: '#16a34aff', light: '#ffffffff' }
+            color: { dark: '#16a34a', light: '#ffffff' },
+            errorCorrectionLevel: 'M',
           });
         } catch (e) {
-          const qrData = encodeURIComponent(rawCode);
-          // Forzamos formato correcto de color hexadecimal sin el '#' para la API externa
-          finalQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${qrData}&color=16a34a&bgcolor=ffffff&margin=10`;
+          console.warn('[WhatsApp QR] Error en generación local de QR verde:', e);
         }
+      }
+
+      // 2. Respaldo: si por alguna razón rawCode no vino, usar rawBase64
+      if (!finalQrImage && rawBase64) {
+        finalQrImage = rawBase64.startsWith('data:image')
+          ? rawBase64
+          : `data:image/png;base64,${rawBase64}`;
       }
 
       if (!finalQrImage) {
         return NextResponse.json({
-          error: 'Presiona "Generar Código" para generar un nuevo código .',
-          instanceName,
+          success: false,
+          error: 'No fue posible generar el código QR en este momento. Por favor, intenta de nuevo.',
         }, { status: 502 });
       }
 
@@ -497,6 +499,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: false, error: 'Acción no soportada' }, { status: 400 });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    console.error('[WhatsApp API] Error:', err?.message || err);
+    return NextResponse.json({ success: false, error: 'Ocurrió un error al procesar la solicitud. Por favor intenta de nuevo.' }, { status: 500 });
   }
 }

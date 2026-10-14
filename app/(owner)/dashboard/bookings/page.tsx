@@ -1108,9 +1108,66 @@ export default function BookingsPage() {
 
           {/* Cards de Reservas — responsivo sin tabla */}
           {groupedBookings.length === 0 ? (
-            <div className="bg-card rounded-2xl border border-border text-center py-16 p-4">
-              <p className="text-sm text-muted-foreground">No se encontraron reservas con los filtros seleccionados.</p>
-            </div>
+            (() => {
+              // Mensaje contextual según el filtro activo
+              const emptyMeta: Record<string, { icon: string; title: string; desc: string; cta?: { label: string; href: string } }> = {
+                pending: {
+                  icon: '⏳',
+                  title: 'Sin reservas pendientes',
+                  desc: 'No tienes solicitudes por revisar en este momento. Cuando un cliente envíe su comprobante, aparecerá aquí.',
+                },
+                confirmed: {
+                  icon: '✅',
+                  title: 'Sin reservas aprobadas',
+                  desc: 'No hay partidos confirmados con los filtros seleccionados.',
+                  cta: { label: 'Ver todas las reservas', href: '' },
+                },
+                cancelled: {
+                  icon: '❌',
+                  title: 'Sin reservas canceladas',
+                  desc: 'No hay reservas canceladas en este período.',
+                },
+                pending_payment: {
+                  icon: '💰',
+                  title: 'Sin saldos pendientes',
+                  desc: 'Todos los partidos confirmados tienen el saldo al día.',
+                },
+                paid: {
+                  icon: '🎉',
+                  title: 'Sin pagos completos registrados',
+                  desc: 'Cuando registres un cobro de saldo, aparecerá en esta sección.',
+                },
+                manual: {
+                  icon: '📋',
+                  title: 'Sin reservas manuales',
+                  desc: 'No has registrado reservas manuales en este período.',
+                },
+                all: {
+                  icon: '⚽',
+                  title: 'Tu cancha está esperando jugadores',
+                  desc: 'No hay reservas con los filtros actuales. Comparte el enlace de tu cancha para que los clientes puedan reservar directamente.',
+                  cta: { label: 'Ir a explorar canchas', href: '/' },
+                },
+              };
+              const key = filterStatus in emptyMeta ? filterStatus : 'all';
+              const meta = emptyMeta[key] || emptyMeta['all'];
+              return (
+                <div className="bg-card rounded-2xl border border-border text-center py-14 px-6 flex flex-col items-center gap-3">
+                  <span className="text-4xl leading-none">{meta.icon}</span>
+                  <h3 className="font-bold text-base text-foreground">{meta.title}</h3>
+                  <p className="text-sm text-muted-foreground max-w-xs mx-auto">{meta.desc}</p>
+                  {meta.cta && (
+                    <a
+                      href={meta.cta.href || undefined}
+                      onClick={!meta.cta.href ? (e) => { e.preventDefault(); } : undefined}
+                      className="mt-1 inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-colors cursor-pointer"
+                    >
+                      {meta.cta.label}
+                    </a>
+                  )}
+                </div>
+              );
+            })()
           ) : (
             <div className="grid gap-3">
               {groupedBookings.map((group: any) => {

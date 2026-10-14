@@ -1150,7 +1150,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                   })}
                 </div>
                 {selectedDate && (
-                  <span key={selectedDate} className="inline-flex w-fit items-center gap-1 bg-primary text-white text-[11px] font-bold px-2.5 py-1 rounded-full">
+                  <span key={selectedDate} className="inline-flex w-fit items-center gap-1 bg-primary text-white text-[11px] font-bold px-2.5 py-1 rounded-full capitalize">
                     📅 {formattedSelectedDate}
                     <button
                       type="button"
@@ -1279,7 +1279,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
               </div>
 
               {/* Formato (Desplegable) */}
-              <div className="flex flex-col gap-1.5 relative z-40">
+              <div className="flex flex-col gap-1.5 relative z-10">
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                   <Grid2X2 size={12} /> Formato
                 </label>
@@ -1294,7 +1294,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                   <ChevronDown size={16} className={`flex-shrink-0 transition-transform text-muted-foreground ${openDropdown === 'format' ? 'rotate-180' : ''}`} />
                 </button>
                 {openDropdown === 'format' && (
-                  <div className="absolute top-[100%] mt-1 left-0 right-0 p-2 bg-card border border-border rounded-xl shadow-xl flex flex-col gap-1 animate-in fade-in slide-in-from-top-1 z-50 max-h-48 overflow-y-auto">
+                  <div className="absolute top-[100%] mt-1 left-0 right-0 p-2 bg-card border border-border rounded-xl shadow-xl flex flex-col gap-1 animate-in fade-in slide-in-from-top-1 z-20 max-h-48 overflow-y-auto">
                     {['Todos', 'Fútbol 5', 'Fútbol 6', 'Fútbol 7', 'Fútbol 11'].map(f => {
                       const isActive = f === 'Todos' ? selectedFormats.length === 0 : selectedFormats.includes(f);
                       return (

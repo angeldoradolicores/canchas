@@ -529,38 +529,81 @@ export default function TournamentsPage() {
           <Loader2 size={36} className="animate-spin text-[#008744]" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 px-4 bg-card/60 border border-border rounded-[2.5rem]">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-secondary flex items-center justify-center text-primary">
-            <Trophy size={32} />
-          </div>
-          <h3 className="font-black text-xl text-foreground uppercase tracking-tight mb-1">
-            {selectedCity !== 'Todas'
-              ? `No hay campeonatos en ${selectedCity}`
-              : (statusFilter !== 'all'
-                ? `No hay campeonatos ${STATUS_LABELS[statusFilter]?.label || ''}`
-                : 'No hay campeonatos aún')}
-          </h3>
-          <p className="text-muted-foreground text-sm font-medium max-w-sm mx-auto mb-4">
-            {selectedCity !== 'Todas'
-              ? `Actualmente no hay torneos registrados en ${selectedCity}. Puedes ver los torneos disponibles a nivel nacional.`
-              : (user ? '¡Sé el primero en crear y publicar un campeonato!' : 'Inicia sesión para registrar tu torneo.')}
-          </p>
-          {selectedCity !== 'Todas' && (
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedCity('Todas');
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem('selectedCity', 'Todas');
-                  window.dispatchEvent(new CustomEvent('cityChange', { detail: 'Todas' }));
-                }
-              }}
-              className="px-4 py-2 bg-[#008744] hover:bg-[#054D27] text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
-            >
-              Ver campeonatos en todas las ciudades
-            </button>
-          )}
-        </div>
+        (() => {
+          // Mensajes contextuales según la pestaña activa
+          const tabMessages: Record<string, { emoji: string; title: string; desc: string }> = {
+            all: {
+              emoji: '🏆',
+              title: selectedCity !== 'Todas' ? `No hay campeonatos en ${selectedCity}` : 'No hay campeonatos aún',
+              desc: selectedCity !== 'Todas'
+                ? `Actualmente no hay torneos registrados en ${selectedCity}. Puedes ver los torneos disponibles a nivel nacional.`
+                : (user ? '¡Sé el primero en crear y publicar un campeonato!' : 'Inicia sesión para registrar tu torneo.'),
+            },
+            active: {
+              emoji: '📣',
+              title: '¡No hay campeonatos abiertos!',
+              desc: 'En este momento no hay torneos con inscripciones abiertas. Vuelve pronto o consulta los torneos próximos a iniciar.',
+            },
+            closed: {
+              emoji: '🔒',
+              title: 'Ningún torneo está lleno aún',
+              desc: 'Cuando las inscripciones de un campeonato estén al límite, aparecerá aquí. Revisa los torneos abiertos para participar antes de que se llenen.',
+            },
+            finished: {
+              emoji: '🏅',
+              title: 'Sin torneos finalizados',
+              desc: 'Aquí encontrarás el historial de campeonatos que ya culminaron. Los resultados y campeones quedarán registrados en esta sección.',
+            },
+          };
+          const key = statusFilter in tabMessages ? statusFilter : 'all';
+          const msg = tabMessages[key];
+          return (
+            <div className="text-center py-16 px-4 bg-card/60 border border-border rounded-[2.5rem]">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-secondary flex items-center justify-center text-3xl">
+                {msg.emoji}
+              </div>
+              <h3 className="font-black text-xl text-foreground uppercase tracking-tight mb-1">
+                {msg.title}
+              </h3>
+              <p className="text-muted-foreground text-sm font-medium max-w-sm mx-auto mb-4">
+                {msg.desc}
+              </p>
+              {selectedCity !== 'Todas' && statusFilter === 'all' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCity('Todas');
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('selectedCity', 'Todas');
+                      window.dispatchEvent(new CustomEvent('cityChange', { detail: 'Todas' }));
+                    }
+                  }}
+                  className="px-4 py-2 bg-[#008744] hover:bg-[#054D27] text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  Ver campeonatos en todas las ciudades
+                </button>
+              )}
+              {statusFilter === 'active' && (
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('all' as any)}
+                  className="px-4 py-2 bg-[#008744] hover:bg-[#054D27] text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  Ver todos los campeonatos
+                </button>
+              )}
+              {statusFilter === 'finished' && (
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('active' as any)}
+                  className="px-4 py-2 bg-[#008744] hover:bg-[#054D27] text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  Ver torneos abiertos
+                </button>
+              )}
+            </div>
+          );
+        })()
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((t) => {

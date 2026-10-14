@@ -156,7 +156,7 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
           type="button"
           onClick={toggleFavorite}
           disabled={loadingFavorite}
-          className={`absolute top-3.5 right-3.5 z-30 p-2 rounded-full backdrop-blur-md transition-all hover:scale-110 active:scale-95 cursor-pointer shadow-md ${isFavorite
+          className={`absolute top-3.5 right-3.5 z-10 p-2 rounded-full backdrop-blur-md transition-all hover:scale-110 active:scale-95 cursor-pointer shadow-md ${isFavorite
             ? 'bg-emerald-500 text-white'
             : 'bg-black/40 hover:bg-black/60 text-white border border-white/20'
             }`}

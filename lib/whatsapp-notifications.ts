@@ -283,11 +283,11 @@ export async function notifyBookingSubmitted(bookingId: string) {
     // ── C) MENSAJE AL DUEÑO: aviso de reserva pendiente + link al dashboard ──
     const ownerMsg =
       `🔔 *¡Nuevo comprobante de pago recibido!*\n\n` +
-      `🏟️ *${company_name}*\n` +
+      `*${company_name}*\n` +
       `${pitchNameCombined}\n` +
       `*Cliente:* ${customer_name}${customer_phone ? ` (📱 ${customer_phone})` : ''}\n` +
-      `📅 *Fecha:* ${fechaCorta}\n` +
-      `⏰ *${siblingBookings.length > 1 ? 'Turnos reservados:' : 'Horario:'}* ${horasStr}\n\n` +
+      `*Fecha:* ${fechaCorta}\n` +
+      `*${siblingBookings.length > 1 ? 'Turnos reservados:' : 'Horario:'}* ${horasStr}\n\n` +
       `*Revisar y aprobar en tu panel:*\n` +
       `👉 ${APP_URL}/dashboard/bookings`;
 
@@ -421,7 +421,7 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
 
     const pitchNames = Array.from(new Set(siblingBookings.map((s: any) => s.pitches?.name).filter(Boolean))).join(' + ') || pitch.name;
     const shortId = (b.id ? b.id.slice(0, 8) : 'REF').toUpperCase();
-    
+
     // Resolver la ubicación y link de Google Maps de forma robusta
     const loc = resolvePitchLocation(pitch);
     const mapsUrl = loc.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${company?.name || 'Canchas'}, Pasto`)}`;
@@ -434,8 +434,7 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
         `📅 *FECHA:* ${fechaLarga}\n` +
         `⏰ *${siblingBookings.length > 1 ? 'HORARIOS RESERVADOS:' : 'HORARIO:'}* ${horasStr}\n` +
         // `📍 *DIRECCIÓN:* ${address}\n` +
-        `📍 *VER EN MAPS:* ${mapsUrl}\n`;
-
+        `📍 *VER EN MAPS:* <${mapsUrl}>\n`;
       await sendEvolutionWhatsAppText(instanceName, b.customer_phone, ticketMsg);
     } else {
       // ── RESERVA DECLINADA / CANCELADA ──
