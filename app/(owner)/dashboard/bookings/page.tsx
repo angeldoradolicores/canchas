@@ -20,6 +20,7 @@ import {
   formatPaymentMethod,
   calculateRemainingBalance,
 } from '@/lib/remaining-payment-utils';
+import { SlotDetailModal } from '@/components/booking/SlotDetailModal';
 
 const TIME_SLOTS = [
   '06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00',
@@ -112,6 +113,36 @@ export default function BookingsPage() {
     turns?: string[];
   } | null>(null);
   const notifiedPendingIdsRef = useRef<Set<string>>(new Set());
+
+  // Estados de Animación de Transición de Estados
+  const [animatingCard, setAnimatingCard] = useState<{
+    bookingIds: string[];
+    targetTab: 'pending_payment' | 'paid' | 'cancelled';
+    targetLabel: string;
+    color: 'sky' | 'emerald' | 'rose';
+    text: string;
+  } | null>(null);
+  const [bumpTab, setBumpTab] = useState<string | null>(null);
+  const [transitionToast, setTransitionToast] = useState<{
+    name: string;
+    targetTab: string;
+    targetLabel: string;
+    color: string;
+  } | null>(null);
+
+  // Modal / Pestaña flotante para horarios interactivos
+  const [selectedSlotDetail, setSelectedSlotDetail] = useState<{
+    pitch: any;
+    slot: string;
+    dateStr: string;
+    booking: any | null;
+    isOperating: boolean;
+  } | null>(null);
+  const [manualBookingPrefill, setManualBookingPrefill] = useState<{
+    pitchId?: string;
+    date?: string;
+    time?: string;
+  } | null>(null);
 
   // Descartar notificación y resaltado al tocar o interactuar con la reserva
   const dismissNewArrival = (group: any) => {
@@ -394,8 +425,65 @@ export default function BookingsPage() {
   const [batchCancelling, setBatchCancelling] = useState(false);
   const [batchCancelConfirm, setBatchCancelConfirm] = useState<{ ids: string[]; label: string } | null>(null);
 
+  const triggerStatusAnimation = (
+    ids: string[],
+    targetTab: 'pending_payment' | 'paid' | 'cancelled',
+    targetLabel: string,
+    color: 'sky' | 'emerald' | 'rose',
+    text: string,
+    customerName?: string
+  ) => {
+    setAnimatingCard({
+      bookingIds: ids,
+      targetTab,
+      targetLabel,
+      color,
+      text,
+    });
+    setBumpTab(targetTab);
+    setTransitionToast({
+      name: customerName || 'Cliente',
+      targetTab,
+      targetLabel,
+      color: color === 'sky' ? 'bg-sky-500' : color === 'emerald' ? 'bg-emerald-500' : 'bg-rose-500',
+    });
+    setTimeout(() => {
+      setAnimatingCard(null);
+    }, 700);
+    setTimeout(() => {
+      setBumpTab(null);
+    }, 2200);
+  };
+
   const updateStatus = async (id: string, newStatus: 'confirmed' | 'cancelled') => {
     try {
+      const bTarget = bookings.find(b => b.id === id);
+      if (newStatus === 'confirmed') {
+        const tPrice = Number(bTarget?.total_price || bTarget?.pitches?.price_per_hour || 0);
+        const dAmount = Number(bTarget?.deposit_amount || 0);
+        const remPaid = Number(bTarget?.remaining_amount_paid || 0);
+        const bal = calculateRemainingBalance(tPrice, dAmount, remPaid);
+        const targetTab = bal > 0 ? 'pending_payment' : 'paid';
+        const targetLabel = bal > 0 ? 'Por Cobrar' : 'Cobradas';
+        triggerStatusAnimation(
+          [id],
+          targetTab,
+          targetLabel,
+          bal > 0 ? 'sky' : 'emerald',
+          bal > 0 ? '¡Aprobada! Trasladando a Por Cobrar ➔' : '¡Aprobada y Pagada! Trasladando a Cobradas ➔',
+          bTarget?.customer_name
+        );
+      } else if (newStatus === 'cancelled') {
+        triggerStatusAnimation(
+          [id],
+          'cancelled',
+          'Canceladas',
+          'rose',
+          '¡Cancelada! Trasladando a Canceladas ➔',
+          bTarget?.customer_name
+        );
+      }
+
       const token = (await supabase.auth.getSession()).data.session?.access_token;
       const res = await fetch('/api/bookings/batch-action', {
         method: 'POST',
@@ -531,8 +619,20 @@ export default function BookingsPage() {
   const confirmBatchApprove = async () => {
     if (!batchApproveConfirm) return;
     setBatchApproving(true);
-    const { ids } = batchApproveConfirm;
+    const { ids, totalPrice, depositAmount, name } = batchApproveConfirm;
     try {
+      const bal = calculateRemainingBalance(totalPrice, depositAmount, 0);
+      const targetTab = bal > 0 ? 'pending_payment' : 'paid';
+      const targetLabel = bal > 0 ? 'Por Cobrar' : 'Cobradas';
+      triggerStatusAnimation(
+        ids,
+        targetTab,
+        targetLabel,
+        bal > 0 ? 'sky' : 'emerald',
+        bal > 0 ? `¡${ids.length} horas aprobadas! Moviendo a Por Cobrar ➔` : `¡${ids.length} horas aprobadas! Moviendo a Cobradas ➔`,
+        name
+      );
+
       const token = (await supabase.auth.getSession()).data.session?.access_token;
       const res = await fetch('/api/bookings/batch-action', {
         method: 'POST',
@@ -570,6 +670,14 @@ export default function BookingsPage() {
     setBatchCancelling(true);
     const { ids } = batchCancelConfirm;
     try {
+      triggerStatusAnimation(
+        ids,
+        'cancelled',
+        'Canceladas',
+        'rose',
+        `¡${ids.length} horas canceladas! Moviendo a Canceladas ➔`,
+        'Reserva'
+      );
       const token = (await supabase.auth.getSession()).data.session?.access_token;
       const res = await fetch('/api/bookings/batch-action', {
         method: 'POST',
@@ -605,6 +713,16 @@ export default function BookingsPage() {
         : [];
 
     if (targetIds.length > 0) {
+      const bObj = bookings.find(b => targetIds.includes(b.id));
+      triggerStatusAnimation(
+        targetIds,
+        'paid',
+        'Cobradas',
+        'emerald',
+        '¡Saldo cobrado con éxito! Moviendo a Cobradas ➔',
+        bObj?.customer_name
+      );
+
       setBookings(prev =>
         prev.map(b => {
           if (!targetIds.includes(b.id)) return b;
@@ -1050,15 +1168,22 @@ export default function BookingsPage() {
                   return matchSt && matchDt;
                 }).length;
 
+                const isBumped = bumpTab === st.key;
+
                 return (
                   <button
                     key={st.key}
                     onClick={() => setFilterStatus(st.key)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap border cursor-pointer ${isActive
+                    className={`relative px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap border cursor-pointer ${isActive
                       ? 'bg-primary text-white border-primary shadow-sm'
                       : 'bg-secondary/40 border-transparent text-muted-foreground hover:bg-secondary hover:text-foreground'
-                      }`}
+                      } ${isBumped ? 'ring-4 ring-primary scale-110 shadow-lg animate-pulse' : ''}`}
                   >
+                    {isBumped && (
+                      <span className="absolute -top-3.5 right-1 px-1.5 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-black animate-bounce shadow-md">
+                        +1
+                      </span>
+                    )}
                     {st.color && <span className={`w-2 h-2 rounded-full ${st.color}`} />}
                     {st.label}
                     <span className="opacity-75">({count})</span>
@@ -1195,12 +1320,23 @@ export default function BookingsPage() {
                   ? new Date(lastBooking.end_time)
                   : new Date(new Date(lastBooking?.start_time || group.start_time).getTime() + 60 * 60 * 1000);
 
+                const isAnimating = animatingCard?.bookingIds.some((id: string) =>
+                  group.bookings?.some((b: any) => b.id === id)
+                );
+
                 return (
                   <div
                     key={group.key}
                     onClick={() => dismissNewArrival(group)}
-                    className={`bg-card rounded-2xl border border-border shadow-sm hover:shadow-md transition-all p-3.5 sm:p-4.5 flex flex-col gap-3.5 relative overflow-hidden ${isNewlyArrived ? 'ring-2 ring-amber-500 shadow-lg shadow-amber-500/10 cursor-pointer' : ''
-                      }`}
+                    className={`bg-card rounded-2xl border border-border shadow-sm hover:shadow-md transition-all p-3.5 sm:p-4.5 flex flex-col gap-3.5 relative overflow-hidden ${
+                      isNewlyArrived ? 'ring-2 ring-amber-500 shadow-lg shadow-amber-500/10 cursor-pointer' : ''
+                    } ${
+                      isAnimating
+                        ? filterStatus !== 'all'
+                          ? 'translate-x-[110%] opacity-0 scale-95 duration-700 pointer-events-none'
+                          : 'scale-[1.01] ring-2 ring-primary shadow-xl duration-700'
+                        : ''
+                    }`}
                   >
                     {/* Indicador sutil de estado en el borde izquierdo */}
                     <div
@@ -1211,6 +1347,25 @@ export default function BookingsPage() {
                           : 'bg-red-400'
                         }`}
                     />
+
+                    {/* Banner de animación de cambio de estado en vivo */}
+                    {isAnimating && animatingCard && (
+                      <div className={`flex items-center justify-between gap-2 px-3.5 py-2 rounded-xl text-xs font-bold animate-in slide-in-from-left duration-300 ${
+                        animatingCard.color === 'sky'
+                          ? 'bg-sky-500/15 border border-sky-500/40 text-sky-800 dark:text-sky-200'
+                          : animatingCard.color === 'emerald'
+                          ? 'bg-emerald-500/15 border border-emerald-500/40 text-emerald-800 dark:text-emerald-200'
+                          : 'bg-rose-500/15 border border-rose-500/40 text-rose-800 dark:text-rose-200'
+                      }`}>
+                        <span className="flex items-center gap-2">
+                          <Sparkles size={14} className="animate-spin text-primary" />
+                          <span>{animatingCard.text}</span>
+                        </span>
+                        <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-lg bg-card/90 shadow-2xs">
+                          {animatingCard.targetLabel}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Alerta de Nueva Reserva Entrante (se descarta al hacer click en cualquier parte de la card) */}
                     {isNewlyArrived && (
@@ -1615,6 +1770,7 @@ export default function BookingsPage() {
                     onCancel={updateStatus}
                     onCancelRequest={handleCancelRequest}
                     onViewProof={(url: string) => setProofModalData({ url, title: 'Comprobante de Pago' })}
+                    onSelectSlot={setSelectedSlotDetail}
                   />
                 ) : (
                   <PitchGridMatrixCard
@@ -1625,6 +1781,7 @@ export default function BookingsPage() {
                     allPitches={pitches}
                     onDayClick={(dateStr: string) => { setSelectedDate(dateStr); setCalView('day'); }}
                     onViewProof={(url: string) => setProofModalData({ url, title: 'Comprobante de Pago' })}
+                    onSelectSlot={setSelectedSlotDetail}
                   />
                 )
               ))}
@@ -1639,9 +1796,83 @@ export default function BookingsPage() {
       {showManualBooking && (
         <ManualBookingModal
           pitches={pitches}
-          onClose={() => setShowManualBooking(false)}
-          onSuccess={() => { setShowManualBooking(false); fetchBookingsAndPitches(); }}
+          onClose={() => {
+            setShowManualBooking(false);
+            setManualBookingPrefill(null);
+          }}
+          onSuccess={() => {
+            setShowManualBooking(false);
+            setManualBookingPrefill(null);
+            fetchBookingsAndPitches();
+          }}
+          initialPitchId={manualBookingPrefill?.pitchId}
+          initialDate={manualBookingPrefill?.date}
+          initialTime={manualBookingPrefill?.time}
         />
+      )}
+
+      {/* ── Modal Flotante de Horario Interactivo (al tocar cada hora) ── */}
+      {selectedSlotDetail && (
+        <SlotDetailModal
+          data={selectedSlotDetail}
+          onClose={() => setSelectedSlotDetail(null)}
+          onApprove={(b) => {
+            handleApproveRequest(b);
+          }}
+          onCancelRequest={(b) => {
+            handleCancelRequest(b);
+          }}
+          onCollectBalance={(b) => {
+            setSelectedBookingForRemainingPayment(b);
+          }}
+          onViewProof={(url) => {
+            setProofModalData({ url, title: 'Comprobante de Pago' });
+          }}
+          onGoToList={(b) => {
+            setViewMode('list');
+            setListDateFilter('all');
+            if (b.customer_name) {
+              setSearchQuery(b.customer_name);
+            }
+          }}
+          onCreateManual={(p, d, s) => {
+            setManualBookingPrefill({ pitchId: p.id, date: d, time: s });
+            setShowManualBooking(true);
+          }}
+        />
+      )}
+
+      {/* ── Toast Flotante de Notificación de Cambio de Estado ── */}
+      {transitionToast && (
+        <div className="fixed bottom-5 right-5 left-5 sm:left-auto sm:max-w-md z-[260] bg-card/95 backdrop-blur-md border border-border shadow-2xl rounded-2xl p-3.5 flex items-center justify-between gap-3 text-xs animate-in slide-in-from-bottom-5 duration-300">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={`w-3 h-3 rounded-full ${transitionToast.color} shrink-0 animate-ping`} />
+            <span className="truncate">
+              {transitionToast.name ? `Reserva de ${transitionToast.name}: ` : ''}
+              trasladada a <strong>{transitionToast.targetLabel}</strong>
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setFilterStatus(transitionToast.targetTab);
+                setViewMode('list');
+                setTransitionToast(null);
+              }}
+              className="px-2.5 py-1 rounded-lg bg-primary text-primary-foreground font-bold text-[11px] hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
+            >
+              Ver {transitionToast.targetLabel}
+            </button>
+            <button
+              type="button"
+              onClick={() => setTransitionToast(null)}
+              className="p-1 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
       )}
 
       {/* ── Modal de Confirmación de Cancelación ── */}
@@ -2082,7 +2313,7 @@ function SlotCountdown({ expiresAt, onExpire }: { expiresAt: string; onExpire: (
   );
 }
 
-function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel, onCancelRequest, onViewProof }: any) {
+function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel, onCancelRequest, onViewProof, onSelectSlot }: any) {
   const [slots, setSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -2207,7 +2438,26 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
           }
 
           return (
-            <div key={slot} className={`relative p-2 rounded-xl border text-center transition-all flex flex-col justify-center min-h-[72px] ${bgClass}`}>
+            <div
+              key={slot}
+              onClick={() => {
+                onSelectSlot?.({
+                  pitch,
+                  slot,
+                  dateStr: selectedDate,
+                  booking: effectiveBooking,
+                  isOperating,
+                });
+              }}
+              className={`relative p-2 rounded-xl border text-center transition-all flex flex-col justify-center min-h-[72px] cursor-pointer hover:ring-2 hover:ring-primary/60 hover:scale-[1.02] active:scale-95 select-none ${bgClass}`}
+              title={
+                effectiveBooking
+                  ? `Ver detalle: ${effectiveBooking.customer_name || 'Reserva'}`
+                  : !isOperating
+                    ? 'Horario no operativo / cerrado'
+                    : 'Toca para ver o registrar reserva manual'
+              }
+            >
               <span className={`font-bold text-xs block leading-tight ${effectiveBooking ? 'text-foreground' : (!isOperating ? 'text-red-400/50' : 'text-muted-foreground')}`}>{h12}:00</span>
               <span className={`text-[9px] uppercase opacity-60 font-semibold ${!isOperating && !effectiveBooking ? 'text-red-400/50' : ''}`}>{ampm}</span>
 
@@ -2258,7 +2508,8 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
 
                   {(effectiveBooking.status === 'confirmed' || effectiveBooking.status === 'pending') && (
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         if (onCancelRequest) {
                           onCancelRequest(effectiveBooking);
                         } else {
@@ -2283,7 +2534,7 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
 
 
 /* Matriz de Horarios en Grilla: Filas = Horas | Columnas = Días */
-function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, onDayClick, onViewProof }: any) {
+function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, onDayClick, onViewProof, onSelectSlot }: any) {
   const [allSlots, setAllSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -2398,7 +2649,23 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, onDayClick, o
                     return (
                       <div
                         key={`${dateStr}-${slot}`}
-                        className={`min-h-[36px] p-1 rounded-lg border flex flex-col justify-center text-center transition-all ${cellClass}`}
+                        onClick={() => {
+                          onSelectSlot?.({
+                            pitch,
+                            slot,
+                            dateStr,
+                            booking: slotBooking,
+                            isOperating,
+                          });
+                        }}
+                        className={`min-h-[36px] p-1 rounded-lg border flex flex-col justify-center text-center transition-all cursor-pointer hover:ring-2 hover:ring-primary/60 hover:scale-[1.03] active:scale-95 select-none ${cellClass}`}
+                        title={
+                          slotBooking
+                            ? `Ver detalle reserva: ${slotBooking.customer_name || 'Reserva'}`
+                            : !isOperating
+                              ? 'Cerrado'
+                              : 'Toca para reservar'
+                        }
                       >
                         {slotBooking ? (
                           <div className="flex flex-col items-center">

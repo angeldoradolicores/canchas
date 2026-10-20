@@ -98,11 +98,28 @@ function PitchMiniCard({ pitch, selected, onClick }: { pitch: any; selected: boo
   );
 }
 
-export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: Pitch[], onClose: () => void, onSuccess: () => void }) {
+export function ManualBookingModal({
+  pitches,
+  onClose,
+  onSuccess,
+  initialPitchId,
+  initialDate,
+  initialTime,
+}: {
+  pitches: Pitch[];
+  onClose: () => void;
+  onSuccess: () => void;
+  initialPitchId?: string;
+  initialDate?: string;
+  initialTime?: string;
+}) {
   const today = useToday();
-  const [selectedPitch, setSelectedPitch] = useState<Pitch | null>(pitches[0] || null);
-  const [selectedDate, setSelectedDate] = useState('');
-  const [selectedTimes, setSelectedTimes] = useState<string[]>([]);
+  const [selectedPitch, setSelectedPitch] = useState<Pitch | null>(
+    (initialPitchId && pitches.find(p => p.id === initialPitchId)) || pitches[0] || null
+  );
+  const [selectedDate, setSelectedDate] = useState(initialDate || '');
+  const [selectedTimes, setSelectedTimes] = useState<string[]>(initialTime ? [initialTime] : []);
+  const initialTimeAppliedRef = useRef(false);
   const [activeCategory, setActiveCategory] = useState<'manana' | 'tarde' | 'noche'>('noche');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -126,7 +143,12 @@ export function ManualBookingModal({ pitches, onClose, onSuccess }: { pitches: P
   useEffect(() => {
     if (!selectedDate || !selectedPitch) return;
     setLoadingSlots(true);
-    setSelectedTimes([]);
+    if (initialTime && !initialTimeAppliedRef.current) {
+      initialTimeAppliedRef.current = true;
+      setSelectedTimes([initialTime]);
+    } else {
+      setSelectedTimes([]);
+    }
 
     const pitchIdList = [
       selectedPitch.id,

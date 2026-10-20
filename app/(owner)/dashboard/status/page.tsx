@@ -61,7 +61,7 @@ const QUICK_ACCENT = [
 const ALL_HOURS = [
   '6:00 AM', '7:00 AM', '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM',
   '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM',
-  '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM', '10:00 PM',
+  '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM', '10:00 PM', '11:00 PM',
 ];
 
 const MAX_H = 12;
@@ -346,6 +346,8 @@ export default function CreateStatusPage() {
   const [hours, setHours] = useState<string[]>([]);
   const [freeSet, setFreeSet] = useState<Set<string>>(new Set());
   const [bookedSet, setBookedSet] = useState<Set<string>>(new Set());
+  const [inProgressSet, setInProgressSet] = useState<Set<string>>(new Set());
+  const [slotsDetailMap, setSlotsDetailMap] = useState<Record<string, any>>({});
   const [customTime, setCustomTime] = useState('');
 
   const [customLogo, setCustomLogo] = useState<string | null>(null);
@@ -451,6 +453,7 @@ export default function CreateStatusPage() {
             if (firstPitchId && isMounted) {
               setSelPitch(firstPitchId);
             }
+            const todayYmd = bogotaNow().ymd;
             const hRes = await fetch('/api/generate-status', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -458,6 +461,7 @@ export default function CreateStatusPage() {
                 companyId: currentCompany.id,
                 pitchId: firstPitchId || 'all',
                 forTomorrow: false,
+                date: todayYmd,
               }),
             });
             const hJson = await hRes.json();
@@ -467,8 +471,16 @@ export default function CreateStatusPage() {
               }
               const free: string[] = hJson.data.freeHours ?? [];
               const booked: string[] = hJson.data.bookedHours ?? [];
+              const inProg: string[] = hJson.data.inProgressHours ?? [];
               setFreeSet(new Set(free));
               setBookedSet(new Set(booked));
+              setInProgressSet(new Set(inProg));
+
+              const dMap: Record<string, any> = {};
+              (hJson.data.slotsDetail || []).forEach((s: any) => {
+                dMap[s.slot] = s;
+              });
+              setSlotsDetailMap(dMap);
 
               const minNow = bogotaNow().min;
               const available = free.filter(h => h2min(h) > minNow);
@@ -603,10 +615,19 @@ export default function CreateStatusPage() {
       }
       const free: string[] = json.data?.freeHours ?? [];
       const booked: string[] = json.data?.bookedHours ?? [];
+      const inProg: string[] = json.data?.inProgressHours ?? [];
       const newFreeSet = new Set(free);
       const newBookedSet = new Set(booked);
+      const newInProgressSet = new Set(inProg);
       setFreeSet(newFreeSet);
       setBookedSet(newBookedSet);
+      setInProgressSet(newInProgressSet);
+
+      const dMap: Record<string, any> = {};
+      (json.data?.slotsDetail || []).forEach((s: any) => {
+        dMap[s.slot] = s;
+      });
+      setSlotsDetailMap(dMap);
 
       const minNow = bogotaNow().min;
       const available = tomorrow ? free : free.filter(h => h2min(h) > minNow);
@@ -627,7 +648,6 @@ export default function CreateStatusPage() {
       // Solo auto-agregar horas disponibles si el póster está vacío
       setHours(prev => {
         if (prev.length === 0) return available.slice(0, MAX_H);
-        // Si ya hay horas en el póster, mantenerlas (menos las ya eliminadas arriba)
         return prev;
       });
       setNotice({
@@ -656,8 +676,15 @@ export default function CreateStatusPage() {
   };
 
   const toggleHour = (h: string) => {
-    // No permitir agregar horas reservadas u ocupadas
-    if (bookedSet.has(h)) return;
+    // Si ya está reservada, no permitir agregarla
+    if (bookedSet.has(h)) {
+      setNotice({ k: 'warn', t: `La franja ${h} ya está reservada y ocupada.` });
+      return;
+    }
+    // Si está siendo reservada (en checkout por un cliente), alertar
+    if (inProgressSet.has(h) && !hours.includes(h)) {
+      setNotice({ k: 'warn', t: `Atención: ${h} está siendo reservada por un cliente en el checkout.` });
+    }
     setHours(p => p.includes(h) ? p.filter(x => x !== h) : p.length >= MAX_H ? p : [...p, h]);
   };
 
@@ -859,56 +886,132 @@ export default function CreateStatusPage() {
     </div>
   );
 
+  const selectAllFree = () => {
+    const minNow = bogotaNow().min;
+    const available = Array.from(freeSet)
+      .filter(h => forTomorrow || h2min(h) > minNow)
+      .sort((a, b) => h2min(a) - h2min(b));
+    setHours(available.slice(0, MAX_H));
+    setNotice({
+      k: 'ok',
+      t: `Se añadieron ${Math.min(available.length, MAX_H)} franjas disponibles al póster.`
+    });
+  };
+
   const HoursSection = (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-bold text-foreground dark:text-zinc-300 flex items-center gap-1.5">
-          <Clock size={14} className="text-emerald-500" /> Franjas ({hours.length}/{MAX_H})
-        </label>
-        {hours.length > 0 && (
-          <button onClick={() => setHours([])} className="text-xs font-bold text-rose-500 hover:text-rose-600 flex items-center gap-1">
-            <XCircle size={12} /> Limpiar
-          </button>
-        )}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-2.5">
+        <div>
+          <label className="text-xs font-bold text-foreground dark:text-zinc-200 flex items-center gap-1.5">
+            <Clock size={14} className="text-emerald-500" /> Franjas para Publicación ({hours.length}/{MAX_H})
+          </label>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            Toca las horas disponibles para agregarlas al póster
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 self-end sm:self-auto">
+          {freeSet.size > 0 && (
+            <button
+              onClick={selectAllFree}
+              className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 hover:bg-emerald-500/25 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors border border-emerald-500/30 shadow-2xs"
+              title="Añadir todas las disponibles"
+            >
+              <Sparkles size={11} /> Todas las libres
+            </button>
+          )}
+          {hours.length > 0 && (
+            <button
+              onClick={() => setHours([])}
+              className="text-[11px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 px-2 py-1 rounded-lg flex items-center gap-1 transition-colors border border-rose-500/20"
+            >
+              <XCircle size={11} /> Limpiar
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-1.5 max-h-60 overflow-y-auto pr-1">
+      {/* Grid de franjas horarias con diseño idéntico al Horario */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-1">
         {ALL_HOURS.map(h => {
           const isSelected = hours.includes(h);
-          const isFree = freeSet.has(h);
           const isBooked = bookedSet.has(h);
+          const isInProgress = inProgressSet.has(h);
+          const isFree = freeSet.has(h);
+          const slotInfo = slotsDetailMap[h];
+
+          let cardClass = '';
+          let badgeLabel = '';
+          let badgeColor = '';
+          let subInfo = '';
+
+          if (isSelected) {
+            cardClass = 'bg-emerald-600 text-white border-emerald-500 shadow-md ring-2 ring-emerald-400 font-extrabold';
+            badgeLabel = '✓ En póster';
+            badgeColor = 'bg-white/20 text-white';
+          } else if (isBooked) {
+            cardClass = 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 opacity-75 cursor-not-allowed';
+            badgeLabel = '✗ Reservada';
+            badgeColor = 'bg-rose-500/20 text-rose-700 dark:text-rose-300';
+            if (slotInfo?.details?.[0]?.customer_name) {
+              subInfo = slotInfo.details[0].customer_name;
+            } else if (slotInfo?.bookedCount) {
+              subInfo = `${slotInfo.bookedCount} ocupada${slotInfo.bookedCount > 1 ? 's' : ''}`;
+            }
+          } else if (isInProgress) {
+            cardClass = 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/40 hover:bg-amber-500/25';
+            badgeLabel = '⏳ Siendo reservada';
+            badgeColor = 'bg-amber-500/25 text-amber-800 dark:text-amber-200';
+            subInfo = 'En checkout';
+          } else if (isFree) {
+            cardClass = 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 hover:border-emerald-500/50 cursor-pointer';
+            badgeLabel = '🟢 Disponible';
+            badgeColor = 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300';
+            if (selPitch === 'all' && slotInfo?.freeCount) {
+              subInfo = `${slotInfo.freeCount} canchas libres`;
+            }
+          } else {
+            cardClass = 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
+            badgeLabel = 'Disponible';
+            badgeColor = 'bg-secondary text-muted-foreground';
+          }
+
           return (
-            <button key={h} onClick={() => !isBooked && toggleHour(h)} disabled={isBooked && !isSelected}
-              className={`relative py-2 px-1 rounded-xl text-[11px] font-bold border transition-all ${isSelected
-                ? 'bg-emerald-600 text-white border-emerald-500 shadow-md ring-1 ring-emerald-400'
-                : isBooked
-                  ? 'bg-rose-500/10 text-rose-500/60 border-rose-500/20 opacity-50 cursor-not-allowed line-through'
-                  : isFree
-                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
-                    : 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
-                }`}>
-              {isSelected && <CheckCircle2 size={10} className="inline mr-1 text-white" />}
-              {h}
-              {isBooked && <span className="absolute top-0.5 right-1 text-[8px] font-black text-rose-500">✗</span>}
-              {isFree && !isSelected && !isBooked && (
-                <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <button
+              key={h}
+              onClick={() => toggleHour(h)}
+              disabled={isBooked && !isSelected}
+              className={`relative p-2 rounded-xl border text-left transition-all flex flex-col justify-between min-h-[58px] ${cardClass}`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <span className="font-extrabold text-xs tracking-tight">{h}</span>
+                <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${badgeColor}`}>
+                  {badgeLabel}
+                </span>
+              </div>
+              {subInfo && (
+                <div className="text-[10px] font-medium opacity-80 truncate mt-1">
+                  {subInfo}
+                </div>
               )}
             </button>
           );
         })}
       </div>
 
-      <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />Libre</span>
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" />Ocupada</span>
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-600" />En póster</span>
+      {/* Leyenda interactiva */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-bold uppercase tracking-wide bg-secondary/30 p-2.5 rounded-xl border border-border">
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />Disponible</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />Siendo reservada</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-500" />Reservada</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-600 ring-2 ring-emerald-400" />En el póster</span>
       </div>
 
       {/* Hora personalizada */}
       <div className="flex gap-2 pt-2 border-t border-border">
         <input type="time" value={customTime} onChange={e => setCustomTime(e.target.value)}
-          className="flex-1 px-3 py-2 bg-background border border-border rounded-xl text-xs text-black outline-none focus:border-emerald-500" />        <button onClick={addCustomTime} disabled={!customTime || hours.length >= MAX_H}
-            className="py-2 px-3 rounded-xl text-xs font-bold bg-secondary hover:bg-secondary/80 disabled:opacity-50 text-foreground border border-border flex items-center gap-1">
+          className="flex-1 px-3 py-2 bg-background border border-border rounded-xl text-xs text-foreground outline-none focus:border-emerald-500" />
+        <button onClick={addCustomTime} disabled={!customTime || hours.length >= MAX_H}
+          className="py-2 px-3 rounded-xl text-xs font-bold bg-secondary hover:bg-secondary/80 disabled:opacity-50 text-foreground border border-border flex items-center gap-1 cursor-pointer">
           <Plus size={12} /> Añadir
         </button>
       </div>
