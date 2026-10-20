@@ -632,24 +632,8 @@ export default function CreateStatusPage() {
       const minNow = bogotaNow().min;
       const available = tomorrow ? free : free.filter(h => h2min(h) > minNow);
 
-      // Quitar del póster cualquier hora que ya esté reservada u ocupada
-      setHours(prev => {
-        const cleaned = prev.filter(h => !newBookedSet.has(h));
-        return cleaned;
-      });
-
-      if (available.length === 0) {
-        setNotice({
-          k: 'warn',
-          t: tomorrow ? 'No hay horas libres para mañana. Selecciona manualmente si deseas.' : 'No hay más horas libres hoy. Elige mañana o selecciona manualmente.'
-        });
-        return;
-      }
-      // Solo auto-agregar horas disponibles si el póster está vacío
-      setHours(prev => {
-        if (prev.length === 0) return available.slice(0, MAX_H);
-        return prev;
-      });
+      // Actualizar automáticamente las horas en el póster con las disponibles de esta cancha
+      setHours(available.slice(0, MAX_H));
       setNotice({
         k: 'ok',
         t: `${available.length} hora${available.length !== 1 ? 's' : ''} libre${available.length !== 1 ? 's' : ''} detectada${available.length !== 1 ? 's' : ''}.`
@@ -944,12 +928,8 @@ export default function CreateStatusPage() {
           let badgeColor = '';
           let subInfo = '';
 
-          if (isSelected) {
-            cardClass = 'bg-emerald-600 text-white border-emerald-500 shadow-md ring-2 ring-emerald-400 font-extrabold';
-            badgeLabel = '✓ En póster';
-            badgeColor = 'bg-white/20 text-white';
-          } else if (isBooked) {
-            cardClass = 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 opacity-75 cursor-not-allowed';
+          if (isBooked) {
+            cardClass = 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 opacity-80 cursor-not-allowed';
             badgeLabel = '✗ Reservada';
             badgeColor = 'bg-rose-500/20 text-rose-700 dark:text-rose-300';
             if (slotInfo?.details?.[0]?.customer_name) {
@@ -957,6 +937,10 @@ export default function CreateStatusPage() {
             } else if (slotInfo?.bookedCount) {
               subInfo = `${slotInfo.bookedCount} ocupada${slotInfo.bookedCount > 1 ? 's' : ''}`;
             }
+          } else if (isSelected) {
+            cardClass = 'bg-emerald-600 text-white border-emerald-500 shadow-md ring-2 ring-emerald-400 font-extrabold';
+            badgeLabel = '✓ En póster';
+            badgeColor = 'bg-white/20 text-white';
           } else if (isInProgress) {
             cardClass = 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/40 hover:bg-amber-500/25';
             badgeLabel = '⏳ Siendo reservada';
@@ -979,7 +963,7 @@ export default function CreateStatusPage() {
             <button
               key={h}
               onClick={() => toggleHour(h)}
-              disabled={isBooked && !isSelected}
+              disabled={isBooked}
               className={`relative p-2 rounded-xl border text-left transition-all flex flex-col justify-between min-h-[58px] ${cardClass}`}
             >
               <div className="flex items-center justify-between w-full">

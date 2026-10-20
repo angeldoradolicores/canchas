@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
     // 3. Todas las canchas del complejo (incluyendo configuración modular/combinada)
     const { data: allPitches, error: pitchErr } = await supabase
       .from('pitches')
-      .select('id, name, is_active, custom_pricing, is_combined, linked_pitch_ids')
+      .select('id, name, price_per_hour, custom_pricing, booking_percentage')
       .eq('company_id', companyId)
       .order('name');
 
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
       console.error('[generate-status] Error fetching pitches:', pitchErr);
     }
 
-    const pitches = (allPitches ?? []).filter((p: any) => p.is_active !== false);
+    const pitches = (allPitches ?? []).filter((p: any) => p.custom_pricing?.is_active !== false);
 
     if (pitches.length === 0) {
       return NextResponse.json({
@@ -275,14 +275,6 @@ export async function POST(req: NextRequest) {
           // Hay al menos 1 cancha libre
           slotStatus = 'free';
           freeHours.push(slot);
-
-          // Si además hay alguna siendo reservada o ya reservada, registrar en listas de soporte
-          if (inProgressPitchesList.length > 0) {
-            inProgressHours.push(slot);
-          }
-          if (bookedPitchesList.length > 0) {
-            bookedHours.push(slot);
-          }
         }
 
         slotsDetail.push({

@@ -1819,8 +1819,14 @@ export default function BookingsPage() {
           onApprove={(b) => {
             handleApproveRequest(b);
           }}
+          onBatchApprove={(bookingsList, custName, pName, totPrice, depAmount) => {
+            handleBatchApproveRequest(bookingsList, custName, pName, totPrice, depAmount);
+          }}
           onCancelRequest={(b) => {
             handleCancelRequest(b);
+          }}
+          onBatchCancel={(ids, label) => {
+            handleBatchCancelRequest(ids, label);
           }}
           onCollectBalance={(b) => {
             setSelectedBookingForRemainingPayment(b);
@@ -2313,6 +2319,79 @@ function SlotCountdown({ expiresAt, onExpire }: { expiresAt: string; onExpire: (
   );
 }
 
+// Helper: Extraer hora local de Bogotá en formato "HH:MM"
+function getSlotTimeBogota(dateIso: string): string {
+  const bDate = new Date(dateIso);
+  const parts = new Intl.DateTimeFormat('es-CO', {
+    timeZone: 'America/Bogota',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(bDate);
+  let hh = parts.find(p => p.type === 'hour')?.value || '00';
+  const mm = parts.find(p => p.type === 'minute')?.value || '00';
+  if (hh === '24') hh = '00';
+  return `${hh}:${mm}`;
+}
+
+// Helper: Detectar reservas continuas del mismo cliente en la misma fecha y cancha
+function findContiguousBookings(target: any, allList: any[]): any[] {
+  if (!target) return [];
+  if (!allList || allList.length === 0) return [target];
+
+  const targetDateStr = getLocalDateString(target.start_time);
+  const targetCust = (target.customer_name || '').trim().toLowerCase();
+  const targetPhone = (target.customer_phone || '').replace(/\D/g, '');
+  const targetProof = target.payment_proof_url;
+  const targetCreated = new Date(target.created_at || target.start_time).getTime();
+
+  const matches = allList.filter(b => {
+    if (b.id === target.id) return true;
+    if (b.status === 'cancelled') return false;
+
+    const bDateStr = getLocalDateString(b.start_time);
+    if (bDateStr !== targetDateStr) return false;
+
+    const bCust = (b.customer_name || '').trim().toLowerCase();
+    const bPhone = (b.customer_phone || '').replace(/\D/g, '');
+    const sameName = targetCust && bCust && targetCust === bCust;
+    const samePhone = targetPhone && bPhone && targetPhone === bPhone;
+    const sameProof = targetProof && b.payment_proof_url && targetProof === b.payment_proof_url;
+    const sameUser = target.user_id && b.user_id && target.user_id === b.user_id;
+
+    if (!sameName && !samePhone && !sameProof && !sameUser) return false;
+
+    const bCreated = new Date(b.created_at || b.start_time).getTime();
+    const diffMin = Math.abs(bCreated - targetCreated) / (1000 * 60);
+
+    return diffMin <= 20 || sameProof || (sameName && samePhone);
+  });
+
+  matches.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+
+  const targetIdx = matches.findIndex(b => b.id === target.id);
+  if (targetIdx === -1) return [target];
+
+  const cont: any[] = [matches[targetIdx]];
+  for (let i = targetIdx - 1; i >= 0; i--) {
+    const prev = matches[i];
+    const next = cont[0];
+    const prevEnd = new Date(prev.end_time || new Date(prev.start_time).getTime() + 3600000).getTime();
+    const nextStart = new Date(next.start_time).getTime();
+    if (Math.abs(nextStart - prevEnd) <= 2000) cont.unshift(prev);
+    else break;
+  }
+  for (let i = targetIdx + 1; i < matches.length; i++) {
+    const curr = matches[i];
+    const prev = cont[cont.length - 1];
+    const prevEnd = new Date(prev.end_time || new Date(prev.start_time).getTime() + 3600000).getTime();
+    const currStart = new Date(curr.start_time).getTime();
+    if (Math.abs(currStart - prevEnd) <= 2000) cont.push(curr);
+    else break;
+  }
+  return cont;
+}
+
 function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel, onCancelRequest, onViewProof, onSelectSlot }: any) {
   const [slots, setSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -2405,15 +2484,8 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-        {TIME_SLOTS.map(slot => {
-          const slotBooking = slots.find(b => {
-            const bDate = new Date(b.start_time);
-            const parts = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(bDate);
-            let hh = parts.find(p => p.type === 'hour')?.value;
-            const mm = parts.find(p => p.type === 'minute')?.value;
-            if (hh === '24') hh = '00';
-            return `${hh}:${mm}` === slot;
-          });
+        {TIME_SLOTS.map((slot) => {
+          const slotBooking = slots.find(b => getSlotTimeBogota(b.start_time) === slot);
 
           const hNum = parseInt(slot.split(':')[0]);
           const h12 = hNum === 0 ? 12 : hNum > 12 ? hNum - 12 : hNum;
@@ -2427,6 +2499,17 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
           const allowedSlots = pitch.custom_pricing?.time_slots || TIME_SLOTS;
           const isOperating = allowedSlots.includes(slot);
 
+          // Detección de bloque continuo de múltiples horas juntas
+          const relatedBookings = effectiveBooking
+            ? findContiguousBookings(effectiveBooking, slots)
+            : [];
+          const isMultiHour = relatedBookings.length > 1;
+          const multiIdx = isMultiHour
+            ? relatedBookings.findIndex(b => getSlotTimeBogota(b.start_time) === slot)
+            : -1;
+          const isMultiStart = multiIdx === 0;
+          const isMultiEnd = isMultiHour && multiIdx === relatedBookings.length - 1;
+
           let bgClass = 'bg-card border-border/80';
           if (!isOperating && !effectiveBooking) {
             bgClass = 'bg-red-50/50 border-red-200/50 dark:bg-red-950/20';
@@ -2435,6 +2518,10 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
             else if (effectiveBooking.status === 'pending') bgClass = 'bg-amber-50 border-amber-300 dark:bg-amber-950/30';
             else if (isManual) bgClass = 'bg-purple-50 border-purple-300 dark:bg-purple-950/30';
             else bgClass = 'bg-primary/10 border-primary/40';
+          }
+
+          if (isMultiHour) {
+            bgClass += ' ring-2 ring-primary/80 shadow-md border-primary/50';
           }
 
           return (
@@ -2446,18 +2533,29 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
                   slot,
                   dateStr: selectedDate,
                   booking: effectiveBooking,
+                  relatedBookings: isMultiHour ? relatedBookings : (effectiveBooking ? [effectiveBooking] : []),
                   isOperating,
                 });
               }}
               className={`relative p-2 rounded-xl border text-center transition-all flex flex-col justify-center min-h-[72px] cursor-pointer hover:ring-2 hover:ring-primary/60 hover:scale-[1.02] active:scale-95 select-none ${bgClass}`}
               title={
                 effectiveBooking
-                  ? `Ver detalle: ${effectiveBooking.customer_name || 'Reserva'}`
+                  ? `Ver detalle: ${effectiveBooking.customer_name || 'Reserva'}${isMultiHour ? ` (${relatedBookings.length} horas continuas)` : ''}`
                   : !isOperating
                     ? 'Horario no operativo / cerrado'
                     : 'Toca para ver o registrar reserva manual'
               }
             >
+              {/* Badge de conexión multi-hora */}
+              {isMultiHour && (
+                <div className="mb-1 text-[8px] font-black uppercase tracking-wider text-primary bg-primary/20 rounded px-1.5 py-0.5 flex items-center justify-center gap-1 shadow-2xs">
+                  <span>🔗</span>
+                  <span>
+                    {isMultiStart ? `Inicio 2h (${multiIdx + 1}/${relatedBookings.length})` : isMultiEnd ? `Fin 2h (${multiIdx + 1}/${relatedBookings.length})` : `Parte ${multiIdx + 1}/${relatedBookings.length}`}
+                  </span>
+                </div>
+              )}
+
               <span className={`font-bold text-xs block leading-tight ${effectiveBooking ? 'text-foreground' : (!isOperating ? 'text-red-400/50' : 'text-muted-foreground')}`}>{h12}:00</span>
               <span className={`text-[9px] uppercase opacity-60 font-semibold ${!isOperating && !effectiveBooking ? 'text-red-400/50' : ''}`}>{ampm}</span>
 
@@ -2603,10 +2701,13 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, onDayClick, o
 
           {/* Filas por Horas de 06:00 a 23:00 */}
           <div className="divide-y divide-border/40 text-xs">
-            {TIME_SLOTS.map((slot) => {
+            {TIME_SLOTS.map((slot, sIdx) => {
               const hNum = parseInt(slot.split(':')[0]);
               const h12 = hNum === 0 ? 12 : hNum > 12 ? hNum - 12 : hNum;
               const ampm = hNum < 12 ? 'am' : 'pm';
+
+              const prevSlot = sIdx > 0 ? TIME_SLOTS[sIdx - 1] : null;
+              const nextSlot = sIdx < TIME_SLOTS.length - 1 ? TIME_SLOTS[sIdx + 1] : null;
 
               return (
                 <div
@@ -2621,21 +2722,25 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, onDayClick, o
 
                   {/* Celdas de cada día para esa hora específica */}
                   {dates.map((dateStr: string) => {
-                    const slotBooking = allSlots.find(b => {
-                      const bDateStr = getLocalDateString(b.start_time);
-                      if (bDateStr !== dateStr) return false;
-
-                      const bDate = new Date(b.start_time);
-                      const parts = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(bDate);
-                      let hh = parts.find(p => p.type === 'hour')?.value;
-                      const mm = parts.find(p => p.type === 'minute')?.value;
-                      if (hh === '24') hh = '00';
-                      return `${hh}:${mm}` === slot;
-                    });
+                    const dayBookings = allSlots.filter(b => getLocalDateString(b.start_time) === dateStr);
+                    const slotBooking = dayBookings.find(b => getSlotTimeBogota(b.start_time) === slot);
 
                     const isManual = slotBooking?.source === 'owner_panel';
                     const allowedSlots = pitch.custom_pricing?.time_slots || TIME_SLOTS;
                     const isOperating = allowedSlots.includes(slot);
+
+                    // Detección de bloque continuo en la columna de este día
+                    const relatedBookings = slotBooking
+                      ? findContiguousBookings(slotBooking, dayBookings)
+                      : [];
+                    const isMultiHour = relatedBookings.length > 1;
+
+                    const hasPrev = isMultiHour && prevSlot
+                      ? relatedBookings.some(b => getSlotTimeBogota(b.start_time) === prevSlot)
+                      : false;
+                    const hasNext = isMultiHour && nextSlot
+                      ? relatedBookings.some(b => getSlotTimeBogota(b.start_time) === nextSlot)
+                      : false;
 
                     let cellClass = 'bg-secondary/10 border-border/30 text-muted-foreground/40';
                     if (!isOperating && !slotBooking) {
@@ -2644,6 +2749,18 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, onDayClick, o
                       cellClass = isManual
                         ? 'bg-purple-100 dark:bg-purple-950/40 border-purple-300 text-purple-900 dark:text-purple-200'
                         : 'bg-primary/10 border-primary/40 text-foreground';
+                    }
+
+                    // Fusión visual vertical para bloques continuos de varias horas
+                    let mergeClass = 'rounded-lg border';
+                    if (isMultiHour) {
+                      if (hasNext && !hasPrev) {
+                        mergeClass = 'rounded-t-lg rounded-b-none border border-b-0 shadow-xs relative z-1';
+                      } else if (hasPrev && hasNext) {
+                        mergeClass = 'rounded-none border-x border-y-0 shadow-xs relative z-1';
+                      } else if (hasPrev && !hasNext) {
+                        mergeClass = 'rounded-b-lg rounded-t-none border border-t-0 shadow-xs relative z-1';
+                      }
                     }
 
                     return (
@@ -2655,13 +2772,14 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, onDayClick, o
                             slot,
                             dateStr,
                             booking: slotBooking,
+                            relatedBookings: isMultiHour ? relatedBookings : (slotBooking ? [slotBooking] : []),
                             isOperating,
                           });
                         }}
-                        className={`min-h-[36px] p-1 rounded-lg border flex flex-col justify-center text-center transition-all cursor-pointer hover:ring-2 hover:ring-primary/60 hover:scale-[1.03] active:scale-95 select-none ${cellClass}`}
+                        className={`min-h-[36px] p-1 flex flex-col justify-center text-center transition-all cursor-pointer hover:ring-2 hover:ring-primary/60 hover:scale-[1.03] active:scale-95 select-none ${cellClass} ${mergeClass}`}
                         title={
                           slotBooking
-                            ? `Ver detalle reserva: ${slotBooking.customer_name || 'Reserva'}`
+                            ? `Ver detalle reserva: ${slotBooking.customer_name || 'Reserva'}${isMultiHour ? ` (${relatedBookings.length} horas juntas)` : ''}`
                             : !isOperating
                               ? 'Cerrado'
                               : 'Toca para reservar'
@@ -2669,15 +2787,28 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, onDayClick, o
                       >
                         {slotBooking ? (
                           <div className="flex flex-col items-center">
-                            <div className="text-[10px] font-bold leading-tight truncate w-full" title={slotBooking.customer_name}>
-                              {slotBooking.customer_name || 'Reservado'}
-                            </div>
+                            {hasPrev ? (
+                              <span className="text-[8px] font-black text-primary/80 uppercase tracking-tighter">
+                                ↳ Continuación 2h
+                              </span>
+                            ) : (
+                              <>
+                                {isMultiHour && (
+                                  <span className="text-[7px] font-black uppercase tracking-tight text-primary bg-primary/20 rounded px-1 mb-0.5 leading-none">
+                                    🔗 2h Juntas
+                                  </span>
+                                )}
+                                <div className="text-[10px] font-bold leading-tight truncate w-full" title={slotBooking.customer_name}>
+                                  {slotBooking.customer_name || 'Reservado'}
+                                </div>
+                              </>
+                            )}
                             {slotBooking.pitch_id !== pitch.id && (
                               <span className="text-[8px] font-black text-amber-600 dark:text-amber-400 uppercase leading-none mt-0.5">
                                 ⚡ Vinculada
                               </span>
                             )}
-                            {slotBooking.payment_proof_url && (
+                            {slotBooking.payment_proof_url && !hasPrev && (
                               <button
                                 type="button"
                                 onClick={(e) => {

@@ -19,11 +19,14 @@ interface SlotDetailModalProps {
     slot: string; // "07:00"
     dateStr: string; // "2026-10-19"
     booking: any | null;
+    relatedBookings?: any[];
     isOperating: boolean;
   };
   onClose: () => void;
   onApprove?: (booking: any) => void;
+  onBatchApprove?: (bookings: any[], customerName: string, pitchName: string, totalPrice: number, depositAmount: number) => void;
   onCancelRequest?: (booking: any) => void;
+  onBatchCancel?: (bookingIds: string[], label: string) => void;
   onCollectBalance?: (booking: any) => void;
   onViewProof?: (url: string) => void;
   onGoToList?: (booking: any) => void;
@@ -34,13 +37,15 @@ export function SlotDetailModal({
   data,
   onClose,
   onApprove,
+  onBatchApprove,
   onCancelRequest,
+  onBatchCancel,
   onCollectBalance,
   onViewProof,
   onGoToList,
   onCreateManual,
 }: SlotDetailModalProps) {
-  const { pitch, slot, dateStr, booking, isOperating } = data;
+  const { pitch, slot, dateStr, booking, relatedBookings = [], isOperating } = data;
 
   const hNum = parseInt(slot.split(':')[0], 10);
   const h12 = hNum === 0 ? 12 : hNum > 12 ? hNum - 12 : hNum;
@@ -50,7 +55,7 @@ export function SlotDetailModal({
   const endHNum = (hNum + 1) % 24;
   const endH12 = endHNum === 0 ? 12 : endHNum > 12 ? endHNum - 12 : endHNum;
   const endAmpm = endHNum < 12 ? 'AM' : 'PM';
-  const timeRange = `${timeLabel} – ${endH12}:00 ${endAmpm}`;
+  const defaultTimeRange = `${timeLabel} – ${endH12}:00 ${endAmpm}`;
 
   // Formatear fecha en español
   const formattedDate = useMemo(() => {
@@ -66,34 +71,106 @@ export function SlotDetailModal({
     });
   }, [dateStr]);
 
-  const isManual = booking?.source === 'owner_panel';
-  const isDraft = booking?.status === 'draft';
-  const isPending = booking?.status === 'pending';
-  const isConfirmed = booking?.status === 'confirmed';
-
-  const tPrice = Number(booking?.total_price || pitch?.price_per_hour || 80000);
-  let dAmount = Number(booking?.deposit_amount || 0);
-
-  if (dAmount === 0 && pitch) {
-    const customPricing = pitch.custom_pricing || {};
-    const isFixed = customPricing.booking_type === 'fixed';
-    const pct = customPricing.booking_percentage || pitch.booking_percentage || 50;
-    if (isFixed) {
-      dAmount = Number(customPricing.booking_fixed || 0);
-    } else {
-      dAmount = (tPrice * Number(pct)) / 100;
+  // Lista ordenada de todas las reservas continuas asociadas
+  const relatedList = useMemo(() => {
+    if (relatedBookings && relatedBookings.length > 0) {
+      return [...relatedBookings].sort(
+        (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+      );
     }
-  }
+    return booking ? [booking] : [];
+  }, [relatedBookings, booking]);
+
+  const isMultiHour = relatedList.length > 1;
+  const hoursCount = Math.max(1, relatedList.length);
+
+  // Rango horario consolidado (ej. "7:00 PM – 9:00 PM (2 horas continuas)")
+  const { timeRange, sortedHourLabels } = useMemo(() => {
+    if (relatedList.length > 1) {
+      const first = relatedList[0];
+      const last = relatedList[relatedList.length - 1];
+      const sDate = new Date(first.start_time);
+      const eDate = new Date(last.end_time || new Date(last.start_time).getTime() + 3600000);
+
+      const sLabel = sDate.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+      const eLabel = eDate.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+
+      const labels = relatedList.map(b => {
+        const d = new Date(b.start_time);
+        return d.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+      });
+
+      return {
+        timeRange: `${sLabel} – ${eLabel} (${hoursCount} horas continuas)`,
+        sortedHourLabels: labels,
+      };
+    }
+    return {
+      timeRange: defaultTimeRange,
+      sortedHourLabels: [timeLabel],
+    };
+  }, [relatedList, hoursCount, defaultTimeRange, timeLabel]);
+
+  const isManual = booking?.source === 'owner_panel' || relatedList.some(b => b.source === 'owner_panel');
+  const isDraft = booking?.status === 'draft';
+  const isPending = booking?.status === 'pending' || relatedList.some(b => b.status === 'pending');
+  const isConfirmed = booking?.status === 'confirmed' || relatedList.some(b => b.status === 'confirmed');
+
+  // Precios consolidados para las horas continuas
+  const tPrice = useMemo(() => {
+    if (relatedList.length > 1) {
+      return relatedList.reduce((sum, b) => {
+        return sum + Number(b.total_price || pitch?.price_per_hour || 80000);
+      }, 0);
+    }
+    return Number(booking?.total_price || pitch?.price_per_hour || 80000);
+  }, [relatedList, booking, pitch]);
+
+  const dAmount = useMemo(() => {
+    if (relatedList.length > 1) {
+      const explicitDeposit = relatedList.reduce((sum, b) => sum + Number(b.deposit_amount || 0), 0);
+      if (explicitDeposit > 0) return explicitDeposit;
+    } else if (Number(booking?.deposit_amount || 0) > 0) {
+      return Number(booking?.deposit_amount || 0);
+    }
+
+    if (pitch) {
+      const customPricing = pitch.custom_pricing || {};
+      const isFixed = customPricing.booking_type === 'fixed';
+      const pct = customPricing.booking_percentage || pitch.booking_percentage || 50;
+      if (isFixed) {
+        return Number(customPricing.booking_fixed || 0) * hoursCount;
+      }
+      return (tPrice * Number(pct)) / 100;
+    }
+    return (tPrice * 50) / 100;
+  }, [relatedList, booking, pitch, hoursCount, tPrice]);
 
   const remainingInfo = booking ? getBookingRemainingPayment(booking) : null;
-  const remPaid = Number(remainingInfo?.amount || 0);
+  const remPaid = useMemo(() => {
+    if (relatedList.length > 1) {
+      return relatedList.reduce((sum, b) => {
+        const info = getBookingRemainingPayment(b);
+        return sum + Number(info?.amount || 0);
+      }, 0);
+    }
+    return Number(remainingInfo?.amount || 0);
+  }, [relatedList, remainingInfo]);
+
   const balance = calculateRemainingBalance(tPrice, dAmount, remPaid);
   const isFullyPaid = isConfirmed && (balance <= 0 || remPaid > 0);
-  const proofUrl = booking ? (booking.payment_proof_url || remainingInfo?.proofUrl) : null;
+
+  const proofUrl = useMemo(() => {
+    if (relatedList.length > 1) {
+      const found = relatedList.find(b => b.payment_proof_url);
+      if (found) return found.payment_proof_url;
+    }
+    return booking ? (booking.payment_proof_url || remainingInfo?.proofUrl) : null;
+  }, [relatedList, booking, remainingInfo]);
 
   const phoneClean = booking?.customer_phone ? booking.customer_phone.replace(/\D/g, '') : '';
   const waUrl = phoneClean
-    ? `https://wa.me/57${phoneClean}?text=Hola%20${encodeURIComponent(booking?.customer_name || 'jugador')},%20te%20contacto%20sobre%20tu%20reserva%20en%20${encodeURIComponent(pitch?.name || 'la cancha')}%20a%20las%20${encodeURIComponent(timeLabel)}.`
+    ? `https://wa.me/57${phoneClean}?text=Hola%20${encodeURIComponent(booking?.customer_name || 'jugador')},%20te%20contacto%20sobre%20tu%20reserva%20en%20${encodeURIComponent(pitch?.name || 'la cancha')}%20de%20${encodeURIComponent(timeRange)}.`
     : '';
 
   return (
@@ -193,7 +270,26 @@ export function SlotDetailModal({
               )}
             </div>
 
-            {/* 2. Datos del Cliente y Contacto Directo */}
+            {/* 2. Banner Destacado para Reservas Continuas / Multi-Hora */}
+            {isMultiHour && (
+              <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-900 dark:text-amber-200 space-y-1.5 shadow-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">⚡</span>
+                  <span className="font-extrabold text-sm tracking-tight text-amber-900 dark:text-amber-100">
+                    Reserva Continua de {hoursCount} Horas
+                  </span>
+                  <span className="ml-auto text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500 text-white">
+                    {sortedHourLabels.join(' + ')}
+                  </span>
+                </div>
+                <p className="text-xs text-amber-800/90 dark:text-amber-300 leading-relaxed">
+                  El usuario reservó <strong>{hoursCount} horas de seguido ({sortedHourLabels.join(' y ')})</strong>.
+                  Por eso el valor de la separación/seña requerida es de <strong>${dAmount.toLocaleString('es-CO')}</strong> (Valor Total: <strong>${tPrice.toLocaleString('es-CO')}</strong>) respaldado por su comprobante adjunto.
+                </p>
+              </div>
+            )}
+
+            {/* 3. Datos del Cliente y Contacto Directo */}
             <div className="p-3.5 bg-secondary/40 rounded-2xl border border-border space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -237,16 +333,20 @@ export function SlotDetailModal({
               </div>
             </div>
 
-            {/* 3. Desglose Financiero */}
+            {/* 4. Desglose Financiero */}
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="p-2.5 rounded-xl bg-secondary/30 border border-border/70">
-                <p className="text-[10px] uppercase font-bold text-muted-foreground">Valor Hora</p>
+                <p className="text-[10px] uppercase font-bold text-muted-foreground">
+                  {isMultiHour ? `Total (${hoursCount}h)` : 'Valor Turno'}
+                </p>
                 <p className="font-black text-xs sm:text-sm text-foreground mt-0.5">
                   ${tPrice.toLocaleString('es-CO')}
                 </p>
               </div>
               <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <p className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-300">Anticipo</p>
+                <p className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-300">
+                  {isMultiHour ? 'Separación' : 'Anticipo'}
+                </p>
                 <p className="font-black text-xs sm:text-sm text-emerald-700 dark:text-emerald-300 mt-0.5">
                   ${dAmount.toLocaleString('es-CO')}
                 </p>
@@ -261,14 +361,16 @@ export function SlotDetailModal({
               </div>
             </div>
 
-            {/* 4. Comprobante de Pago (si existe) */}
+            {/* 5. Comprobante de Pago (si existe) */}
             {proofUrl && (
               <div className="flex items-center justify-between p-3 rounded-2xl bg-secondary/30 border border-border">
                 <div className="flex items-center gap-2">
                   <FileText size={16} className="text-primary" />
                   <div>
-                    <p className="text-xs font-bold text-foreground">Comprobante de Pago</p>
-                    <p className="text-[10px] text-muted-foreground">Adjuntado por el cliente</p>
+                    <p className="text-xs font-bold text-foreground">Comprobante de Pago Adjunto</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {isMultiHour ? `Respaldo de separación por ${hoursCount} horas` : 'Adjuntado por el cliente'}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -281,7 +383,7 @@ export function SlotDetailModal({
               </div>
             )}
 
-            {/* 5. Botones de Acción de Estado */}
+            {/* 6. Botones de Acción de Estado */}
             <div className="space-y-2 pt-2 border-t border-border">
               {isPending && (
                 <div className="grid grid-cols-2 gap-2">
@@ -289,24 +391,45 @@ export function SlotDetailModal({
                     type="button"
                     onClick={() => {
                       onClose();
-                      onApprove?.(booking);
+                      if (isMultiHour && onBatchApprove) {
+                        onBatchApprove(
+                          relatedList,
+                          booking.customer_name || 'Cliente',
+                          pitch?.name || 'Cancha',
+                          tPrice,
+                          dAmount
+                        );
+                      } else {
+                        onApprove?.(booking);
+                      }
                     }}
-                    className="py-2.5 px-3 rounded-xl font-extrabold text-xs bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="py-2.5 px-3 rounded-xl font-extrabold text-xs bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer text-center"
                   >
                     <CheckCircle size={15} />
-                    <span>Aprobar Reserva</span>
+                    <span>
+                      {isMultiHour ? `Aprobar ${hoursCount} Horas Juntas` : 'Aprobar Reserva'}
+                    </span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => {
                       onClose();
-                      onCancelRequest?.(booking);
+                      if (isMultiHour && onBatchCancel) {
+                        onBatchCancel(
+                          relatedList.map(b => b.id),
+                          `Reserva de ${booking.customer_name || 'Cliente'} (${hoursCount} horas: ${sortedHourLabels.join(', ')})`
+                        );
+                      } else {
+                        onCancelRequest?.(booking);
+                      }
                     }}
-                    className="py-2.5 px-3 rounded-xl font-extrabold text-xs text-rose-600 dark:text-rose-400 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 border border-rose-200/80 rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="py-2.5 px-3 rounded-xl font-extrabold text-xs text-rose-600 dark:text-rose-400 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 border border-rose-200/80 rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer text-center"
                   >
                     <XCircle size={15} />
-                    <span>Rechazar</span>
+                    <span>
+                      {isMultiHour ? `Rechazar ${hoursCount} Horas` : 'Rechazar'}
+                    </span>
                   </button>
                 </div>
               )}
@@ -316,12 +439,18 @@ export function SlotDetailModal({
                   type="button"
                   onClick={() => {
                     onClose();
-                    onCollectBalance?.(booking);
+                    const combinedBooking = isMultiHour
+                      ? { ...booking, total_price: tPrice, deposit_amount: dAmount, remaining_amount_paid: remPaid }
+                      : booking;
+                    onCollectBalance?.(combinedBooking);
                   }}
                   className="w-full py-2.5 px-3 rounded-xl font-extrabold text-xs bg-sky-600 hover:bg-sky-700 active:scale-95 text-white transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Receipt size={15} />
-                  <span>Cobrar Saldo en Local (${balance.toLocaleString('es-CO')})</span>
+                  <span>
+                    Cobrar Saldo en Local (${Math.max(0, balance).toLocaleString('es-CO')})
+                    {isMultiHour && ` · ${hoursCount} Horas`}
+                  </span>
                 </button>
               )}
 
@@ -343,13 +472,20 @@ export function SlotDetailModal({
                     type="button"
                     onClick={() => {
                       onClose();
-                      onCancelRequest?.(booking);
+                      if (isMultiHour && onBatchCancel) {
+                        onBatchCancel(
+                          relatedList.map(b => b.id),
+                          `Reserva de ${booking.customer_name || 'Cliente'} (${hoursCount} horas: ${sortedHourLabels.join(', ')})`
+                        );
+                      } else {
+                        onCancelRequest?.(booking);
+                      }
                     }}
                     className="py-2 px-3 rounded-xl font-bold text-xs text-rose-600 hover:bg-rose-500/10 transition-colors flex items-center gap-1 cursor-pointer"
-                    title="Cancelar esta reserva"
+                    title={isMultiHour ? `Cancelar las ${hoursCount} horas juntas` : 'Cancelar esta reserva'}
                   >
                     <XCircle size={14} />
-                    <span>Cancelar</span>
+                    <span>{isMultiHour ? `Cancelar las ${hoursCount} Horas Juntas` : 'Cancelar'}</span>
                   </button>
                 )}
               </div>
