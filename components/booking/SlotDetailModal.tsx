@@ -205,10 +205,10 @@ export function SlotDetailModal({
   const phoneClean = booking?.customer_phone ? booking.customer_phone.replace(/\D/g, '') : '';
   const waSummary = relatedList.length > 1
     ? relatedList.map(b => {
-        const pName = b.pitches?.name || pitch?.name || 'Cancha';
-        const s = new Date(b.start_time).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
-        return `${pName} a las ${s}`;
-      }).join(', ')
+      const pName = b.pitches?.name || pitch?.name || 'Cancha';
+      const s = new Date(b.start_time).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+      return `${pName} a las ${s}`;
+    }).join(', ')
     : `${pitch?.name || 'la cancha'} de ${timeRange}`;
 
   const waUrl = phoneClean
@@ -317,7 +317,6 @@ export function SlotDetailModal({
               <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-950 dark:text-amber-100 space-y-2.5 shadow-xs">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-xl shrink-0">🔗</span>
                     <div>
                       <h4 className="font-extrabold text-sm tracking-tight text-amber-950 dark:text-amber-100">
                         {isMultiPitch
@@ -370,7 +369,7 @@ export function SlotDetailModal({
 
                 {/* Mensaje explícito solicitado por el usuario para el dueño */}
                 <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-950 dark:text-amber-200 leading-relaxed">
-                  ℹ️ <strong>Resumen para el Dueño:</strong> El valor total de <strong>${tPrice.toLocaleString('es-CO')}</strong> y el abono correspondiente de <strong>${dAmount.toLocaleString('es-CO')}</strong> corresponden a <strong>{booking.customer_name || 'este cliente'}</strong> por haber reservado estas <strong>{hoursCount} horas</strong> en estas canchas.
+                  ℹ️ <strong>Resumen:</strong> El valor total de <strong>${tPrice.toLocaleString('es-CO')}</strong> y el abono correspondiente de <strong>${dAmount.toLocaleString('es-CO')}</strong> corresponden a <strong>{booking.customer_name || 'este cliente'}</strong> por haber reservado estas <strong>{hoursCount} horas</strong> en estas canchas.
                 </div>
               </div>
             )}
