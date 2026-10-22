@@ -71,7 +71,7 @@ export function SlotDetailModal({
     });
   }, [dateStr]);
 
-  // Lista ordenada de todas las reservas continuas asociadas
+  // Lista ordenada de todas las reservas asociadas (misma cancha o múltiples canchas / horas no seguidas)
   const relatedList = useMemo(() => {
     if (relatedBookings && relatedBookings.length > 0) {
       return [...relatedBookings].sort(
@@ -84,43 +84,77 @@ export function SlotDetailModal({
   const isMultiHour = relatedList.length > 1;
   const hoursCount = Math.max(1, relatedList.length);
 
-  // Rango horario consolidado (ej. "7:00 PM – 9:00 PM (2 horas continuas)")
+  // Detección de múltiples canchas
+  const distinctPitchNames = useMemo(() => {
+    const names = relatedList.map(b => b.pitches?.name || pitch?.name || 'Cancha').filter(Boolean);
+    return Array.from(new Set(names));
+  }, [relatedList, pitch]);
+  const isMultiPitch = distinctPitchNames.length > 1;
+
+  // Detección de si todas las horas son continuas en la misma cancha
+  const isContiguous = useMemo(() => {
+    if (isMultiPitch || relatedList.length <= 1) return false;
+    for (let i = 0; i < relatedList.length - 1; i++) {
+      const curr = relatedList[i];
+      const next = relatedList[i + 1];
+      const currEnd = new Date(curr.end_time || new Date(curr.start_time).getTime() + 3600000).getTime();
+      const nextStart = new Date(next.start_time).getTime();
+      if (Math.abs(nextStart - currEnd) > 2000) return false;
+    }
+    return true;
+  }, [relatedList, isMultiPitch]);
+
+  // Rango horario consolidado (adaptado a continuas, no seguidas o multi-cancha)
   const { timeRange, sortedHourLabels } = useMemo(() => {
     if (relatedList.length > 1) {
-      const first = relatedList[0];
-      const last = relatedList[relatedList.length - 1];
-      const sDate = new Date(first.start_time);
-      const eDate = new Date(last.end_time || new Date(last.start_time).getTime() + 3600000);
-
-      const sLabel = sDate.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
-      const eLabel = eDate.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
-
       const labels = relatedList.map(b => {
         const d = new Date(b.start_time);
-        return d.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+        const pName = b.pitches?.name || pitch?.name;
+        const timePart = d.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+        return isMultiPitch ? `${pName}: ${timePart}` : timePart;
       });
 
-      return {
-        timeRange: `${sLabel} – ${eLabel} (${hoursCount} horas continuas)`,
-        sortedHourLabels: labels,
-      };
+      if (isContiguous) {
+        const first = relatedList[0];
+        const last = relatedList[relatedList.length - 1];
+        const sDate = new Date(first.start_time);
+        const eDate = new Date(last.end_time || new Date(last.start_time).getTime() + 3600000);
+
+        const sLabel = sDate.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+        const eLabel = eDate.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+
+        return {
+          timeRange: `${sLabel} – ${eLabel} (${hoursCount} horas continuas)`,
+          sortedHourLabels: labels,
+        };
+      } else if (isMultiPitch) {
+        return {
+          timeRange: `${hoursCount} horas en ${distinctPitchNames.length} canchas`,
+          sortedHourLabels: labels,
+        };
+      } else {
+        return {
+          timeRange: `${hoursCount} horas no seguidas (${labels.join(', ')})`,
+          sortedHourLabels: labels,
+        };
+      }
     }
     return {
       timeRange: defaultTimeRange,
       sortedHourLabels: [timeLabel],
     };
-  }, [relatedList, hoursCount, defaultTimeRange, timeLabel]);
+  }, [relatedList, hoursCount, isContiguous, isMultiPitch, distinctPitchNames, defaultTimeRange, timeLabel, pitch]);
 
   const isManual = booking?.source === 'owner_panel' || relatedList.some(b => b.source === 'owner_panel');
   const isDraft = booking?.status === 'draft';
   const isPending = booking?.status === 'pending' || relatedList.some(b => b.status === 'pending');
   const isConfirmed = booking?.status === 'confirmed' || relatedList.some(b => b.status === 'confirmed');
 
-  // Precios consolidados para las horas continuas
+  // Precios consolidados para todas las horas/canchas reservadas
   const tPrice = useMemo(() => {
     if (relatedList.length > 1) {
       return relatedList.reduce((sum, b) => {
-        return sum + Number(b.total_price || pitch?.price_per_hour || 80000);
+        return sum + Number(b.total_price || b.pitches?.price_per_hour || pitch?.price_per_hour || 80000);
       }, 0);
     }
     return Number(booking?.total_price || pitch?.price_per_hour || 80000);
@@ -151,11 +185,11 @@ export function SlotDetailModal({
     if (relatedList.length > 1) {
       return relatedList.reduce((sum, b) => {
         const info = getBookingRemainingPayment(b);
-        return sum + Number(info?.amount || 0);
+        return sum + Number(info?.amount || b.remaining_amount_paid || 0);
       }, 0);
     }
-    return Number(remainingInfo?.amount || 0);
-  }, [relatedList, remainingInfo]);
+    return Number(remainingInfo?.amount || booking?.remaining_amount_paid || 0);
+  }, [relatedList, remainingInfo, booking]);
 
   const balance = calculateRemainingBalance(tPrice, dAmount, remPaid);
   const isFullyPaid = isConfirmed && (balance <= 0 || remPaid > 0);
@@ -169,8 +203,16 @@ export function SlotDetailModal({
   }, [relatedList, booking, remainingInfo]);
 
   const phoneClean = booking?.customer_phone ? booking.customer_phone.replace(/\D/g, '') : '';
+  const waSummary = relatedList.length > 1
+    ? relatedList.map(b => {
+        const pName = b.pitches?.name || pitch?.name || 'Cancha';
+        const s = new Date(b.start_time).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+        return `${pName} a las ${s}`;
+      }).join(', ')
+    : `${pitch?.name || 'la cancha'} de ${timeRange}`;
+
   const waUrl = phoneClean
-    ? `https://wa.me/57${phoneClean}?text=Hola%20${encodeURIComponent(booking?.customer_name || 'jugador')},%20te%20contacto%20sobre%20tu%20reserva%20en%20${encodeURIComponent(pitch?.name || 'la cancha')}%20de%20${encodeURIComponent(timeRange)}.`
+    ? `https://wa.me/57${phoneClean}?text=Hola%20${encodeURIComponent(booking?.customer_name || 'jugador')},%20te%20contacto%20sobre%20tu%20reserva%20en%20${encodeURIComponent(waSummary)}.`
     : '';
 
   return (
@@ -270,22 +312,66 @@ export function SlotDetailModal({
               )}
             </div>
 
-            {/* 2. Banner Destacado para Reservas Continuas / Multi-Hora */}
+            {/* 2. Banner Destacado para Reservas Múltiples (Multi-Cancha, Multi-Hora no seguidas o Continuas) */}
             {isMultiHour && (
-              <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-900 dark:text-amber-200 space-y-1.5 shadow-xs">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">⚡</span>
-                  <span className="font-extrabold text-sm tracking-tight text-amber-900 dark:text-amber-100">
-                    Reserva Continua de {hoursCount} Horas
-                  </span>
-                  <span className="ml-auto text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500 text-white">
-                    {sortedHourLabels.join(' + ')}
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-950 dark:text-amber-100 space-y-2.5 shadow-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl shrink-0">🔗</span>
+                    <div>
+                      <h4 className="font-extrabold text-sm tracking-tight text-amber-950 dark:text-amber-100">
+                        {isMultiPitch
+                          ? `Reserva Múltiple (${hoursCount} Horas en ${distinctPitchNames.length} Canchas)`
+                          : isContiguous
+                            ? `Reserva Continua de ${hoursCount} Horas`
+                            : `Reserva Múltiple (${hoursCount} Horas No Seguidas)`}
+                      </h4>
+                      <p className="text-[11px] text-amber-900/80 dark:text-amber-300 font-medium">
+                        {isMultiPitch
+                          ? 'El usuario reservó turnos en diferentes canchas el mismo día.'
+                          : isContiguous
+                            ? 'El usuario reservó un bloque de horas seguidas.'
+                            : 'El usuario reservó más de una hora con horarios separados / no seguidos.'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500 text-white shrink-0">
+                    {hoursCount} Turnos
                   </span>
                 </div>
-                <p className="text-xs text-amber-800/90 dark:text-amber-300 leading-relaxed">
-                  El usuario reservó <strong>{hoursCount} horas de seguido ({sortedHourLabels.join(' y ')})</strong>.
-                  Por eso el valor de la separación/seña requerida es de <strong>${dAmount.toLocaleString('es-CO')}</strong> (Valor Total: <strong>${tPrice.toLocaleString('es-CO')}</strong>) respaldado por su comprobante adjunto.
-                </p>
+
+                {/* Lista detallada de cada turno con su cancha, horario y valor */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-0.5">
+                  {relatedList.map((b: any, idx: number) => {
+                    const bPitchName = b.pitches?.name || (b.pitch_id === pitch?.id ? pitch?.name : 'Cancha');
+                    const sTime = new Date(b.start_time).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+                    const eTime = b.end_time
+                      ? new Date(b.end_time).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })
+                      : '';
+                    const bPrice = Number(b.total_price || b.pitches?.price_per_hour || pitch?.price_per_hour || 80000);
+                    return (
+                      <div key={b.id || idx} className="flex items-center justify-between p-2 rounded-xl bg-card/85 border border-amber-500/30 text-xs shadow-2xs">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-5 h-5 rounded-full bg-primary/15 text-primary font-black text-[10px] flex items-center justify-center shrink-0">
+                            {idx + 1}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="font-bold text-foreground text-[11px] truncate">{bPitchName}</p>
+                            <p className="text-[10px] text-muted-foreground">{sTime} {eTime ? `– ${eTime}` : ''}</p>
+                          </div>
+                        </div>
+                        <span className="text-[11px] font-extrabold text-foreground shrink-0 pl-1">
+                          ${bPrice.toLocaleString('es-CO')}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Mensaje explícito solicitado por el usuario para el dueño */}
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-950 dark:text-amber-200 leading-relaxed">
+                  ℹ️ <strong>Resumen para el Dueño:</strong> El valor total de <strong>${tPrice.toLocaleString('es-CO')}</strong> y el abono correspondiente de <strong>${dAmount.toLocaleString('es-CO')}</strong> corresponden a <strong>{booking.customer_name || 'este cliente'}</strong> por haber reservado estas <strong>{hoursCount} horas</strong> en estas canchas.
+                </div>
               </div>
             )}
 
@@ -395,7 +481,7 @@ export function SlotDetailModal({
                         onBatchApprove(
                           relatedList,
                           booking.customer_name || 'Cliente',
-                          pitch?.name || 'Cancha',
+                          distinctPitchNames.join(', ') || pitch?.name || 'Cancha',
                           tPrice,
                           dAmount
                         );

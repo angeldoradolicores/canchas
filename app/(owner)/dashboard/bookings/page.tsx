@@ -123,12 +123,6 @@ export default function BookingsPage() {
     text: string;
   } | null>(null);
   const [bumpTab, setBumpTab] = useState<string | null>(null);
-  const [transitionToast, setTransitionToast] = useState<{
-    name: string;
-    targetTab: string;
-    targetLabel: string;
-    color: string;
-  } | null>(null);
 
   // Modal / Pestaña flotante para horarios interactivos
   const [selectedSlotDetail, setSelectedSlotDetail] = useState<{
@@ -441,12 +435,6 @@ export default function BookingsPage() {
       text,
     });
     setBumpTab(targetTab);
-    setTransitionToast({
-      name: customerName || 'Cliente',
-      targetTab,
-      targetLabel,
-      color: color === 'sky' ? 'bg-sky-500' : color === 'emerald' ? 'bg-emerald-500' : 'bg-rose-500',
-    });
     setTimeout(() => {
       setAnimatingCard(null);
     }, 700);
@@ -864,9 +852,10 @@ export default function BookingsPage() {
 
       // Buscar si ya existe un grupo que pertenezca a la misma reserva/transacción
       const existingGroup = groupsList.find((g: any) => {
-        if (g.pitch_id !== b.pitch_id || g.status !== b.status) return false;
+        if (g.status !== b.status) return false;
 
         // 1. Si ambos tienen comprobante de pago: deben ser idénticos para agruparse
+        //    (Incluso si son canchas diferentes, si comparten el mismo comprobante pertenecen a la misma compra)
         if (bProof && g.payment_proof_url) {
           return bProof === g.payment_proof_url;
         }
@@ -875,6 +864,9 @@ export default function BookingsPage() {
         if (Boolean(bProof) !== Boolean(g.payment_proof_url)) {
           return false;
         }
+
+        // Si son canchas distintas y no hay comprobante, no agrupar
+        if (g.pitch_id !== b.pitch_id) return false;
 
         // 2. Si no tienen comprobante: mismo cliente, misma fecha y creados al mismo tiempo (< 3 minutos)
         const sameCustomer = (b.customer_name || '').trim().toLowerCase() === (g.customer_name || '').trim().toLowerCase();
@@ -911,6 +903,16 @@ export default function BookingsPage() {
         existingGroup.bookings.push(b);
         existingGroup.total_price += tPrice;
         existingGroup.deposit_amount += dAmount;
+        if (!existingGroup.pitch_ids) {
+          existingGroup.pitch_ids = [existingGroup.pitch_id];
+        }
+        if (!existingGroup.pitch_ids.includes(b.pitch_id)) {
+          existingGroup.pitch_ids.push(b.pitch_id);
+        }
+        const bPName = b.pitches?.name;
+        if (bPName && !existingGroup.pitch_names?.includes(bPName)) {
+          existingGroup.pitch_names = [...(existingGroup.pitch_names || [existingGroup.pitches?.name || 'Cancha']), bPName];
+        }
         if (b.payment_proof_url && !existingGroup.payment_proof_url) {
           existingGroup.payment_proof_url = b.payment_proof_url;
         }
@@ -941,6 +943,8 @@ export default function BookingsPage() {
           key,
           id: b.id,
           pitch_id: b.pitch_id,
+          pitch_ids: [b.pitch_id],
+          pitch_names: [b.pitches?.name || 'Cancha'],
           status: b.status,
           customer_name: b.customer_name,
           customer_phone: b.customer_phone,
@@ -1333,8 +1337,8 @@ export default function BookingsPage() {
                     } ${
                       isAnimating
                         ? filterStatus !== 'all'
-                          ? 'translate-x-[110%] opacity-0 scale-95 duration-700 pointer-events-none'
-                          : 'scale-[1.01] ring-2 ring-primary shadow-xl duration-700'
+                          ? 'opacity-0 -translate-y-2 scale-[0.98] duration-500 ease-out pointer-events-none ring-2 ring-emerald-500/50 bg-emerald-500/5'
+                          : 'scale-[1.01] ring-2 ring-primary shadow-xl duration-500'
                         : ''
                     }`}
                   >
@@ -1350,18 +1354,18 @@ export default function BookingsPage() {
 
                     {/* Banner de animación de cambio de estado en vivo */}
                     {isAnimating && animatingCard && (
-                      <div className={`flex items-center justify-between gap-2 px-3.5 py-2 rounded-xl text-xs font-bold animate-in slide-in-from-left duration-300 ${
+                      <div className={`flex items-center justify-between gap-2 px-3.5 py-2 rounded-xl text-xs font-bold animate-in fade-in duration-200 ${
                         animatingCard.color === 'sky'
                           ? 'bg-sky-500/15 border border-sky-500/40 text-sky-800 dark:text-sky-200'
                           : animatingCard.color === 'emerald'
                           ? 'bg-emerald-500/15 border border-emerald-500/40 text-emerald-800 dark:text-emerald-200'
                           : 'bg-rose-500/15 border border-rose-500/40 text-rose-800 dark:text-rose-200'
                       }`}>
-                        <span className="flex items-center gap-2">
-                          <Sparkles size={14} className="animate-spin text-primary" />
-                          <span>{animatingCard.text}</span>
+                        <span className="flex items-center gap-2 min-w-0">
+                          <CheckCircle size={15} className="text-primary shrink-0 animate-pulse" />
+                          <span className="truncate">{animatingCard.text.replace(' ➔', '')}</span>
                         </span>
-                        <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-lg bg-card/90 shadow-2xs">
+                        <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-lg bg-card/90 shadow-2xs shrink-0">
                           {animatingCard.targetLabel}
                         </span>
                       </div>
@@ -1463,8 +1467,15 @@ export default function BookingsPage() {
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">Cancha</p>
                         <p className="font-bold text-xs sm:text-sm text-foreground break-words leading-snug">
-                          {group.pitches?.name?.toUpperCase() || '—'}
+                          {group.pitch_names && group.pitch_names.length > 1
+                            ? group.pitch_names.join(' + ').toUpperCase()
+                            : group.pitches?.name?.toUpperCase() || '—'}
                         </p>
+                        {group.pitch_names && group.pitch_names.length > 1 && (
+                          <span className="inline-flex items-center text-[9px] font-extrabold uppercase px-1.5 py-0.5 mt-0.5 rounded bg-primary/15 border border-primary/30 text-primary">
+                            🔗 Multi-cancha ({group.pitch_names.length})
+                          </span>
+                        )}
                         {group.pitches?.custom_pricing?.is_combined && (
                           <span className="inline-flex items-center text-[9px] font-extrabold uppercase px-1.5 py-0.2 mt-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300">
                             Combinada
@@ -1478,32 +1489,6 @@ export default function BookingsPage() {
                         <p className="font-bold text-xs sm:text-sm text-foreground capitalize leading-snug">
                           {startTime.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
                         </p>
-                        {/* {group.bookings && group.bookings.length > 1 ? (
-                          <div className="flex flex-col gap-1 mt-1">
-                            {group.bookings.map((b: any, idx: number) => {
-                              const bStart = new Date(b.start_time);
-                              const bEnd = new Date(b.end_time);
-                              return (
-                                <div key={b.id || idx} className="flex items-center gap-1.5 text-xs font-bold text-primary">
-                                  <span className="w-4 h-4 rounded-full bg-primary/15 text-primary font-bold text-[10px] flex items-center justify-center shrink-0">
-                                    {idx + 1}
-                                  </span>
-                                  <span>
-                                    {bStart.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
-                                    {' – '}
-                                    {bEnd.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <p className="text-xs font-semibold text-primary mt-0.5">
-                            {startTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
-                            {' – '}
-                            {lastEnd.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
-                          </p>
-                        )} */}
                       </div>
 
                       {/* Finanzas */}
@@ -1539,7 +1524,8 @@ export default function BookingsPage() {
                         </span>
                         {group.bookings.map((b: any, idx: number) => {
                           const bStart = new Date(b.start_time);
-                          const bEnd = new Date(b.end_time);
+                          const bEnd = new Date(b.end_time || new Date(b.start_time).getTime() + 3600000);
+                          const bPName = b.pitches?.name;
                           return (
                             <span
                               key={b.id}
@@ -1548,6 +1534,9 @@ export default function BookingsPage() {
                               <span className="w-3.5 h-3.5 rounded-full bg-primary/10 text-primary font-bold text-[9px] flex items-center justify-center">
                                 {idx + 1}
                               </span>
+                              {group.pitch_names && group.pitch_names.length > 1 && bPName && (
+                                <span className="font-bold text-primary text-[10px]">[{bPName}]</span>
+                              )}
                               <span>
                                 {bStart.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
                                 {' – '}
@@ -1767,6 +1756,7 @@ export default function BookingsPage() {
                     selectedDate={selectedDate}
                     supabase={supabase}
                     allPitches={pitches}
+                    allBookings={bookings}
                     onCancel={updateStatus}
                     onCancelRequest={handleCancelRequest}
                     onViewProof={(url: string) => setProofModalData({ url, title: 'Comprobante de Pago' })}
@@ -1779,6 +1769,7 @@ export default function BookingsPage() {
                     dates={getDaysRange(selectedDate, calView)}
                     supabase={supabase}
                     allPitches={pitches}
+                    allBookings={bookings}
                     onDayClick={(dateStr: string) => { setSelectedDate(dateStr); setCalView('day'); }}
                     onViewProof={(url: string) => setProofModalData({ url, title: 'Comprobante de Pago' })}
                     onSelectSlot={setSelectedSlotDetail}
@@ -1846,39 +1837,6 @@ export default function BookingsPage() {
             setShowManualBooking(true);
           }}
         />
-      )}
-
-      {/* ── Toast Flotante de Notificación de Cambio de Estado ── */}
-      {transitionToast && (
-        <div className="fixed bottom-5 right-5 left-5 sm:left-auto sm:max-w-md z-[260] bg-card/95 backdrop-blur-md border border-border shadow-2xl rounded-2xl p-3.5 flex items-center justify-between gap-3 text-xs animate-in slide-in-from-bottom-5 duration-300">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className={`w-3 h-3 rounded-full ${transitionToast.color} shrink-0 animate-ping`} />
-            <span className="truncate">
-              {transitionToast.name ? `Reserva de ${transitionToast.name}: ` : ''}
-              trasladada a <strong>{transitionToast.targetLabel}</strong>
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                setFilterStatus(transitionToast.targetTab);
-                setViewMode('list');
-                setTransitionToast(null);
-              }}
-              className="px-2.5 py-1 rounded-lg bg-primary text-primary-foreground font-bold text-[11px] hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
-            >
-              Ver {transitionToast.targetLabel}
-            </button>
-            <button
-              type="button"
-              onClick={() => setTransitionToast(null)}
-              className="p-1 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        </div>
       )}
 
       {/* ── Modal de Confirmación de Cancelación ── */}
@@ -2334,65 +2292,168 @@ function getSlotTimeBogota(dateIso: string): string {
   return `${hh}:${mm}`;
 }
 
-// Helper: Detectar reservas continuas del mismo cliente en la misma fecha y cancha
-function findContiguousBookings(target: any, allList: any[]): any[] {
-  if (!target) return [];
-  if (!allList || allList.length === 0) return [target];
+// Helper: Detectar todas las reservas del mismo cliente en la misma fecha (múltiples canchas o múltiples horas no seguidas)
+function findUserDayBookings(
+  target: any,
+  allCompanyBookings: any[],
+  targetDateStr?: string,
+  allPitches?: any[]
+) {
+  if (!target) {
+    return {
+      allBookings: [],
+      isMultiBooking: false,
+      isMultiPitch: false,
+      isContiguous: true,
+      totalPrice: 0,
+      depositAmount: 0,
+      balance: 0,
+      distinctPitches: [],
+      distinctPitchNames: [],
+    };
+  }
 
-  const targetDateStr = getLocalDateString(target.start_time);
+  const dateStr = targetDateStr || getLocalDateString(target.start_time);
   const targetCust = (target.customer_name || '').trim().toLowerCase();
   const targetPhone = (target.customer_phone || '').replace(/\D/g, '');
-  const targetProof = target.payment_proof_url;
+  const targetProof = target.payment_proof_url ? target.payment_proof_url.split('###')[0].trim() : null;
+  const targetUserId = target.user_id;
   const targetCreated = new Date(target.created_at || target.start_time).getTime();
 
-  const matches = allList.filter(b => {
-    if (b.id === target.id) return true;
+  const sourceList = Array.isArray(allCompanyBookings) ? allCompanyBookings : [];
+  const seenIds = new Set<string>();
+
+  const matches = sourceList.filter((b: any) => {
+    if (!b || !b.id || seenIds.has(b.id)) return false;
     if (b.status === 'cancelled') return false;
 
     const bDateStr = getLocalDateString(b.start_time);
-    if (bDateStr !== targetDateStr) return false;
+    if (bDateStr !== dateStr) return false;
+
+    if (b.id === target.id) {
+      seenIds.add(b.id);
+      return true;
+    }
 
     const bCust = (b.customer_name || '').trim().toLowerCase();
     const bPhone = (b.customer_phone || '').replace(/\D/g, '');
-    const sameName = targetCust && bCust && targetCust === bCust;
-    const samePhone = targetPhone && bPhone && targetPhone === bPhone;
-    const sameProof = targetProof && b.payment_proof_url && targetProof === b.payment_proof_url;
-    const sameUser = target.user_id && b.user_id && target.user_id === b.user_id;
-
-    if (!sameName && !samePhone && !sameProof && !sameUser) return false;
-
+    const bProof = b.payment_proof_url ? b.payment_proof_url.split('###')[0].trim() : null;
     const bCreated = new Date(b.created_at || b.start_time).getTime();
     const diffMin = Math.abs(bCreated - targetCreated) / (1000 * 60);
 
-    return diffMin <= 20 || sameProof || (sameName && samePhone);
+    // 1. Mismo comprobante de pago
+    if (targetProof && bProof && targetProof === bProof) {
+      seenIds.add(b.id);
+      return true;
+    }
+
+    // 2. Mismo usuario registrado en la fecha
+    if (targetUserId && b.user_id && targetUserId === b.user_id) {
+      if (diffMin <= 120 || bDateStr === dateStr) {
+        seenIds.add(b.id);
+        return true;
+      }
+    }
+
+    // 3. Mismo teléfono
+    if (targetPhone && bPhone && targetPhone.length >= 7 && targetPhone === bPhone) {
+      if (diffMin <= 120 || bDateStr === dateStr) {
+        seenIds.add(b.id);
+        return true;
+      }
+    }
+
+    // 4. Mismo nombre en sesión de reserva
+    if (targetCust && bCust && targetCust.length >= 3 && targetCust === bCust && diffMin <= 90) {
+      seenIds.add(b.id);
+      return true;
+    }
+
+    return false;
   });
+
+  if (!matches.some(m => m.id === target.id)) {
+    matches.push(target);
+  }
 
   matches.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
 
-  const targetIdx = matches.findIndex(b => b.id === target.id);
-  if (targetIdx === -1) return [target];
+  if (allPitches && allPitches.length > 0) {
+    matches.forEach(b => {
+      if (!b.pitches) {
+        const foundPitch = allPitches.find(p => p.id === b.pitch_id);
+        if (foundPitch) b.pitches = foundPitch;
+      }
+    });
+  }
 
-  const cont: any[] = [matches[targetIdx]];
-  for (let i = targetIdx - 1; i >= 0; i--) {
-    const prev = matches[i];
-    const next = cont[0];
-    const prevEnd = new Date(prev.end_time || new Date(prev.start_time).getTime() + 3600000).getTime();
-    const nextStart = new Date(next.start_time).getTime();
-    if (Math.abs(nextStart - prevEnd) <= 2000) cont.unshift(prev);
-    else break;
+  const pitchIds = Array.from(new Set(matches.map(b => b.pitch_id).filter(Boolean)));
+  const distinctPitches = pitchIds.map(pId => (allPitches || []).find(p => p.id === pId) || { id: pId, name: 'Cancha' });
+  const distinctPitchNames = Array.from(new Set(matches.map(b => b.pitches?.name || b.pitch_name || 'Cancha')));
+  const isMultiPitch = pitchIds.length > 1;
+
+  let isContiguous = !isMultiPitch && matches.length > 1;
+  if (isContiguous) {
+    for (let i = 0; i < matches.length - 1; i++) {
+      const curr = matches[i];
+      const next = matches[i + 1];
+      const currEnd = new Date(curr.end_time || new Date(curr.start_time).getTime() + 3600000).getTime();
+      const nextStart = new Date(next.start_time).getTime();
+      if (Math.abs(nextStart - currEnd) > 2000) {
+        isContiguous = false;
+        break;
+      }
+    }
   }
-  for (let i = targetIdx + 1; i < matches.length; i++) {
-    const curr = matches[i];
-    const prev = cont[cont.length - 1];
-    const prevEnd = new Date(prev.end_time || new Date(prev.start_time).getTime() + 3600000).getTime();
-    const currStart = new Date(curr.start_time).getTime();
-    if (Math.abs(currStart - prevEnd) <= 2000) cont.push(curr);
-    else break;
-  }
-  return cont;
+
+  let totalPrice = 0;
+  let depositAmount = 0;
+  let remainingPaid = 0;
+
+  matches.forEach(b => {
+    const pitchPrice = b.pitches?.price_per_hour || 80000;
+    const bPrice = Number(b.total_price || pitchPrice);
+    totalPrice += bPrice;
+
+    let d = Number(b.deposit_amount || 0);
+    if (d === 0 && b.pitches) {
+      const customPricing = b.pitches.custom_pricing || {};
+      const isFixed = customPricing.booking_type === 'fixed';
+      const pct = customPricing.booking_percentage || b.pitches.booking_percentage || 50;
+      if (isFixed) {
+        d = Number(customPricing.booking_fixed || 0);
+      } else {
+        d = (bPrice * Number(pct)) / 100;
+      }
+    }
+    depositAmount += d;
+
+    const remInfo = getBookingRemainingPayment(b);
+    remainingPaid += Number(remInfo?.amount || b.remaining_amount_paid || 0);
+  });
+
+  const balance = calculateRemainingBalance(totalPrice, depositAmount, remainingPaid);
+
+  return {
+    allBookings: matches,
+    isMultiBooking: matches.length > 1,
+    isMultiPitch,
+    isContiguous,
+    totalPrice,
+    depositAmount,
+    balance,
+    distinctPitches,
+    distinctPitchNames,
+  };
 }
 
-function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel, onCancelRequest, onViewProof, onSelectSlot }: any) {
+// Helper retrocompatible si alguna parte aún usa findContiguousBookings
+function findContiguousBookings(target: any, allList: any[]): any[] {
+  const res = findUserDayBookings(target, allList);
+  return res.allBookings;
+}
+
+function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, allBookings, onCancel, onCancelRequest, onViewProof, onSelectSlot }: any) {
   const [slots, setSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -2442,6 +2503,20 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
     return () => { supabase.removeChannel(channel); };
   }, [pitch.id, selectedDate, supabase, fetchSlots]);
 
+  // Unir las reservas de la cancha actual con todas las reservas de la empresa para detectar reservas entre canchas
+  const combinedDayBookings = useMemo(() => {
+    const map = new Map<string, any>();
+    (allBookings || []).forEach((b: any) => {
+      if (getLocalDateString(b.start_time) === selectedDate) {
+        map.set(b.id, b);
+      }
+    });
+    slots.forEach((s: any) => {
+      map.set(s.id, { ...(map.get(s.id) || {}), ...s });
+    });
+    return Array.from(map.values());
+  }, [allBookings, slots, selectedDate]);
+
   return (
     <div className="bg-card p-4 rounded-2xl border border-border shadow-sm">
       <div className="flex items-center justify-between mb-3 border-b border-border pb-2.5">
@@ -2454,14 +2529,6 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
           )}
         </h3>
         <div className="flex items-center gap-2">
-          {/* {loading && <Loader2 size={14} className="animate-spin text-muted-foreground" />} */}
-          <button
-            onClick={fetchSlots}
-            title="Actualizar disponibilidad"
-            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-primary transition-colors"
-          >
-            {/* <Clock size={13} /> */}
-          </button>
           <div className="flex items-center gap-1.5">
             <span
               title={realtimeOk ? 'Tiempo real activo' : 'Tiempo real desconectado'}
@@ -2499,16 +2566,14 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
           const allowedSlots = pitch.custom_pricing?.time_slots || TIME_SLOTS;
           const isOperating = allowedSlots.includes(slot);
 
-          // Detección de bloque continuo de múltiples horas juntas
-          const relatedBookings = effectiveBooking
-            ? findContiguousBookings(effectiveBooking, slots)
-            : [];
-          const isMultiHour = relatedBookings.length > 1;
-          const multiIdx = isMultiHour
-            ? relatedBookings.findIndex(b => getSlotTimeBogota(b.start_time) === slot)
+          // Detección consolidada de reservas del mismo usuario en la fecha (múltiples canchas o múltiples horas no seguidas)
+          const userGroupInfo = effectiveBooking
+            ? findUserDayBookings(effectiveBooking, combinedDayBookings, selectedDate, allPitches)
+            : null;
+          const isMulti = Boolean(userGroupInfo && userGroupInfo.isMultiBooking);
+          const multiIdx = isMulti && userGroupInfo
+            ? userGroupInfo.allBookings.findIndex((b: any) => b.id === effectiveBooking.id)
             : -1;
-          const isMultiStart = multiIdx === 0;
-          const isMultiEnd = isMultiHour && multiIdx === relatedBookings.length - 1;
 
           let bgClass = 'bg-card border-border/80';
           if (!isOperating && !effectiveBooking) {
@@ -2520,8 +2585,8 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
             else bgClass = 'bg-primary/10 border-primary/40';
           }
 
-          if (isMultiHour) {
-            bgClass += ' ring-2 ring-primary/80 shadow-md border-primary/50';
+          if (isMulti) {
+            bgClass += ' ring-2 ring-primary/80 shadow-md border-primary/60 bg-primary/5';
           }
 
           return (
@@ -2533,25 +2598,37 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
                   slot,
                   dateStr: selectedDate,
                   booking: effectiveBooking,
-                  relatedBookings: isMultiHour ? relatedBookings : (effectiveBooking ? [effectiveBooking] : []),
+                  relatedBookings: isMulti && userGroupInfo ? userGroupInfo.allBookings : (effectiveBooking ? [effectiveBooking] : []),
                   isOperating,
                 });
               }}
               className={`relative p-2 rounded-xl border text-center transition-all flex flex-col justify-center min-h-[72px] cursor-pointer hover:ring-2 hover:ring-primary/60 hover:scale-[1.02] active:scale-95 select-none ${bgClass}`}
               title={
                 effectiveBooking
-                  ? `Ver detalle: ${effectiveBooking.customer_name || 'Reserva'}${isMultiHour ? ` (${relatedBookings.length} horas continuas)` : ''}`
+                  ? `Ver detalle: ${effectiveBooking.customer_name || 'Reserva'}${isMulti && userGroupInfo ? ` (${userGroupInfo.allBookings.length} horas: ${userGroupInfo.distinctPitchNames.join(', ')} · Total: $${userGroupInfo.totalPrice.toLocaleString('es-CO')})` : ''}`
                   : !isOperating
                     ? 'Horario no operativo / cerrado'
                     : 'Toca para ver o registrar reserva manual'
               }
             >
-              {/* Badge de conexión multi-hora */}
-              {isMultiHour && (
-                <div className="mb-1 text-[8px] font-black uppercase tracking-wider text-primary bg-primary/20 rounded px-1.5 py-0.5 flex items-center justify-center gap-1 shadow-2xs">
-                  <span>🔗</span>
-                  <span>
-                    {isMultiStart ? `Inicio 2h (${multiIdx + 1}/${relatedBookings.length})` : isMultiEnd ? `Fin 2h (${multiIdx + 1}/${relatedBookings.length})` : `Parte ${multiIdx + 1}/${relatedBookings.length}`}
+              {/* Badge de conexión multi-reserva (multi-cancha, multi-hora no seguidas o continuas) */}
+              {isMulti && userGroupInfo && (
+                <div className="mb-1 text-[8px] font-black uppercase tracking-tight text-primary bg-primary/20 border border-primary/30 rounded px-1.5 py-0.5 flex flex-col items-center justify-center gap-0.5 shadow-2xs">
+                  <div className="flex items-center gap-1">
+                    <span>🔗</span>
+                    <span>
+                      {userGroupInfo.isMultiPitch
+                        ? `${userGroupInfo.allBookings.length} Canchas/Horas`
+                        : userGroupInfo.isContiguous
+                          ? `${userGroupInfo.allBookings.length}h Continuas`
+                          : `${userGroupInfo.allBookings.length}h No Seguidas`}
+                    </span>
+                    {multiIdx >= 0 && (
+                      <span className="opacity-80">({multiIdx + 1}/{userGroupInfo.allBookings.length})</span>
+                    )}
+                  </div>
+                  <span className="text-[7.5px] font-extrabold text-foreground/80 lowercase tracking-normal">
+                    tot: ${userGroupInfo.totalPrice.toLocaleString('es-CO')} · ab: ${userGroupInfo.depositAmount.toLocaleString('es-CO')}
                   </span>
                 </div>
               )}
@@ -2597,7 +2674,7 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
                         e.stopPropagation();
                         onViewProof?.(effectiveBooking.payment_proof_url);
                       }}
-                      className="w-full flex items-center justify-center gap-1 text-[8px] font-bold text-primary border border-primary/20 bg-primary/10 hover:bg-primary/20 rounded py-0.5 transition-colors mt-0.5"
+                      className="w-full flex items-center justify-center gap-1 text-[8px] font-bold text-primary border border-primary/20 bg-primary/10 hover:bg-primary/20 rounded py-0.5 transition-colors mt-0.5 cursor-pointer"
                       title="Ver comprobante de pago"
                     >
                       <FileText size={8} /> Comprobante
@@ -2614,7 +2691,7 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
                           onCancel(effectiveBooking.id, 'cancelled').then(() => fetchSlots());
                         }
                       }}
-                      className="w-full text-[8px] bg-red-100 text-red-600 dark:bg-red-950/50 hover:bg-red-200 rounded py-0.5 transition-colors font-bold mt-1"
+                      className="w-full text-[8px] bg-red-100 text-red-600 dark:bg-red-950/50 hover:bg-red-200 rounded py-0.5 transition-colors font-bold mt-1 cursor-pointer"
                       title="Cancelar"
                     >
                       Cancelar
@@ -2632,7 +2709,7 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, onCancel
 
 
 /* Matriz de Horarios en Grilla: Filas = Horas | Columnas = Días */
-function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, onDayClick, onViewProof, onSelectSlot }: any) {
+function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, allBookings, onDayClick, onViewProof, onSelectSlot }: any) {
   const [allSlots, setAllSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -2658,6 +2735,21 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, onDayClick, o
     };
     fetch();
   }, [dates, pitch.id, supabase, allPitches]);
+
+  // Unir todas las reservas de la empresa con las de esta cancha para detectar multi-reservas
+  const combinedAllSlots = useMemo(() => {
+    const map = new Map<string, any>();
+    (allBookings || []).forEach((b: any) => {
+      const dStr = getLocalDateString(b.start_time);
+      if (dates.includes(dStr)) {
+        map.set(b.id, b);
+      }
+    });
+    allSlots.forEach((s: any) => {
+      map.set(s.id, { ...(map.get(s.id) || {}), ...s });
+    });
+    return Array.from(map.values());
+  }, [allBookings, allSlots, dates]);
 
   return (
     <div className="bg-card p-4 rounded-2xl border border-border shadow-sm">
@@ -2729,17 +2821,18 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, onDayClick, o
                     const allowedSlots = pitch.custom_pricing?.time_slots || TIME_SLOTS;
                     const isOperating = allowedSlots.includes(slot);
 
-                    // Detección de bloque continuo en la columna de este día
-                    const relatedBookings = slotBooking
-                      ? findContiguousBookings(slotBooking, dayBookings)
-                      : [];
-                    const isMultiHour = relatedBookings.length > 1;
+                    // Detección consolidada de multi-reserva en el día
+                    const userGroupInfo = slotBooking
+                      ? findUserDayBookings(slotBooking, combinedAllSlots, dateStr, allPitches)
+                      : null;
+                    const isMultiHour = Boolean(userGroupInfo && userGroupInfo.isMultiBooking);
+                    const relatedBookings = isMultiHour && userGroupInfo ? userGroupInfo.allBookings : (slotBooking ? [slotBooking] : []);
 
                     const hasPrev = isMultiHour && prevSlot
-                      ? relatedBookings.some(b => getSlotTimeBogota(b.start_time) === prevSlot)
+                      ? relatedBookings.some(b => getSlotTimeBogota(b.start_time) === prevSlot && b.pitch_id === pitch.id)
                       : false;
                     const hasNext = isMultiHour && nextSlot
-                      ? relatedBookings.some(b => getSlotTimeBogota(b.start_time) === nextSlot)
+                      ? relatedBookings.some(b => getSlotTimeBogota(b.start_time) === nextSlot && b.pitch_id === pitch.id)
                       : false;
 
                     let cellClass = 'bg-secondary/10 border-border/30 text-muted-foreground/40';
@@ -2779,7 +2872,7 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, onDayClick, o
                         className={`min-h-[36px] p-1 flex flex-col justify-center text-center transition-all cursor-pointer hover:ring-2 hover:ring-primary/60 hover:scale-[1.03] active:scale-95 select-none ${cellClass} ${mergeClass}`}
                         title={
                           slotBooking
-                            ? `Ver detalle reserva: ${slotBooking.customer_name || 'Reserva'}${isMultiHour ? ` (${relatedBookings.length} horas juntas)` : ''}`
+                            ? `Ver detalle reserva: ${slotBooking.customer_name || 'Reserva'}${isMultiHour && userGroupInfo ? ` (${userGroupInfo.allBookings.length} horas: ${userGroupInfo.distinctPitchNames.join(', ')} · Total: $${userGroupInfo.totalPrice.toLocaleString('es-CO')})` : ''}`
                             : !isOperating
                               ? 'Cerrado'
                               : 'Toca para reservar'
@@ -2789,14 +2882,19 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, onDayClick, o
                           <div className="flex flex-col items-center">
                             {hasPrev ? (
                               <span className="text-[8px] font-black text-primary/80 uppercase tracking-tighter">
-                                ↳ Continuación 2h
+                                ↳ Continuación
                               </span>
                             ) : (
                               <>
-                                {isMultiHour && (
-                                  <span className="text-[7px] font-black uppercase tracking-tight text-primary bg-primary/20 rounded px-1 mb-0.5 leading-none">
-                                    🔗 2h Juntas
-                                  </span>
+                                {isMultiHour && userGroupInfo && (
+                                  <div className="flex flex-col items-center mb-0.5">
+                                    <span className="text-[7px] font-black uppercase tracking-tight text-primary bg-primary/20 rounded px-1 leading-none">
+                                      🔗 {userGroupInfo.allBookings.length}h {userGroupInfo.isMultiPitch ? 'Multi-cancha' : (!userGroupInfo.isContiguous ? 'No seguidas' : 'Juntas')}
+                                    </span>
+                                    <span className="text-[7px] font-bold text-foreground/75 leading-none mt-0.5">
+                                      Tot: ${userGroupInfo.totalPrice.toLocaleString('es-CO')} (Ab: ${userGroupInfo.depositAmount.toLocaleString('es-CO')})
+                                    </span>
+                                  </div>
                                 )}
                                 <div className="text-[10px] font-bold leading-tight truncate w-full" title={slotBooking.customer_name}>
                                   {slotBooking.customer_name || 'Reservado'}
