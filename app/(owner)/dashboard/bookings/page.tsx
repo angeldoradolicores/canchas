@@ -21,13 +21,6 @@ import {
   calculateRemainingBalance,
 } from '@/lib/remaining-payment-utils';
 import { SlotDetailModal } from '@/components/booking/SlotDetailModal';
-import {
-  saveOfflineData,
-  getOfflineData,
-  formatLastSync,
-  precacheRecentProofs,
-  getCachedProofUrl,
-} from '@/lib/offline-storage';
 
 const TIME_SLOTS = [
   '06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00',
@@ -107,17 +100,6 @@ export default function BookingsPage() {
   // Modal de visualización de comprobante enriquecido (Anticipo y Saldo)
   const [proofModalData, setProofModalData] = useState<{ url: string; title: string } | null>(null);
 
-  // Estados de conectividad y caché local offline
-  const [isOffline, setIsOffline] = useState(false);
-  const [lastSyncTimestamp, setLastSyncTimestamp] = useState<number | null>(null);
-
-  // Helper para abrir comprobante resolviendo desde caché local si no hay internet
-  const openProofModal = useCallback(async (url: string, title: string = 'Comprobante de Pago') => {
-    if (!url) return;
-    const resolvedUrl = await getCachedProofUrl(url);
-    setProofModalData({ url: resolvedUrl, title });
-  }, []);
-
   // Modal para registrar el pago restante en el local físico
   const [selectedBookingForRemainingPayment, setSelectedBookingForRemainingPayment] = useState<any | null>(null);
 
@@ -178,37 +160,6 @@ export default function BookingsPage() {
 
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const calendarRef = useRef<HTMLDivElement>(null);
-
-  // ── 0. Carga Inmediata Offline-First y Detección de Conexión ──
-  useEffect(() => {
-    // 1. Hidratar estado inmediatamente desde almacenamiento local
-    const cached = getOfflineData();
-    if (cached) {
-      if (cached.pitches?.length > 0) setPitches(cached.pitches);
-      if (cached.bookings?.length > 0) setBookings(cached.bookings);
-      if (cached.timestamp) setLastSyncTimestamp(cached.timestamp);
-      // Con datos locales en memoria, no bloquear la vista con spinner
-      setLoading(false);
-    }
-
-    // 2. Monitorear cambios de red online / offline
-    if (typeof window !== 'undefined') {
-      setIsOffline(!navigator.onLine);
-      const handleOnline = () => {
-        setIsOffline(false);
-        fetchBookingsRef.current(true);
-      };
-      const handleOffline = () => {
-        setIsOffline(true);
-      };
-      window.addEventListener('online', handleOnline);
-      window.addEventListener('offline', handleOffline);
-      return () => {
-        window.removeEventListener('online', handleOnline);
-        window.removeEventListener('offline', handleOffline);
-      };
-    }
-  }, []);
 
   useEffect(() => {
     if (today && !selectedDate) setSelectedDate(today);
@@ -273,23 +224,10 @@ export default function BookingsPage() {
           .neq('status', 'draft')
           .order('created_at', { ascending: false });
 
-        if (bookingsData) {
-          setBookings(bookingsData);
-          // Guardar snapshot local y pre-descargar comprobantes para acceso offline
-          saveOfflineData(company, pitchesData || [], bookingsData);
-          precacheRecentProofs(bookingsData);
-          setLastSyncTimestamp(Date.now());
-        }
+        if (bookingsData) setBookings(bookingsData);
       }
     } catch (err) {
-      console.warn('[fetchBookings error or offline]:', err);
-      // Fallback: asegurarse de cargar datos locales si la red falló
-      const cached = getOfflineData();
-      if (cached && (!bookings || bookings.length === 0)) {
-        if (cached.pitches?.length > 0) setPitches(cached.pitches);
-        if (cached.bookings?.length > 0) setBookings(cached.bookings);
-        if (cached.timestamp) setLastSyncTimestamp(cached.timestamp);
-      }
+      console.error('[fetchBookings error]:', err);
     } finally {
       if (!isSilent) setLoading(false);
     }
@@ -1049,21 +987,6 @@ export default function BookingsPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 py-4 space-y-4">
-      {/* Banner Informativo de Modo Sin Conexión */}
-      {isOffline && (
-        <div className="px-4 py-2.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs font-semibold flex items-center justify-between gap-3 shadow-xs animate-in fade-in">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
-            <span className="truncate">
-              <strong>Modo Sin Conexión</strong> · Mostrando canchas, reservas y horarios guardados ({formatLastSync(lastSyncTimestamp || 0)}).
-            </span>
-          </div>
-          <span className="text-[10px] uppercase font-black bg-amber-500 text-white px-2 py-0.5 rounded-lg shrink-0">
-            Offline
-          </span>
-        </div>
-      )}
-
       {/* Header Principal */}
       <div className="card-heading flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-4 rounded-2xl border border-border shadow-sm">
         <div>
@@ -1409,34 +1332,31 @@ export default function BookingsPage() {
                   <div
                     key={group.key}
                     onClick={() => dismissNewArrival(group)}
-                    className={`bg-card rounded-2xl border transition-all p-3.5 sm:p-4.5 flex flex-col gap-3.5 relative overflow-hidden ${
-                      isNewlyArrived ? 'ring-2 ring-amber-500 shadow-lg shadow-amber-500/10 cursor-pointer' : 'border-border shadow-sm hover:shadow-md'
-                    } ${
-                      isAnimating && animatingCard
+                    className={`bg-card rounded-2xl border transition-all p-3.5 sm:p-4.5 flex flex-col gap-3.5 relative overflow-hidden ${isNewlyArrived ? 'ring-2 ring-amber-500 shadow-lg shadow-amber-500/10 cursor-pointer' : 'border-border shadow-sm hover:shadow-md'
+                      } ${isAnimating && animatingCard
                         ? filterStatus !== 'all'
                           ? animatingCard.color === 'sky'
                             ? '-translate-y-8 scale-[0.96] opacity-0 duration-700 ease-in-out pointer-events-none ring-2 ring-sky-500 border-sky-500 bg-sky-500/10 shadow-2xl shadow-sky-500/30'
                             : animatingCard.color === 'emerald'
-                            ? '-translate-y-8 scale-[0.96] opacity-0 duration-700 ease-in-out pointer-events-none ring-2 ring-emerald-500 border-emerald-500 bg-emerald-500/10 shadow-2xl shadow-emerald-500/30'
-                            : '-translate-y-8 scale-[0.96] opacity-0 duration-700 ease-in-out pointer-events-none ring-2 ring-rose-500 border-rose-500 bg-rose-500/10 shadow-2xl shadow-rose-500/30'
+                              ? '-translate-y-8 scale-[0.96] opacity-0 duration-700 ease-in-out pointer-events-none ring-2 ring-emerald-500 border-emerald-500 bg-emerald-500/10 shadow-2xl shadow-emerald-500/30'
+                              : '-translate-y-8 scale-[0.96] opacity-0 duration-700 ease-in-out pointer-events-none ring-2 ring-rose-500 border-rose-500 bg-rose-500/10 shadow-2xl shadow-rose-500/30'
                           : animatingCard.color === 'sky'
-                          ? 'scale-[1.02] ring-2 ring-sky-500 border-sky-500 shadow-xl shadow-sky-500/20 bg-sky-500/5 duration-500'
-                          : animatingCard.color === 'emerald'
-                          ? 'scale-[1.02] ring-2 ring-emerald-500 border-emerald-500 shadow-xl shadow-emerald-500/20 bg-emerald-500/5 duration-500'
-                          : 'scale-[1.02] ring-2 ring-rose-500 border-rose-500 shadow-xl shadow-rose-500/20 bg-rose-500/5 duration-500'
+                            ? 'scale-[1.02] ring-2 ring-sky-500 border-sky-500 shadow-xl shadow-sky-500/20 bg-sky-500/5 duration-500'
+                            : animatingCard.color === 'emerald'
+                              ? 'scale-[1.02] ring-2 ring-emerald-500 border-emerald-500 shadow-xl shadow-emerald-500/20 bg-emerald-500/5 duration-500'
+                              : 'scale-[1.02] ring-2 ring-rose-500 border-rose-500 shadow-xl shadow-rose-500/20 bg-rose-500/5 duration-500'
                         : ''
-                    }`}
+                      }`}
                   >
                     {/* Indicador de estado en el borde izquierdo (cambia en vivo al color de la animación) */}
                     <div
-                      className={`absolute left-0 top-0 bottom-0 w-1.5 transition-colors ${
-                        isAnimating && animatingCard
-                          ? animatingCard.color === 'sky'
-                            ? 'bg-sky-500'
-                            : animatingCard.color === 'emerald'
+                      className={`absolute left-0 top-0 bottom-0 w-1.5 transition-colors ${isAnimating && animatingCard
+                        ? animatingCard.color === 'sky'
+                          ? 'bg-sky-500'
+                          : animatingCard.color === 'emerald'
                             ? 'bg-emerald-500'
                             : 'bg-rose-500'
-                          : group.status === 'confirmed'
+                        : group.status === 'confirmed'
                           ? isFullyPaid ? 'bg-emerald-500' : 'bg-sky-500'
                           : group.status === 'pending'
                             ? 'bg-amber-500'
@@ -1446,26 +1366,23 @@ export default function BookingsPage() {
 
                     {/* Banner de animación de cambio de estado en vivo con color de destino */}
                     {isAnimating && animatingCard && (
-                      <div className={`flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold animate-in fade-in slide-in-from-top-1 duration-200 shadow-sm ${
-                        animatingCard.color === 'sky'
-                          ? 'bg-sky-500/15 border border-sky-500/40 text-sky-800 dark:text-sky-200 ring-1 ring-sky-500/20'
-                          : animatingCard.color === 'emerald'
+                      <div className={`flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold animate-in fade-in slide-in-from-top-1 duration-200 shadow-sm ${animatingCard.color === 'sky'
+                        ? 'bg-sky-500/15 border border-sky-500/40 text-sky-800 dark:text-sky-200 ring-1 ring-sky-500/20'
+                        : animatingCard.color === 'emerald'
                           ? 'bg-emerald-500/15 border border-emerald-500/40 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-500/20'
                           : 'bg-rose-500/15 border border-rose-500/40 text-rose-800 dark:text-rose-200 ring-1 ring-rose-500/20'
-                      }`}>
+                        }`}>
                         <span className="flex items-center gap-2 min-w-0">
-                          <CheckCircle size={15} className={`shrink-0 animate-pulse ${
-                            animatingCard.color === 'sky' ? 'text-sky-500' : animatingCard.color === 'emerald' ? 'text-emerald-500' : 'text-rose-500'
-                          }`} />
+                          <CheckCircle size={15} className={`shrink-0 animate-pulse ${animatingCard.color === 'sky' ? 'text-sky-500' : animatingCard.color === 'emerald' ? 'text-emerald-500' : 'text-rose-500'
+                            }`} />
                           <span className="truncate">{animatingCard.text.replace(' ➔', '')}</span>
                         </span>
-                        <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-lg shadow-xs shrink-0 ${
-                          animatingCard.color === 'sky'
-                            ? 'bg-sky-500 text-white'
-                            : animatingCard.color === 'emerald'
+                        <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-lg shadow-xs shrink-0 ${animatingCard.color === 'sky'
+                          ? 'bg-sky-500 text-white'
+                          : animatingCard.color === 'emerald'
                             ? 'bg-emerald-500 text-white'
                             : 'bg-rose-500 text-white'
-                        }`}>
+                          }`}>
                           {animatingCard.targetLabel}
                         </span>
                       </div>
@@ -1573,7 +1490,7 @@ export default function BookingsPage() {
                         </p>
                         {group.pitch_names && group.pitch_names.length > 1 && (
                           <span className="inline-flex items-center text-[9px] font-extrabold uppercase px-1.5 py-0.5 mt-0.5 rounded bg-primary/15 border border-primary/30 text-primary">
-                            🔗 Multi-cancha ({group.pitch_names.length})
+                            Multi-cancha ({group.pitch_names.length})
                           </span>
                         )}
                         {group.pitches?.custom_pricing?.is_combined && (
@@ -1658,10 +1575,10 @@ export default function BookingsPage() {
                             onClick={(e) => {
                               e.stopPropagation();
                               dismissNewArrival(group);
-                              openProofModal(
-                                originalProof,
-                                `Comprobante de Reserva - ${group.customer_name || 'Cliente'}`
-                              );
+                              setProofModalData({
+                                url: originalProof,
+                                title: `Comprobante de Reserva - ${group.customer_name || 'Cliente'}`
+                              });
                             }}
                             className="inline-flex items-center gap-1 text-[11px] font-bold text-primary border border-primary/30 bg-primary/10 hover:bg-primary/20 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
                             title="Ver foto del comprobante de abono"
@@ -1675,10 +1592,10 @@ export default function BookingsPage() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              openProofModal(
-                                group.remaining_payment_proof_url,
-                                `Comprobante de Saldo (${formatPaymentMethod(group.remaining_payment_method, group.remaining_payment_splits)}) - ${group.customer_name || 'Cliente'}`
-                              );
+                              setProofModalData({
+                                url: group.remaining_payment_proof_url,
+                                title: `Comprobante de Saldo (${formatPaymentMethod(group.remaining_payment_method, group.remaining_payment_splits)}) - ${group.customer_name || 'Cliente'}`
+                              });
                             }}
                             className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
                             title="Ver foto del comprobante de saldo restante"
@@ -1859,7 +1776,7 @@ export default function BookingsPage() {
                     allBookings={bookings}
                     onCancel={updateStatus}
                     onCancelRequest={handleCancelRequest}
-                    onViewProof={(url: string) => openProofModal(url, 'Comprobante de Pago')}
+                    onViewProof={(url: string) => setProofModalData({ url, title: 'Comprobante de Pago' })}
                     onSelectSlot={setSelectedSlotDetail}
                   />
                 ) : (
@@ -1871,7 +1788,7 @@ export default function BookingsPage() {
                     allPitches={pitches}
                     allBookings={bookings}
                     onDayClick={(dateStr: string) => { setSelectedDate(dateStr); setCalView('day'); }}
-                    onViewProof={(url: string) => openProofModal(url, 'Comprobante de Pago')}
+                    onViewProof={(url: string) => setProofModalData({ url, title: 'Comprobante de Pago' })}
                     onSelectSlot={setSelectedSlotDetail}
                   />
                 )
@@ -1923,7 +1840,7 @@ export default function BookingsPage() {
             setSelectedBookingForRemainingPayment(b);
           }}
           onViewProof={(url) => {
-            openProofModal(url, 'Comprobante de Pago');
+            setProofModalData({ url, title: 'Comprobante de Pago' });
           }}
           onGoToList={(b) => {
             setViewMode('list');
@@ -2564,36 +2481,17 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, allBooki
   const fetchSlots = useCallback(async () => {
     if (!selectedDate) return;
     setLoading(true);
-    try {
-      if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        throw new Error('Offline');
-      }
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('*')
-        .in('pitch_id', conflictingIds)
-        .gte('start_time', `${selectedDate}T00:00:00-05:00`)
-        .lte('start_time', `${selectedDate}T23:59:59-05:00`)
-        .neq('status', 'cancelled');
-
-      if (error) throw error;
-      setSlots(data || []);
-      setLastRefresh(new Date());
-    } catch {
-      // Fallback offline: usar las reservas guardadas localmente para la fecha seleccionada
-      if (Array.isArray(allBookings)) {
-        const localSlots = allBookings.filter((b: any) => {
-          if (!b || b.status === 'cancelled') return false;
-          if (!conflictingIds.includes(b.pitch_id)) return false;
-          const bDateStr = getLocalDateString(b.start_time);
-          return bDateStr === selectedDate;
-        });
-        setSlots(localSlots);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedDate, conflictingIds, supabase, allBookings]);
+    const { data } = await supabase
+      .from('bookings')
+      .select('*')
+      .in('pitch_id', conflictingIds)
+      .gte('start_time', `${selectedDate}T00:00:00-05:00`)
+      .lte('start_time', `${selectedDate}T23:59:59-05:00`)
+      .neq('status', 'cancelled');
+    setSlots(data || []);
+    setLastRefresh(new Date());
+    setLoading(false);
+  }, [selectedDate, conflictingIds, supabase]);
 
   // Carga inicial
   useEffect(() => { fetchSlots(); }, [fetchSlots]);
@@ -2732,7 +2630,6 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, allBooki
               {isMulti && userGroupInfo && (
                 <div className="mb-1 text-[8px] font-black uppercase tracking-tight text-primary bg-primary/20 border border-primary/30 rounded px-1.5 py-0.5 flex flex-col items-center justify-center gap-0.5 shadow-2xs">
                   <div className="flex items-center gap-1">
-                    <span>🔗</span>
                     <span>
                       {userGroupInfo.isMultiPitch
                         ? `${userGroupInfo.allBookings.length} Canchas/Horas`
@@ -2744,9 +2641,9 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, allBooki
                       <span className="opacity-80">({multiIdx + 1}/{userGroupInfo.allBookings.length})</span>
                     )}
                   </div>
-                  <span className="text-[7.5px] font-extrabold text-foreground/80 lowercase tracking-normal">
+                  {/* <span className="text-[7.5px] font-extrabold text-foreground/80 lowercase tracking-normal">
                     tot: ${userGroupInfo.totalPrice.toLocaleString('es-CO')} · ab: ${userGroupInfo.depositAmount.toLocaleString('es-CO')}
-                  </span>
+                  </span> */}
                 </div>
               )}
 
@@ -2780,7 +2677,7 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, allBooki
                     </div>
                   ) : (
                     <div className={`rounded px-1 py-0.5 inline-block text-[9px] font-bold ${effectiveBooking.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-primary/20 text-primary'}`}>
-                      {effectiveBooking.status === 'pending' ? 'Pend.' : 'OK'}
+                      {effectiveBooking.status === 'pending' ? 'Pendiente.' : 'Aprobada'}
                     </div>
                   )}
 
@@ -2839,34 +2736,16 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, allBookings, 
 
       const conflictingIds = getConflictingPitchIds(pitch.id, allPitches || [pitch]);
 
-      try {
-        if (typeof navigator !== 'undefined' && !navigator.onLine) {
-          throw new Error('Offline');
-        }
-        const { data, error } = await supabase
-          .from('bookings')
-          .select('*')
-          .in('pitch_id', conflictingIds)
-          .gte('start_time', `${startDate}T00:00:00-05:00`)
-          .lte('start_time', `${endDate}T23:59:59-05:00`)
-          .neq('status', 'cancelled');
+      const { data } = await supabase
+        .from('bookings')
+        .select('*')
+        .in('pitch_id', conflictingIds)
+        .gte('start_time', `${startDate}T00:00:00-05:00`)
+        .lte('start_time', `${endDate}T23:59:59-05:00`)
+        .neq('status', 'cancelled');
 
-        if (error) throw error;
-        setAllSlots(data || []);
-      } catch {
-        // Fallback offline con allBookings
-        if (Array.isArray(allBookings)) {
-          const localSlots = allBookings.filter((b: any) => {
-            if (!b || b.status === 'cancelled') return false;
-            if (!conflictingIds.includes(b.pitch_id)) return false;
-            const bDateStr = getLocalDateString(b.start_time);
-            return dates.includes(bDateStr);
-          });
-          setAllSlots(localSlots);
-        }
-      } finally {
-        setLoading(false);
-      }
+      setAllSlots(data || []);
+      setLoading(false);
     };
     fetch();
   }, [dates, pitch.id, supabase, allPitches]);
@@ -3024,11 +2903,11 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, allBookings, 
                                 {isMultiHour && userGroupInfo && (
                                   <div className="flex flex-col items-center mb-0.5">
                                     <span className="text-[7px] font-black uppercase tracking-tight text-primary bg-primary/20 rounded px-1 leading-none">
-                                      🔗 {userGroupInfo.allBookings.length}h {userGroupInfo.isMultiPitch ? 'Multi-cancha' : (!userGroupInfo.isContiguous ? 'No seguidas' : 'Juntas')}
+                                      {userGroupInfo.allBookings.length}h {userGroupInfo.isMultiPitch ? 'Multi-cancha' : (!userGroupInfo.isContiguous ? 'No seguidas' : 'Juntas')}
                                     </span>
-                                    <span className="text-[7px] font-bold text-foreground/75 leading-none mt-0.5">
+                                    {/* <span className="text-[7px] font-bold text-foreground/75 leading-none mt-0.5">
                                       Tot: ${userGroupInfo.totalPrice.toLocaleString('es-CO')} (Ab: ${userGroupInfo.depositAmount.toLocaleString('es-CO')})
-                                    </span>
+                                    </span> */}
                                   </div>
                                 )}
                                 <div className="text-[10px] font-bold leading-tight truncate w-full" title={slotBooking.customer_name}>
@@ -3038,7 +2917,7 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, allBookings, 
                             )}
                             {slotBooking.pitch_id !== pitch.id && (
                               <span className="text-[8px] font-black text-amber-600 dark:text-amber-400 uppercase leading-none mt-0.5">
-                                ⚡ Vinculada
+                                Vinculada
                               </span>
                             )}
                             {slotBooking.payment_proof_url && !hasPrev && (
