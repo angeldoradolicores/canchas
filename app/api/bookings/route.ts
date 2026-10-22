@@ -70,9 +70,12 @@ export async function GET(req: NextRequest) {
       .order('start_time', { ascending: false });
 
     if (idsParam) {
-      const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean);
-      if (ids.length === 0) return NextResponse.json({ success: true, data: [] });
-      query = query.in('id', ids);
+      // ── Sanitización y validación estricta de UUIDs ──
+      const rawIds = idsParam.split(',').map(s => s.trim()).filter(Boolean);
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const validIds = rawIds.filter(id => uuidRegex.test(id)).slice(0, 25);
+      if (validIds.length === 0) return NextResponse.json({ success: true, data: [] });
+      query = query.in('id', validIds);
     } else if (verifiedUserId) {
       query = query.eq('user_id', verifiedUserId);
     } else {

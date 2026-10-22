@@ -21,6 +21,13 @@ import {
   calculateRemainingBalance,
 } from '@/lib/remaining-payment-utils';
 import { SlotDetailModal } from '@/components/booking/SlotDetailModal';
+import {
+  saveOfflineData,
+  getOfflineData,
+  formatLastSync,
+  precacheRecentProofs,
+  getCachedProofUrl,
+} from '@/lib/offline-storage';
 
 const TIME_SLOTS = [
   '06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00',
@@ -100,6 +107,17 @@ export default function BookingsPage() {
   // Modal de visualización de comprobante enriquecido (Anticipo y Saldo)
   const [proofModalData, setProofModalData] = useState<{ url: string; title: string } | null>(null);
 
+  // Estados de conectividad y caché local offline
+  const [isOffline, setIsOffline] = useState(false);
+  const [lastSyncTimestamp, setLastSyncTimestamp] = useState<number | null>(null);
+
+  // Helper para abrir comprobante resolviendo desde caché local si no hay internet
+  const openProofModal = useCallback(async (url: string, title: string = 'Comprobante de Pago') => {
+    if (!url) return;
+    const resolvedUrl = await getCachedProofUrl(url);
+    setProofModalData({ url: resolvedUrl, title });
+  }, []);
+
   // Modal para registrar el pago restante en el local físico
   const [selectedBookingForRemainingPayment, setSelectedBookingForRemainingPayment] = useState<any | null>(null);
 
@@ -160,6 +178,37 @@ export default function BookingsPage() {
 
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const calendarRef = useRef<HTMLDivElement>(null);
+
+  // ── 0. Carga Inmediata Offline-First y Detección de Conexión ──
+  useEffect(() => {
+    // 1. Hidratar estado inmediatamente desde almacenamiento local
+    const cached = getOfflineData();
+    if (cached) {
+      if (cached.pitches?.length > 0) setPitches(cached.pitches);
+      if (cached.bookings?.length > 0) setBookings(cached.bookings);
+      if (cached.timestamp) setLastSyncTimestamp(cached.timestamp);
+      // Con datos locales en memoria, no bloquear la vista con spinner
+      setLoading(false);
+    }
+
+    // 2. Monitorear cambios de red online / offline
+    if (typeof window !== 'undefined') {
+      setIsOffline(!navigator.onLine);
+      const handleOnline = () => {
+        setIsOffline(false);
+        fetchBookingsRef.current(true);
+      };
+      const handleOffline = () => {
+        setIsOffline(true);
+      };
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+      return () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+      };
+    }
+  }, []);
 
   useEffect(() => {
     if (today && !selectedDate) setSelectedDate(today);
@@ -224,10 +273,23 @@ export default function BookingsPage() {
           .neq('status', 'draft')
           .order('created_at', { ascending: false });
 
-        if (bookingsData) setBookings(bookingsData);
+        if (bookingsData) {
+          setBookings(bookingsData);
+          // Guardar snapshot local y pre-descargar comprobantes para acceso offline
+          saveOfflineData(company, pitchesData || [], bookingsData);
+          precacheRecentProofs(bookingsData);
+          setLastSyncTimestamp(Date.now());
+        }
       }
     } catch (err) {
-      console.error('[fetchBookings error]:', err);
+      console.warn('[fetchBookings error or offline]:', err);
+      // Fallback: asegurarse de cargar datos locales si la red falló
+      const cached = getOfflineData();
+      if (cached && (!bookings || bookings.length === 0)) {
+        if (cached.pitches?.length > 0) setPitches(cached.pitches);
+        if (cached.bookings?.length > 0) setBookings(cached.bookings);
+        if (cached.timestamp) setLastSyncTimestamp(cached.timestamp);
+      }
     } finally {
       if (!isSilent) setLoading(false);
     }
@@ -987,6 +1049,21 @@ export default function BookingsPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 py-4 space-y-4">
+      {/* Banner Informativo de Modo Sin Conexión */}
+      {isOffline && (
+        <div className="px-4 py-2.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs font-semibold flex items-center justify-between gap-3 shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+            <span className="truncate">
+              <strong>Modo Sin Conexión</strong> · Mostrando canchas, reservas y horarios guardados ({formatLastSync(lastSyncTimestamp || 0)}).
+            </span>
+          </div>
+          <span className="text-[10px] uppercase font-black bg-amber-500 text-white px-2 py-0.5 rounded-lg shrink-0">
+            Offline
+          </span>
+        </div>
+      )}
+
       {/* Header Principal */}
       <div className="card-heading flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-4 rounded-2xl border border-border shadow-sm">
         <div>
@@ -1581,10 +1658,10 @@ export default function BookingsPage() {
                             onClick={(e) => {
                               e.stopPropagation();
                               dismissNewArrival(group);
-                              setProofModalData({
-                                url: originalProof,
-                                title: `Comprobante de Reserva - ${group.customer_name || 'Cliente'}`
-                              });
+                              openProofModal(
+                                originalProof,
+                                `Comprobante de Reserva - ${group.customer_name || 'Cliente'}`
+                              );
                             }}
                             className="inline-flex items-center gap-1 text-[11px] font-bold text-primary border border-primary/30 bg-primary/10 hover:bg-primary/20 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
                             title="Ver foto del comprobante de abono"
@@ -1598,10 +1675,10 @@ export default function BookingsPage() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setProofModalData({
-                                url: group.remaining_payment_proof_url,
-                                title: `Comprobante de Saldo (${formatPaymentMethod(group.remaining_payment_method, group.remaining_payment_splits)}) - ${group.customer_name || 'Cliente'}`
-                              });
+                              openProofModal(
+                                group.remaining_payment_proof_url,
+                                `Comprobante de Saldo (${formatPaymentMethod(group.remaining_payment_method, group.remaining_payment_splits)}) - ${group.customer_name || 'Cliente'}`
+                              );
                             }}
                             className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
                             title="Ver foto del comprobante de saldo restante"
@@ -1782,7 +1859,7 @@ export default function BookingsPage() {
                     allBookings={bookings}
                     onCancel={updateStatus}
                     onCancelRequest={handleCancelRequest}
-                    onViewProof={(url: string) => setProofModalData({ url, title: 'Comprobante de Pago' })}
+                    onViewProof={(url: string) => openProofModal(url, 'Comprobante de Pago')}
                     onSelectSlot={setSelectedSlotDetail}
                   />
                 ) : (
@@ -1794,7 +1871,7 @@ export default function BookingsPage() {
                     allPitches={pitches}
                     allBookings={bookings}
                     onDayClick={(dateStr: string) => { setSelectedDate(dateStr); setCalView('day'); }}
-                    onViewProof={(url: string) => setProofModalData({ url, title: 'Comprobante de Pago' })}
+                    onViewProof={(url: string) => openProofModal(url, 'Comprobante de Pago')}
                     onSelectSlot={setSelectedSlotDetail}
                   />
                 )
@@ -1846,7 +1923,7 @@ export default function BookingsPage() {
             setSelectedBookingForRemainingPayment(b);
           }}
           onViewProof={(url) => {
-            setProofModalData({ url, title: 'Comprobante de Pago' });
+            openProofModal(url, 'Comprobante de Pago');
           }}
           onGoToList={(b) => {
             setViewMode('list');
@@ -2487,17 +2564,36 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, allBooki
   const fetchSlots = useCallback(async () => {
     if (!selectedDate) return;
     setLoading(true);
-    const { data } = await supabase
-      .from('bookings')
-      .select('*')
-      .in('pitch_id', conflictingIds)
-      .gte('start_time', `${selectedDate}T00:00:00-05:00`)
-      .lte('start_time', `${selectedDate}T23:59:59-05:00`)
-      .neq('status', 'cancelled');
-    setSlots(data || []);
-    setLastRefresh(new Date());
-    setLoading(false);
-  }, [selectedDate, conflictingIds, supabase]);
+    try {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        throw new Error('Offline');
+      }
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .in('pitch_id', conflictingIds)
+        .gte('start_time', `${selectedDate}T00:00:00-05:00`)
+        .lte('start_time', `${selectedDate}T23:59:59-05:00`)
+        .neq('status', 'cancelled');
+
+      if (error) throw error;
+      setSlots(data || []);
+      setLastRefresh(new Date());
+    } catch {
+      // Fallback offline: usar las reservas guardadas localmente para la fecha seleccionada
+      if (Array.isArray(allBookings)) {
+        const localSlots = allBookings.filter((b: any) => {
+          if (!b || b.status === 'cancelled') return false;
+          if (!conflictingIds.includes(b.pitch_id)) return false;
+          const bDateStr = getLocalDateString(b.start_time);
+          return bDateStr === selectedDate;
+        });
+        setSlots(localSlots);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedDate, conflictingIds, supabase, allBookings]);
 
   // Carga inicial
   useEffect(() => { fetchSlots(); }, [fetchSlots]);
@@ -2743,16 +2839,34 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, allBookings, 
 
       const conflictingIds = getConflictingPitchIds(pitch.id, allPitches || [pitch]);
 
-      const { data } = await supabase
-        .from('bookings')
-        .select('*')
-        .in('pitch_id', conflictingIds)
-        .gte('start_time', `${startDate}T00:00:00-05:00`)
-        .lte('start_time', `${endDate}T23:59:59-05:00`)
-        .neq('status', 'cancelled');
+      try {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          throw new Error('Offline');
+        }
+        const { data, error } = await supabase
+          .from('bookings')
+          .select('*')
+          .in('pitch_id', conflictingIds)
+          .gte('start_time', `${startDate}T00:00:00-05:00`)
+          .lte('start_time', `${endDate}T23:59:59-05:00`)
+          .neq('status', 'cancelled');
 
-      setAllSlots(data || []);
-      setLoading(false);
+        if (error) throw error;
+        setAllSlots(data || []);
+      } catch {
+        // Fallback offline con allBookings
+        if (Array.isArray(allBookings)) {
+          const localSlots = allBookings.filter((b: any) => {
+            if (!b || b.status === 'cancelled') return false;
+            if (!conflictingIds.includes(b.pitch_id)) return false;
+            const bDateStr = getLocalDateString(b.start_time);
+            return dates.includes(bDateStr);
+          });
+          setAllSlots(localSlots);
+        }
+      } finally {
+        setLoading(false);
+      }
     };
     fetch();
   }, [dates, pitch.id, supabase, allPitches]);

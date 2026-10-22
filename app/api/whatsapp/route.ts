@@ -92,7 +92,15 @@ export async function POST(req: NextRequest) {
 
     const rawEvoUrl = process.env.EVOLUTION_API_URL || 'http://127.0.0.1:8080';
     const evoUrl = rawEvoUrl.trim().replace(/\/+$/, '').replace('localhost', '127.0.0.1');
-    const evoApiKey = process.env.EVOLUTION_API_KEY || process.env.EVOLUTION_GLOBAL_APIKEY || 'TusClavesSecretasDeEvolution123';
+    const evoApiKey = process.env.EVOLUTION_API_KEY || process.env.EVOLUTION_GLOBAL_APIKEY;
+
+    if (!evoApiKey) {
+      console.error('[WhatsApp API] Error crítico: EVOLUTION_API_KEY no está configurada.');
+      return NextResponse.json(
+        { success: false, error: 'Configuración de servidor incompleta para WhatsApp (Falta API Key).' },
+        { status: 500 }
+      );
+    }
 
     const evoHeaders: Record<string, string> = {
       apikey: evoApiKey,

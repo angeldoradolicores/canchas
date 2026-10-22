@@ -45,7 +45,13 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
+    const ALLOWED_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'mp4', 'mov', 'webm']);
     const ext = file.name.split('.').pop()?.toLowerCase() || (isVideo ? 'mp4' : 'jpg');
+    if (!ALLOWED_EXTS.has(ext)) {
+      return NextResponse.json({
+        error: 'Extensión no permitida. Solo se aceptan formatos seguros: JPG, PNG, WEBP, MP4, MOV, WEBM.'
+      }, { status: 400 });
+    }
     const folder = uploadType === 'receipt' ? 'comprobantes' : `${uploadType}s`;
     const userPrefix = user?.id || 'public';
     const timestamp = Date.now();
