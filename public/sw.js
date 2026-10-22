@@ -1,5 +1,5 @@
 // Service Worker para Cancheros PWA (Acceso Directo y Soporte Offline)
-const CACHE_NAME = 'cancheros-pwa-v1';
+const CACHE_NAME = 'cancheros-pwa-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -57,8 +57,10 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+          if (res && res.status === 200) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+          }
           return res;
         })
         .catch(async () => {
@@ -94,6 +96,29 @@ self.addEventListener('fetch', (event) => {
 
         return cached || fetchPromise;
       })
+    );
+    return;
+  }
+
+  // C. Peticiones de datos RSC de Next.js (navegación interna cliente): Network-First con fallback
+  if (url.searchParams.has('_rsc') || url.pathname.startsWith('/_next/data')) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.status === 200) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+          }
+          return res;
+        })
+        .catch(async () => {
+          const cached = await caches.match(req);
+          if (cached) return cached;
+          return new Response(JSON.stringify({}), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        })
     );
     return;
   }
