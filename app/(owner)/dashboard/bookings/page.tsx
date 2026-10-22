@@ -1332,40 +1332,63 @@ export default function BookingsPage() {
                   <div
                     key={group.key}
                     onClick={() => dismissNewArrival(group)}
-                    className={`bg-card rounded-2xl border border-border shadow-sm hover:shadow-md transition-all p-3.5 sm:p-4.5 flex flex-col gap-3.5 relative overflow-hidden ${
-                      isNewlyArrived ? 'ring-2 ring-amber-500 shadow-lg shadow-amber-500/10 cursor-pointer' : ''
+                    className={`bg-card rounded-2xl border transition-all p-3.5 sm:p-4.5 flex flex-col gap-3.5 relative overflow-hidden ${
+                      isNewlyArrived ? 'ring-2 ring-amber-500 shadow-lg shadow-amber-500/10 cursor-pointer' : 'border-border shadow-sm hover:shadow-md'
                     } ${
-                      isAnimating
+                      isAnimating && animatingCard
                         ? filterStatus !== 'all'
-                          ? 'opacity-0 -translate-y-2 scale-[0.98] duration-500 ease-out pointer-events-none ring-2 ring-emerald-500/50 bg-emerald-500/5'
-                          : 'scale-[1.01] ring-2 ring-primary shadow-xl duration-500'
+                          ? animatingCard.color === 'sky'
+                            ? '-translate-y-8 scale-[0.96] opacity-0 duration-700 ease-in-out pointer-events-none ring-2 ring-sky-500 border-sky-500 bg-sky-500/10 shadow-2xl shadow-sky-500/30'
+                            : animatingCard.color === 'emerald'
+                            ? '-translate-y-8 scale-[0.96] opacity-0 duration-700 ease-in-out pointer-events-none ring-2 ring-emerald-500 border-emerald-500 bg-emerald-500/10 shadow-2xl shadow-emerald-500/30'
+                            : '-translate-y-8 scale-[0.96] opacity-0 duration-700 ease-in-out pointer-events-none ring-2 ring-rose-500 border-rose-500 bg-rose-500/10 shadow-2xl shadow-rose-500/30'
+                          : animatingCard.color === 'sky'
+                          ? 'scale-[1.02] ring-2 ring-sky-500 border-sky-500 shadow-xl shadow-sky-500/20 bg-sky-500/5 duration-500'
+                          : animatingCard.color === 'emerald'
+                          ? 'scale-[1.02] ring-2 ring-emerald-500 border-emerald-500 shadow-xl shadow-emerald-500/20 bg-emerald-500/5 duration-500'
+                          : 'scale-[1.02] ring-2 ring-rose-500 border-rose-500 shadow-xl shadow-rose-500/20 bg-rose-500/5 duration-500'
                         : ''
                     }`}
                   >
-                    {/* Indicador sutil de estado en el borde izquierdo */}
+                    {/* Indicador de estado en el borde izquierdo (cambia en vivo al color de la animación) */}
                     <div
-                      className={`absolute left-0 top-0 bottom-0 w-1 ${group.status === 'confirmed'
-                        ? isFullyPaid ? 'bg-emerald-500' : 'bg-sky-500'
-                        : group.status === 'pending'
-                          ? 'bg-amber-500'
-                          : 'bg-red-400'
+                      className={`absolute left-0 top-0 bottom-0 w-1.5 transition-colors ${
+                        isAnimating && animatingCard
+                          ? animatingCard.color === 'sky'
+                            ? 'bg-sky-500'
+                            : animatingCard.color === 'emerald'
+                            ? 'bg-emerald-500'
+                            : 'bg-rose-500'
+                          : group.status === 'confirmed'
+                          ? isFullyPaid ? 'bg-emerald-500' : 'bg-sky-500'
+                          : group.status === 'pending'
+                            ? 'bg-amber-500'
+                            : 'bg-rose-500'
                         }`}
                     />
 
-                    {/* Banner de animación de cambio de estado en vivo */}
+                    {/* Banner de animación de cambio de estado en vivo con color de destino */}
                     {isAnimating && animatingCard && (
-                      <div className={`flex items-center justify-between gap-2 px-3.5 py-2 rounded-xl text-xs font-bold animate-in fade-in duration-200 ${
+                      <div className={`flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold animate-in fade-in slide-in-from-top-1 duration-200 shadow-sm ${
                         animatingCard.color === 'sky'
-                          ? 'bg-sky-500/15 border border-sky-500/40 text-sky-800 dark:text-sky-200'
+                          ? 'bg-sky-500/15 border border-sky-500/40 text-sky-800 dark:text-sky-200 ring-1 ring-sky-500/20'
                           : animatingCard.color === 'emerald'
-                          ? 'bg-emerald-500/15 border border-emerald-500/40 text-emerald-800 dark:text-emerald-200'
-                          : 'bg-rose-500/15 border border-rose-500/40 text-rose-800 dark:text-rose-200'
+                          ? 'bg-emerald-500/15 border border-emerald-500/40 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-500/20'
+                          : 'bg-rose-500/15 border border-rose-500/40 text-rose-800 dark:text-rose-200 ring-1 ring-rose-500/20'
                       }`}>
                         <span className="flex items-center gap-2 min-w-0">
-                          <CheckCircle size={15} className="text-primary shrink-0 animate-pulse" />
+                          <CheckCircle size={15} className={`shrink-0 animate-pulse ${
+                            animatingCard.color === 'sky' ? 'text-sky-500' : animatingCard.color === 'emerald' ? 'text-emerald-500' : 'text-rose-500'
+                          }`} />
                           <span className="truncate">{animatingCard.text.replace(' ➔', '')}</span>
                         </span>
-                        <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-lg bg-card/90 shadow-2xs shrink-0">
+                        <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-lg shadow-xs shrink-0 ${
+                          animatingCard.color === 'sky'
+                            ? 'bg-sky-500 text-white'
+                            : animatingCard.color === 'emerald'
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-rose-500 text-white'
+                        }`}>
                           {animatingCard.targetLabel}
                         </span>
                       </div>
@@ -2087,7 +2110,7 @@ export default function BookingsPage() {
       {/* Modal de Comprobantes (Anticipo / Saldo Restante) */}
       {proofModalData && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-3 sm:p-4"
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-black/85 backdrop-blur-sm p-3 sm:p-4"
           onClick={() => setProofModalData(null)}
         >
           <div
@@ -2339,32 +2362,30 @@ function findUserDayBookings(
     const bPhone = (b.customer_phone || '').replace(/\D/g, '');
     const bProof = b.payment_proof_url ? b.payment_proof_url.split('###')[0].trim() : null;
     const bCreated = new Date(b.created_at || b.start_time).getTime();
-    const diffMin = Math.abs(bCreated - targetCreated) / (1000 * 60);
+    const diffMs = Math.abs(bCreated - targetCreated);
 
-    // 1. Mismo comprobante de pago
-    if (targetProof && bProof && targetProof === bProof) {
-      seenIds.add(b.id);
-      return true;
-    }
-
-    // 2. Mismo usuario registrado en la fecha
-    if (targetUserId && b.user_id && targetUserId === b.user_id) {
-      if (diffMin <= 120 || bDateStr === dateStr) {
+    // 1. Si ambos tienen comprobante de pago: deben ser exactamente idénticos (pertenecen a la misma compra)
+    if (targetProof && bProof) {
+      if (targetProof === bProof) {
         seenIds.add(b.id);
         return true;
       }
+      return false; // Comprobantes distintos = compras distintas
     }
 
-    // 3. Mismo teléfono
-    if (targetPhone && bPhone && targetPhone.length >= 7 && targetPhone === bPhone) {
-      if (diffMin <= 120 || bDateStr === dateStr) {
-        seenIds.add(b.id);
-        return true;
-      }
+    // Si uno tiene comprobante y el otro no, son compras distintas
+    if (Boolean(targetProof) !== Boolean(bProof)) {
+      return false;
     }
 
-    // 4. Mismo nombre en sesión de reserva
-    if (targetCust && bCust && targetCust.length >= 3 && targetCust === bCust && diffMin <= 90) {
+    // 2. Si no tienen comprobante (ej: caja/efectivo): mismo cliente y creados en la misma sesión (<= 3 minutos)
+    const isSameCustomer = (
+      (targetUserId && b.user_id && targetUserId === b.user_id) ||
+      (targetPhone && bPhone && targetPhone.length >= 7 && targetPhone === bPhone) ||
+      (targetCust && bCust && targetCust.length >= 3 && targetCust === bCust)
+    );
+
+    if (isSameCustomer && diffMs <= 3 * 60 * 1000) {
       seenIds.add(b.id);
       return true;
     }

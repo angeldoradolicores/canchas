@@ -69,33 +69,35 @@ export function PaymentMethodLogo({
       labelText = 'Daviplata';
       logoElement = (
         <div
-          className={`${currentSize} rounded-2xl flex items-center justify-center shrink-0 shadow-md overflow-hidden p-1`}
+          className={`${currentSize} rounded-xl flex items-center justify-center shrink-0 shadow-sm overflow-hidden p-0.5`}
           style={{ background: '#E31C25' }} // Rojo oficial Davivienda/Daviplata
-          title="Daviplata"
+          title="Davivienda / Daviplata"
         >
-          {/* Logo Daviplata con ZOOM: Casita estilizada + Texto 'davi' central */}
+          {/* Logo Davivienda / Daviplata completo: Casita icónica con puerta y chimenea + texto 'davi' sin recortes */}
           <svg
-            viewBox="10 10 75 40" // Ajuste del viewBox para hacer "zoom" (área más pequeña)
+            viewBox="0 0 92 48"
             className="w-full h-full object-contain"
             xmlns="http://www.w3.org/2000/svg"
           >
-            {/* Casita icónica Davivienda (con grosor de trazo ajustado para el zoom) */}
-            <g stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none">
+            {/* Casita icónica Davivienda */}
+            <g stroke="#FFFFFF" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" fill="none">
+              {/* Chimenea */}
+              <path d="M 30.5 18 V 13.5 H 34 V 21" />
               {/* Techo */}
-              <path d="M16 26 L27 15 L38 26" />
+              <path d="M 12 26 L 23 15 L 34 26" />
               {/* Paredes de la casa */}
-              <path d="M19 25 V37 H35 V25" />
-              {/* Chimenea / detalle característico */}
-              <path d="M32 18 V14 H35 V21" />
+              <path d="M 15 25 V 37 H 31 V 25" />
+              {/* Puerta característica */}
+              <path d="M 20.5 37 V 30.5 H 25.5 V 37" />
             </g>
 
-            {/* Texto "davi" ampliado (centralizado en el área de zoom) */}
+            {/* Texto "davi" completo con márgenes seguros */}
             <text
-              x="46" // Posición ajustada para centrar el texto ampliado
-              y="35" // Mismo nivel base de alineación
+              x="40"
+              y="34"
               fill="#FFFFFF"
-              fontSize="23" // Tamaño de fuente original (se ve más grande debido al zoom del viewBox)
-              fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+              fontSize="19"
+              fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
               fontWeight="800"
               letterSpacing="-0.5px"
             >

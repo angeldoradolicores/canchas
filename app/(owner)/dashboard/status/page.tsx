@@ -755,16 +755,53 @@ export default function CreateStatusPage() {
   };
 
   const surprise = () => {
+    // 1. Variaciones de orden del contenido / layout del póster
+    const LAYOUT_ORDERS: SectionId[][] = [
+      ['header', 'title', 'hours', 'message', 'footer'], // Clásico ordenado
+      ['title', 'header', 'hours', 'message', 'footer'], // Título principal hero arriba
+      ['header', 'hours', 'title', 'message', 'footer'], // Horas en el centro protagónico
+      ['title', 'hours', 'header', 'message', 'footer'], // Enfoque directo en disponibilidad
+      ['header', 'title', 'hours', 'footer'],            // Minimalista sin mensaje adicional
+    ];
+    const ALIGNS: Align[] = ['center', 'left', 'right'];
+    const CARD_STYLES: CardStyle[] = ['round', 'pill', 'solid'];
+    const PATTERNS: Pattern[] = ['pitch', 'diagonal', 'dots', 'none'];
+    const LOGO_STYLES: LogoStyle[] = ['badge', 'tint', 'original'];
+    const NAME_SIZES = [56, 64, 72];
+    const PADDINGS = [55, 65, 75];
+
+    // Paleta de colores armoniosa (preset oficial o combinación HSL)
     const h = Math.floor(Math.random() * 360);
-    const light = Math.random() < 0.12;
-    setPal(light ? {
-      bg1: hslH(h, 60, 96), bg2: hslH(h, 70, 88),
-      accent: hslH((h + 180) % 360, 70, 38), text: '#0f172a', angle: 135
-    } : {
-      bg1: hslH(h, 70, 12), bg2: hslH((h + 25) % 360, 65, 30),
-      accent: hslH((h + 150) % 360, 85, 62), text: '#ffffff',
-      angle: [120, 135, 150, 160][Math.floor(Math.random() * 4)]
-    });
+    const usePreset = Math.random() < 0.45;
+    const randomPal: Pal = usePreset
+      ? PRESETS[Math.floor(Math.random() * PRESETS.length)].p
+      : {
+          bg1: hslH(h, 70, 12),
+          bg2: hslH((h + 28) % 360, 65, 28),
+          accent: hslH((h + 150) % 360, 85, 62),
+          text: '#ffffff',
+          angle: [120, 135, 150, 160][Math.floor(Math.random() * 4)],
+        };
+
+    const nextOrder = LAYOUT_ORDERS[Math.floor(Math.random() * LAYOUT_ORDERS.length)];
+    const nextAlign = ALIGNS[Math.floor(Math.random() * ALIGNS.length)];
+    const nextCardStyle = CARD_STYLES[Math.floor(Math.random() * CARD_STYLES.length)];
+    const nextPattern = PATTERNS[Math.floor(Math.random() * PATTERNS.length)];
+    const nextLogoStyle = LOGO_STYLES[Math.floor(Math.random() * LOGO_STYLES.length)];
+    const nextNameSize = NAME_SIZES[Math.floor(Math.random() * NAME_SIZES.length)];
+    const nextPadding = PADDINGS[Math.floor(Math.random() * PADDINGS.length)];
+
+    setCfg(prev => ({
+      ...prev,
+      order: nextOrder,
+      align: nextAlign,
+      cardStyle: nextCardStyle,
+      pattern: nextPattern,
+      logoStyle: nextLogoStyle,
+      nameSize: nextNameSize,
+      padding: nextPadding,
+      pal: randomPal,
+    }));
   };
 
   const inp = 'w-full px-3 py-2.5 bg-background border border-border rounded-xl text-sm font-medium outline-none focus:border-emerald-600 transition-colors';
@@ -1024,7 +1061,7 @@ export default function CreateStatusPage() {
         </div>
         <button onClick={surprise}
           className="w-full py-2.5 rounded-xl text-xs font-bold border border-border bg-secondary hover:bg-secondary/80 text-foreground flex items-center justify-center gap-1.5 shadow-xs transition-colors">
-          <Shuffle size={13} className="text-violet-500" /> Mezclar Colores (Sorpréndeme)
+          <Shuffle size={13} className="text-violet-500" /> Rediseñar Póster (Mix Completo)
         </button>
       </div>
 
