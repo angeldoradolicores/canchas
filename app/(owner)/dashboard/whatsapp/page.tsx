@@ -48,6 +48,8 @@ export default function WhatsAppConnectionPage() {
   const [sendingTest, setSendingTest] = useState(false);
   const [testResult, setTestResult] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [filterPersonal, setFilterPersonal] = useState<boolean>(false);
+  const [savingFilter, setSavingFilter] = useState(false);
   const [alertState, setAlertState] = useState<AlertModalState>({
     isOpen: false,
     type: 'info',
@@ -86,6 +88,7 @@ export default function WhatsAppConnectionPage() {
 
         if (isMounted && targetCompany) {
           setCompany(targetCompany);
+          setFilterPersonal(Boolean(targetCompany.filter_personal_messages));
           const initialPhone = targetCompany.whatsapp_connected_phone || targetCompany.owner_phone || profile?.phone || '';
           setConnectedPhone(initialPhone);
           if (targetCompany.owner_phone || profile?.phone) {
@@ -392,6 +395,39 @@ export default function WhatsAppConnectionPage() {
     }
   };
 
+  const handleToggleFilterPersonal = async () => {
+    if (!company?.id) return;
+    const nextVal = !filterPersonal;
+    setFilterPersonal(nextVal);
+    setSavingFilter(true);
+    try {
+      const token = session?.access_token;
+      const res = await fetch('/api/admin-actions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          action: 'toggle_filter_personal_messages',
+          payload: { filter_personal_messages: nextVal },
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setFilterPersonal(!nextVal);
+        setErrorMsg(data.error || 'No se pudo guardar la configuración del filtro.');
+      } else {
+        setCompany((prev: any) => ({ ...prev, filter_personal_messages: nextVal }));
+      }
+    } catch {
+      setFilterPersonal(!nextVal);
+      setErrorMsg('Error de red al actualizar la configuración del filtro.');
+    } finally {
+      setSavingFilter(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="py-20 flex flex-col items-center justify-center gap-3">
@@ -465,6 +501,49 @@ export default function WhatsAppConnectionPage() {
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Sesión activa · Vinculado a <strong className="text-foreground">{company?.name || 'Mi Complejo'}</strong>
                     </p>
+                  </div>
+                </div>
+
+                {/* ── Switch para Separar Mensajes Personales ── */}
+                <div className="p-4 rounded-2xl bg-secondary/50 dark:bg-muted/30 border border-border space-y-2.5 transition-all">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1 pr-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-foreground">
+                          Separar mensajes personales de clientes
+                        </span>
+                        {filterPersonal ? (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300/40">
+                            Filtro Activo
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                            Responde Todo
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        {filterPersonal
+                          ? 'El asistente responderá únicamente a reservas, canchas, precios y saludos iniciales ("hola", "buenas tardes", "cómo estás"). Tus conversaciones personales o familiares serán ignoradas en silencio.'
+                          : 'El asistente responderá a todos los mensajes entrantes con máxima velocidad (~2.5s). Activa esta opción si usas este mismo número para chatear con tu familia o amigos.'}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={savingFilter}
+                      onClick={handleToggleFilterPersonal}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        filterPersonal ? 'bg-emerald-600' : 'bg-zinc-300 dark:bg-zinc-700'
+                      } ${savingFilter ? 'opacity-50 cursor-wait' : ''}`}
+                      title={filterPersonal ? 'Desactivar filtro' : 'Activar filtro'}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          filterPersonal ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
                   </div>
                 </div>
 

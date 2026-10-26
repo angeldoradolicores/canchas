@@ -931,11 +931,17 @@ export default function BookingsPage() {
         // Si son canchas distintas y no hay comprobante, no agrupar
         if (g.pitch_id !== b.pitch_id) return false;
 
-        // 2. Si no tienen comprobante: mismo cliente, misma fecha y creados al mismo tiempo (< 3 minutos)
+        // 2. Si no tienen comprobante: mismo cliente, misma fecha y creados al mismo tiempo
+        const isManual = b.source === 'owner_panel' || g.source === 'owner_panel';
         const sameCustomer = (b.customer_name || '').trim().toLowerCase() === (g.customer_name || '').trim().toLowerCase();
         const gDateStr = getLocalDateString(g.start_time);
         const gCreated = new Date(g.created_at || g.start_time).getTime();
         const diffMs = Math.abs(bCreated - gCreated);
+
+        if (isManual) {
+          // En reservas manuales, solo se agrupan las horas añadidas en el mismo formulario (diffMs <= 2.5s)
+          return sameCustomer && bDateStr === gDateStr && diffMs <= 2500;
+        }
 
         return sameCustomer && bDateStr === gDateStr && diffMs <= 3 * 60 * 1000;
       });
@@ -2450,12 +2456,30 @@ function findUserDayBookings(
       return false;
     }
 
-    // 2. Si no tienen comprobante (ej: caja/efectivo): mismo cliente y creados en la misma sesión (<= 3 minutos)
-    const isSameCustomer = (
-      (targetUserId && b.user_id && targetUserId === b.user_id) ||
-      (targetPhone && bPhone && targetPhone.length >= 7 && targetPhone === bPhone) ||
-      (targetCust && bCust && targetCust.length >= 3 && targetCust === bCust)
-    );
+    // 2. Si es una reserva manual del dueño (source === 'owner_panel'):
+    // NUNCA comparar user_id porque ambas reservas tienen el user_id del dueño del complejo.
+    // Solo deben agruparse si se crearon juntas en la misma acción manual (mismo cliente y diffMs <= 2.5 seg)
+    const isManualBooking = target.source === 'owner_panel' || b.source === 'owner_panel';
+    if (isManualBooking) {
+      const sameCustomerName = Boolean(targetCust && bCust && targetCust === bCust);
+      if (sameCustomerName && diffMs <= 2500) {
+        seenIds.add(b.id);
+        return true;
+      }
+      return false;
+    }
+
+    // 3. Para reservas normales web de clientes sin comprobante:
+    // NUNCA agrupar si los nombres existen y son diferentes (ej. "Miguel" vs "Cristian")
+    if (targetCust && bCust && targetCust !== bCust) {
+      return false;
+    }
+
+    const sameCust = Boolean(targetCust && bCust && targetCust.length >= 3 && targetCust === bCust);
+    const samePhone = Boolean(targetPhone && bPhone && targetPhone.length >= 7 && targetPhone === bPhone);
+    const sameUser = Boolean(targetUserId && b.user_id && targetUserId === b.user_id);
+
+    const isSameCustomer = (sameCust && samePhone) || (sameUser && (sameCust || samePhone));
 
     if (isSameCustomer && diffMs <= 3 * 60 * 1000) {
       seenIds.add(b.id);

@@ -140,6 +140,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, data: updated });
     }
 
+    // ── ACCIÓN: TOGGLE_FILTER_PERSONAL_MESSAGES ──
+    if (action === 'toggle_filter_personal_messages') {
+      if (!ownerId) {
+        return NextResponse.json({ error: 'Sesión no autorizada' }, { status: 401 });
+      }
+      const filterVal = Boolean(payload?.filter_personal_messages);
+      const { data: updated, error } = await supabase
+        .from('companies')
+        .update({ filter_personal_messages: filterVal })
+        .eq('owner_id', ownerId)
+        .select('*')
+        .maybeSingle();
+
+      if (error) return NextResponse.json(safeServerErrorResponse(error, 'Error al actualizar preferencia de filtro.'), { status: 500 });
+      return NextResponse.json({ success: true, data: updated });
+    }
+
     // ── 4. ACCIÓN: GET_PITCHES ──
     if (action === 'get_pitches') {
       const targetOwnerId = ownerId || (typeof payload?.owner_id === 'string' ? payload.owner_id : null);
