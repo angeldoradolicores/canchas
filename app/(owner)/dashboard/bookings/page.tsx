@@ -280,7 +280,19 @@ export default function BookingsPage() {
           .order('created_at', { ascending: false });
 
         if (bookingsData) {
-          setBookings(bookingsData);
+          setBookings(prev => {
+            if (prev.length === bookingsData.length) {
+              const unchanged = prev.every((b, i) =>
+                b.id === bookingsData[i]?.id &&
+                b.status === bookingsData[i]?.status &&
+                b.payment_status === bookingsData[i]?.payment_status &&
+                b.payment_proof_url === bookingsData[i]?.payment_proof_url &&
+                b.remaining_payment_status === bookingsData[i]?.remaining_payment_status
+              );
+              if (unchanged) return prev;
+            }
+            return bookingsData;
+          });
           saveOfflineData(company, pitchesData || [], bookingsData);
           precacheRecentProofs(bookingsData);
           setLastSyncTimestamp(Date.now());
@@ -2620,9 +2632,9 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, allBooki
     return getConflictingPitchIds(pitch.id, allPitches || [pitch]);
   }, [pitch.id, allPitches]);
 
-  const fetchSlots = useCallback(async () => {
+  const fetchSlots = useCallback(async (silent = false) => {
     if (!selectedDate) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         throw new Error('Offline');
@@ -2636,7 +2648,14 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, allBooki
         .neq('status', 'cancelled');
 
       if (error) throw error;
-      setSlots(data || []);
+      const nextData = data || [];
+      setSlots(prev => {
+        if (prev.length === nextData.length) {
+          const unchanged = prev.every((b, i) => b.id === nextData[i]?.id && b.status === nextData[i]?.status);
+          if (unchanged) return prev;
+        }
+        return nextData;
+      });
       setLastRefresh(new Date());
     } catch {
       // Fallback offline: usar las reservas guardadas localmente para la fecha seleccionada
@@ -2650,20 +2669,20 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, allBooki
         setSlots(localSlots);
       }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [selectedDate, conflictingIds, supabase, allBookings]);
 
   // Carga inicial
-  useEffect(() => { fetchSlots(); }, [fetchSlots]);
+  useEffect(() => { fetchSlots(false); }, [fetchSlots]);
 
-  // Auto-refresh cada 2 segundos (crítico para evitar doble reserva cuando hay red)
+  // Auto-refresh silencioso de respaldo cada 25 segundos (Realtime ya actualiza de forma instantánea)
   useEffect(() => {
     const interval = setInterval(() => {
       if (typeof navigator !== 'undefined' && navigator.onLine) {
-        fetchSlots();
+        fetchSlots(true);
       }
-    }, 2000);
+    }, 25000);
     return () => clearInterval(interval);
   }, [fetchSlots]);
 
@@ -2676,7 +2695,7 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, allBooki
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'bookings' },
-        () => { fetchSlots(); }
+        () => { fetchSlots(true); }
       )
       .subscribe((status: string) => {
         setRealtimeOk(status === 'SUBSCRIBED');

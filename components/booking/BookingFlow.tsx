@@ -511,14 +511,27 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
           }
         }
       });
-      setTakenSlots(taken);
+      setTakenSlots(prev => {
+        if (prev.size === taken.size) {
+          let same = true;
+          for (const [k, v] of taken.entries()) {
+            const p = prev.get(k);
+            if (!p || p.status !== v.status || p.expires_at !== v.expires_at) {
+              same = false;
+              break;
+            }
+          }
+          if (same) return prev;
+        }
+        return taken;
+      });
       if (!silent) setLoadingSlots(false);
     };
 
     fetchTaken(false);
 
-    // Polling continuo cada 3.5s silencioso en segundo plano sin interrumpir ni mostrar loaders
-    const pollInterval = setInterval(() => fetchTaken(true), 3500);
+    // Polling de respaldo silencioso cada 15s (el WebSocket de Realtime ya actualiza al instante ante cualquier reserva)
+    const pollInterval = setInterval(() => fetchTaken(true), 15000);
 
     // Canal realtime: escuchar cambios en cualquier pitch vinculado
     const channel = supabase

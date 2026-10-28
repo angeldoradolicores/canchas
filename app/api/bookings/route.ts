@@ -606,12 +606,10 @@ export async function POST(req: NextRequest) {
       }
 
       if (updatedBookings.length > 0) {
-        // Disparar y esperar la notificación de WhatsApp para asegurar envío inmediato (evita suspensión en Vercel)
-        try {
-          await notifyBookingSubmitted(updatedBookings[0].id);
-        } catch (err) {
-          console.error('[WhatsApp Notification error]:', err);
-        }
+        // Enviar notificación de WhatsApp en segundo plano para responder de inmediato al usuario (<100ms)
+        notifyBookingSubmitted(updatedBookings[0].id).catch(err => {
+          console.error('[WhatsApp Notification background error]:', err);
+        });
       }
 
       return NextResponse.json({ success: true, data: updatedBookings });

@@ -36,14 +36,14 @@ export default function UserReservationsPage() {
   // Carga inicial (usuarios registrados e invitados con reservas en este navegador)
   useEffect(() => {
     setAuthChecked(true);
-    fetchMyBookings();
+    fetchMyBookings(false);
   }, [user]);
 
   // Sincronización en TIEMPO REAL: actualización inmediata cuando el dueño aprueba o cancela
   useEffect(() => {
     if (!user) {
-      // Para usuarios invitados: sondeo continuo cada 4 segundos
-      const guestInterval = setInterval(fetchMyBookings, 4000);
+      // Para usuarios invitados: sondeo silencioso cada 25 segundos
+      const guestInterval = setInterval(() => fetchMyBookings(true), 25000);
       return () => clearInterval(guestInterval);
     }
 
@@ -96,14 +96,14 @@ export default function UserReservationsPage() {
             }
           }
 
-          // Refrescar reservas al instante
-          fetchMyBookings();
+          // Refrescar reservas silenciosamente en tiempo real sin recargar la pantalla
+          fetchMyBookings(true);
         }
       )
       .subscribe();
 
-    // Sondeo de respaldo cada 4 segundos
-    const interval = setInterval(fetchMyBookings, 4000);
+    // Sondeo de respaldo silencioso cada 30 segundos (el WebSocket de Realtime ya hace el trabajo instantáneo)
+    const interval = setInterval(() => fetchMyBookings(true), 30000);
 
     return () => {
       supabase.removeChannel(channel);
@@ -111,7 +111,19 @@ export default function UserReservationsPage() {
     };
   }, [user, supabase]);
 
-  const fetchMyBookings = async () => {
+  const areBookingsEqual = (prev: any[], next: any[]): boolean => {
+    if (prev.length !== next.length) return false;
+    for (let i = 0; i < prev.length; i++) {
+      const p = prev[i];
+      const n = next[i];
+      if (!n || p.id !== n.id || p.status !== n.status || p.payment_proof_url !== n.payment_proof_url) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const fetchMyBookings = async (isSilent = false) => {
     try {
       if (user?.id) {
         const { data, error } = await supabase
@@ -131,7 +143,9 @@ export default function UserReservationsPage() {
           .eq('user_id', user.id)
           .order('start_time', { ascending: false });
 
-        if (!error && data) setBookings(data);
+        if (!error && data) {
+          setBookings(prev => areBookingsEqual(prev, data) ? prev : data);
+        }
       } else {
         let guestIds: string[] = [];
         if (typeof window !== 'undefined') {
@@ -153,7 +167,8 @@ export default function UserReservationsPage() {
           const res = await fetch(`/api/bookings?ids=${guestIds.join(',')}`);
           const resJson = await res.json();
           if (resJson.success && Array.isArray(resJson.data)) {
-            setBookings(resJson.data);
+            const nextData = resJson.data;
+            setBookings(prev => areBookingsEqual(prev, nextData) ? prev : nextData);
           } else {
             console.error('[fetchMyBookings guest error]', resJson);
           }
@@ -164,7 +179,7 @@ export default function UserReservationsPage() {
     } catch (error) {
       console.error(error);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
