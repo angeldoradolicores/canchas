@@ -7,10 +7,12 @@ import {
   Loader2, CheckCircle, XCircle, FileText, CalendarDays,
   LayoutList, Calendar as CalendarIcon, Plus, X, Download, Clock,
   ChevronLeft, ChevronRight, Wrench, Search, AlertTriangle, Bell,
-  Receipt, DollarSign, Sparkles, Camera, Phone
+  Receipt, DollarSign, Sparkles, Camera, Phone, BarChart3, Repeat
 } from 'lucide-react';
 import { useToday } from '@/lib/use-today';
 import { ManualBookingModal } from '@/components/booking/ManualBookingModal';
+import { BookingReportModal } from '@/components/booking/BookingReportModal';
+import { ContractBookingModal } from '@/components/booking/ContractBookingModal';
 import { CustomMonthCalendar } from '@/components/explore/CustomMonthCalendar';
 import { isCombinedPitch, getConflictingPitchIds } from '@/lib/combined-pitch-utils';
 import { RemainingPaymentModal } from '@/components/booking/RemainingPaymentModal';
@@ -101,6 +103,9 @@ export default function BookingsPage() {
 
   const [viewMode, setViewMode] = useState<'list' | 'schedule'>('list');
   const [calView, setCalView] = useState<CalendarView>('day');
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showContractModal, setShowContractModal] = useState(false);
+  const [companyName, setCompanyName] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [showManualBooking, setShowManualBooking] = useState(false);
 
@@ -251,9 +256,10 @@ export default function BookingsPage() {
       }
       const { data: company, error: companyErr } = await supabase
         .from('companies')
-        .select('id')
+        .select('id, name')
         .eq('owner_id', user.id)
         .maybeSingle();
+      if (company?.name && !companyName) setCompanyName(company.name);
 
       if (companyErr) {
         console.warn('[fetchBookings error fetching company]:', companyErr);
@@ -1092,6 +1098,18 @@ export default function BookingsPage() {
               <CalendarIcon size={15} /> Horarios
             </button>
           </div>
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="flex items-center gap-2 px-3 py-2 border border-border bg-card hover:bg-secondary text-xs font-bold rounded-xl transition-all w-full sm:w-auto justify-center"
+          >
+            <BarChart3 size={15} className="text-[#008744]" /> Reporte
+          </button>
+          <button
+            onClick={() => setShowContractModal(true)}
+            className="flex items-center gap-2 px-3 py-2 border border-violet-500/40 bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 text-xs font-bold rounded-xl transition-all w-full sm:w-auto justify-center"
+          >
+            <Repeat size={15} /> Turno Fijo
+          </button>
           <button
             onClick={() => setShowManualBooking(true)}
             className="btn-primary py-2 px-4 flex items-center justify-center gap-2 text-xs font-bold rounded-xl w-full sm:w-auto"
@@ -2299,6 +2317,7 @@ export default function BookingsPage() {
               <button
                 type="button"
                 onClick={() => {
+                  setViewMode('list');
                   setFilterStatus('pending');
                   setListDateFilter('all');
                   setLiveNotification(null);
@@ -2311,6 +2330,27 @@ export default function BookingsPage() {
             </div>
           </div>
         </aside>
+      )}
+
+      {/* ── Modal de Reportes ── */}
+      <BookingReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        bookings={bookings}
+        pitches={pitches}
+        companyName={companyName}
+      />
+
+      {/* ── Modal de Contrato Fijo / Turno Recurrente ── */}
+      {showContractModal && pitches.length > 0 && (
+        <ContractBookingModal
+          pitches={pitches}
+          onClose={() => setShowContractModal(false)}
+          onSuccess={() => {
+            setShowContractModal(false);
+            fetchBookingsAndPitches();
+          }}
+        />
       )}
     </div>
   );

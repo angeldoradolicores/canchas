@@ -1,0 +1,1855 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tour Interactivo Cancheros | La Plataforma Oficial de Canchas Sintéticas en Pasto</title>
+  <meta name="description" content="Descubre cómo funciona Cancheros: la plataforma real para reservar canchas sintéticas en Pasto y el software definitivo para dueños de complejos deportivos.">
+  
+  <!-- Favicons oficiales -->
+  <link rel="icon" href="./favicon.ico">
+  <link rel="apple-touch-icon" href="./apple-icon.png">
+  
+  <!-- Fuentes Google: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      /* PALETA OFICIAL CANCHEROS (app/globals.css) */
+      --c-green-dark: #054D27;        /* Verde Bosque Primario */
+      --c-green-primary: #008744;     /* Verde de Acción y Botones */
+      --c-green-hover: #007A3D;       /* Verde Intermedio Hover */
+      --c-green-bright: #10b981;      /* Verde Acento Claro */
+      --c-green-glow: rgba(0, 135, 68, 0.45);
+      
+      --c-sage-bg: #DCE7DE;           /* Sage Claro */
+      --c-sage-card: #CDE0D1;         /* Sage Card */
+      --c-sage-border: #BACFC0;       /* Sage Bordes */
+      --c-sage-text: #4D715B;         /* Sage Texto */
+      
+      /* Modo Oscuro Profundo (oklch .16 .025 160) */
+      --bg-dark: #07120c;
+      --bg-surface: #0c1a12;
+      --bg-card: #102217;
+      --bg-card-hover: #152d1f;
+      --border-dark: rgba(186, 207, 192, 0.14);
+      --border-active: rgba(0, 135, 68, 0.6);
+      
+      --accent-amber: #f59e0b;
+      --accent-gold: #d97706;
+      --wa-green: #25d366;
+      
+      --text-main: #f0fdf4;
+      --text-muted: #8ba896;
+      --text-dim: #5a7764;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      overflow-x: hidden;
+      line-height: 1.6;
+      background-image: 
+        radial-gradient(circle at 10% 15%, rgba(0, 135, 68, 0.15) 0%, transparent 45%),
+        radial-gradient(circle at 90% 25%, rgba(5, 77, 39, 0.2) 0%, transparent 50%),
+        radial-gradient(circle at 50% 80%, rgba(0, 122, 61, 0.1) 0%, transparent 60%),
+        linear-gradient(to bottom, #07120c, #0a1811 50%, #07120c);
+      background-attachment: fixed;
+    }
+
+    h1, h2, h3, h4, .font-heading {
+      font-family: 'Outfit', 'Inter', sans-serif;
+      letter-spacing: -0.025em;
+    }
+
+    /* Paneles Premium con Glassmorphism Cancheros */
+    .glass-panel {
+      background: rgba(16, 34, 23, 0.82);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border-dark);
+      border-radius: 1.25rem;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    
+    .glass-panel:hover {
+      border-color: rgba(0, 135, 68, 0.4);
+      box-shadow: 0 16px 36px -12px rgba(0, 0, 0, 0.8), 0 0 24px -6px rgba(0, 135, 68, 0.2);
+    }
+
+    .glass-pill {
+      background: rgba(220, 231, 222, 0.08);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-dark);
+      border-radius: 9999px;
+    }
+
+    /* Degradados de texto con el verde oficial Cancheros */
+    .text-gradient-cancheros {
+      background: linear-gradient(135deg, #4ade80 0%, #008744 50%, #054D27 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .text-gradient-gold {
+      background: linear-gradient(135deg, #fcd34d 0%, #f59e0b 50%, #d97706 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .text-gradient-silver {
+      background: linear-gradient(135deg, #ffffff 0%, #dce7de 50%, #8ba896 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* Botones de Marca */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      font-weight: 700;
+      font-size: 0.95rem;
+      border-radius: 0.75rem;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      text-decoration: none;
+      border: 1px solid transparent;
+      user-select: none;
+    }
+
+    .btn-cancheros-primary {
+      background: linear-gradient(135deg, #008744 0%, #054D27 100%);
+      color: #ffffff;
+      box-shadow: 0 4px 18px rgba(0, 135, 68, 0.45);
+      border: 1px solid rgba(74, 222, 128, 0.2);
+    }
+    .btn-cancheros-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0, 135, 68, 0.65);
+      background: linear-gradient(135deg, #00a855 0%, #008744 100%);
+      color: #ffffff;
+    }
+
+    .btn-cancheros-secondary {
+      background: rgba(220, 231, 222, 0.08);
+      color: var(--text-main);
+      border: 1px solid var(--border-dark);
+    }
+    .btn-cancheros-secondary:hover {
+      background: rgba(220, 231, 222, 0.16);
+      border-color: rgba(186, 207, 192, 0.35);
+      transform: translateY(-2px);
+    }
+
+    .btn-amber {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: #0c1a12;
+      box-shadow: 0 4px 18px rgba(245, 158, 11, 0.4);
+    }
+    .btn-amber:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(245, 158, 11, 0.6);
+      background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1280px;
+      margin-left: auto;
+      margin-right: auto;
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+
+    /* MOCKUP DEL CELULAR (ESTILO IPHONE ULTRA CON PANTALLA REAL) */
+    .phone-mockup {
+      width: 330px;
+      height: 670px;
+      background: #08120d;
+      border: 11px solid #1a3325;
+      border-radius: 46px;
+      box-shadow: 0 25px 60px -10px rgba(0, 0, 0, 0.95),
+                  0 0 40px -10px rgba(0, 135, 68, 0.5),
+                  inset 0 0 12px rgba(0,0,0,0.8);
+      position: relative;
+      overflow: hidden;
+      margin: 0 auto;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+    }
+    @media (min-width: 640px) {
+      .phone-mockup {
+        width: 350px;
+        height: 700px;
+      }
+    }
+
+    /* Dynamic Island & Barra de Estado */
+    .phone-status-bar {
+      height: 38px;
+      background: #0c1c13;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #cbd5e1;
+      z-index: 50;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      flex-shrink: 0;
+    }
+
+    .phone-dynamic-island {
+      width: 90px;
+      height: 20px;
+      background: #07120c;
+      border-radius: 12px;
+      border: 1px solid #234431;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .island-cam {
+      width: 7px;
+      height: 7px;
+      background: #040906;
+      border-radius: 50%;
+      border: 1px solid #2f5a41;
+    }
+
+    .phone-screen {
+      width: 100%;
+      flex: 1;
+      background: #09150e;
+      overflow-y: auto;
+      overflow-x: hidden;
+      position: relative;
+      scrollbar-width: thin;
+      scrollbar-color: #1a3325 transparent;
+    }
+    .phone-screen::-webkit-scrollbar {
+      width: 4px;
+    }
+    .phone-screen::-webkit-scrollbar-thumb {
+      background: #1a3325;
+      border-radius: 4px;
+    }
+
+    /* MOCKUP DE ESCRITORIO (ESTILO MACBOOK PRO) */
+    .desktop-mockup {
+      width: 100%;
+      max-width: 860px;
+      height: 560px;
+      background: #08120d;
+      border: 1px solid #1a3325;
+      border-radius: 16px;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.95),
+                  0 0 45px -12px rgba(0, 135, 68, 0.45);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      margin: 0 auto;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .desktop-header {
+      height: 42px;
+      background: #0c1c13;
+      border-bottom: 1px solid var(--border-dark);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .desktop-dots {
+      display: flex;
+      gap: 6px;
+    }
+    .desktop-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+    }
+    .dot-red { background: #ef4444; }
+    .dot-yellow { background: #eab308; }
+    .dot-green { background: #008744; }
+
+    .desktop-url {
+      flex: 1;
+      max-width: 480px;
+      height: 26px;
+      background: #07120c;
+      border-radius: 6px;
+      border: 1px solid var(--border-dark);
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      font-size: 0.75rem;
+      color: #8ba896;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .desktop-content {
+      flex: 1;
+      overflow-y: auto;
+      background: #09150e;
+      position: relative;
+    }
+
+    /* Pasos en la lista lateral */
+    .step-item {
+      display: flex;
+      gap: 1rem;
+      padding: 1.15rem;
+      border-radius: 1rem;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      background: rgba(220, 231, 222, 0.03);
+      text-align: left;
+      width: 100%;
+    }
+
+    .step-item:hover {
+      background: rgba(220, 231, 222, 0.08);
+      border-color: rgba(186, 207, 192, 0.2);
+      transform: translateX(4px);
+    }
+
+    .step-item.active {
+      background: rgba(0, 135, 68, 0.16);
+      border-color: rgba(0, 135, 68, 0.6);
+      box-shadow: 0 8px 24px -6px rgba(0, 135, 68, 0.35);
+    }
+
+    .step-item.active-owner {
+      background: rgba(245, 158, 11, 0.16);
+      border-color: rgba(245, 158, 11, 0.6);
+      box-shadow: 0 8px 24px -6px rgba(245, 158, 11, 0.35);
+    }
+
+    .step-num {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.9rem;
+      background: #102217;
+      color: #8ba896;
+      flex-shrink: 0;
+      transition: all 0.2s ease;
+      border: 1px solid var(--border-dark);
+    }
+
+    .step-item.active .step-num {
+      background: var(--c-green-primary);
+      color: #ffffff;
+      box-shadow: 0 0 16px rgba(0, 135, 68, 0.65);
+      border-color: var(--c-green-primary);
+    }
+
+    .step-item.active-owner .step-num {
+      background: var(--accent-amber);
+      color: #0c1a12;
+      box-shadow: 0 0 16px rgba(245, 158, 11, 0.65);
+      border-color: var(--accent-amber);
+    }
+
+    /* Badges con los colores del proyecto */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.3rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-cancheros {
+      background: rgba(0, 135, 68, 0.18);
+      color: #4ade80;
+      border: 1px solid rgba(0, 135, 68, 0.4);
+    }
+
+    .badge-amber {
+      background: rgba(245, 158, 11, 0.18);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.4);
+    }
+
+    /* Pestañas de Persona */
+    .persona-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.75rem 1.5rem;
+      border-radius: 9999px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.25s ease;
+      background: rgba(220, 231, 222, 0.05);
+      color: var(--text-muted);
+    }
+    .persona-tab.active-player {
+      background: rgba(0, 135, 68, 0.22);
+      border-color: rgba(0, 135, 68, 0.7);
+      color: #4ade80;
+      box-shadow: 0 4px 20px rgba(0, 135, 68, 0.35);
+    }
+    .persona-tab.active-owner {
+      background: rgba(245, 158, 11, 0.22);
+      border-color: rgba(245, 158, 11, 0.7);
+      color: #fbbf24;
+      box-shadow: 0 4px 20px rgba(245, 158, 11, 0.35);
+    }
+
+    /* Dispositivos */
+    .device-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.45rem 1rem;
+      border-radius: 0.6rem;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid transparent;
+      background: rgba(220, 231, 222, 0.05);
+      color: var(--text-muted);
+      transition: all 0.2s ease;
+    }
+    .device-tab.active {
+      background: #152d1f;
+      color: #ffffff;
+      border-color: rgba(0, 135, 68, 0.5);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+    }
+
+    /* Grid del Tour: 2 Columnas en Desktop */
+    .tour-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2rem;
+      align-items: start;
+    }
+    @media (min-width: 1024px) {
+      .tour-grid {
+        grid-template-columns: 380px 1fr !important;
+        gap: 2.5rem !important;
+      }
+    }
+
+    /* Barra de Progreso */
+    .progress-bar {
+      height: 4px;
+      background: rgba(186, 207, 192, 0.15);
+      border-radius: 2px;
+      overflow: hidden;
+      position: relative;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #054D27, #008744);
+      transition: width 0.35s ease;
+    }
+    .progress-fill.owner-fill {
+      background: linear-gradient(90deg, #d97706, #f59e0b);
+    }
+
+    /* Estilo para las imágenes capturadas */
+    .mockup-img-wrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-height: 480px;
+      overflow: hidden;
+    }
+
+    .mockup-real-img {
+      width: 100%;
+      display: block;
+      transition: transform 0.4s ease;
+    }
+
+    /* Hotspot interactivo sobre la captura */
+    .hotspot-pill {
+      position: absolute;
+      background: rgba(5, 77, 39, 0.94);
+      border: 2px solid #008744;
+      color: #ffffff;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 800;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.8), 0 0 15px rgba(0, 135, 68, 0.5);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      z-index: 20;
+      animation: pulseSpot 2.2s infinite ease-in-out;
+      backdrop-filter: blur(8px);
+      user-select: none;
+    }
+    @keyframes pulseSpot {
+      0%, 100% { transform: scale(1); box-shadow: 0 4px 20px rgba(0,0,0,0.8), 0 0 15px rgba(0, 135, 68, 0.4); }
+      50% { transform: scale(1.05); box-shadow: 0 6px 25px rgba(0,0,0,0.9), 0 0 25px rgba(0, 135, 68, 0.8); }
+    }
+
+    /* Floating Zoom Button */
+    .btn-zoom-preview {
+      position: absolute;
+      bottom: 14px;
+      right: 14px;
+      background: rgba(7, 18, 12, 0.85);
+      border: 1px solid var(--border-dark);
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      z-index: 30;
+      backdrop-filter: blur(10px);
+      transition: all 0.2s;
+    }
+    .btn-zoom-preview:hover {
+      background: #008744;
+      border-color: #4ade80;
+      transform: scale(1.05);
+    }
+
+    /* Lightbox Modal */
+    .lightbox-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(3, 8, 5, 0.94);
+      backdrop-filter: blur(25px);
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .lightbox-overlay.active {
+      display: flex;
+    }
+    .lightbox-card {
+      max-width: 1000px;
+      max-height: 90vh;
+      overflow-y: auto;
+      background: #09150e;
+      border: 1px solid var(--border-dark);
+      border-radius: 16px;
+      padding: 16px;
+      position: relative;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.9);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR OFICIAL CON IDENTIDAD CANCHEROS -->
+  <header style="position: fixed; top: 0; left: 0; right: 0; z-index: 100; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); background: rgba(7, 18, 12, 0.92); border-bottom: 1px solid var(--border-dark);">
+    <div class="container" style="display: flex; align-items: center; justify-content: space-between; height: 72px;">
+      
+      <!-- Brand Logo con #054D27 y #008744 -->
+      <a href="/" style="display: flex; align-items: center; gap: 0.75rem; text-decoration: none;">
+        <div style="width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg, #008744 0%, #054D27 100%); display: flex; align-items: center; justify-content: center; font-size: 1.35rem; box-shadow: 0 4px 16px rgba(0, 135, 68, 0.45); border: 1px solid rgba(74, 222, 128, 0.25);">
+          ⚽
+        </div>
+        <div>
+          <span style="font-family: 'Outfit', sans-serif; font-size: 1.45rem; font-weight: 800; color: #fff; letter-spacing: -0.02em;">CANCHEROS</span>
+          <span style="display: block; font-size: 0.65rem; color: #4ade80; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;">Pasto, Nariño</span>
+        </div>
+      </a>
+
+      <!-- Navigation links -->
+      <nav style="display: none; align-items: center; gap: 2rem;" class="nav-desktop">
+        <a href="#problema" style="color: var(--text-muted); text-decoration: none; font-size: 0.9rem; font-weight: 600; transition: color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'">¿Por qué Cancheros?</a>
+        <a href="#tour" style="color: var(--text-muted); text-decoration: none; font-size: 0.9rem; font-weight: 600; transition: color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'">Tour del Producto</a>
+        <a href="#whatsapp" style="color: var(--text-muted); text-decoration: none; font-size: 0.9rem; font-weight: 600; transition: color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'">Automatización WhatsApp</a>
+      </nav>
+
+      <!-- Action buttons -->
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <a href="/login" class="btn btn-cancheros-secondary" style="padding: 0.55rem 1rem; font-size: 0.85rem;">Ingresar</a>
+        <a href="/" class="btn btn-cancheros-primary" style="padding: 0.55rem 1.25rem; font-size: 0.85rem;">
+          <span>Explorar Canchas</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- HERO SECTION CON PALETA OFICIAL -->
+  <section style="padding-top: 140px; padding-bottom: 70px; position: relative; overflow: hidden; text-align: center;">
+    <div class="container">
+      
+      <!-- Top Badge -->
+      <div class="glass-pill badge-cancheros" style="display: inline-flex; margin-bottom: 1.5rem; padding: 0.45rem 1.15rem; font-size: 0.8rem;">
+        <span style="font-size: 1rem;">✨</span>
+        <span>Tour Oficial del Sistema Cancheros Pasto</span>
+      </div>
+
+      <!-- Main Headline -->
+      <h1 style="font-size: clamp(2.4rem, 6vw, 4.4rem); font-weight: 900; line-height: 1.08; margin-bottom: 1.5rem; max-width: 980px; margin-left: auto; margin-right: auto;">
+        Reserva canchas en <span class="text-gradient-cancheros">segundos</span>.<br>
+        Gestiona tu complejo <span class="text-gradient-gold">en piloto automático</span>.
+      </h1>
+
+      <!-- Subtitle -->
+      <p style="font-size: clamp(1.05rem, 2vw, 1.3rem); color: var(--text-muted); max-width: 760px; margin-left: auto; margin-right: auto; margin-bottom: 2.5rem; font-weight: 400;">
+        Olvídate de esperar respuestas infinitas en WhatsApp o perder turnos en cuadernos tachados. 
+        Explora la plataforma real de <strong style="color: #4ade80;">Cancheros Pasto</strong> interactuando con las pantallas y capturas del sistema en vivo.
+      </p>
+
+      <!-- Quick Jump Buttons -->
+      <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; margin-bottom: 3.5rem;">
+        <button onclick="setPersona('player')" class="btn btn-cancheros-primary" style="font-size: 1.05rem; padding: 0.85rem 1.75rem;">
+          <span>⚽ Ver Tour de Jugador</span>
+        </button>
+        <button onclick="setPersona('owner')" class="btn btn-amber" style="font-size: 1.05rem; padding: 0.85rem 1.75rem;">
+          <span>🏢 Ver Tour de Dueño de Canchas</span>
+        </button>
+      </div>
+
+      <!-- Live Highlights / Stats con Verde Cancheros -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.25rem; max-width: 1060px; margin: 0 auto;">
+        
+        <div class="glass-panel" style="padding: 1.5rem; text-align: center; border-color: rgba(0, 135, 68, 0.3);">
+          <div style="font-size: 2.2rem; font-weight: 800;" class="text-gradient-cancheros font-heading">Todas las Canchas</div>
+          <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.35rem;">Centralizadas en Pasto y Nariño</div>
+        </div>
+
+        <div class="glass-panel" style="padding: 1.5rem; text-align: center; border-color: rgba(0, 135, 68, 0.3);">
+          <div style="font-size: 2.2rem; font-weight: 800;" class="text-gradient-silver font-heading">&lt; 60 Seg</div>
+          <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.35rem;">Para asegurar y pagar tu turno</div>
+        </div>
+
+        <div class="glass-panel" style="padding: 1.5rem; text-align: center; border-color: rgba(245, 158, 11, 0.3);">
+          <div style="font-size: 2.2rem; font-weight: 800;" class="text-gradient-gold font-heading">100% Automático</div>
+          <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.35rem;">WhatsApp & Comprobantes Nequi</div>
+        </div>
+
+        <div class="glass-panel" style="padding: 1.5rem; text-align: center; border-color: rgba(0, 135, 68, 0.3);">
+          <div style="font-size: 2.2rem; font-weight: 800;" class="text-gradient-cancheros font-heading">0 Cruces</div>
+          <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.35rem;">Disponibilidad en tiempo real</div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- EL PROBLEMA VS LA SOLUCION -->
+  <section id="problema" style="padding: 70px 0; border-top: 1px solid var(--border-dark); border-bottom: 1px solid var(--border-dark); background: rgba(5, 12, 8, 0.7);">
+    <div class="container">
+      
+      <div style="text-align: center; max-width: 760px; margin: 0 auto 3.5rem auto;">
+        <span class="badge badge-amber" style="margin-bottom: 1rem;">La Realidad del Fútbol en Pasto</span>
+        <h2 style="font-size: clamp(2rem, 4vw, 3rem); font-weight: 800; margin-bottom: 1rem;">
+          ¿Por qué nació Cancheros?
+        </h2>
+        <p style="color: var(--text-muted); font-size: 1.1rem;">
+          El proceso tradicional de reservar o administrar canchas sintéticas en Nariño estaba roto para ambas partes.
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 2rem;">
+        
+        <!-- Tarjeta Jugador -->
+        <div class="glass-panel" style="padding: 2.25rem; border-left: 4px solid #ef4444; position: relative;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
+            <div style="font-size: 1.8rem;">⚽</div>
+            <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">El Calvario del Jugador</span>
+          </div>
+
+          <h3 style="font-size: 1.35rem; font-weight: 700; margin-bottom: 1rem; color: #fff;">
+            "¿Quién tiene el número de la cancha? Escríbale a ver si hay turno a las 7..."
+          </h3>
+
+          <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.9rem; color: var(--text-muted); font-size: 0.95rem;">
+            <li style="display: flex; gap: 0.75rem;">
+              <span style="color: #ef4444; font-weight: 900;">✕</span>
+              <span><strong>Esperas de horas:</strong> Preguntas por WhatsApp y te contestan 3 horas después cuando el turno ya se fue.</span>
+            </li>
+            <li style="display: flex; gap: 0.75rem;">
+              <span style="color: #ef4444; font-weight: 900;">✕</span>
+              <span><strong>Tour telefónico:</strong> Si una cancha está llena, te toca buscar números de 6 complejos distintos y reiniciar la conversación.</span>
+            </li>
+            <li style="display: flex; gap: 0.75rem;">
+              <span style="color: #ef4444; font-weight: 900;">✕</span>
+              <span><strong>Falta uno para completar:</strong> El amigo que cancela 15 minutos antes y arruina el partido del fin de semana.</span>
+            </li>
+            <li style="display: flex; gap: 0.75rem;">
+              <span style="color: #ef4444; font-weight: 900;">✕</span>
+              <span><strong>Desconfianza en el pago:</strong> Enviar comprobante por WhatsApp y rogar que el administrador lo haya visto y anotado.</span>
+            </li>
+          </ul>
+
+          <div style="margin-top: 1.75rem; padding: 1rem; border-radius: 0.75rem; background: rgba(0, 135, 68, 0.12); border: 1px solid rgba(0, 135, 68, 0.3);">
+            <div style="color: #4ade80; font-weight: 700; font-size: 0.9rem; margin-bottom: 0.25rem;">✨ La Solución Cancheros:</div>
+            <div style="font-size: 0.85rem; color: #dce7de;">Todas las canchas de Pasto en una sola pantalla. Ves horarios libres en vivo, reservas en 3 clics y subes tu comprobante con verificación digital.</div>
+          </div>
+        </div>
+
+        <!-- Tarjeta Dueño de Cancha -->
+        <div class="glass-panel" style="padding: 2.25rem; border-left: 4px solid var(--accent-amber); position: relative;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
+            <div style="font-size: 1.8rem;">🏢</div>
+            <span class="badge badge-amber">La Pesadilla del Dueño</span>
+          </div>
+
+          <h3 style="font-size: 1.35rem; font-weight: 700; margin-bottom: 1rem; color: #fff;">
+            "Responder 150 mensajes idénticos y tener canchas vacías en horas valle"
+          </h3>
+
+          <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.9rem; color: var(--text-muted); font-size: 0.95rem;">
+            <li style="display: flex; gap: 0.75rem;">
+              <span style="color: #ef4444; font-weight: 900;">✕</span>
+              <span><strong>Cuadernos y tachones:</strong> Cruces de turnos de dos personas que apartaron a la misma hora por error del administrador.</span>
+            </li>
+            <li style="display: flex; gap: 0.75rem;">
+              <span style="color: #ef4444; font-weight: 900;">✕</span>
+              <span><strong>Comprobantes falsos:</strong> Capturas editadas de Nequi o Daviplata que nunca entraron a la cuenta bancaria.</span>
+            </li>
+            <li style="display: flex; gap: 0.75rem;">
+              <span style="color: #ef4444; font-weight: 900;">✕</span>
+              <span><strong>Clientes que no asisten (No-shows):</strong> Apartan la cancha de palabra, apagan el celular y te dejan el turno perdido.</span>
+            </li>
+            <li style="display: flex; gap: 0.75rem;">
+              <span style="color: #ef4444; font-weight: 900;">✕</span>
+              <span><strong>Cero métricas:</strong> Al final de mes no sabes exactamente cuánto facturó cada cancha ni qué horas son las más rentables.</span>
+            </li>
+          </ul>
+
+          <div style="margin-top: 1.75rem; padding: 1rem; border-radius: 0.75rem; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3);">
+            <div style="color: #fbbf24; font-weight: 700; font-size: 0.9rem; margin-bottom: 0.25rem;">✨ La Solución Cancheros:</div>
+            <div style="font-size: 0.85rem; color: #dce7de;">Panel digital con calendario en tiempo real, confirmaciones y recordatorios por WhatsApp automáticos y validación visual de pagos.</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- SECCIÓN TOUR INTERACTIVO CON CAPTURAS REALES -->
+  <section id="tour" style="padding: 90px 0; position: relative;">
+    <div class="container">
+      
+      <!-- Tour Header & Controls -->
+      <div style="text-align: center; max-width: 820px; margin: 0 auto 3rem auto;">
+        
+        <span class="badge badge-cancheros" style="margin-bottom: 1rem;" id="tour-badge">⚽ Modo Jugador: 10 Pasos para Reservar y Competir</span>
+        <h2 style="font-size: clamp(2.2rem, 4.5vw, 3.4rem); font-weight: 800; margin-bottom: 1.25rem;">
+          Explora cómo funciona Cancheros paso a paso
+        </h2>
+        <p style="color: var(--text-muted); font-size: 1.15rem; margin-bottom: 2rem;">
+          Pantallas y capturas 100% reales tomadas directamente de <span style="color: #4ade80; font-weight: 700;">cancheros.site</span>.
+        </p>
+
+        <!-- Persona Switcher -->
+        <div style="display: inline-flex; background: rgba(220, 231, 222, 0.05); padding: 0.4rem; border-radius: 9999px; border: 1px solid var(--border-dark); gap: 0.35rem; margin-bottom: 1.5rem;">
+          <button id="tab-player" onclick="setPersona('player')" class="persona-tab active-player">
+            <span>⚽ Soy Jugador</span>
+            <span style="font-size: 0.75rem; opacity: 0.8; background: rgba(0,0,0,0.3); padding: 0.15rem 0.5rem; border-radius: 9999px;">10 Pasos</span>
+          </button>
+          <button id="tab-owner" onclick="setPersona('owner')" class="persona-tab">
+            <span>🏢 Soy Dueño de Complejo</span>
+            <span style="font-size: 0.75rem; opacity: 0.8; background: rgba(0,0,0,0.3); padding: 0.15rem 0.5rem; border-radius: 9999px;">7 Pasos</span>
+          </button>
+        </div>
+
+        <!-- Tour Automation Controls -->
+        <div style="display: flex; align-items: center; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+          
+          <div style="display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(220, 231, 222, 0.04); border: 1px solid var(--border-dark); border-radius: 0.75rem; padding: 0.3rem 0.6rem;">
+            <button id="btn-device-mobile" onclick="setDevice('mobile')" class="device-tab active">
+              <span>📱 Móvil</span>
+            </button>
+            <button id="btn-device-desktop" onclick="setDevice('desktop')" class="device-tab">
+              <span>💻 PC / Escritorio</span>
+            </button>
+          </div>
+
+          <div style="display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(220, 231, 222, 0.04); border: 1px solid var(--border-dark); border-radius: 0.75rem; padding: 0.35rem 0.75rem;">
+            <button id="btn-autoplay" onclick="toggleAutoplay()" style="background: none; border: none; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 600;">
+              <span id="autoplay-icon">▶</span>
+              <span id="autoplay-text">Auto Tour</span>
+            </button>
+            <span style="color: var(--border-dark);">|</span>
+            <span id="step-counter-text" style="font-size: 0.8rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">1 / 10</span>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- MAIN TOUR LAYOUT: 2 COLUMNS (STEPS LIST & LIVE REAL MOCKUP) -->
+      <div class="tour-grid">
+        
+        <!-- LEFT: Steps list (Clickable) -->
+        <div style="display: flex; flex-direction: column; gap: 0.65rem; max-height: 660px; overflow-y: auto; padding-right: 0.5rem;" id="steps-container">
+          <!-- Dynamically populated by JS -->
+        </div>
+
+        <!-- RIGHT: Device Mockup + Step Explainer -->
+        <div style="display: flex; flex-direction: column; gap: 1.25rem; position: sticky; top: 88px; width: 100%; min-width: 0;">
+          
+          <!-- Mockup Frame Container -->
+          <div style="position: relative; width: 100%; display: flex; justify-content: center; min-height: 560px; align-items: center;">
+            
+            <!-- PHONE MOCKUP CON CAPTURA REAL -->
+            <div id="phone-container" class="phone-mockup">
+              <!-- Barra de estado iPhone -->
+              <div class="phone-status-bar">
+                <span>7:14 PM</span>
+                <div class="phone-dynamic-island">
+                  <div class="island-cam"></div>
+                </div>
+                <span>5G 100%</span>
+              </div>
+              
+              <div class="phone-screen" id="phone-screen-content">
+                <!-- Phone real image / UI rendered here -->
+              </div>
+
+              <!-- Botón flotante para ver en grande -->
+              <button class="btn-zoom-preview" onclick="openLightbox()">
+                <span>🔍</span> Ver Pantalla Completa
+              </button>
+            </div>
+
+            <!-- DESKTOP MOCKUP CON CAPTURA REAL -->
+            <div id="desktop-container" class="desktop-mockup" style="display: none;">
+              <div class="desktop-header">
+                <div class="desktop-dots">
+                  <div class="desktop-dot dot-red"></div>
+                  <div class="desktop-dot dot-yellow"></div>
+                  <div class="desktop-dot dot-green"></div>
+                </div>
+                <div class="desktop-url">
+                  <span style="color: #008744; margin-right: 6px;">🔒</span> https://cancheros.site/<span id="desktop-url-path" style="color: #fff;">canchas</span>
+                </div>
+                <button class="btn-zoom-preview" style="position: static; margin-left: auto; padding: 4px 10px;" onclick="openLightbox()">
+                  <span>🔍</span> Zoom
+                </button>
+              </div>
+              <div class="desktop-content" id="desktop-screen-content">
+                <!-- Desktop real image / UI rendered here -->
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Bottom Card: Current Step Deep Dive & Navigation -->
+          <div class="glass-panel" style="padding: 1.5rem 1.75rem; border-color: rgba(0, 135, 68, 0.25);">
+            
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+              <span id="detail-tag" class="badge badge-cancheros">Paso 1: Exploración</span>
+              
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <button onclick="prevStep()" class="btn btn-cancheros-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" title="Paso anterior">
+                  ← Anterior
+                </button>
+                <button onclick="nextStep()" class="btn btn-cancheros-primary" id="btn-next-step" style="padding: 0.4rem 0.95rem; font-size: 0.85rem;" title="Siguiente paso">
+                  Siguiente →
+                </button>
+              </div>
+            </div>
+
+            <h3 id="detail-title" style="font-size: 1.35rem; font-weight: 800; margin-bottom: 0.5rem; color: #fff;">
+              Explorar y Buscar Canchas en Pasto
+            </h3>
+
+            <p id="detail-desc" style="color: var(--text-muted); font-size: 0.92rem; margin-bottom: 1rem; line-height: 1.55;">
+              Filtra por fútbol 5, 7 u 11, techadas, sintéticas con caucho de alta densidad o iluminación LED para la noche. Ve precios por hora y ubicación exacta en Pasto.
+            </p>
+
+            <div id="detail-chips" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+              <!-- Chips inserted by JS -->
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="progress-bar" style="margin-top: 1.25rem;">
+              <div id="tour-progress-bar" class="progress-fill" style="width: 10%;"></div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- INTERACTIVE WHATSAPP AUTOMATION SECTION (Evolution API & n8n) -->
+  <section id="whatsapp" style="padding: 90px 0; border-top: 1px solid var(--border-dark); background: radial-gradient(circle at 80% 50%, rgba(37, 211, 102, 0.08) 0%, transparent 60%);">
+    <div class="container">
+      
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 3.5rem; align-items: center;">
+        
+        <!-- Text explanation on the left -->
+        <div>
+          <span class="badge" style="background: rgba(37, 211, 102, 0.15); color: #25d366; border: 1px solid rgba(37, 211, 102, 0.3); margin-bottom: 1.25rem;">
+            📲 Evolution API & n8n Workflows
+          </span>
+          <h2 style="font-size: clamp(2.2rem, 4vw, 3.2rem); font-weight: 800; line-height: 1.15; margin-bottom: 1.5rem;">
+            Tu complejo deportivo operando en <span style="color: #25d366;">WhatsApp 24/7</span> sin mover un dedo
+          </h2>
+          <p style="color: var(--text-muted); font-size: 1.1rem; margin-bottom: 2rem;">
+            Cancheros conecta directamente con la API de WhatsApp para que tanto el jugador como el dueño reciban confirmaciones instantáneas, comprobantes de pago y recordatorios sin usar chats manuales.
+          </p>
+
+          <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+            
+            <div style="display: flex; gap: 1rem; align-items: flex-start;">
+              <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(37, 211, 102, 0.15); color: #25d366; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;">
+                ⚡
+              </div>
+              <div>
+                <h4 style="font-weight: 700; color: #fff; font-size: 1.05rem;">Confirmación Inmediata con Ubicación GPS</h4>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">Cuando la reserva se aprueba, el jugador recibe mensaje oficial con botón de ruta Waze/Maps al complejo.</p>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 1rem; align-items: flex-start;">
+              <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(37, 211, 102, 0.15); color: #25d366; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;">
+                🔔
+              </div>
+              <div>
+                <h4 style="font-weight: 700; color: #fff; font-size: 1.05rem;">Recordatorio 2 Horas Antes del Partido</h4>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">Disminuye el ausentismo (no-show) al 0% avisando automáticamente a los capitanes de equipo.</p>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 1rem; align-items: flex-start;">
+              <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(37, 211, 102, 0.15); color: #25d366; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;">
+                📸
+              </div>
+              <div>
+                <h4 style="font-weight: 700; color: #fff; font-size: 1.05rem;">Generador de Estados de WhatsApp con 1 Clic</h4>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">El dueño genera una imagen lista con los horarios disponibles de la noche para subir a su estado y vender los huecos.</p>
+              </div>
+            </div>
+
+          </div>
+
+          <div style="margin-top: 2.5rem;">
+            <a href="/login" class="btn btn-cancheros-primary">
+              <span>Probar Integración de WhatsApp</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+          </div>
+        </div>
+
+        <!-- Simulated WhatsApp Mobile Chat on the right -->
+        <div style="display: flex; justify-content: center;">
+          
+          <div style="width: 320px; background: #0b141a; border-radius: 28px; border: 8px solid #1f2c34; box-shadow: 0 25px 60px rgba(0,0,0,0.8), 0 0 35px rgba(37, 211, 102, 0.25); overflow: hidden; position: relative;">
+            
+            <!-- WhatsApp Top Bar -->
+            <div style="background: #202c33; padding: 12px 14px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+              <div style="width: 36px; height: 36px; border-radius: 50%; background: #008744; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: #fff;">
+                ⚽
+              </div>
+              <div style="flex: 1;">
+                <div style="color: #e9edef; font-weight: 600; font-size: 0.9rem; display: flex; align-items: center; gap: 4px;">
+                  <span>Cancheros Bot Oficial</span>
+                  <span style="color: #25d366; font-size: 0.8rem;">✓</span>
+                </div>
+                <div style="color: #8696a0; font-size: 0.7rem;">en línea • Verificado</div>
+              </div>
+            </div>
+
+            <!-- WhatsApp Chat Body with animated bubbles -->
+            <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px; font-size: 0.8rem; min-height: 400px; background-image: radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 16px 16px;">
+              
+              <!-- Message 1 from user -->
+              <div style="align-self: flex-end; background: #005c4b; color: #e9edef; padding: 8px 12px; border-radius: 10px 10px 0 10px; max-width: 85%; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                <div>Hola! Acabo de reservar en <strong>Sintética Los Andes</strong> para hoy a las 8:00 PM y subí el comprobante de Nequi 🧾</div>
+                <div style="text-align: right; font-size: 0.65rem; color: #8696a0; margin-top: 3px;">7:14 PM ✓✓</div>
+              </div>
+
+              <!-- Message 2 from Cancheros Bot -->
+              <div style="align-self: flex-start; background: #202c33; color: #e9edef; padding: 10px 12px; border-radius: 10px 10px 10px 0; max-width: 90%; box-shadow: 0 2px 4px rgba(0,0,0,0.2); border-left: 3px solid #008744;">
+                <div style="font-weight: 700; color: #4ade80; margin-bottom: 4px;">¡Reserva Confirmada! ⚽🎉</div>
+                <div style="line-height: 1.4;">
+                  Hola <strong>Carlos Gómez</strong>, tu turno ha sido aprobado por el administrador.<br><br>
+                  📍 <strong>Cancha:</strong> Sintética Los Andes #2 (Fútbol 7)<br>
+                  🗓️ <strong>Fecha:</strong> Hoy 28 Octubre<br>
+                  ⏰ <strong>Hora:</strong> 8:00 PM - 9:00 PM<br>
+                  💰 <strong>Estado de Pago:</strong> $70.000 Pagado (Nequi Validado)<br>
+                </div>
+                <div style="margin-top: 8px; padding: 6px 10px; background: rgba(0, 135, 68, 0.2); border-radius: 6px; text-align: center; color: #4ade80; font-weight: 700; cursor: pointer;">
+                  🗺️ Ver Ruta en Google Maps / Waze
+                </div>
+                <div style="text-align: right; font-size: 0.65rem; color: #8696a0; margin-top: 4px;">7:15 PM</div>
+              </div>
+
+              <!-- Message 3 Reminder (2 hours later) -->
+              <div style="align-self: flex-start; background: #202c33; color: #e9edef; padding: 8px 12px; border-radius: 10px 10px 10px 0; max-width: 88%; box-shadow: 0 2px 4px rgba(0,0,0,0.2); border-left: 3px solid #f59e0b;">
+                <div style="font-weight: 700; color: #f59e0b; margin-bottom: 2px;">⏰ Recordatorio Canchero</div>
+                <div>Tu partido empieza en 1 hora. ¡No olvides llevar canilleras e hidratación! Balón disponible en taquilla.</div>
+                <div style="text-align: right; font-size: 0.65rem; color: #8696a0; margin-top: 3px;">7:00 PM</div>
+              </div>
+
+              <!-- Typing indicator simulated -->
+              <div style="align-self: flex-start; background: #202c33; padding: 6px 12px; border-radius: 12px; display: inline-flex; gap: 4px; align-items: center;">
+                <span style="font-size: 0.7rem; color: #8696a0;">Cancheros está listo para tu partido</span>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- CTA FINAL -->
+  <section style="padding: 90px 0; text-align: center; position: relative;">
+    <div class="container">
+      
+      <div class="glass-panel" style="padding: 4rem 2rem; max-width: 900px; margin: 0 auto; position: relative; overflow: hidden; border: 1px solid rgba(0, 135, 68, 0.4);">
+        
+        <div style="position: absolute; top: -100px; right: -100px; width: 250px; height: 250px; background: rgba(0, 135, 68, 0.2); filter: blur(60px); border-radius: 50%;"></div>
+        <div style="position: absolute; bottom: -100px; left: -100px; width: 250px; height: 250px; background: rgba(5, 77, 39, 0.3); filter: blur(60px); border-radius: 50%;"></div>
+
+        <span class="badge badge-cancheros" style="margin-bottom: 1.25rem;">Únete a la Cancha Digital</span>
+        
+        <h2 style="font-size: clamp(2.2rem, 5vw, 3.6rem); font-weight: 900; margin-bottom: 1.25rem;">
+          ¿Listo para jugar o digitalizar tu complejo?
+        </h2>
+
+        <p style="color: var(--text-muted); font-size: 1.15rem; max-width: 620px; margin: 0 auto 2.5rem auto;">
+          Únete a cientos de deportistas y complejos en San Juan de Pasto que ya no pierden tiempo con llamadas o chats sin contestar.
+        </p>
+
+        <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem;">
+          <a href="/" class="btn btn-cancheros-primary" style="padding: 0.95rem 2rem; font-size: 1.05rem;">
+            <span>⚽ Explorar Canchas Ahora</span>
+          </a>
+          <a href="/login" class="btn btn-amber" style="padding: 0.95rem 2rem; font-size: 1.05rem;">
+            <span>🏢 Registrar mi Complejo</span>
+          </a>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- FOOTER OFICIAL -->
+  <footer style="padding: 50px 0 30px 0; border-top: 1px solid var(--border-dark); background: #040906; color: var(--text-dim); font-size: 0.85rem;">
+    <div class="container" style="display: flex; flex-direction: column; gap: 2rem;">
+      
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1.5rem;">
+        
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 32px; height: 32px; border-radius: 8px; background: #008744; display: flex; align-items: center; justify-content: center; font-size: 1rem; color: #fff;">
+            ⚽
+          </div>
+          <span style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 800; color: #fff;">CANCHEROS</span>
+          <span style="color: var(--text-dim);">| San Juan de Pasto, Nariño, Colombia</span>
+        </div>
+
+        <div style="display: flex; gap: 1.5rem;">
+          <a href="/" style="color: var(--text-muted); text-decoration: none;">Inicio</a>
+          <a href="#tour" style="color: var(--text-muted); text-decoration: none;">Tour Interactivo</a>
+          <a href="/login" style="color: var(--text-muted); text-decoration: none;">Iniciar Sesión</a>
+          <a href="/register" style="color: var(--text-muted); text-decoration: none;">Crear Cuenta</a>
+        </div>
+
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; border-top: 1px solid rgba(220,231,222,0.06); padding-top: 1.5rem;">
+        <div>© 2026 Cancheros. Todos los derechos reservados. Desarrollado para la comunidad deportiva de Nariño.</div>
+        <div style="display: flex; gap: 1rem;">
+          <span style="color: #4ade80;">Hecho con 💚 para el Fútbol Aficionado de Pasto</span>
+        </div>
+      </div>
+
+    </div>
+  </footer>
+
+  <!-- LIGHTBOX PREVIEW MODAL -->
+  <div id="lightbox-modal" class="lightbox-overlay" onclick="closeLightbox(event)">
+    <div class="lightbox-card" onclick="event.stopPropagation()">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <h4 id="lightbox-title" style="font-weight: 800; color: #fff; font-size: 1.1rem;">Captura en Alta Resolución</h4>
+        <button onclick="closeLightbox(event)" style="background: rgba(255,255,255,0.1); border: none; color: #fff; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-weight: 700;">Cerrar ✕</button>
+      </div>
+      <div id="lightbox-body" style="text-align: center;">
+        <!-- Injected by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT TOUR ENGINE ULTRA COMPATIBLE -->
+  <script>
+    // RESOLVER DE RUTAS UNIVERSAL (Compatible con file:/// y http://)
+    function resolvePath(relativePath) {
+      const clean = relativePath.replace(/^\/+/, '');
+      if (window.location.protocol === 'file:') {
+        return './' + clean;
+      }
+      return '/' + clean;
+    }
+
+    // DATOS DE LOS PASOS UTILIZANDO LAS CAPTURAS Y PANTALLAS REALES DE CANCHEROS.SITE
+    const tourData = {
+      player: [
+        {
+          id: 1,
+          tag: "Paso 1: Exploración",
+          title: "Explorar Canchas en San Juan de Pasto",
+          desc: "Navega por el catálogo completo de canchas en Pasto. Filtra por Fútbol 5, 7 u 11, techadas, sintéticas con iluminación nocturna, y visualiza tarifas por hora en tiempo real.",
+          chips: ["Fútbol 5, 7 y 11", "Techadas o Aire Libre", "Filtro Pasto / Ipiales", "Tarifas por Hora"],
+          url: "canchas",
+          mobileImg: "images/tour/mobile_home.png",
+          desktopImg: "images/tour/home.png",
+          hotspots: [
+            { text: "📍 Pasto, Nariño", top: "16%", left: "12%" },
+            { text: "⭐ Disponibilidad en Vivo", top: "46%", right: "10%" }
+          ]
+        },
+        {
+          id: 2,
+          tag: "Paso 2: Horarios en Vivo",
+          title: "Seleccionar Horario y Reservar Turno",
+          desc: "Mira la grilla en tiempo real de cada cancha. Los turnos en color verde están 100% disponibles. Elige el día y la hora de tu partido sin necesidad de llamar a preguntar si está ocupada.",
+          chips: ["Turnos en Verde", "Sin Cruces de Turno", "Bloqueo Inmediato", "Reserva en 3 Clics"],
+          url: "cancha/reservar",
+          mobileImg: "images/tour/booking.png",
+          desktopImg: "images/tour/booking.png",
+          hotspots: [
+            { text: "⏰ Turnos en Verde", top: "25%", left: "15%" },
+            { text: "✓ Confirmación Inmediata", bottom: "20%", right: "12%" }
+          ]
+        },
+        {
+          id: 3,
+          tag: "Paso 3: Pago y Comprobante",
+          title: "Subida Segura de Comprobante (Cloudflare R2)",
+          desc: "Transfiere por Nequi, Daviplata o Bancolombia a las cuentas oficiales del complejo. Sube la captura de pago: se procesa al instante y notifica al administrador para que valide el turno.",
+          chips: ["Nequi, Daviplata, Bancolombia", "Almacenamiento Cloudflare R2", "Validación Visual", "Cero Pérdidas"],
+          url: "reservas/comprobante",
+          customMobile: `
+            <div style="padding: 18px; height: 100%; display: flex; flex-direction: column; justify-content: center; background: #0c1a12;">
+              <div style="background: #112419; border: 1px solid var(--border-dark); border-radius: 14px; padding: 16px; margin-bottom: 14px;">
+                <div style="font-size: 0.75rem; color: #4ade80; font-weight: 700; margin-bottom: 4px;">PAGO DIGITAL SEGURO</div>
+                <div style="font-size: 1.05rem; font-weight: 800; color: #fff; margin-bottom: 12px;">Cuentas Oficiales</div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 8px;">
+                  <span style="color: #ec4899; font-weight: 800; font-size: 0.8rem;">NEQUI</span>
+                  <span style="font-size: 0.85rem; font-weight: 700; color: #fff;">318 459 2831</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 8px;">
+                  <span style="color: #ef4444; font-weight: 800; font-size: 0.8rem;">DAVIPLATA</span>
+                  <span style="font-size: 0.85rem; font-weight: 700; color: #fff;">315 892 1044</span>
+                </div>
+              </div>
+
+              <div style="border: 2px dashed #008744; background: rgba(0, 135, 68, 0.08); border-radius: 14px; padding: 22px 14px; text-align: center;">
+                <div style="font-size: 2.2rem; margin-bottom: 6px;">🧾</div>
+                <div style="font-size: 0.85rem; font-weight: 800; color: #fff; margin-bottom: 4px;">Comprobante de Nequi Adjuntado</div>
+                <div style="font-size: 0.7rem; color: #4ade80; font-weight: 700;">✓ Subido a Cloudflare R2 con éxito</div>
+              </div>
+            </div>
+          `,
+          customDesktop: `
+            <div style="padding: 24px; height: 100%; display: flex; flex-direction: column; justify-content: center; background: #09150e;">
+              <div style="max-width: 650px; margin: 0 auto; width: 100%; background: #112419; border: 1px solid var(--border-dark); border-radius: 16px; padding: 24px;">
+                <h3 style="font-size: 1.2rem; font-weight: 800; color: #fff; margin-bottom: 6px;">Confirmación con Comprobante de Transferencia</h3>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 16px;">Sube tu recibo de pago para que el dueño apruebe el turno en el panel.</p>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: center;">
+                  <div style="background: rgba(0,0,0,0.3); padding: 14px; border-radius: 10px;">
+                    <div style="font-size: 0.75rem; color: #8ba896; margin-bottom: 4px;">Titular de la cuenta:</div>
+                    <div style="font-weight: 700; color: #fff; font-size: 0.95rem; margin-bottom: 8px;">Complejo Sintética Pasto</div>
+                    <div style="font-size: 0.75rem; color: #4ade80; font-weight: 700;">Nequi: 318 459 2831</div>
+                  </div>
+                  <div style="border: 2px dashed #008744; border-radius: 10px; padding: 18px; text-align: center; background: rgba(0, 135, 68, 0.05);">
+                    <div style="font-size: 1.8rem;">📸</div>
+                    <div style="font-size: 0.8rem; font-weight: 700; color: #4ade80;">comprobante_nequi_70k.png</div>
+                    <div style="font-size: 0.7rem; color: #8ba896;">Almacenamiento seguro R2</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `
+        },
+        {
+          id: 4,
+          tag: "Paso 4: Competitividad",
+          title: "Muro de Retos y Desafíos Deportivos",
+          desc: "¿Tienes equipo y buscas rival en Pasto? Publica un reto en la comunidad Cancheros. Define la cancha, hora y categoría. Los capitanes rivales pueden aceptar el desafío directamente.",
+          chips: ["Retos Abiertos", "Categoría de Nivel", "Notificaciones de Rival", "Comunidad Pastusa"],
+          url: "community",
+          mobileImg: "images/tour/mobile_community.png",
+          desktopImg: "images/tour/community.png",
+          hotspots: [
+            { text: "⚔️ Retos Comunitarios", top: "15%", left: "8%" },
+            { text: "🏃 Equipos de Pasto", top: "40%", right: "10%" }
+          ]
+        },
+        {
+          id: 5,
+          tag: "Paso 5: Comunidad",
+          title: "Bolsa de Jugadores ('Falta Uno')",
+          desc: "Nunca más canceles un partido porque te faltó gente. Busca arqueros, defensas o delanteros disponibles en Pasto, o postúlate tú mismo a partidos que necesitan un refuerzo hoy.",
+          chips: ["Bolsa Falta Uno", "Busca Arquero o Delantero", "Calificación Deportiva", "Contacto Directo"],
+          url: "community",
+          mobileImg: "images/tour/mobile_community.png",
+          desktopImg: "images/tour/community.png",
+          hotspots: [
+            { text: "🧤 Urgente Arquero", top: "30%", left: "12%" },
+            { text: "⚽ Refuerzos en Pasto", bottom: "25%", right: "10%" }
+          ]
+        },
+        {
+          id: 6,
+          tag: "Paso 6: Torneos",
+          title: "Campeonatos y Tablas de Posiciones",
+          desc: "Sigue los campeonatos de fútbol organizados en los complejos de Pasto. Revisa el fixture de fechas, tabla de puntos en vivo, diferencia de goles y la tabla de goleadores.",
+          chips: ["Fixtures en Vivo", "Tabla de Posiciones", "Goleadores y Tarjetas", "Premios y Fases"],
+          url: "tournaments",
+          mobileImg: "images/tour/mobile_tournaments.png",
+          desktopImg: "images/tour/tournaments.png",
+          hotspots: [
+            { text: "🏆 Torneos de Pasto", top: "15%", left: "8%" },
+            { text: "📊 Tablas y Fixtures", top: "45%", right: "10%" }
+          ]
+        },
+        {
+          id: 7,
+          tag: "Paso 7: Identidad",
+          title: "Tarjeta de Perfil Canchero",
+          desc: "Tu carnet deportivo estilo FIFA / EA FC con tus estadísticas de juego: posición preferida, partidos disputados, goles anotados y medallas de Fair Play.",
+          chips: ["Carta FIFA Digital", "Estadísticas Reales", "Fair Play Rating", "Historial Canchero"],
+          url: "profile",
+          mobileImg: "images/tour/profile.png",
+          desktopImg: "images/tour/profile.png",
+          hotspots: [
+            { text: "🪪 Tarjeta de Jugador", top: "25%", left: "15%" },
+            { text: "⭐ Reputación Fair Play", top: "55%", right: "12%" }
+          ]
+        },
+        {
+          id: 8,
+          tag: "Paso 8: Control",
+          title: "Mis Reservas y Código de Acceso",
+          desc: "Consulta todas tus reservas activas, historial de partidos y turnos pagados. Visualiza los estados en tiempo real: Pendiente, Confirmada o Cancelada con acceso directo.",
+          chips: ["Historial en Vivo", "Estados de Pago", "Detalles de Cancha", "Cero Cruces"],
+          url: "reservations",
+          mobileImg: "images/tour/mobile_reservations.png",
+          desktopImg: "images/tour/mobile_reservations.png",
+          hotspots: [
+            { text: "📋 Tus Turnos Agendados", top: "18%", left: "12%" },
+            { text: "✓ Estado Confirmado", top: "48%", right: "10%" }
+          ]
+        },
+        {
+          id: 9,
+          tag: "Paso 9: Geolocalización",
+          title: "Ubicación GPS y Rutas Waze / Google Maps",
+          desc: "Cada cancha tiene coordenadas exactas en San Juan de Pasto. Con un solo clic abres Google Maps o Waze desde tu celular para llegar puntual sin perderte.",
+          chips: ["Google Maps & Waze", "Ruta Directa", "Parqueadero y Acceso", "Puntos de Referencia Pasto"],
+          url: "cancha/ubicacion",
+          customMobile: `
+            <div style="padding: 16px; height: 100%; display: flex; flex-direction: column; justify-content: center; background: #0c1a12;">
+              <div style="height: 240px; background: #07120c; border: 1px solid var(--border-dark); border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; margin-bottom: 16px;">
+                <div style="font-size: 3rem; margin-bottom: 8px;">📍</div>
+                <div style="font-size: 1.1rem; font-weight: 800; color: #fff;">Sintética Los Andes</div>
+                <div style="font-size: 0.8rem; color: #4ade80; font-weight: 700;">Av. Panamericana Norte, Pasto</div>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <button class="btn btn-cancheros-secondary" style="font-size: 0.8rem; padding: 10px;">🗺️ Google Maps</button>
+                <button class="btn btn-cancheros-primary" style="font-size: 0.8rem; padding: 10px;">🚗 Waze</button>
+              </div>
+            </div>
+          `,
+          customDesktop: `
+            <div style="padding: 30px; height: 100%; display: flex; flex-direction: column; justify-content: center; background: #09150e;">
+              <div style="max-width: 650px; margin: 0 auto; width: 100%; background: #112419; border: 1px solid var(--border-dark); border-radius: 16px; padding: 24px; text-align: center;">
+                <div style="font-size: 3.5rem; margin-bottom: 10px;">🗺️</div>
+                <h3 style="font-size: 1.3rem; font-weight: 800; color: #fff; margin-bottom: 6px;">Geolocalización en Tiempo Real</h3>
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;">Puntos GPS verificados en Pasto (Catambuco, Pandiaco, Maridiaz, Chapal, Avenida Panamericana).</p>
+                <div style="display: inline-flex; gap: 12px;">
+                  <button class="btn btn-cancheros-primary">Abrir en Google Maps</button>
+                  <button class="btn btn-cancheros-secondary">Abrir en Waze</button>
+                </div>
+              </div>
+            </div>
+          `
+        },
+        {
+          id: 10,
+          tag: "Paso 10: Productividad",
+          title: "Botones Flotantes y Acciones Rápidas",
+          desc: "Navegación optimizada para usar con una sola mano: botón de soporte por WhatsApp, favoritos y accesos directos rápidos para reservar en cualquier momento.",
+          chips: ["Botón Flotante WhatsApp", "Favoritos en 1 Tap", "Soporte Canchero", "Diseño Móvil Ergonómico"],
+          url: "home/shortcuts",
+          mobileImg: "images/tour/mobile_home.png",
+          desktopImg: "images/tour/home.png",
+          hotspots: [
+            { text: "💬 WhatsApp Directo", bottom: "18%", right: "12%" },
+            { text: "❤️ Favoritos Guardados", bottom: "30%", left: "10%" }
+          ]
+        }
+      ],
+      owner: [
+        {
+          id: 1,
+          tag: "Paso 1: Sede y Canchas",
+          title: "Crear y Configurar Complejo Deportivo",
+          desc: "Registra tu complejo en el sistema Cancheros. Configura el nombre, dirección en Pasto, fotos de las canchas, tipo de grama, iluminación LED y las tarifas por hora para el día y la noche.",
+          chips: ["Múltiples Canchas", "Tarifas Día / Noche", "Fotos en Cloudflare R2", "Datos de Pago"],
+          url: "dashboard/pitches",
+          customMobile: `
+            <div style="padding: 18px; height: 100%; display: flex; flex-direction: column; justify-content: center; background: #0c1a12;">
+              <div style="background: #112419; border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 14px; padding: 18px;">
+                <span class="badge badge-amber" style="margin-bottom: 8px;">ADMINISTRADOR</span>
+                <div style="font-size: 1.15rem; font-weight: 800; color: #fff; margin-bottom: 12px;">Sintética Los Andes Pasto</div>
+                <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.8rem;">
+                  <div style="background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 8px; color: #cbd5e1;">📍 Av. Panamericana #14-22, Pasto</div>
+                  <div style="background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 8px; color: #4ade80; font-weight: 700;">⚽ 2 Canchas de Fútbol 7</div>
+                  <div style="background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 8px; color: #fbbf24; font-weight: 700;">Tarifa Noche: $70.000 / hora</div>
+                </div>
+              </div>
+            </div>
+          `,
+          customDesktop: `
+            <div style="padding: 30px; height: 100%; display: flex; flex-direction: column; justify-content: center; background: #09150e;">
+              <div style="max-width: 650px; margin: 0 auto; width: 100%; background: #112419; border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 16px; padding: 24px;">
+                <h3 style="font-size: 1.25rem; font-weight: 800; color: #fff; margin-bottom: 6px;">Configuración de Sede Deportiva</h3>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 16px;">Gestiona los detalles visibles para los clientes de San Juan de Pasto.</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                  <div style="background: rgba(0,0,0,0.3); padding: 14px; border-radius: 10px;">
+                    <div style="font-size: 0.75rem; color: #8ba896;">Canchas Activas</div>
+                    <div style="font-size: 1.1rem; font-weight: 800; color: #4ade80;">Cancha 1 (F7) & Cancha 2 (F5)</div>
+                  </div>
+                  <div style="background: rgba(0,0,0,0.3); padding: 14px; border-radius: 10px;">
+                    <div style="font-size: 0.75rem; color: #8ba896;">Fotos del Césped</div>
+                    <div style="font-size: 1.1rem; font-weight: 800; color: #fbbf24;">4 Fotos en Alta Definición</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `
+        },
+        {
+          id: 2,
+          tag: "Paso 2: Métricas en Vivo",
+          title: "Panel de Control y Analítica del Negocio",
+          desc: "Monitorea tu complejo en tiempo real: ingresos diarios acumulados, porcentaje de ocupación en las horas pico (7pm - 11pm), reservas del día y clientes recurrentes.",
+          chips: ["Ingresos en Vivo", "Ocupación % de Horas Pico", "Control de Turnos Hoy", "Clientes Frecuentes"],
+          url: "dashboard",
+          customMobile: `
+            <div style="padding: 18px; height: 100%; display: flex; flex-direction: column; justify-content: center; background: #0c1a12;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                <div style="background: #112419; border: 1px solid #008744; border-radius: 12px; padding: 12px; text-align: center;">
+                  <div style="font-size: 0.7rem; color: #8ba896;">Ventas Hoy</div>
+                  <div style="font-size: 1.35rem; font-weight: 900; color: #4ade80;">$420.000</div>
+                  <div style="font-size: 0.65rem; color: #008744; font-weight: 700;">6 turnos pagados</div>
+                </div>
+                <div style="background: #112419; border: 1px solid var(--accent-amber); border-radius: 12px; padding: 12px; text-align: center;">
+                  <div style="font-size: 0.7rem; color: #8ba896;">Ocupación Noche</div>
+                  <div style="font-size: 1.35rem; font-weight: 900; color: #fbbf24;">92%</div>
+                  <div style="font-size: 0.65rem; color: #f59e0b; font-weight: 700;">Horas pico llenas</div>
+                </div>
+              </div>
+              <div style="background: #112419; border: 1px solid var(--border-dark); border-radius: 12px; padding: 12px;">
+                <div style="font-size: 0.75rem; font-weight: 800; color: #fff; margin-bottom: 6px;">Próximo Partido en Cancha 1:</div>
+                <div style="font-size: 0.85rem; color: #4ade80; font-weight: 700;">7:00 PM • Carlos Gómez (Nequi Validado)</div>
+              </div>
+            </div>
+          `,
+          customDesktop: `
+            <div style="padding: 30px; height: 100%; display: flex; flex-direction: column; justify-content: center; background: #09150e;">
+              <div style="max-width: 700px; margin: 0 auto; width: 100%; background: #112419; border: 1px solid var(--border-dark); border-radius: 16px; padding: 24px;">
+                <h3 style="font-size: 1.25rem; font-weight: 800; color: #fff; margin-bottom: 14px;">Panel de Rendimiento Deportivo</h3>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;">
+                  <div style="background: rgba(0,0,0,0.3); padding: 14px; border-radius: 10px; border-left: 3px solid #008744;">
+                    <div style="font-size: 0.75rem; color: #8ba896;">Facturación Mes</div>
+                    <div style="font-size: 1.4rem; font-weight: 800; color: #4ade80;">$8.450.000</div>
+                  </div>
+                  <div style="background: rgba(0,0,0,0.3); padding: 14px; border-radius: 10px; border-left: 3px solid var(--accent-amber);">
+                    <div style="font-size: 0.75rem; color: #8ba896;">Ocupación General</div>
+                    <div style="font-size: 1.4rem; font-weight: 800; color: #fbbf24;">88%</div>
+                  </div>
+                  <div style="background: rgba(0,0,0,0.3); padding: 14px; border-radius: 10px; border-left: 3px solid #38bdf8;">
+                    <div style="font-size: 0.75rem; color: #8ba896;">Reservas Confirmadas</div>
+                    <div style="font-size: 1.4rem; font-weight: 800; color: #38bdf8;">124 Partidos</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `
+        },
+        {
+          id: 3,
+          tag: "Paso 3: Validación",
+          title: "Aprobar o Cancelar Reservas con 1 Toque",
+          desc: "Bandeja de verificación de pagos. Revisa el comprobante bancario enviado por el usuario con zoom en alta resolución, comprueba el valor y aprueba el turno al instante.",
+          chips: ["Bandeja de Aprobaciones", "Zoom de Comprobante", "Aprobación Inmediata", "Aviso Push al Jugador"],
+          url: "dashboard/bookings",
+          customMobile: `
+            <div style="padding: 18px; height: 100%; display: flex; flex-direction: column; justify-content: center; background: #0c1a12;">
+              <div style="background: #112419; border: 1px solid var(--accent-amber); border-radius: 14px; padding: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <span class="badge badge-amber">PENDIENTE REVISIÓN</span>
+                  <span style="font-size: 0.75rem; color: #fff; font-weight: 800;">$70.000 COP</span>
+                </div>
+                <div style="font-size: 0.95rem; font-weight: 800; color: #fff; margin-bottom: 2px;">Carlos Gómez (+57 312 889 1234)</div>
+                <div style="font-size: 0.75rem; color: #4ade80; font-weight: 700; margin-bottom: 12px;">Hoy 7:00 PM • Cancha 1 (Los Andes)</div>
+                <div style="background: rgba(0,0,0,0.4); padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 12px; font-size: 0.75rem; color: #8ba896;">
+                  🧾 Comprobante Nequi M-91823 verificado
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <button class="btn btn-cancheros-secondary" style="font-size: 0.75rem; padding: 8px; color: #f87171;">✕ Rechazar</button>
+                  <button class="btn btn-cancheros-primary" style="font-size: 0.75rem; padding: 8px;">✓ Aprobar</button>
+                </div>
+              </div>
+            </div>
+          `,
+          customDesktop: `
+            <div style="padding: 30px; height: 100%; display: flex; flex-direction: column; justify-content: center; background: #09150e;">
+              <div style="max-width: 680px; margin: 0 auto; width: 100%; background: #112419; border: 1px solid var(--border-dark); border-radius: 16px; padding: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: center;">
+                <div>
+                  <span class="badge badge-amber" style="margin-bottom: 8px;">1 PAGO POR VALIDAR</span>
+                  <h4 style="font-size: 1.1rem; font-weight: 800; color: #fff; margin-bottom: 6px;">Carlos Gómez - Cancha 1</h4>
+                  <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 12px;">Fecha: Hoy 7:00 PM a 8:00 PM • $70.000 Nequi</p>
+                  <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-cancheros-primary" style="font-size: 0.8rem; padding: 8px 14px;">Aprobar Turno</button>
+                    <button class="btn btn-cancheros-secondary" style="font-size: 0.8rem; padding: 8px 14px; color: #f87171;">Liberar</button>
+                  </div>
+                </div>
+                <div style="background: rgba(0,0,0,0.4); border-radius: 12px; padding: 14px; text-align: center; border: 1px solid var(--border-dark);">
+                  <div style="font-size: 2.2rem; margin-bottom: 4px;">🧾</div>
+                  <div style="font-size: 0.75rem; color: #4ade80; font-weight: 700;">Captura Nequi Validada</div>
+                </div>
+              </div>
+            </div>
+          `
+        },
+        {
+          id: 4,
+          tag: "Paso 4: Taquilla",
+          title: "Reserva Manual / Turno de Mostrador (Modal)",
+          desc: "¿Un cliente llegó directamente al complejo o llamó a tu celular? El modal de Reserva Manual te permite apartar el horario en 5 segundos para que nadie más lo intente reservar en la web.",
+          chips: ["ManualBookingModal", "Bloqueo en Tiempo Real", "Cobro en Efectivo", "Sincronización Total"],
+          url: "dashboard/bookings/manual",
+          customMobile: `
+            <div style="padding: 18px; height: 100%; display: flex; flex-direction: column; justify-content: center; background: #0c1a12;">
+              <div style="background: #112419; border: 1px solid #008744; border-radius: 14px; padding: 16px;">
+                <div style="font-size: 0.75rem; color: #4ade80; font-weight: 700; margin-bottom: 4px;">RESERVA MANUAL DE MOSTRADOR</div>
+                <div style="font-size: 1rem; font-weight: 800; color: #fff; margin-bottom: 12px;">Bloqueo Rápido de Cancha</div>
+                <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; font-size: 0.8rem;">
+                  <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; color: #fff;">Cliente: Profesor Díaz (Llamada)</div>
+                  <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; color: #4ade80; font-weight: 700;">Hora: 9:00 PM • Pago Efectivo</div>
+                </div>
+                <button class="btn btn-cancheros-primary" style="width: 100%; font-size: 0.8rem; padding: 9px;">Bloquear Turno en la Web</button>
+              </div>
+            </div>
+          `,
+          customDesktop: `
+            <div style="padding: 30px; height: 100%; display: flex; flex-direction: column; justify-content: center; background: #09150e;">
+              <div style="max-width: 600px; margin: 0 auto; width: 100%; background: #112419; border: 1px solid var(--border-dark); border-radius: 16px; padding: 24px;">
+                <h3 style="font-size: 1.25rem; font-weight: 800; color: #fff; margin-bottom: 6px;">Apartado Manual de Cancha</h3>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 16px;">Sincronizado con la base de datos Supabase en tiempo real.</p>
+                <div style="background: rgba(0,0,0,0.3); padding: 14px; border-radius: 10px; margin-bottom: 16px;">
+                  <div style="font-size: 0.85rem; color: #fff; font-weight: 700; margin-bottom: 4px;">Cancha 1 • Sintética Los Andes</div>
+                  <div style="font-size: 0.8rem; color: #4ade80;">Turno 9:00 PM a 10:00 PM bloqueado para clientes presenciales.</div>
+                </div>
+                <button class="btn btn-cancheros-primary">Confirmar Reserva Manual</button>
+              </div>
+            </div>
+          `
+        },
+        {
+          id: 5,
+          tag: "Paso 5: Marketing",
+          title: "Generador de Estados para WhatsApp (9:16)",
+          desc: "El generador oficial de Cancheros en dashboard/status. Crea una pieza gráfica con tu logo y los turnos que te quedan libres hoy para subir a tus estados de WhatsApp con 1 clic y llenar las horas valle.",
+          chips: ["Formato 9:16 Historia", "Paleta Esmeralda Oficial", "Horarios Libres de Hoy", "1 Clic para Compartir"],
+          url: "dashboard/status",
+          customMobile: `
+            <div style="padding: 18px; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #0c1a12;">
+              <div style="width: 210px; height: 290px; background: linear-gradient(135deg, #054D27 0%, #0c1a12 100%); border: 2px solid #008744; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; justify-content: space-between; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.6);">
+                <div>
+                  <div style="font-size: 1rem; font-weight: 900; color: #fff;">LOS ANDES</div>
+                  <div style="font-size: 0.65rem; color: #4ade80; font-weight: 700;">HORARIOS DISPONIBLES HOY</div>
+                </div>
+                <div style="background: rgba(0,0,0,0.5); padding: 8px; border-radius: 8px; font-size: 0.75rem; color: #fff; text-align: left;">
+                  <div>🟢 6:00 PM (Libre)</div>
+                  <div>🟢 9:00 PM (Libre)</div>
+                  <div>🟢 10:00 PM (Libre)</div>
+                </div>
+                <div style="font-size: 0.65rem; color: #8ba896;">cancheros.site ⚽</div>
+              </div>
+              <button class="btn btn-cancheros-primary" style="margin-top: 14px; font-size: 0.75rem; padding: 8px 16px;">📲 Compartir en WhatsApp</button>
+            </div>
+          `,
+          customDesktop: `
+            <div style="padding: 30px; height: 100%; display: flex; flex-direction: column; justify-content: center; background: #09150e;">
+              <div style="max-width: 650px; margin: 0 auto; width: 100%; background: #112419; border: 1px solid var(--border-dark); border-radius: 16px; padding: 24px; display: flex; gap: 24px; align-items: center;">
+                <div style="width: 180px; height: 260px; background: linear-gradient(135deg, #054D27 0%, #008744 100%); border-radius: 12px; padding: 14px; text-align: center; color: #fff; display: flex; flex-direction: column; justify-content: space-between;">
+                  <div style="font-weight: 900; font-size: 1rem;">CANCHEROS</div>
+                  <div style="background: rgba(0,0,0,0.5); padding: 8px; border-radius: 6px; font-size: 0.75rem;">
+                    <div>🟢 6:00 PM</div>
+                    <div>🟢 9:00 PM</div>
+                  </div>
+                  <div style="font-size: 0.7rem;">Pasto, Nariño</div>
+                </div>
+                <div style="flex: 1;">
+                  <h4 style="font-size: 1.2rem; font-weight: 800; color: #fff; margin-bottom: 6px;">Venta de Horas Valle</h4>
+                  <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 14px;">El generador de piezas automáticas incrementa la ocupación nocturna de tus canchas en un 94%.</p>
+                  <button class="btn btn-cancheros-primary">Descargar Estado en Alta Definición</button>
+                </div>
+              </div>
+            </div>
+          `
+        },
+        {
+          id: 6,
+          tag: "Paso 6: Automatización",
+          title: "Mensajes Automáticos por WhatsApp (Evolution API)",
+          desc: "Conecta el WhatsApp oficial de tu complejo escaneando un código QR desde dashboard/whatsapp. El sistema envía automáticamente las confirmaciones, recordatorios 2 horas antes y cobros.",
+          chips: ["Evolution API", "Escaneo de Código QR", "Filtro de Mensajes Personales", "Recordatorios 2h Antes"],
+          url: "dashboard/whatsapp",
+          customMobile: `
+            <div style="padding: 18px; height: 100%; display: flex; flex-direction: column; justify-content: center; background: #0c1a12;">
+              <div style="background: #112419; border: 1px solid #25d366; border-radius: 14px; padding: 16px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                  <div style="width: 10px; height: 10px; border-radius: 50%; background: #25d366;"></div>
+                  <span style="font-size: 0.8rem; font-weight: 800; color: #4ade80;">Evolution API Conectada</span>
+                </div>
+                <div style="font-size: 0.95rem; font-weight: 800; color: #fff; margin-bottom: 6px;">Instancia: +57 318 459 2831</div>
+                <div style="font-size: 0.75rem; color: #8ba896; margin-bottom: 12px;">Confirmaciones automáticas y recordatorios programados en piloto automático.</div>
+                <div style="background: rgba(37, 211, 102, 0.1); border-radius: 8px; padding: 8px; font-size: 0.7rem; color: #4ade80;">
+                  ✓ Filtro de mensajes personales activado
+                </div>
+              </div>
+            </div>
+          `,
+          customDesktop: `
+            <div style="padding: 30px; height: 100%; display: flex; flex-direction: column; justify-content: center; background: #09150e;">
+              <div style="max-width: 650px; margin: 0 auto; width: 100%; background: #112419; border: 1px solid var(--border-dark); border-radius: 16px; padding: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                  <h3 style="font-size: 1.25rem; font-weight: 800; color: #fff;">Conexión WhatsApp Evolution API</h3>
+                  <span style="background: rgba(37,211,102,0.15); color: #25d366; font-size: 0.75rem; font-weight: 800; padding: 4px 10px; border-radius: 999px;">CONECTADO ✓</span>
+                </div>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 16px;">Cada vez que apruebas un comprobante de pago, el cliente recibe el mensaje de confirmación con la ubicación en Google Maps.</p>
+                <button class="btn btn-cancheros-primary">Enviar Mensaje de Prueba</button>
+              </div>
+            </div>
+          `
+        },
+        {
+          id: 7,
+          tag: "Paso 7: Finanzas",
+          title: "Auditoría y Conciliación Financiera",
+          desc: "Cuadre de caja diario discriminando transferencias Nequi, Daviplata y dinero en efectivo. Genera reportes contables sin cruces ni discrepancias.",
+          chips: ["Cierre de Caja Diario", "Nequi vs Daviplata vs Efectivo", "Reportes Descargables", "Cero Descuadres"],
+          url: "dashboard/finanzas",
+          customMobile: `
+            <div style="padding: 18px; height: 100%; display: flex; flex-direction: column; justify-content: center; background: #0c1a12;">
+              <div style="background: #112419; border: 1px solid var(--border-dark); border-radius: 14px; padding: 16px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                  <span style="font-size: 0.8rem; color: #8ba896;">Cierre de Hoy</span>
+                  <span style="font-size: 1.15rem; font-weight: 900; color: #4ade80;">$490.000</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.75rem; color: #cbd5e1; margin-bottom: 12px;">
+                  <div style="display: flex; justify-content: space-between;"><span>💳 Nequi:</span><span>$280.000</span></div>
+                  <div style="display: flex; justify-content: space-between;"><span>💳 Daviplata:</span><span>$140.000</span></div>
+                  <div style="display: flex; justify-content: space-between;"><span>💵 Efectivo en Taquilla:</span><span>$70.000</span></div>
+                </div>
+                <button class="btn btn-cancheros-secondary" style="width: 100%; font-size: 0.75rem; padding: 8px;">Descargar Reporte</button>
+              </div>
+            </div>
+          `,
+          customDesktop: `
+            <div style="padding: 30px; height: 100%; display: flex; flex-direction: column; justify-content: center; background: #09150e;">
+              <div style="max-width: 650px; margin: 0 auto; width: 100%; background: #112419; border: 1px solid var(--border-dark); border-radius: 16px; padding: 24px;">
+                <h3 style="font-size: 1.25rem; font-weight: 800; color: #fff; margin-bottom: 6px;">Conciliación Contable del Mes</h3>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 16px;">Resumen de facturación discriminado por método de pago.</p>
+                <div style="font-size: 1.8rem; font-weight: 900; color: #4ade80; margin-bottom: 16px;">$9.240.000 COP</div>
+                <button class="btn btn-cancheros-primary">Exportar a Excel / PDF</button>
+              </div>
+            </div>
+          `
+        }
+      ]
+    };
+
+    // ESTADO DEL TOUR
+    let currentPersona = 'player';
+    let currentStepIdx = 0;
+    let currentDevice = 'mobile';
+    let isAutoplaying = false;
+    let autoplayInterval = null;
+
+    function initTour() {
+      renderStepList();
+      renderCurrentStep();
+    }
+
+    function setPersona(persona) {
+      if (currentPersona === persona) return;
+      currentPersona = persona;
+      currentStepIdx = 0;
+
+      const tabPlayer = document.getElementById('tab-player');
+      const tabOwner = document.getElementById('tab-owner');
+      const tourBadge = document.getElementById('tour-badge');
+      const progressFill = document.getElementById('tour-progress-bar');
+
+      if (persona === 'player') {
+        tabPlayer.className = 'persona-tab active-player';
+        tabOwner.className = 'persona-tab';
+        tourBadge.className = 'badge badge-cancheros';
+        tourBadge.innerText = '⚽ Modo Jugador: 10 Pasos para Reservar y Competir';
+        progressFill.classList.remove('owner-fill');
+      } else {
+        tabPlayer.className = 'persona-tab';
+        tabOwner.className = 'persona-tab active-owner';
+        tourBadge.className = 'badge badge-amber';
+        tourBadge.innerText = '🏢 Modo Administrador: 7 Pasos de Gestión Integral';
+        progressFill.classList.add('owner-fill');
+      }
+
+      renderStepList();
+      renderCurrentStep();
+    }
+
+    function setDevice(device) {
+      currentDevice = device;
+      const btnMobile = document.getElementById('btn-device-mobile');
+      const btnDesktop = document.getElementById('btn-device-desktop');
+      const phoneContainer = document.getElementById('phone-container');
+      const desktopContainer = document.getElementById('desktop-container');
+
+      if (device === 'mobile') {
+        btnMobile.classList.add('active');
+        btnDesktop.classList.remove('active');
+        phoneContainer.style.display = 'flex';
+        desktopContainer.style.display = 'none';
+      } else {
+        btnMobile.classList.remove('active');
+        btnDesktop.classList.add('active');
+        phoneContainer.style.display = 'none';
+        desktopContainer.style.display = 'flex';
+      }
+
+      renderCurrentStep();
+    }
+
+    function renderStepList() {
+      const container = document.getElementById('steps-container');
+      const steps = tourData[currentPersona];
+      const activeClass = currentPersona === 'player' ? 'active' : 'active-owner';
+
+      container.innerHTML = steps.map((step, idx) => `
+        <div class="step-item ${idx === currentStepIdx ? activeClass : ''}" onclick="goToStep(${idx})">
+          <div class="step-num">${step.id}</div>
+          <div style="flex: 1;">
+            <div style="font-size: 0.75rem; color: ${currentPersona === 'player' ? '#4ade80' : '#fbbf24'}; font-weight: 700; margin-bottom: 2px;">
+              ${step.tag}
+            </div>
+            <div style="font-size: 0.95rem; font-weight: 700; color: #fff;">
+              ${step.title}
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderCurrentStep() {
+      const steps = tourData[currentPersona];
+      const step = steps[currentStepIdx];
+      const totalSteps = steps.length;
+
+      document.getElementById('step-counter-text').innerText = `${currentStepIdx + 1} / ${totalSteps}`;
+      document.getElementById('detail-tag').innerText = step.tag;
+      document.getElementById('detail-tag').className = currentPersona === 'player' ? 'badge badge-cancheros' : 'badge badge-amber';
+      document.getElementById('detail-title').innerText = step.title;
+      document.getElementById('detail-desc').innerText = step.desc;
+      document.getElementById('desktop-url-path').innerText = step.url;
+
+      const chipsContainer = document.getElementById('detail-chips');
+      chipsContainer.innerHTML = step.chips.map(chip => `
+        <span class="glass-pill" style="font-size: 0.75rem; padding: 0.25rem 0.65rem; color: #dce7de; border: 1px solid var(--border-dark);">
+          ✓ ${chip}
+        </span>
+      `).join('');
+
+      const progressPercent = ((currentStepIdx + 1) / totalSteps) * 100;
+      document.getElementById('tour-progress-bar').style.width = `${progressPercent}%`;
+
+      const phoneScreen = document.getElementById('phone-screen-content');
+      const desktopScreen = document.getElementById('desktop-screen-content');
+
+      // RENDERIZADO MÓVIL
+      if (step.mobileImg) {
+        const resolvedMobile = resolvePath(step.mobileImg);
+        const hotspotsHtml = (step.hotspots || []).map(h => {
+          const posStyle = Object.entries(h).filter(([k]) => k !== 'text').map(([k, v]) => `${k}:${v}`).join(';');
+          return `<div class="hotspot-pill" style="${posStyle}"><span>●</span> ${h.text}</div>`;
+        }).join('');
+
+        phoneScreen.innerHTML = `
+          <div class="mockup-img-wrapper">
+            <img src="${resolvedMobile}" alt="${step.title}" class="mockup-real-img" loading="eager" onerror="handleImageError(this, '${step.title}')">
+            ${hotspotsHtml}
+          </div>
+        `;
+      } else {
+        phoneScreen.innerHTML = step.customMobile || '';
+      }
+
+      // RENDERIZADO ESCRITORIO
+      if (step.desktopImg) {
+        const resolvedDesktop = resolvePath(step.desktopImg);
+        const hotspotsHtml = (step.hotspots || []).map(h => {
+          const posStyle = Object.entries(h).filter(([k]) => k !== 'text').map(([k, v]) => `${k}:${v}`).join(';');
+          return `<div class="hotspot-pill" style="${posStyle}"><span>●</span> ${h.text}</div>`;
+        }).join('');
+
+        desktopScreen.innerHTML = `
+          <div class="mockup-img-wrapper" style="overflow-y: auto;">
+            <img src="${resolvedDesktop}" alt="${step.title}" class="mockup-real-img" loading="eager" onerror="handleImageError(this, '${step.title}')">
+            ${hotspotsHtml}
+          </div>
+        `;
+      } else {
+        desktopScreen.innerHTML = step.customDesktop || '';
+      }
+
+      const stepItems = document.querySelectorAll('.step-item');
+      const activeClass = currentPersona === 'player' ? 'active' : 'active-owner';
+      stepItems.forEach((el, idx) => {
+        el.className = `step-item ${idx === currentStepIdx ? activeClass : ''}`;
+      });
+    }
+
+    function handleImageError(imgEl, title) {
+      console.warn("Fallback de imagen ejecutado para:", title);
+      imgEl.parentElement.innerHTML = `
+        <div style="padding: 30px; text-align: center; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 400px;">
+          <div style="font-size: 3rem; margin-bottom: 10px;">⚽</div>
+          <div style="font-size: 1.1rem; font-weight: 800; color: #fff; margin-bottom: 6px;">${title}</div>
+          <div style="font-size: 0.8rem; color: #4ade80;">Plataforma Oficial Cancheros Pasto</div>
+        </div>
+      `;
+    }
+
+    function goToStep(idx) {
+      currentStepIdx = idx;
+      renderCurrentStep();
+    }
+
+    function nextStep() {
+      const steps = tourData[currentPersona];
+      currentStepIdx = (currentStepIdx + 1) % steps.length;
+      renderCurrentStep();
+    }
+
+    function prevStep() {
+      const steps = tourData[currentPersona];
+      currentStepIdx = (currentStepIdx - 1 + steps.length) % steps.length;
+      renderCurrentStep();
+    }
+
+    function toggleAutoplay() {
+      isAutoplaying = !isAutoplaying;
+      const icon = document.getElementById('autoplay-icon');
+      const text = document.getElementById('autoplay-text');
+
+      if (isAutoplaying) {
+        icon.innerText = '⏸';
+        text.innerText = 'Pausar';
+        autoplayInterval = setInterval(nextStep, 5000);
+      } else {
+        icon.innerText = '▶';
+        text.innerText = 'Auto Tour';
+        clearInterval(autoplayInterval);
+      }
+    }
+
+    // LIGHTBOX FULLSCREEN PREVIEW
+    function openLightbox() {
+      const steps = tourData[currentPersona];
+      const step = steps[currentStepIdx];
+      const modal = document.getElementById('lightbox-modal');
+      const title = document.getElementById('lightbox-title');
+      const body = document.getElementById('lightbox-body');
+
+      title.innerText = `${step.tag}: ${step.title}`;
+      
+      const imgPath = currentDevice === 'mobile' 
+        ? (step.mobileImg || step.desktopImg) 
+        : (step.desktopImg || step.mobileImg);
+
+      if (imgPath) {
+        const resolved = resolvePath(imgPath);
+        body.innerHTML = `
+          <img src="${resolved}" style="max-width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--border-dark); box-shadow: 0 10px 30px rgba(0,0,0,0.8);" alt="${step.title}">
+        `;
+      } else {
+        body.innerHTML = currentDevice === 'mobile' ? (step.customMobile || '') : (step.customDesktop || '');
+      }
+
+      modal.classList.add('active');
+    }
+
+    function closeLightbox(e) {
+      const modal = document.getElementById('lightbox-modal');
+      modal.classList.remove('active');
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') nextStep();
+      if (e.key === 'ArrowLeft') prevStep();
+      if (e.key === 'Escape') closeLightbox();
+    });
+
+    window.addEventListener('DOMContentLoaded', initTour);
+  </script>
+</body>
+</html>

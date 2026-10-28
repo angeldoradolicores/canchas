@@ -269,17 +269,19 @@ export function ManualBookingModal({
     }
   };
 
-  // Días disponibles para seleccionar
+  // Días disponibles – para el panel del dueño incluimos también días pasados (hasta 30 días atrás)
   const nextDays = useMemo(() => {
     if (!today) return [];
     const days = [];
     const base = new Date(today + 'T12:00:00');
-    for (let i = 0; i < 21; i++) {
+    // 30 días hacia atrás + 30 días hacia futuro
+    for (let i = -30; i < 30; i++) {
       const d = new Date(base);
       d.setDate(base.getDate() + i);
       const dateStr = d.toISOString().split('T')[0];
-      const dayName = i === 0 ? 'Hoy' : d.toLocaleDateString('es-CO', { weekday: 'short' });
-      days.push({ dateStr, dayName, dayNumber: d.getDate(), monthName: d.toLocaleDateString('es-CO', { month: 'short' }), isToday: i === 0 });
+      const isToday = i === 0;
+      const dayName = isToday ? 'Hoy' : d.toLocaleDateString('es-CO', { weekday: 'short' });
+      days.push({ dateStr, dayName, dayNumber: d.getDate(), monthName: d.toLocaleDateString('es-CO', { month: 'short' }), isToday });
     }
     return days;
   }, [today]);
@@ -387,16 +389,11 @@ export function ManualBookingModal({
               <button
                 type="button"
                 onClick={() => {
-                  const allAvailable = TIME_CATEGORIES
+                  // Dueño puede reservar TODOS los slots operativos sin importar si están tomados
+                  const allOperating = TIME_CATEGORIES
                     .flatMap(cat => cat.slots as unknown as string[])
-                    .filter(slot => {
-                      if (allowedSlots && !allowedSlots.includes(slot)) return false;
-                      const slotData = takenSlots.get(slot);
-                      if (!slotData) return true;
-                      if (slotData.status === 'draft' && slotData.expires_at && new Date(slotData.expires_at) < new Date()) return true;
-                      return false;
-                    });
-                  setSelectedTimes(allAvailable);
+                    .filter(slot => !allowedSlots || allowedSlots.includes(slot));
+                  setSelectedTimes(allOperating);
                 }}
                 className="text-[11px] font-bold text-primary hover:underline"
               >

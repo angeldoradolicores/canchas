@@ -53,6 +53,14 @@ const nextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: '/tour',
+        destination: '/tour.html',
+      },
+    ];
+  },
 };
 
 export default nextConfig

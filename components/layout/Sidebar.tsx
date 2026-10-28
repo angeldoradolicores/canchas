@@ -14,7 +14,8 @@ import {
   Trophy,
   User,
   Swords,
-  GraduationCap
+  GraduationCap,
+  Sparkles
 } from 'lucide-react';
 import { Logo } from './Logo';
 import Link from 'next/link';
@@ -32,6 +33,7 @@ export function Sidebar() {
     ['Retos y Jugadores', Swords, '/community'],
     ['Campeonatos', Trophy, '/tournaments'],
     ['Escuelas de fútbol', GraduationCap, '/schools'],
+    ['Tour del Producto', Sparkles, '/tour.html'],
     ['Mi perfil', User, '/profile'],
   ] as const;
 

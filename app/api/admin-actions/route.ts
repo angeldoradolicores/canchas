@@ -477,6 +477,9 @@ export async function POST(req: NextRequest) {
       }
 
       const { pitch_id, selected_date, selected_times, customer_name, customer_phone } = validation.data;
+      // Campos adicionales opcionales (no requieren validación estricta)
+      const note = typeof payload?.note === 'string' ? payload.note.slice(0, 500) : undefined;
+      const isContract = !!payload?.is_contract;
 
       // Verificar que la cancha le pertenece al dueño
       const isOwner = await verifyPitchOwnership(ownerId, pitch_id);
@@ -484,21 +487,23 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'No tienes permisos para agendar en esta cancha' }, { status: 403 });
       }
 
-      // Verify that all selected slots are operating hours
-      const { data: pitchData } = await supabase
-        .from('pitches')
-        .select('custom_pricing')
-        .eq('id', pitch_id)
-        .single();
+      // Verificar slots operativos – los contratos y reservas de todo el día omiten este chequeo
+      if (!isContract) {
+        const { data: pitchData } = await supabase
+          .from('pitches')
+          .select('custom_pricing')
+          .eq('id', pitch_id)
+          .single();
 
-      const allowedSlots = pitchData?.custom_pricing?.time_slots;
-      if (Array.isArray(allowedSlots) && allowedSlots.length > 0) {
-        const closedSlot = selected_times.find((s: string) => !allowedSlots.includes(s));
-        if (closedSlot) {
-          return NextResponse.json(
-            { error: `La hora ${closedSlot} no es operable para esta cancha.` },
-            { status: 400 }
-          );
+        const allowedSlots = pitchData?.custom_pricing?.time_slots;
+        if (Array.isArray(allowedSlots) && allowedSlots.length > 0) {
+          const closedSlot = selected_times.find((s: string) => !allowedSlots.includes(s));
+          if (closedSlot) {
+            return NextResponse.json(
+              { error: `La hora ${closedSlot} no es operable para esta cancha.` },
+              { status: 400 }
+            );
+          }
         }
       }
 
@@ -514,6 +519,8 @@ export async function POST(req: NextRequest) {
           status: 'confirmed',
           payment_status: 'verified',
           source: 'owner_panel',
+          ...(note ? { note } : {}),
+          ...(isContract ? { booking_type: 'contract' } : {}),
         };
       });
 
