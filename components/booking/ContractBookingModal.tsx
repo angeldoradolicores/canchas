@@ -8,7 +8,6 @@ import {
   Clock,
   User,
   Phone,
-  IdCard,
   StickyNote,
   ChevronRight,
   Check,
@@ -120,7 +119,6 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
   // Cliente
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [customerDoc, setCustomerDoc] = useState('');
   const [customerNote, setCustomerNote] = useState('');
 
   // Envío
@@ -176,13 +174,22 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
       const token = sessData?.session?.access_token;
       if (!token) throw new Error('No autorizado');
 
-      const contractTag = `[CONTRATO FIJO · ${DAYS_OF_WEEK.filter(d => selectedDays.includes(d.key)).map(d => d.full).join(', ')} · ${selectedSlots.map(fmt12).join(', ')}]`;
-      const noteWithTag = `${contractTag}${customerDoc ? ` · CC: ${customerDoc}` : ''}${customerNote ? ` · ${customerNote}` : ''}`;
+      const daysText = DAYS_OF_WEEK.filter(d => selectedDays.includes(d.key)).map(d => d.label).join(', ');
+      const slotsText = selectedSlots.map(fmt12).join(', ');
+      // Nombre que identifica claramente el contrato en la base de datos y calendario
+      const contractCustomerName = `${customerName.trim()} [Contrato: ${daysText} ${slotsText}]`;
+      const contractTag = `[CONTRATO FIJO · ${DAYS_OF_WEEK.filter(d => selectedDays.includes(d.key)).map(d => d.full).join(', ')} · ${slotsText}]`;
+      const noteWithTag = `${contractTag}${customerNote ? ` · ${customerNote}` : ''}`;
 
-      // Enviar fechas en lotes de 20 para no saturar
+      // Enviar fechas con feedback de progreso interactivo
       const BATCH = 20;
       let totalCreated = 0;
-      for (const date of allDates) {
+      let totalSkipped = 0;
+
+      for (let dIdx = 0; dIdx < allDates.length; dIdx++) {
+        const date = allDates[dIdx];
+        setSuccessMsg(`Guardando reservas (${dIdx + 1}/${allDates.length} fechas)...`);
+
         for (let i = 0; i < selectedSlots.length; i += BATCH) {
           const slotsBatch = selectedSlots.slice(i, i + BATCH);
           const res = await fetch('/api/admin-actions', {
@@ -197,7 +204,7 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
                 pitch_id: selectedPitch.id,
                 date,
                 selected_times: slotsBatch,
-                customer_name: customerName,
+                customer_name: contractCustomerName,
                 customer_phone: customerPhone,
                 note: noteWithTag,
                 is_contract: true,
@@ -207,14 +214,24 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
           const data = await res.json();
           if (res.ok && data.success) {
             totalCreated += (data.booking_ids?.length || 0);
-          } else if (data.error && !data.error.includes('ocupad')) {
-            // Ignorar conflictos de horas ya ocupadas silenciosamente
-            console.warn('[ContractBooking] Slot error:', date, slotsBatch, data.error);
+            if (data.skipped_conflicts?.length) {
+              totalSkipped += data.skipped_conflicts.length;
+            }
+          } else {
+            console.warn('[ContractBooking] Slot warning en fecha:', date, slotsBatch, data.error);
           }
         }
       }
 
-      setSuccessMsg(`✅ Contrato creado: ${totalCreated} reserva${totalCreated !== 1 ? 's' : ''} registradas para ${customerName}`);
+      if (totalCreated === 0) {
+        throw new Error('No se pudo guardar ninguna reserva. Los horarios seleccionados podrían estar ya ocupados.');
+      }
+
+      const finishMsg = totalSkipped > 0
+        ? `✅ Contrato guardado: ${totalCreated} reservas confirmadas (${totalSkipped} omitidas por cruce de horario).`
+        : `✅ Contrato guardado: ${totalCreated} reservas registradas con éxito para ${customerName}`;
+
+      setSuccessMsg(finishMsg);
       setTimeout(() => {
         onSuccess();
       }, 1800);
@@ -223,7 +240,7 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
     } finally {
       setLoading(false);
     }
-  }, [selectedPitch, selectedDays, selectedSlots, customerName, customerPhone, customerDoc, customerNote, allDates, supabase]);
+  }, [selectedPitch, selectedDays, selectedSlots, customerName, customerPhone, customerNote, allDates, supabase, onSuccess]);
 
   // ── Navegación entre pasos ──────────────────────────────────────────────────
 
@@ -490,19 +507,6 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
 
               <div>
                 <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1.5">
-                  <IdCard size={12} /> Cédula / Documento
-                </label>
-                <input
-                  type="text"
-                  value={customerDoc}
-                  onChange={e => setCustomerDoc(e.target.value)}
-                  placeholder="Número de cédula"
-                  className="w-full border border-border bg-card rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1.5">
                   <StickyNote size={12} /> Notas del contrato
                 </label>
                 <textarea
@@ -567,7 +571,6 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
                     <p className="text-[11px] font-bold text-muted-foreground uppercase">Cliente</p>
                     <p className="font-black text-foreground">{customerName}</p>
                     {customerPhone && <p className="text-xs text-muted-foreground">{customerPhone}</p>}
-                    {customerDoc && <p className="text-xs text-muted-foreground">CC: {customerDoc}</p>}
                     {customerNote && <p className="text-xs italic text-muted-foreground mt-0.5">"{customerNote}"</p>}
                   </div>
                 </div>

@@ -88,28 +88,6 @@ const PERIOD_OPTIONS: PeriodOption[] = [
   { key: 'custom', label: 'Personalizado', short: 'fecha libre', getDays: () => 0 },
 ];
 
-const PAYMENT_LABELS: Record<string, string> = {
-  nequi: 'Nequi',
-  daviplata: 'Daviplata',
-  bancolombia: 'Bancolombia',
-  cash: 'Efectivo',
-  efectivo: 'Efectivo',
-  transfer: 'Transferencia',
-  transferencia: 'Transferencia',
-  other: 'Otro',
-};
-
-const PAYMENT_COLORS: Record<string, string> = {
-  nequi: '#9333ea',
-  daviplata: '#dc2626',
-  bancolombia: '#008744',
-  cash: '#f59e0b',
-  efectivo: '#f59e0b',
-  transfer: '#3b82f6',
-  transferencia: '#3b82f6',
-  other: '#6b7280',
-};
-
 // ─── Mini progress bar ────────────────────────────────────────────────────────
 
 function ProgressBar({ value, max, color = '#008744' }: { value: number; max: number; color?: string }) {
@@ -194,20 +172,6 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
 
   const maxHourCount = byHour.reduce((m, h) => Math.max(m, h.count), 0);
 
-  // Por método de pago
-  const byPayment = useMemo(() => {
-    const map: Record<string, number> = {};
-    confirmedOnly.forEach(b => {
-      const method = (b.payment_method || 'other').toLowerCase();
-      map[method] = (map[method] || 0) + (b.total_price || b.pitches?.price_per_hour || 0);
-    });
-    return Object.entries(map)
-      .map(([method, revenue]) => ({ method, revenue, label: PAYMENT_LABELS[method] || method }))
-      .sort((a, b) => b.revenue - a.revenue);
-  }, [confirmedOnly]);
-
-  const maxPaymentRevenue = byPayment.reduce((m, p) => Math.max(m, p.revenue), 0);
-
   // Pending
   const pendingCount = useMemo(() => filtered.filter(b => b.status === 'pending').length, [filtered]);
 
@@ -235,13 +199,7 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
       </tr>
     `).join('');
 
-    const paymentRows = byPayment.map(p => `
-      <tr style="border-bottom:1px solid #e5e7eb;">
-        <td style="padding:8px 12px;font-weight:700;">${p.label}</td>
-        <td style="padding:8px 12px;text-align:right;font-weight:700;color:#008744;">${formatCOP(p.revenue)}</td>
-        <td style="padding:8px 12px;text-align:right;color:#6b7280;">${pct(p.revenue, totalRevenue)}</td>
-      </tr>
-    `).join('');
+    const logoUrl = typeof window !== 'undefined' ? `${window.location.origin}/cancheros.png` : '/cancheros.png';
 
     const html = `<!DOCTYPE html>
 <html lang="es">
@@ -252,6 +210,8 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', Arial, sans-serif; color: #111; background: #fff; padding: 32px; }
     .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; padding-bottom: 18px; border-bottom: 3px solid #008744; }
+    .brand-box { display: flex; align-items: center; gap: 14px; }
+    .logo-img { height: 48px; max-width: 130px; object-fit: contain; }
     .logo { font-size: 24px; font-weight: 900; color: #054D27; }
     .logo span { color: #008744; }
     .subtitle { font-size: 12px; color: #6b7280; margin-top: 2px; }
@@ -276,9 +236,12 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
 </head>
 <body>
   <div class="header">
-    <div>
-      <div class="logo">Canch<span>eros</span></div>
-      <div class="subtitle">${companyName || 'Panel de Dueño'} · Reporte ${periodLabel}</div>
+    <div class="brand-box">
+      <img src="${logoUrl}" alt="Cancheros" class="logo-img" onerror="this.style.display='none'" />
+      <div>
+        <div class="logo">Canch<span>eros</span></div>
+        <div class="subtitle">${companyName || 'Panel de Dueño'} · Reporte ${periodLabel}</div>
+      </div>
     </div>
     <div class="meta">
       <div><strong>Período:</strong> ${dateRange}</div>
@@ -323,15 +286,6 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
     </table>
   </div>` : ''}
 
-  ${byPayment.length > 0 ? `
-  <div class="section">
-    <div class="section-title">💳 Recaudo por Método de Pago</div>
-    <table>
-      <thead><tr><th>Método</th><th>Recaudo</th><th>% Total</th></tr></thead>
-      <tbody>${paymentRows}</tbody>
-    </table>
-  </div>` : ''}
-
   ${depositRevenue > 0 ? `
   <div class="section">
     <div class="section-title">💰 Anticipos Recaudados</div>
@@ -355,7 +309,7 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
     win.document.write(html);
     win.document.close();
     setTimeout(() => { win.focus(); win.print(); }, 400);
-  }, [period, from, to, confirmedOnly, byCourt, byHour, byPayment, totalRevenue, depositRevenue, pendingCount, pitches, companyName, filtered.length]);
+  }, [period, from, to, confirmedOnly, byCourt, byHour, totalRevenue, depositRevenue, pendingCount, pitches, companyName, filtered.length]);
 
   if (!isOpen) return null;
 
@@ -368,18 +322,21 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0 bg-card">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#008744]/15 rounded-xl">
-              <BarChart3 size={20} className="text-[#008744]" />
+            <div className="h-10 w-10 rounded-xl bg-card border border-border flex items-center justify-center p-1 overflow-hidden shadow-sm shrink-0">
+              <img src="/cancheros.png" alt="Cancheros" className="h-full w-full object-contain" />
             </div>
             <div>
-              <h2 className="text-base font-black text-foreground">Reporte de Gestión</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-black text-foreground">Reporte de Gestión</h2>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-[#008744]/15 text-[#008744]">Cancheros</span>
+              </div>
               <p className="text-xs text-muted-foreground">{companyName || 'Tu Complejo'} · Analítica de reservas</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleDownloadPDF}
-              className="flex items-center gap-1.5 px-3 py-2 bg-[#054D27] hover:bg-[#043d20] text-white text-xs font-bold rounded-xl transition-all"
+              className="flex items-center gap-1.5 px-3 py-2 bg-[#054D27] hover:bg-[#043d20] text-white text-xs font-bold rounded-xl transition-all shadow-sm"
             >
               <Download size={14} /> Descargar PDF
             </button>
@@ -529,33 +486,6 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
                     </div>
                     <span className="text-xs font-bold text-muted-foreground w-20 text-right shrink-0">
                       {h.count} reservas
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Por método de pago */}
-          {byPayment.length > 0 && (
-            <div>
-              <h3 className="text-sm font-black text-foreground flex items-center gap-2 mb-3">
-                <span>💳</span> Recaudo por Método de Pago
-              </h3>
-              <div className="space-y-2.5">
-                {byPayment.map(p => (
-                  <div key={p.method} className="flex items-center gap-3">
-                    <span
-                      className="w-20 text-xs font-black shrink-0"
-                      style={{ color: PAYMENT_COLORS[p.method] || '#6b7280' }}
-                    >
-                      {p.label}
-                    </span>
-                    <div className="flex-1">
-                      <ProgressBar value={p.revenue} max={maxPaymentRevenue} color={PAYMENT_COLORS[p.method] || '#6b7280'} />
-                    </div>
-                    <span className="text-xs font-bold text-muted-foreground w-28 text-right shrink-0">
-                      {formatCOP(p.revenue)} ({pct(p.revenue, totalRevenue)})
                     </span>
                   </div>
                 ))}

@@ -40,6 +40,9 @@ function computeSlotIsoTimes(selectedDate: string, slot: string) {
   return { startIso, endIso };
 }
 
+// Caché en memoria para verificar si la BD tiene columnas 'note' y 'booking_type'
+let _supportsContractColumns: boolean | null = null;
+
 export async function POST(req: NextRequest) {
   // ── 1. RATE LIMITING: 40 peticiones por minuto ──
   const rateLimit = checkRateLimit(req, {
@@ -507,25 +510,42 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Mapeo seguro: base nativa garantizada + versión extendida si la BD tiene las columnas
       const inserts = selected_times.map((slot: string) => {
         const { startIso, endIso } = computeSlotIsoTimes(selected_date, slot);
         return {
-          pitch_id,
-          user_id: ownerId,
-          customer_name: customer_name || 'Reserva Interna',
-          customer_phone: customer_phone || '',
+          base: {
+            pitch_id,
+            user_id: ownerId,
+            customer_name: customer_name || 'Reserva Interna',
+            customer_phone: customer_phone || '',
+            start_time: startIso,
+            end_time: endIso,
+            status: 'confirmed',
+            payment_status: 'verified',
+            source: 'owner_panel',
+          },
+          extended: {
+            pitch_id,
+            user_id: ownerId,
+            customer_name: customer_name || 'Reserva Interna',
+            customer_phone: customer_phone || '',
+            start_time: startIso,
+            end_time: endIso,
+            status: 'confirmed',
+            payment_status: 'verified',
+            source: 'owner_panel',
+            ...(note ? { note } : {}),
+            ...(isContract ? { booking_type: 'contract' } : {}),
+          },
           start_time: startIso,
           end_time: endIso,
-          status: 'confirmed',
-          payment_status: 'verified',
-          source: 'owner_panel',
-          ...(note ? { note } : {}),
-          ...(isContract ? { booking_type: 'contract' } : {}),
         };
       });
 
       const conflictingPitchIds = await fetchConflictingPitchIds(supabase, pitch_id);
       const createdBookings: any[] = [];
+      const skippedConflicts: any[] = [];
 
       for (const item of inserts) {
         // Verificar conflictos en la cancha actual y canchas combinadas/hijas vinculadas
@@ -542,6 +562,10 @@ export async function POST(req: NextRequest) {
         });
 
         if (activeConflict) {
+          if (isContract) {
+            skippedConflicts.push({ slot: item.start_time, reason: 'Hora ya ocupada' });
+            continue;
+          }
           const isLinked = activeConflict.pitch_id !== pitch_id;
           return NextResponse.json(
             {
@@ -566,6 +590,10 @@ export async function POST(req: NextRequest) {
               .single();
 
             if (draftRow?.expires_at && new Date(draftRow.expires_at) > new Date()) {
+              if (isContract) {
+                skippedConflicts.push({ slot: item.start_time, reason: 'Hora en proceso por otro usuario' });
+                continue;
+              }
               return NextResponse.json(
                 { error: `La hora ${item.start_time.substring(11, 16)} está siendo reservada por otro usuario.` },
                 { status: 400 }
@@ -577,10 +605,10 @@ export async function POST(req: NextRequest) {
           const { data: updated, error: updateErr } = await supabase
             .from('bookings')
             .update({
-              user_id: item.user_id,
-              customer_name: item.customer_name,
-              customer_phone: item.customer_phone,
-              end_time: item.end_time,
+              user_id: item.base.user_id,
+              customer_name: item.base.customer_name,
+              customer_phone: item.base.customer_phone,
+              end_time: item.base.end_time,
               status: 'confirmed',
               payment_status: 'verified',
               source: 'owner_panel',
@@ -592,20 +620,47 @@ export async function POST(req: NextRequest) {
             .single();
 
           if (updateErr) {
+            if (isContract) {
+              skippedConflicts.push({ slot: item.start_time, reason: updateErr.message });
+              continue;
+            }
             return NextResponse.json(safeServerErrorResponse(updateErr, 'Error al actualizar la reserva.'), { status: 500 });
           }
           if (updated) createdBookings.push(updated);
         } else {
-          // Insertar nueva reserva
-          const { data: inserted, error: insertErr } = await supabase
+          // Insertar nueva reserva con manejo dinámico de schema de columnas
+          let payloadToInsert = (_supportsContractColumns === false) ? item.base : item.extended;
+          let { data: inserted, error: insertErr } = await supabase
             .from('bookings')
-            .insert(item)
+            .insert(payloadToInsert)
             .select()
             .single();
 
+          // Si falla porque las columnas note o booking_type no existen en Supabase (PGRST204), fallback seguro
+          if (insertErr && insertErr.code === 'PGRST204') {
+            _supportsContractColumns = false;
+            const retry = await supabase
+              .from('bookings')
+              .insert(item.base)
+              .select()
+              .single();
+            inserted = retry.data;
+            insertErr = retry.error;
+          } else if (!insertErr && _supportsContractColumns === null) {
+            _supportsContractColumns = true;
+          }
+
           if (insertErr) {
             if (insertErr.code === '23505') {
+              if (isContract) {
+                skippedConflicts.push({ slot: item.start_time, reason: 'Hora ya ocupada' });
+                continue;
+              }
               return NextResponse.json({ error: `La hora ${item.start_time.substring(11, 16)} ya está ocupada.` }, { status: 400 });
+            }
+            if (isContract) {
+              skippedConflicts.push({ slot: item.start_time, reason: insertErr.message });
+              continue;
             }
             return NextResponse.json(safeServerErrorResponse(insertErr, 'Error al crear la reserva.'), { status: 500 });
           }
@@ -613,7 +668,12 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      return NextResponse.json({ success: true, data: createdBookings, booking_ids: createdBookings.map(b => b.id) });
+      return NextResponse.json({
+        success: true,
+        data: createdBookings,
+        booking_ids: createdBookings.map(b => b.id),
+        skipped_conflicts: skippedConflicts,
+      });
     }
 
     // ── 9. ACCIÓN: GET_DASHBOARD_STATS ──
