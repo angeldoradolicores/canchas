@@ -59,6 +59,9 @@ export async function sendEvolutionWhatsAppText(instanceName: string, toPhone: s
   const tryInstances = [instanceName];
   if (instanceName.toLowerCase() !== instanceName) tryInstances.push(instanceName.toLowerCase());
   if (instanceName.toUpperCase() !== instanceName) tryInstances.push(instanceName.charAt(0).toUpperCase() + instanceName.slice(1));
+  if (CENTRAL_WHATSAPP_INSTANCE && !tryInstances.includes(CENTRAL_WHATSAPP_INSTANCE)) {
+    tryInstances.push(CENTRAL_WHATSAPP_INSTANCE);
+  }
 
   for (const inst of [...new Set(tryInstances)]) {
     try {
@@ -77,7 +80,7 @@ export async function sendEvolutionWhatsAppText(instanceName: string, toPhone: s
           },
           text: text,
         }),
-        signal: AbortSignal.timeout(7000),
+        signal: AbortSignal.timeout(4500),
       });
 
       if (res.ok) return true;
@@ -105,6 +108,9 @@ export async function sendEvolutionWhatsAppMedia(
   const tryInstances = [instanceName];
   if (instanceName.toLowerCase() !== instanceName) tryInstances.push(instanceName.toLowerCase());
   if (instanceName.toUpperCase() !== instanceName) tryInstances.push(instanceName.charAt(0).toUpperCase() + instanceName.slice(1));
+  if (CENTRAL_WHATSAPP_INSTANCE && !tryInstances.includes(CENTRAL_WHATSAPP_INSTANCE)) {
+    tryInstances.push(CENTRAL_WHATSAPP_INSTANCE);
+  }
 
   for (const inst of [...new Set(tryInstances)]) {
     try {
@@ -126,7 +132,7 @@ export async function sendEvolutionWhatsAppMedia(
             presence: 'available',
           },
         }),
-        signal: AbortSignal.timeout(9000),
+        signal: AbortSignal.timeout(6000),
       });
 
       if (res.ok) return true;
@@ -242,12 +248,13 @@ export async function notifyBookingSubmitted(bookingId: string) {
 
     // ── A) MENSAJE AL CLIENTE: confirmación de recepción de comprobante ──
     const customerMsg =
-      `*¡Recibimos tu comprobante!*\n\n` +
-      // `${company_name}\n` +
-      // `${pitchNameCombined}\n` +
-      // `*Fecha:* ${fechaCorta}\n` +
-      // `*Horario:* ${horasStr}\n\n` +
-      `Tu reserva quedó en revisión. El dueño está validando tu comprobante y te notificaremos apenas sea aprobada 🙌`;
+      `✅ *¡Recibimos tu comprobante!*\n\n` +
+      `🏟️ *${company_name}*\n` +
+      `⚽ *${pitchNameCombined}*\n` +
+      `📅 *Fecha:* ${fechaCorta}\n` +
+      `⏰ *Horario:* ${horasStr}\n` +
+      `🎫 *Ref:* #${shortId}\n\n` +
+      `Tu reserva quedó en revisión. El dueño está validando tu comprobante y te notificaremos inmediatamente apenas sea aprobada 🙌`;
 
     // ── B) RESOLVER DESTINATARIOS DEL DUEÑO (PRIORIZANDO SU TELÉFONO PERSONAL) ──
     const targetOwnerPhones = new Set<string>();
@@ -428,22 +435,25 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
     if (newStatus === 'confirmed') {
       // ── TICKET DIGITAL DE RESERVA (Diseño visual y estructurado) ──
       const ticketMsg =
-        `✅ *RESERVA CONFIRMADA*\n\n` +
-        `${company.name.toUpperCase()}\n` +
-        `${pitchNames.toUpperCase()}\n` +
+        `🎉 *¡TU RESERVA FUE CONFIRMADA!*\n\n` +
+        `🏟️ *${company.name.toUpperCase()}*\n` +
+        `⚽ *${pitchNames.toUpperCase()}*\n` +
         `📅 *FECHA:* ${fechaLarga}\n` +
         `⏰ *${siblingBookings.length > 1 ? 'HORARIOS RESERVADOS:' : 'HORARIO:'}* ${horasStr}\n` +
-        // `📍 *DIRECCIÓN:* ${address}\n` +
-        `📍 *VER EN MAPS:* <${mapsUrl}>\n`;
+        `🎫 *REF:* #${shortId}\n` +
+        (loc.address ? `📍 *DIRECCIÓN:* ${loc.address}\n` : '') +
+        `🗺️ *VER EN MAPS:* ${mapsUrl}\n\n` +
+        `Presenta este mensaje al llegar al complejo. ¡Nos vemos en la cancha! ⚽🏆`;
       await sendEvolutionWhatsAppText(instanceName, b.customer_phone, ticketMsg);
     } else {
       // ── RESERVA DECLINADA / CANCELADA ──
       const cancelMsg =
-        `❌ *RESERVA DECLINADA / CANCELADA*\n\n` +
-        `${company.name}\n` +
-        `${pitchNames}\n` +
+        `❌ *RESERVA RECHAZADA / CANCELADA*\n\n` +
+        `🏟️ *${company.name}*\n` +
+        `⚽ *${pitchNames}*\n` +
         `📅 *FECHA:* ${fechaLarga}\n` +
-        `⏰ *${siblingBookings.length > 1 ? 'HORARIOS:' : 'HORARIO:'}* ${horasStr}\n\n` +
+        `⏰ *${siblingBookings.length > 1 ? 'HORARIOS:' : 'HORARIO:'}* ${horasStr}\n` +
+        `🎫 *REF:* #${shortId}\n\n` +
         `Tu solicitud de reserva no pudo ser confirmada por el complejo. Si realizaste un pago o tienes dudas, comunícate directamente con la administración de la cancha.`;
 
       await sendEvolutionWhatsAppText(instanceName, b.customer_phone, cancelMsg);

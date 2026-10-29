@@ -606,10 +606,11 @@ export async function POST(req: NextRequest) {
       }
 
       if (updatedBookings.length > 0) {
-        // Enviar notificación de WhatsApp en segundo plano para responder de inmediato al usuario (<100ms)
-        notifyBookingSubmitted(updatedBookings[0].id).catch(err => {
-          console.error('[WhatsApp Notification background error]:', err);
-        });
+        try {
+          await notifyBookingSubmitted(updatedBookings[0].id);
+        } catch (err) {
+          console.error('[WhatsApp Notification error]:', err);
+        }
       }
 
       return NextResponse.json({ success: true, data: updatedBookings });

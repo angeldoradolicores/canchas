@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@supabase/supabase-js';
+import { notifyBookingStatusChange } from '@/lib/whatsapp-notifications';
 
 export const dynamic = 'force-dynamic';
 
@@ -124,13 +125,13 @@ export async function POST(req: NextRequest) {
         await supabase.from('notifications').insert(notifs);
       }
 
-      // 6. Trigger WhatsApp notification asynchronously (first booking ID is representative)
+      // 6. Trigger WhatsApp notification immediately
       const firstId = validIds[0];
-      fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/bookings/notify-status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: firstId, status: newStatus }),
-      }).catch((e) => console.error('[batch-action] notify-status error:', e));
+      try {
+        await notifyBookingStatusChange(firstId, newStatus);
+      } catch (e) {
+        console.error('[batch-action] notify-status error:', e);
+      }
     }
 
     return NextResponse.json({ success: true, updated: validIds.length, skipped: ids.length - validIds.length });
