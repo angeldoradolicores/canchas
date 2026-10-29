@@ -248,12 +248,12 @@ export async function notifyBookingSubmitted(bookingId: string) {
 
     // ── A) MENSAJE AL CLIENTE: confirmación de recepción de comprobante ──
     const customerMsg =
-      `✅ *¡Recibimos tu comprobante!*\n\n` +
-      `🏟️ *${company_name}*\n` +
-      `⚽ *${pitchNameCombined}*\n` +
-      `📅 *Fecha:* ${fechaCorta}\n` +
-      `⏰ *Horario:* ${horasStr}\n` +
-      `🎫 *Ref:* #${shortId}\n\n` +
+      // `✅ *¡Recibimos tu comprobante!*\n\n` +
+      // `🏟️ *${company_name}*\n` +
+      // `⚽ *${pitchNameCombined}*\n` +
+      // `📅 *Fecha:* ${fechaCorta}\n` +
+      // `⏰ *Horario:* ${horasStr}\n` +
+      // `🎫 *Ref:* #${shortId}\n\n` +
       `Tu reserva quedó en revisión. El dueño está validando tu comprobante y te notificaremos inmediatamente apenas sea aprobada 🙌`;
 
     // ── B) RESOLVER DESTINATARIOS DEL DUEÑO (PRIORIZANDO SU TELÉFONO PERSONAL) ──
@@ -440,10 +440,7 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
         `⚽ *${pitchNames.toUpperCase()}*\n` +
         `📅 *FECHA:* ${fechaLarga}\n` +
         `⏰ *${siblingBookings.length > 1 ? 'HORARIOS RESERVADOS:' : 'HORARIO:'}* ${horasStr}\n` +
-        `🎫 *REF:* #${shortId}\n` +
-        (loc.address ? `📍 *DIRECCIÓN:* ${loc.address}\n` : '') +
-        `🗺️ *VER EN MAPS:* ${mapsUrl}\n\n` +
-        `Presenta este mensaje al llegar al complejo. ¡Nos vemos en la cancha! ⚽🏆`;
+        `🗺️ *VER EN MAPS:* <${mapsUrl}>\n\n`;
       await sendEvolutionWhatsAppText(instanceName, b.customer_phone, ticketMsg);
     } else {
       // ── RESERVA DECLINADA / CANCELADA ──
@@ -453,7 +450,6 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
         `⚽ *${pitchNames}*\n` +
         `📅 *FECHA:* ${fechaLarga}\n` +
         `⏰ *${siblingBookings.length > 1 ? 'HORARIOS:' : 'HORARIO:'}* ${horasStr}\n` +
-        `🎫 *REF:* #${shortId}\n\n` +
         `Tu solicitud de reserva no pudo ser confirmada por el complejo. Si realizaste un pago o tienes dudas, comunícate directamente con la administración de la cancha.`;
 
       await sendEvolutionWhatsAppText(instanceName, b.customer_phone, cancelMsg);
