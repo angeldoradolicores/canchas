@@ -50,7 +50,7 @@ const PRESETS: { id: string; label: string; p: Pal }[] = [
   { id: 'gold', label: 'Oro', p: { bg1: '#1c1917', bg2: '#44403c', accent: '#facc15', text: '#fafaf9', angle: 145 } },
   { id: 'passion', label: 'Pasión', p: { bg1: '#450a0a', bg2: '#dc2626', accent: '#fde047', text: '#ffffff', angle: 150 } },
   { id: 'violet', label: 'Violeta', p: { bg1: '#2e1065', bg2: '#6d28d9', accent: '#f0abfc', text: '#ffffff', angle: 135 } },
-  { id: 'clean', label: 'Claro', p: { bg1: '#f0fdf4', bg2: '#dcfce7', accent: '#16a34a', text: '#0f172a', angle: 135 } },
+  { id: 'clean', label: 'Claro', p: { bg1: '#f8fafc', bg2: '#e2e8f0', accent: '#047857', text: '#0f172a', angle: 135 } },
 ];
 
 const QUICK_ACCENT = [
@@ -139,6 +139,8 @@ function Poster({ innerRef, cfg, hours, dayLabel, dateStr, logoSrc, pitchName }:
   const fsBig = (cols === 2 ? 58 : cols === 3 ? 46 : 36);
   const radius = cfg.cardStyle === 'pill' ? 999 : cfg.cardStyle === 'solid' ? 16 : 30;
   const solid = cfg.cardStyle === 'solid';
+  const isLightBg = lum(bg1) > 0.45;
+  const hourColor = solid ? onAccent : isLightBg ? '#064e3b' : accent;
 
   /* — Logo con efecto medallón + glow grande — */
   const logoEl = logoSrc ? (
@@ -215,16 +217,16 @@ function Poster({ innerRef, cfg, hours, dayLabel, dateStr, logoSrc, pitchName }:
               const [t, ap] = h.split(' ');
               return (
                 <div key={h} style={{
-                  background: solid ? accent : cardBg, border: solid ? 'none' : `2px solid ${cardBdr}`,
+                  background: solid ? accent : cardBg, border: solid ? 'none' : `2px solid ${isLightBg ? 'rgba(5, 150, 105, 0.45)' : cardBdr}`,
                   borderRadius: radius, padding: `${compact ? 24 : 30}px 14px`,
-                  textAlign: 'center', color: solid ? onAccent : accent,
+                  textAlign: 'center', color: hourColor,
                 }}>
                   <div style={{ fontSize: fsBig, fontWeight: 900, lineHeight: 1 }}>
                     {t}<span style={{ fontSize: fsBig * .5, fontWeight: 800, marginLeft: 6 }}>{ap}</span>
                   </div>
                   <div style={{
-                    fontSize: 19, marginTop: 8, fontWeight: 600,
-                    color: solid ? rgba(onAccent, .8) : sub
+                    fontSize: 19, marginTop: 8, fontWeight: 700,
+                    color: solid ? rgba(onAccent, .85) : isLightBg ? '#047857' : sub
                   }}>● Disponible</div>
                 </div>
               );
@@ -821,9 +823,9 @@ export default function CreateStatusPage() {
   );
 
   const NoticeBanner = notice && (
-    <div className={`rounded-xl px-3 py-2 text-xs font-semibold flex items-start gap-2 shadow-sm ${notice.k === 'ok' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-      : notice.k === 'warn' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-        : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
+    <div className={`rounded-xl px-3 py-2 text-xs font-semibold flex items-start gap-2 shadow-sm ${notice.k === 'ok' ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 font-bold'
+      : notice.k === 'warn' ? 'bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/40 font-bold'
+        : 'bg-red-500/10 text-red-800 dark:text-red-300 border border-red-500/40 font-bold'}`}>
       <span className="mt-0.5 shrink-0">{notice.k === 'ok' ? '✅' : notice.k === 'warn' ? '⚠️' : '❌'}</span>
       <span className="flex-1">{notice.t}</span>
       <button className="shrink-0 opacity-70 hover:opacity-100" onClick={() => setNotice(null)}>×</button>
@@ -934,7 +936,7 @@ export default function CreateStatusPage() {
           {freeSet.size > 0 && (
             <button
               onClick={selectAllFree}
-              className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 hover:bg-emerald-500/25 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors border border-emerald-500/30 shadow-2xs"
+              className="text-[11px] font-extrabold text-emerald-800 dark:text-emerald-300 bg-emerald-500/15 hover:bg-emerald-500/25 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors border border-emerald-500/40 shadow-2xs"
               title="Añadir todas las disponibles"
             >
               <Sparkles size={11} /> Todas las libres
@@ -984,9 +986,9 @@ export default function CreateStatusPage() {
             badgeColor = 'bg-amber-500/25 text-amber-800 dark:text-amber-200';
             subInfo = 'En checkout';
           } else if (isFree) {
-            cardClass = 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 hover:border-emerald-500/50 cursor-pointer';
+            cardClass = 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-900 dark:text-emerald-200 border-emerald-500/40 hover:border-emerald-500/60 cursor-pointer font-bold';
             badgeLabel = '🟢 Disponible';
-            badgeColor = 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300';
+            badgeColor = 'bg-emerald-500/20 text-emerald-900 dark:text-emerald-300 font-extrabold';
             if (selPitch === 'all' && slotInfo?.freeCount) {
               subInfo = `${slotInfo.freeCount} canchas libres`;
             }
@@ -1252,7 +1254,7 @@ export default function CreateStatusPage() {
       {/* ════════════════════════════════════════════════════════════
           VISTA MÓVIL ESTILO SNAPCHAT / INSTAGRAM STORIES (FULLSCREEN)
       ════════════════════════════════════════════════════════════ */}
-      <div className="lg:hidden fixed inset-0 z-40 bg-zinc-950 flex flex-col overflow-hidden select-none">
+      <div className="lg:hidden fixed inset-0 z-40 bg-zinc-950 flex flex-col overflow-hidden select-none dark text-zinc-100">
 
         {/* ── Barra Superior Flotante Translúcida ── */}
         <div className="absolute top-0 left-0 right-0 z-30 px-4 pt-3 pb-2 flex items-center justify-between pointer-events-auto bg-gradient-to-b from-black/80 via-black/40 to-transparent">
@@ -1388,7 +1390,7 @@ export default function CreateStatusPage() {
 
         {/* ── PANEL / DRAWER FLOTANTE LATERAL DERECHO ── */}
         {activeSheet !== 'none' && (
-          <div className="absolute right-0 top-0 bottom-0 w-[84vw] max-w-sm z-40 bg-zinc-950/95 backdrop-blur-2xl border-l border-zinc-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+          <div className="absolute right-0 top-0 bottom-0 w-[84vw] max-w-sm z-40 bg-zinc-950/98 backdrop-blur-2xl border-l border-zinc-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200 dark text-zinc-100">
             {/* Header del drawer */}
             <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
               <h2 className="text-sm font-bold text-white flex items-center gap-2">

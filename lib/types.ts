@@ -9,6 +9,8 @@ export interface Pitch {
   tone: string;
   image_url: string | null;
   amenities: string | null;
+  is_covered?: boolean | null;
+  custom_pricing?: any;
   contact_phone?: string | null; // Nuevo campo para teléfono de la cancha
   facebook_url?: string | null;
   instagram_url?: string | null;

@@ -107,6 +107,7 @@ export const AdminCreatePitchSchema = z.object({
   facebook_url: z.string().max(500).optional().nullable(),
   instagram_url: z.string().max(500).optional().nullable(),
   tiktok_url: z.string().max(500).optional().nullable(),
+  is_covered: z.boolean().optional().default(false),
 }).transform((data) => ({
   ...data,
   price_per_hour: data.price_per_hour ?? data.price ?? 80000,

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowRight, Clock3, Heart, MapPin, ShieldCheck, CalendarDays, Calendar, CheckCircle, Loader2, Grid, X, ChevronLeft, ChevronRight, Trophy, CheckCircle2, Phone, Users, Building2, Layers, LandPlot, Check, Copy } from 'lucide-react';
+import { ArrowRight, Clock3, Heart, MapPin, ShieldCheck, CalendarDays, Calendar, CheckCircle, Loader2, Grid, X, ChevronLeft, ChevronRight, Trophy, CheckCircle2, Phone, Users, Building2, Layers, LandPlot, Check, Copy, Warehouse, Sun } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
@@ -478,6 +478,37 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                 {currentPitch.name}
               </p>
             )}
+
+            {/* Badges de Modalidad, Superficie y Cubierta */}
+            {(() => {
+              const isCovered = Boolean(
+                (currentPitch as any).is_covered ??
+                currentPitch.custom_pricing?.is_covered ??
+                (typeof currentPitch.amenities === 'string' && currentPitch.amenities.toLowerCase().includes('techada')) ??
+                (Array.isArray(currentPitch.amenities) && currentPitch.amenities.some((a: string) => typeof a === 'string' && a.toLowerCase().includes('techada')))
+              );
+              return (
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/20">
+                    {currentPitch.type || 'Fútbol 5'}
+                  </span>
+                  {currentPitch.surface && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-secondary text-foreground border border-border">
+                      {currentPitch.surface}
+                    </span>
+                  )}
+                  {isCovered ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-800 dark:text-sky-300 border border-sky-500/30">
+                      <Warehouse size={12} className="text-sky-600 dark:text-sky-400" /> Techada
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30">
+                      <Sun size={12} className="text-amber-600 dark:text-amber-400" /> Al aire libre
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Lado derecho: Calificación estilo badge moderno y limpio */}
@@ -598,9 +629,19 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                           </span>
                         )}
                       </div>
-                      <p className={`text-[11px] truncate ${isCurrent ? 'text-emerald-100' : 'text-muted-foreground'}`}>
-                        {sp.type || 'Fútbol 5'}
-                      </p>
+                      <div className="flex items-center gap-1 text-[11px] truncate">
+                        <span className={isCurrent ? 'text-emerald-100' : 'text-muted-foreground'}>
+                          {sp.type || 'Fútbol 5'}
+                        </span>
+                        <span>·</span>
+                        <span className={`font-semibold ${isCurrent ? 'text-white' : 'text-foreground/80'}`}>
+                          {Boolean(
+                            (sp as any).is_covered ??
+                            (sp as any).custom_pricing?.is_covered ??
+                            (typeof sp.amenities === 'string' && sp.amenities.toLowerCase().includes('techada'))
+                          ) ? 'Techada' : 'Al aire libre'}
+                        </span>
+                      </div>
                       {/* {spPrice > 0 && (
                         <p className={`text-[10px] font-bold mt-0.5 ${isCurrent ? 'text-emerald-100/80' : 'text-muted-foreground/70'}`}>
                           ${spPrice.toLocaleString('es-CO')}/h
@@ -782,24 +823,35 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
             </h2>
 
             {/* GRID DE DETALLES */}
-            <div className="grid grid-cols-2 gap-2.5 sm:gap-3 mt-3 sm:mt-4 w-full">
-              {[
-                ['Tipo', currentPitch.type || 'Fútbol 5'],
-                ['Superficie', currentPitch.surface || 'Sintética'],
-              ].map(([k, v]) => (
-                <div
-                  key={k}
-                  className="p-3.5 sm:p-3.5 bg-emerald-500/5 dark:bg-emerald-500/10 rounded-2xl sm:rounded-xl border border-emerald-500/10 dark:border-emerald-500/20 shadow-xs flex flex-col items-center justify-center text-center transition-all hover:scale-[1.02] duration-200 w-full"
-                >
-                  <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
-                    {k}
-                  </p>
-                  <p className="font-black text-xs sm:text-sm text-emerald-700 dark:text-emerald-400 leading-tight">
-                    {v}
-                  </p>
+            {(() => {
+              const isCovered = Boolean(
+                (currentPitch as any).is_covered ??
+                currentPitch.custom_pricing?.is_covered ??
+                (typeof currentPitch.amenities === 'string' && currentPitch.amenities.toLowerCase().includes('techada')) ??
+                (Array.isArray(currentPitch.amenities) && currentPitch.amenities.some((a: string) => typeof a === 'string' && a.toLowerCase().includes('techada')))
+              );
+              return (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 mt-3 sm:mt-4 w-full">
+                  {[
+                    ['Tipo', currentPitch.type || 'Fútbol 5'],
+                    ['Superficie', currentPitch.surface || 'Sintética'],
+                    ['Cubierta', isCovered ? 'Techada' : 'Al aire libre'],
+                  ].map(([k, v]) => (
+                    <div
+                      key={k}
+                      className="p-3.5 sm:p-3.5 bg-emerald-500/5 dark:bg-emerald-500/10 rounded-2xl sm:rounded-xl border border-emerald-500/10 dark:border-emerald-500/20 shadow-xs flex flex-col items-center justify-center text-center transition-all hover:scale-[1.02] duration-200 w-full"
+                    >
+                      <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
+                        {k}
+                      </p>
+                      <p className="font-black text-xs sm:text-sm text-emerald-700 dark:text-emerald-400 leading-tight">
+                        {v}
+                      </p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              );
+            })()}
 
             {/* Banner: Cancha Combinada */}
             {isCombinedPitch(currentPitch as any) && (() => {

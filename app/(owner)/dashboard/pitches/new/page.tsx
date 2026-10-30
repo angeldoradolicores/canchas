@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth-context';
 import {
   ArrowLeft, Loader2, Plus, ShieldAlert, Eye, X, MapPin,
   Video, Image as ImageIcon, Trash2, Check, DollarSign,
-  ChevronLeft, ChevronRight, CreditCard, ArrowUp, ArrowDown, Copy, CheckCheck, GripVertical, Layers, Palette, Upload, Star, Clock, ChevronDown
+  ChevronLeft, ChevronRight, CreditCard, ArrowUp, ArrowDown, Copy, CheckCheck, GripVertical, Layers, Palette, Upload, Star, Clock, ChevronDown, Warehouse, Sun
 } from 'lucide-react';
 import Link from 'next/link';
 import nextDynamic from 'next/dynamic';
@@ -72,6 +72,15 @@ function PreviewCard({ data }: { data: any }) {
         style={firstImage ? { backgroundImage: `linear-gradient(180deg, transparent 28%, rgba(6,18,17,.8)), url(${firstImage})` } : undefined}
       >
         <span className="pitch-tag">{data.types[0] || 'Fútbol 5'}</span>
+        {data.isCovered ? (
+          <span className="absolute top-3 right-3 bg-sky-500/95 backdrop-blur-md text-white font-extrabold text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1 z-10">
+            <Warehouse size={10} className="shrink-0" /> Techada
+          </span>
+        ) : (
+          <span className="absolute top-3 right-3 bg-black/60 backdrop-blur-md text-white font-semibold text-[10px] px-2 py-0.5 rounded-full border border-white/20 flex items-center gap-1 z-10">
+            <Sun size={10} className="shrink-0" /> Al aire libre
+          </span>
+        )}
         <div className="pitch-lines" />
         {images.length > 1 && (
           <div className="absolute bottom-2 right-2 flex gap-1 z-10">
@@ -103,6 +112,7 @@ function PreviewCard({ data }: { data: any }) {
         </div>
         <div className="pitch-meta">
           <span>{data.surface}</span>
+          <span>{data.isCovered ? 'Techada' : 'Al aire libre'}</span>
           {data.types.length > 1 && <span>+{data.types.length - 1} modal.</span>}
         </div>
         {data.description && (
@@ -142,6 +152,7 @@ function NewPitchForm() {
   const [description, setDescription] = useState('');
   const [types, setTypes] = useState<string[]>(['Fútbol 5']);
   const [surface, setSurface] = useState('Sintética');
+  const [isCovered, setIsCovered] = useState<boolean>(false);
   const [tone, setTone] = useState('field-emerald');
   const [address, setAddress] = useState('Pasto, Nariño');
   const [neighborhood, setNeighborhood] = useState('');
@@ -322,6 +333,13 @@ function NewPitchForm() {
       if (first.grass_color) setGrassColor(first.grass_color);
       if (first.custom_surface) setCustomSurface(first.custom_surface);
       if (first.tone) setTone(first.tone);
+      const firstCovered = Boolean(
+        first.is_covered ??
+        cpFirst.is_covered ??
+        (typeof first.amenities === 'string' && first.amenities.toLowerCase().includes('techada')) ??
+        (Array.isArray(first.amenities) && first.amenities.some((a: string) => typeof a === 'string' && a.toLowerCase().includes('techada')))
+      );
+      setIsCovered(firstCovered);
 
       const firstAddr = first.address || first.custom_pricing?.address || (first as any)?.companies?.address;
       if (firstAddr) setAddress(firstAddr);
@@ -436,6 +454,13 @@ function NewPitchForm() {
       }
       setSurface(data.surface || 'Sintética');
       setTone(data.tone || 'field-emerald');
+      const dupCovered = Boolean(
+        data.is_covered ??
+        data.custom_pricing?.is_covered ??
+        (typeof data.amenities === 'string' && data.amenities.toLowerCase().includes('techada')) ??
+        (Array.isArray(data.amenities) && data.amenities.some((a: string) => typeof a === 'string' && a.toLowerCase().includes('techada')))
+      );
+      setIsCovered(dupCovered);
 
       // Dirección exacta y coordenadas intactas
       const dupAddress = data.address || data.custom_pricing?.address || (data as any)?.companies?.address || 'Pasto, Nariño';
@@ -797,6 +822,7 @@ function NewPitchForm() {
             booking_percentage: bookingType === 'percentage' ? bookingPct : 0,
             is_combined: isCombined,
             linked_pitch_ids: isCombined ? linkedPitchIds : [],
+            is_covered: isCovered,
             custom_pricing: {
               ...customPricing,
               booking_type: bookingType,
@@ -804,6 +830,7 @@ function NewPitchForm() {
               time_slots: timeSlots,
               is_combined: isCombined,
               linked_pitch_ids: isCombined ? linkedPitchIds : [],
+              is_covered: isCovered,
             },
             amenities: amenityChips.join(' · '),
             contact_phone: contactPhone,
@@ -862,7 +889,7 @@ function NewPitchForm() {
   };
 
   const previewData = {
-    name, description, types, surface, tone,
+    name, description, types, surface, isCovered, tone,
     price, bookingPct, amenityChips, mediaItems, customSurface, grassColor, lat, lng, paymentMethods
   };
   const sections = [
@@ -1202,6 +1229,53 @@ function NewPitchForm() {
                     <button type="button" onClick={() => setShowCustomSurface(false)} className="bg-secondary text-muted-foreground px-2 rounded-xl"><X size={14} /></button>
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Tipo de Cubierta (Techada vs Al aire libre) */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-muted-foreground uppercase flex items-center justify-between">
+                <span>Tipo de Cubierta</span>
+                <span className="text-[11px] font-normal text-muted-foreground lowercase">¿Protegida de la lluvia y el sol?</span>
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsCovered(true)}
+                  className={`p-3.5 rounded-xl border text-left transition-all flex items-center gap-3 relative ${isCovered
+                    ? 'bg-sky-500/10 border-sky-500 text-sky-950 dark:text-sky-100 shadow-sm ring-1 ring-sky-500/30'
+                    : 'bg-card border-border text-muted-foreground hover:border-primary/30 hover:text-foreground'}`}
+                >
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${isCovered ? 'bg-sky-500 text-white shadow-sm' : 'bg-secondary text-muted-foreground'}`}>
+                    <Warehouse size={18} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold flex items-center gap-1.5">
+                      Cancha Techada
+                      {isCovered && <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">Bajo techo, protegida del clima</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsCovered(false)}
+                  className={`p-3.5 rounded-xl border text-left transition-all flex items-center gap-3 relative ${!isCovered
+                    ? 'bg-amber-500/10 border-amber-500 text-amber-950 dark:text-amber-100 shadow-sm ring-1 ring-amber-500/30'
+                    : 'bg-card border-border text-muted-foreground hover:border-primary/30 hover:text-foreground'}`}
+                >
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${!isCovered ? 'bg-amber-500 text-white shadow-sm' : 'bg-secondary text-muted-foreground'}`}>
+                    <Sun size={18} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold flex items-center gap-1.5">
+                      Al Aire Libre
+                      {!isCovered && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">Cielo abierto, ventilación natural</div>
+                  </div>
+                </button>
               </div>
             </div>
 

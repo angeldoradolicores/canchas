@@ -267,6 +267,28 @@ export function groupPitchesByComplex(
       bestImage = 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&auto=format&fit=crop&q=60';
     }
 
+    // Identificar si tiene canchas techadas o al aire libre
+    const hasCovered = siblingPitches.some(p => {
+      const pAny = p as any;
+      return Boolean(
+        pAny.is_covered ??
+        pAny.custom_pricing?.is_covered ??
+        (typeof pAny.amenities === 'string' && pAny.amenities.toLowerCase().includes('techada')) ??
+        (Array.isArray(pAny.amenities) && pAny.amenities.some((a: string) => typeof a === 'string' && a.toLowerCase().includes('techada')))
+      );
+    });
+
+    const hasOutdoor = siblingPitches.some(p => {
+      const pAny = p as any;
+      const isCov = Boolean(
+        pAny.is_covered ??
+        pAny.custom_pricing?.is_covered ??
+        (typeof pAny.amenities === 'string' && pAny.amenities.toLowerCase().includes('techada')) ??
+        (Array.isArray(pAny.amenities) && pAny.amenities.some((a: string) => typeof a === 'string' && a.toLowerCase().includes('techada')))
+      );
+      return !isCov;
+    });
+
     // Calcular distancia GPS si se proveyeron coordenadas del usuario
     let distanceKm: number | undefined;
     let formattedDistance: string | undefined;
@@ -296,6 +318,8 @@ export function groupPitchesByComplex(
       surfaces: Array.from(surfacesSet),
       amenities: Array.from(amenitiesSet),
       featuredPitch: siblingPitches[0],
+      hasCovered,
+      hasOutdoor,
       distanceKm,
       formattedDistance,
       totalBookings,

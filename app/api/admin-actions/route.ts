@@ -363,6 +363,7 @@ export async function POST(req: NextRequest) {
         ...(instagramUrl !== undefined ? { instagram_url: instagramUrl } : {}),
         ...(tiktokUrl !== undefined ? { tiktok_url: tiktokUrl } : {}),
         ...(payload.is_combined !== undefined ? { is_combined: Boolean(payload.is_combined) } : {}),
+        ...(payload.is_covered !== undefined ? { is_covered: Boolean(payload.is_covered) } : {}),
         ...(Array.isArray(payload.linked_pitch_ids) ? { linked_pitch_ids: payload.linked_pitch_ids } : {}),
         social_links: {
           facebook: facebookUrl !== undefined ? facebookUrl : payload.custom_pricing?.social_links?.facebook,

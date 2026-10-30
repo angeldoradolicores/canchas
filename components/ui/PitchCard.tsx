@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   MapPin, Star, Layers, ShieldCheck, CreditCard,
-  ChevronLeft, ChevronRight, Edit3, Eye, Sparkles, X, Share2, DollarSign, Heart, Trash2, AlertTriangle, Loader2, Copy, Zap
+  ChevronLeft, ChevronRight, Edit3, Eye, Sparkles, X, Share2, DollarSign, Heart, Trash2, AlertTriangle, Loader2, Copy, Zap, Warehouse, Sun
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
@@ -41,6 +41,7 @@ export interface PitchData {
   amenities?: string | string[];
   payment_methods?: PaymentMethod[] | any;
   custom_pricing?: any;
+  is_covered?: boolean;
   is_combined?: boolean;
   linked_pitch_ids?: string[];
   lat?: number;
@@ -161,6 +162,12 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
   const fbUrl = pitchAny.facebook_url || pitchAny.custom_pricing?.facebook_url || pitchAny.custom_pricing?.social_links?.facebook || null;
   const igUrl = pitchAny.instagram_url || pitchAny.custom_pricing?.instagram_url || pitchAny.custom_pricing?.social_links?.instagram || null;
   const ttUrl = pitchAny.tiktok_url || pitchAny.custom_pricing?.tiktok_url || pitchAny.custom_pricing?.social_links?.tiktok || null;
+  const isCovered = Boolean(
+    (pitch as any).is_covered ??
+    pitch.custom_pricing?.is_covered ??
+    (typeof pitch.amenities === 'string' && pitch.amenities.toLowerCase().includes('techada')) ??
+    (Array.isArray(pitch.amenities) && pitch.amenities.some((a: string) => typeof a === 'string' && a.toLowerCase().includes('techada')))
+  );
   const formatSocialUrl = (url: string | null, platform: 'instagram' | 'tiktok' | 'facebook'): string => {
     if (!url) return '#';
     const trimmed = url.trim();
@@ -270,6 +277,15 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
                 {pitch.surface && (
                   <span className="bg-black/60 backdrop-blur-md text-white font-semibold text-[10px] px-2.5 py-1 rounded-full border border-white/20">
                     {pitch.surface}
+                  </span>
+                )}
+                {isCovered ? (
+                  <span className="bg-sky-600/95 backdrop-blur-md text-white font-extrabold text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1">
+                    <Warehouse size={11} className="shrink-0" /> Techada
+                  </span>
+                ) : (
+                  <span className="bg-black/60 backdrop-blur-md text-white font-semibold text-[10px] px-2.5 py-1 rounded-full border border-white/20 flex items-center gap-1">
+                    <Sun size={11} className="shrink-0" /> Al aire libre
                   </span>
                 )}
               </div>
@@ -581,13 +597,13 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
                 </div>
               )}
 
-              {/* Modalidades y Superficie */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Modalidades, Superficie y Cubierta */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-3.5 bg-secondary/40 rounded-2xl border border-border/80 flex flex-col justify-center">
                   <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
                     Modalidad Principal
                   </span>
-                  <span className="text-xs sm:text-sm font-extrabold text-foreground">
+                  <span className="text-xs sm:text-sm font-extrabold text-foreground truncate">
                     {modalities.join(', ')}
                   </span>
                 </div>
@@ -596,8 +612,25 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
                   <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
                     Superficie & Grama
                   </span>
-                  <span className="text-xs sm:text-sm font-extrabold text-foreground">
+                  <span className="text-xs sm:text-sm font-extrabold text-foreground truncate">
                     {pitch.surface || 'No especificada'} {pitch.grass_color ? `(${pitch.grass_color})` : ''}
+                  </span>
+                </div>
+
+                <div className="p-3.5 bg-secondary/40 rounded-2xl border border-border/80 flex flex-col justify-center">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
+                    Tipo de Cubierta
+                  </span>
+                  <span className="text-xs sm:text-sm font-extrabold text-foreground flex items-center gap-1">
+                    {isCovered ? (
+                      <span className="text-sky-600 dark:text-sky-400 flex items-center gap-1 font-black">
+                        <Warehouse size={13} className="shrink-0" /> Techada
+                      </span>
+                    ) : (
+                      <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 font-bold">
+                        <Sun size={13} className="shrink-0" /> Al aire libre
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>

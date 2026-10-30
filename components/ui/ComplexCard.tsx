@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { MapPin, Heart, ChevronRight, ChevronLeft, Check, Star, CreditCard, Sparkles, X, Layers, Navigation, Zap } from 'lucide-react';
+import { MapPin, Heart, ChevronRight, ChevronLeft, Check, Star, CreditCard, Sparkles, X, Layers, Navigation, Zap, Warehouse, Sun } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { useFavorites } from '@/lib/favorites-context';
 import { isCombinedPitch } from '@/lib/combined-pitch-utils';
@@ -32,6 +32,8 @@ export interface ComplexData {
   surfaces: string[];
   amenities: string[];
   featuredPitch: Pitch;
+  hasCovered?: boolean;
+  hasOutdoor?: boolean;
   distanceKm?: number;
   formattedDistance?: string;
   totalBookings?: number;
@@ -181,6 +183,19 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
             />
             <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+
+            {/* Badges de cubierta (Techada / Al aire libre) */}
+            <div className="absolute top-3.5 left-3.5 z-10 flex flex-wrap gap-1.5 items-center max-w-[75%]">
+              {complex.hasCovered ? (
+                <span className="bg-sky-600/95 backdrop-blur-md text-white font-extrabold text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1">
+                  <Warehouse size={11} className="shrink-0" /> Techada
+                </span>
+              ) : (
+                <span className="bg-black/60 backdrop-blur-md text-white font-semibold text-[10px] px-2.5 py-1 rounded-full border border-white/20 flex items-center gap-1">
+                  <Sun size={11} className="shrink-0" /> Al aire libre
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Cuerpo de la Tarjeta */}
@@ -377,20 +392,44 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
               )}
 
               {/* Grid de Características Clave */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3.5 bg-secondary/40 rounded-2xl border border-border/60">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase block mb-0.5">Modalidad Activa</span>
-                  <span className="text-sm font-extrabold text-foreground">
-                    {(currentPitch as any).supported_types?.join(', ') || currentPitch.type || 'Fútbol 5'}
-                  </span>
-                </div>
-                <div className="p-3.5 bg-secondary/40 rounded-2xl border border-border/60">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase block mb-0.5">Superficie</span>
-                  <span className="text-sm font-extrabold text-foreground">
-                    {currentPitch.surface || 'Sintética'}
-                  </span>
-                </div>
-              </div>
+              {(() => {
+                const isCurrentCovered = Boolean(
+                  (currentPitch as any).is_covered ??
+                  (currentPitch as any).custom_pricing?.is_covered ??
+                  (typeof (currentPitch as any).amenities === 'string' && (currentPitch as any).amenities.toLowerCase().includes('techada')) ??
+                  (Array.isArray((currentPitch as any).amenities) && (currentPitch as any).amenities.some((a: string) => typeof a === 'string' && a.toLowerCase().includes('techada')))
+                );
+                return (
+                  <div className="grid grid-cols-3 gap-2.5">
+                    <div className="p-3 bg-secondary/40 rounded-2xl border border-border/60">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase block mb-0.5">Modalidad</span>
+                      <span className="text-xs sm:text-sm font-extrabold text-foreground truncate block">
+                        {(currentPitch as any).supported_types?.join(', ') || currentPitch.type || 'Fútbol 5'}
+                      </span>
+                    </div>
+                    <div className="p-3 bg-secondary/40 rounded-2xl border border-border/60">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase block mb-0.5">Superficie</span>
+                      <span className="text-xs sm:text-sm font-extrabold text-foreground truncate block">
+                        {currentPitch.surface || 'Sintética'}
+                      </span>
+                    </div>
+                    <div className="p-3 bg-secondary/40 rounded-2xl border border-border/60">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase block mb-0.5">Cubierta</span>
+                      <span className="text-xs sm:text-sm font-extrabold text-foreground flex items-center gap-1 truncate">
+                        {isCurrentCovered ? (
+                          <span className="text-sky-600 dark:text-sky-400 flex items-center gap-1 font-black">
+                            <Warehouse size={13} className="shrink-0" /> Techada
+                          </span>
+                        ) : (
+                          <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 font-bold">
+                            <Sun size={13} className="shrink-0" /> Aire libre
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Descripción de la cancha si existe */}
               {(currentPitch as any).description && (
