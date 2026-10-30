@@ -6,10 +6,15 @@ __v0_jsx-dev-runtime.ts
 .v0-trash/
 .vercel/
 
-# Environment variables
+# Environment variables (CRÍTICO: nunca subir credenciales)
+.env
+.env.*
 .env*.local
 
 # Common ignores
 node_modules
 .next/
 .DS_Store
+*.log
+npm-debug.log*
+tsconfig.tsbuildinfo

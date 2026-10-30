@@ -435,12 +435,12 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
     if (newStatus === 'confirmed') {
       // ── TICKET DIGITAL DE RESERVA (Diseño visual y estructurado) ──
       const ticketMsg =
-        `🎉 *¡TU RESERVA FUE CONFIRMADA!*\n\n` +
+        `✅ *¡TU RESERVA FUE CONFIRMADA!*\n\n` +
         `🏟️ *${company.name.toUpperCase()}*\n` +
         `⚽ *${pitchNames.toUpperCase()}*\n` +
         `📅 *FECHA:* ${fechaLarga}\n` +
         `⏰ *${siblingBookings.length > 1 ? 'HORARIOS RESERVADOS:' : 'HORARIO:'}* ${horasStr}\n` +
-        `🗺️ *VER EN MAPS:* <${mapsUrl}>\n\n`;
+        `📍 *VER EN MAPS:* <${mapsUrl}>\n\n`;
       await sendEvolutionWhatsAppText(instanceName, b.customer_phone, ticketMsg);
     } else {
       // ── RESERVA DECLINADA / CANCELADA ──

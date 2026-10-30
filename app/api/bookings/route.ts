@@ -584,12 +584,17 @@ export async function POST(req: NextRequest) {
           const existing = (conflictRows || []).find((b: any) => b.pitch_id === validPitchId) || null;
 
           if (existing) {
-            // Si ya está confirmada por alguien o pendiente por otro usuario
-            if (existing.status === 'confirmed' || (existing.status === 'pending' && effectiveUserId && existing.user_id && existing.user_id !== effectiveUserId)) {
-              return NextResponse.json(
-                { error: `La hora ${slot} ya ha sido reservada por otra persona.` },
-                { status: 400 }
-              );
+            // Si ya está confirmada, o pendiente por otro cliente (o usuario anónimo diferente)
+            if (existing.status === 'confirmed' || existing.status === 'pending') {
+              const isSameAuthedUser = Boolean(effectiveUserId && existing.user_id && existing.user_id === effectiveUserId);
+              const isSameBookingDraft = Boolean(hasBookingIds && booking_ids?.includes(existing.id));
+
+              if (!isSameAuthedUser && !isSameBookingDraft) {
+                return NextResponse.json(
+                  { error: `La hora ${slot} ya ha sido reservada o está en proceso por otro usuario.` },
+                  { status: 400 }
+                );
+              }
             }
 
             // Actualizar el registro existente (borrador, cancelado o del mismo usuario)

@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "NODE_OPTIONS='--require newrelic' next start",
     "start:dev": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:apis": "node --env-file=.env.local scripts/test-apis.mjs",
+    "test:simulation": "node --env-file=.env.local scripts/simulate-user-flows.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1149.0",
