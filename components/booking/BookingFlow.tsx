@@ -975,8 +975,15 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
             const guestIds = typeof window !== 'undefined'
               ? JSON.parse(localStorage.getItem('cancheros_guest_booking_ids') || '[]')
               : [];
-            const queryParam = guestIds.length > 0 ? `?ids=${guestIds.join(',')}` : '';
-            router.push(`/reservations${queryParam}`);
+            // Construir params con info del banner inteligente
+            const params = new URLSearchParams();
+            if (guestIds.length > 0) {
+              params.set('ids', guestIds.join(','));
+            }
+            params.set('newBooking', '1');
+            if (selectedDate) params.set('date', `${selectedDate}T12:00:00`);
+            if (currentPitch.name) params.set('pitch', currentPitch.name);
+            router.push(`/reservations?${params.toString()}`);
           }}
         >
           Ir a mis reservas

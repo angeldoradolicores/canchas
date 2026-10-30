@@ -334,12 +334,12 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
+            {/* <button
               onClick={handleDownloadPDF}
               className="flex items-center gap-1.5 px-3 py-2 bg-[#054D27] hover:bg-[#043d20] text-white text-xs font-bold rounded-xl transition-all shadow-sm"
             >
               <Download size={14} /> Descargar PDF
-            </button>
+            </button> */}
             <button onClick={onClose} className="p-2 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground">
               <X size={18} />
             </button>
@@ -446,7 +446,7 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
           {byCourt.length > 0 && (
             <div>
               <h3 className="text-sm font-black text-foreground flex items-center gap-2 mb-3">
-                <span className="text-base">⚽</span> Recaudo por Cancha
+                <span className="text-base"></span> Recaudo por Cancha
               </h3>
               <div className="space-y-3">
                 {byCourt.map((court, i) => (
@@ -522,7 +522,7 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
             onClick={handleDownloadPDF}
             className="flex items-center gap-2 px-4 py-2 bg-[#054D27] hover:bg-[#043d20] text-white text-xs font-bold rounded-xl transition-all"
           >
-            <Printer size={14} /> Imprimir / PDF
+            <Download size={14} /> Descargar PDF
           </button>
         </div>
       </div>

@@ -11,6 +11,8 @@ import { notifyBookingSubmitted } from '@/lib/whatsapp-notifications';
 import { fetchConflictingPitchIds } from '@/lib/combined-pitch-utils';
 import { uploadToR2, isR2Configured } from '@/lib/storage/r2';
 import { safeServerErrorResponse } from '@/lib/error-handler';
+import { withCache, cache, TTL } from '@/lib/cache';
+
 
 function getAdminSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -48,11 +50,38 @@ function computeSlotIsoTimes(selectedDate: string, slot: string) {
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const idsParam = searchParams.get('ids');
+    const idsParam  = searchParams.get('ids');
+    const pitchId   = searchParams.get('pitch_id');
+    const dateParam = searchParams.get('date');
     const authedUser = await getAuthenticatedUser(req);
     const verifiedUserId = authedUser?.id || null;
 
     const supabase = getAdminSupabase();
+
+    // ── Disponibilidad pública por cancha+fecha (lectura más frecuente) ──────
+    // Estos datos se cachean 20s porque muchos usuarios consultan el mismo slot
+    if (pitchId && dateParam && !idsParam && !verifiedUserId) {
+      const cacheKey = `availability:${pitchId}:${dateParam}`;
+      const cached = await withCache(cacheKey, TTL.AVAILABILITY, async () => {
+        const dayStart = `${dateParam}T00:00:00-05:00`;
+        const dayEnd   = `${dateParam}T23:59:59-05:00`;
+        const { data, error } = await supabase
+          .from('bookings')
+          .select('id, pitch_id, start_time, end_time, status')
+          .eq('pitch_id', pitchId)
+          .gte('start_time', dayStart)
+          .lte('start_time', dayEnd)
+          .in('status', ['confirmed', 'pending']);
+        if (error) throw error;
+        return data || [];
+      });
+      return NextResponse.json(
+        { success: true, data: cached },
+        { headers: { 'Cache-Control': 'public, s-maxage=20, stale-while-revalidate=10' } }
+      );
+    }
+
+    // ── Reservas personales (no se cachean nunca) ─────────────────────────
     let query = supabase
       .from('bookings')
       .select(`
@@ -92,6 +121,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(safeServerErrorResponse(err, 'Error de servidor al obtener las reservas.'), { status: 500 });
   }
 }
+
 
 export async function POST(req: NextRequest) {
   // ── 1. RATE LIMITING: Máximo 25 peticiones por minuto por IP ──
@@ -611,9 +641,19 @@ export async function POST(req: NextRequest) {
         } catch (err) {
           console.error('[WhatsApp Notification error]:', err);
         }
+
+        // Invalidar caché de disponibilidad para este pitch+fecha
+        // para que la próxima consulta refleje las horas ya tomadas
+        try {
+          const firstBooking = updatedBookings[0];
+          if (firstBooking?.pitch_id && firstBooking?.selected_date) {
+            cache.invalidatePrefix(`availability:${firstBooking.pitch_id}:${firstBooking.selected_date}`);
+          }
+        } catch { /* no crítico */ }
       }
 
       return NextResponse.json({ success: true, data: updatedBookings });
+
     }
 
     return NextResponse.json({ error: 'Acción no válida' }, { status: 400 });

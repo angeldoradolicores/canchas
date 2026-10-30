@@ -424,16 +424,10 @@ export function OwnerDashboard() {
         <div className="min-w-0">
           <StatCard icon={<Clock size={18} className="text-rose-500 shrink-0" />} title="Hora más popular" value={topHour ? topHour[0] : '—'} sub={topHour ? `${topHour[1]} reservas` : 'Sin datos'} accent="bg-rose-400" />
         </div>
-      </div>
-
-      {/* Grid Stat Cards Fila 3 — Métricas Adicionales */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 w-full max-w-full min-w-0">
         <div className="min-w-0">
           <StatCard icon={<Users size={18} className="text-indigo-600 shrink-0" />} title="Clientes únicos" value={uniqueCustomers} sub="En el período" accent="bg-indigo-500" />
         </div>
-        <div className="min-w-0">
-          <StatCard icon={<Wallet size={18} className="text-sky-600 shrink-0" />} title="Total en abonos" value={fmt(totalDeposit)} sub="Depósitos recibidos" accent="bg-sky-500" />
-        </div>
+
         <div className="min-w-0">
           <StatCard icon={<TrendingDown size={18} className="text-red-500 shrink-0" />} title="Tasa de cancelación" value={`${cancelRate}%`} sub={`${cancelled.length} canceladas`} accent="bg-red-400" />
         </div>
@@ -444,6 +438,11 @@ export function OwnerDashboard() {
             <StatCard icon={<Hash size={18} className="text-zinc-500 shrink-0" />} title="Total de solicitudes" value={filteredBookings.length} sub="Todas las reservas" accent="bg-zinc-400" />
           )}
         </div>
+      </div>
+
+      Grid Stat Cards Fila 3 — Métricas Adicionales
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 w-full max-w-full min-w-0">
+
       </div>
 
       {/* Banner de aviso para reservas pendientes de otras fechas */}
@@ -751,13 +750,12 @@ export function OwnerDashboard() {
                       <span className="font-extrabold text-foreground">{fmt(getBookingIncome(row))}</span>
                     </td>
                     <td className="px-3 sm:px-4 py-2.5 text-center">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${
-                        row.status === 'confirmed'
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${row.status === 'confirmed'
                           ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                           : row.status === 'pending'
                             ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
                             : 'bg-rose-500/10 text-rose-500'
-                      }`}>
+                        }`}>
                         {row.status === 'confirmed' ? <CheckCircle2 size={10} /> : row.status === 'pending' ? <AlertCircle size={10} /> : <XCircle size={10} />}
                         {row.status === 'confirmed' ? 'Aprobada' : row.status === 'pending' ? 'Pendiente' : 'Cancelada'}
                       </span>
