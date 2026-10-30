@@ -1,15 +1,24 @@
 'use client';
 
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth-context';
-import { Loader2, CalendarDays, MapPin, X, Share2, Ticket, Clock, CheckCircle, XCircle, AlertCircle, LayoutGrid, ChevronDown, Sparkles, Download } from 'lucide-react';
+import { Loader2, CalendarDays, MapPin, X, Share2, Ticket, Clock, CheckCircle, XCircle, AlertCircle, LayoutGrid, ChevronDown, Sparkles, Download, Info, Sparkles as SparklesIcon, CalendarCheck2 } from 'lucide-react';
 import Link from 'next/link';
 import { toPng } from 'html-to-image';
 
+type DateFilterType = 'todas' | 'hoy' | 'pasados_3' | 'pasados_7' | 'historial';
+
+interface BookingBanner {
+  type: 'today' | 'other_date';
+  bookingDate: Date;
+  bookingDateStr: string;
+  pitchName: string;
+}
+
 export default function UserReservationsPage() {
   const [bookings, setBookings] = useState<any[]>([]);
-  const [dateFilter, setDateFilter] = useState<'todas' | 'hoy' | 'pasados_3' | 'pasados_7' | 'historial'>('hoy');
+  const [dateFilter, setDateFilter] = useState<DateFilterType>('hoy');
   const [statusFilter, setStatusFilter] = useState<'todas' | 'confirmed' | 'pending' | 'cancelled'>('todas');
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
@@ -17,9 +26,37 @@ export default function UserReservationsPage() {
   const [isSharing, setIsSharing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [notification, setNotification] = useState<{ show: boolean; title: string; message: string; status: string } | null>(null);
+  // Banner para reservas recién creadas
+  const [newBookingBanner, setNewBookingBanner] = useState<BookingBanner | null>(null);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   const ticketRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const supabase = createClient();
+
+  // Detectar si venimos de una reserva recién creada (parámetro ?newBooking=1&date=...)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const isNew = params.get('newBooking');
+    const rawDate = params.get('date');
+    const pitchName = params.get('pitch') || 'tu cancha';
+    if (isNew && rawDate) {
+      const bookingDate = new Date(rawDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const bDay = new Date(bookingDate);
+      bDay.setHours(0, 0, 0, 0);
+      const isToday = bDay.getTime() === today.getTime();
+      const bookingDateStr = bookingDate.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
+      setNewBookingBanner({ type: isToday ? 'today' : 'other_date', bookingDate, bookingDateStr, pitchName });
+      // Limpiar params sin recargar
+      const url = new URL(window.location.href);
+      url.searchParams.delete('newBooking');
+      url.searchParams.delete('date');
+      url.searchParams.delete('pitch');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, []);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
@@ -557,6 +594,64 @@ export default function UserReservationsPage() {
 
   return (
     <div className="page-content fade-in max-w-3xl mx-auto">
+      {/* ── Banner inteligente de nueva reserva ── */}
+      {newBookingBanner && !bannerDismissed && (
+        <div className={`mb-5 rounded-2xl border p-4 flex flex-col sm:flex-row sm:items-center gap-3 animate-in slide-in-from-top-4 duration-300 shadow-sm ${
+          newBookingBanner.type === 'today'
+            ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800/50'
+            : 'bg-sky-50 border-sky-200 dark:bg-sky-950/30 dark:border-sky-800/50'
+        }`}>
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+            newBookingBanner.type === 'today'
+              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300'
+              : 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300'
+          }`}>
+            {newBookingBanner.type === 'today' ? <CalendarCheck2 size={20} /> : <Info size={20} />}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            {newBookingBanner.type === 'today' ? (
+              <>
+                <p className="font-black text-sm text-emerald-800 dark:text-emerald-200 flex items-center gap-1.5">
+                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  ¡Reserva confirmada para hoy!
+                </p>
+                <p className="text-xs text-emerald-700/80 dark:text-emerald-300/70 mt-0.5">
+                  Tu reserva en <strong>{newBookingBanner.pitchName}</strong> está visible aquí abajo. El dueño la revisará pronto.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-black text-sm text-sky-800 dark:text-sky-200">
+                  ¡Reserva realizada con éxito! 🎉
+                </p>
+                <p className="text-xs text-sky-700/80 dark:text-sky-300/70 mt-0.5">
+                  Tu reserva en <strong>{newBookingBanner.pitchName}</strong> es para el <strong className="capitalize">{newBookingBanner.bookingDateStr}</strong>.
+                  El filtro actual muestra «Hoy» — cámbialo para ver tu reserva.
+                </p>
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {newBookingBanner.type === 'other_date' && (
+              <button
+                onClick={() => { setDateFilter('todas'); setBannerDismissed(true); }}
+                className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-xl transition-colors whitespace-nowrap"
+              >
+                Ver todas las fechas
+              </button>
+            )}
+            <button
+              onClick={() => setBannerDismissed(true)}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Notificación Flotante en Tiempo Real */}
       {notification?.show && (
         <div className="fixed top-20 right-4 sm:right-8 z-[1000] max-w-md w-full animate-in slide-in-from-top-4 duration-300">
@@ -666,7 +761,7 @@ export default function UserReservationsPage() {
         <div className="relative inline-block min-w-[170px]">
           <select
             value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value as any)}
+            onChange={(e) => { setDateFilter(e.target.value as DateFilterType); setBannerDismissed(true); }}
             className="page-filter-bar page-header-text-primary w-full appearance-none cursor-pointer outline-none text-xs font-black rounded-xl pl-3 pr-8 py-2 transition-all shadow-xs border bg-[#CDE0D1]/70 text-[#054D27] border-[#BACFC0] hover:bg-[#CDE0D1] focus:ring-2 focus:ring-[#008744]/20"
           >
             <option value="todas" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">

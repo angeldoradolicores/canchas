@@ -4,7 +4,8 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   ArrowRight, CalendarDays, DollarSign, Grid2X2,
   TrendingUp, Clock, CheckCircle2, AlertCircle, Trophy, XCircle,
-  BarChart3, Wallet, Star, Activity, Zap, ChevronRight, Users, Bell, X
+  BarChart3, Wallet, Star, Activity, Zap, ChevronRight, Users, Bell, X,
+  TrendingDown, Target, CalendarClock, Hash, FileText, Layers
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
@@ -71,6 +72,32 @@ function MiniBarChart({ data }: { data: { label: string; value: number }[] }) {
           />
           <span className="text-[9px] text-muted-foreground font-medium truncate w-full text-center block">
             {d.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WeekdayChart({ data }: { data: { label: string; value: number; income: number }[] }) {
+  const max = Math.max(...data.map(d => d.value), 1);
+  const colors = ['bg-violet-400', 'bg-sky-400', 'bg-emerald-400', 'bg-primary', 'bg-amber-400', 'bg-rose-400', 'bg-pink-400'];
+  return (
+    <div className="flex items-end gap-1.5 h-20 w-full">
+      {data.map((d, i) => (
+        <div key={i} className="flex-1 flex flex-col items-center gap-1 min-w-0 group">
+          <div className="relative flex-1 flex flex-col justify-end w-full">
+            <div
+              className={`w-full rounded-t-md ${colors[i % colors.length]} opacity-80 group-hover:opacity-100 transition-all duration-500`}
+              style={{ height: `${Math.max(4, (d.value / max) * 64)}px` }}
+              title={`${d.label}: ${d.value} reservas`}
+            />
+          </div>
+          <span className="text-[9px] text-muted-foreground font-bold truncate w-full text-center block">
+            {d.label}
+          </span>
+          <span className="text-[8px] text-primary font-bold truncate w-full text-center block">
+            {d.value}
           </span>
         </div>
       ))}
@@ -258,6 +285,37 @@ export function OwnerDashboard() {
     return days;
   }, [allBookings]);
 
+  // Actividad por día de la semana (sobre todas las reservas del período)
+  const byWeekday = useMemo(() => {
+    const labels = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    return labels.map((label, idx) => {
+      const dayBookings = filteredBookings.filter(b => new Date(b.start_time).getDay() === idx);
+      return {
+        label,
+        value: dayBookings.length,
+        income: dayBookings.filter(b => b.status === 'confirmed').reduce((s, b) => s + getBookingIncome(b), 0),
+      };
+    });
+  }, [filteredBookings]);
+
+  // Métricas adicionales
+  const uniqueCustomers = useMemo(() => {
+    const names = new Set(filteredBookings.map(b => b.customer_phone || b.customer_name || b.user_id).filter(Boolean));
+    return names.size;
+  }, [filteredBookings]);
+
+  const cancelRate = filteredBookings.length > 0 ? Math.round((cancelled.length / filteredBookings.length) * 100) : 0;
+
+  // Ingresos proyectados: extrapolar el mes actual basado en los días transcurridos
+  const projectedMonthIncome = useMemo(() => {
+    if (filter !== 'mes' && filter !== 'semana') return null;
+    const now = new Date();
+    const dayOfMonth = now.getDate();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    if (dayOfMonth === 0) return null;
+    return Math.round((totalIncome / dayOfMonth) * daysInMonth);
+  }, [totalIncome, filter]);
+
   if (loading || !user?.id) {
     return (
       <div className="py-24 flex flex-col items-center justify-center gap-4">
@@ -357,7 +415,6 @@ export function OwnerDashboard() {
 
       {/* Grid Stat Cards Fila 2 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 w-full max-w-full min-w-0">
-        {/* <StatCard icon={<Wallet size={18} className="text-sky-600 shrink-0" />} title="Total en abonos" value={fmt(totalDeposit)} sub="Depósitos recibidos" accent="bg-sky-500" /> */}
         <div className="min-w-0">
           <StatCard icon={<TrendingUp size={18} className="text-teal-600 shrink-0" />} title="Promedio por reserva" value={fmt(avgIncome)} sub="Reservas confirmadas" accent="bg-teal-500" />
         </div>
@@ -366,6 +423,26 @@ export function OwnerDashboard() {
         </div>
         <div className="min-w-0">
           <StatCard icon={<Clock size={18} className="text-rose-500 shrink-0" />} title="Hora más popular" value={topHour ? topHour[0] : '—'} sub={topHour ? `${topHour[1]} reservas` : 'Sin datos'} accent="bg-rose-400" />
+        </div>
+      </div>
+
+      {/* Grid Stat Cards Fila 3 — Métricas Adicionales */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 w-full max-w-full min-w-0">
+        <div className="min-w-0">
+          <StatCard icon={<Users size={18} className="text-indigo-600 shrink-0" />} title="Clientes únicos" value={uniqueCustomers} sub="En el período" accent="bg-indigo-500" />
+        </div>
+        <div className="min-w-0">
+          <StatCard icon={<Wallet size={18} className="text-sky-600 shrink-0" />} title="Total en abonos" value={fmt(totalDeposit)} sub="Depósitos recibidos" accent="bg-sky-500" />
+        </div>
+        <div className="min-w-0">
+          <StatCard icon={<TrendingDown size={18} className="text-red-500 shrink-0" />} title="Tasa de cancelación" value={`${cancelRate}%`} sub={`${cancelled.length} canceladas`} accent="bg-red-400" />
+        </div>
+        <div className="min-w-0">
+          {projectedMonthIncome !== null ? (
+            <StatCard icon={<Target size={18} className="text-purple-600 shrink-0" />} title="Ingresos proyectados" value={fmt(projectedMonthIncome)} sub="Al ritmo actual del mes" accent="bg-purple-500" />
+          ) : (
+            <StatCard icon={<Hash size={18} className="text-zinc-500 shrink-0" />} title="Total de solicitudes" value={filteredBookings.length} sub="Todas las reservas" accent="bg-zinc-400" />
+          )}
         </div>
       </div>
 
@@ -466,6 +543,17 @@ export function OwnerDashboard() {
               <p className="text-xs text-muted-foreground">Reservas confirmadas por día</p>
             </div>
             <div className="mt-4"><MiniBarChart data={last7} /></div>
+          </div>
+
+          {/* Actividad por día de la semana */}
+          <div className="bg-card border border-border rounded-2xl p-4 sm:p-5 shadow-xs">
+            <div className="pb-3 border-b border-border/60">
+              <h2 className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                <CalendarClock size={15} className="text-violet-500" /> Días más activos
+              </h2>
+              <p className="text-xs text-muted-foreground">Total reservas por día de la semana</p>
+            </div>
+            <div className="mt-4"><WeekdayChart data={byWeekday} /></div>
           </div>
 
           {/* Estado general */}
@@ -595,6 +683,106 @@ export function OwnerDashboard() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* ── Tabla Corporativa Completa ── */}
+      <div className="bg-card border border-border rounded-2xl shadow-xs overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-4 sm:p-5 border-b border-border/60">
+          <div>
+            <h2 className="text-base font-extrabold text-foreground flex items-center gap-2">
+              <FileText size={16} className="text-primary" /> Detalle de reservas
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {filteredBookings.length} registros en el período · Ingresos confirmados: <span className="font-bold text-foreground">{fmt(totalIncome)}</span>
+            </p>
+          </div>
+          <Link
+            href="/dashboard/bookings"
+            className="text-xs font-bold text-primary hover:underline flex items-center gap-1 shrink-0"
+          >
+            Ver todas <ArrowRight size={13} />
+          </Link>
+        </div>
+
+        {filteredBookings.length === 0 ? (
+          <div className="py-12 flex flex-col items-center gap-2 text-muted-foreground">
+            <CalendarDays size={32} className="opacity-30" />
+            <p className="text-xs font-medium">Sin reservas en este período</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-secondary/50 border-b border-border/60">
+                  <th className="text-left px-3 sm:px-4 py-3 font-extrabold text-muted-foreground uppercase tracking-wider whitespace-nowrap">#</th>
+                  <th className="text-left px-3 sm:px-4 py-3 font-extrabold text-muted-foreground uppercase tracking-wider whitespace-nowrap">Cliente</th>
+                  <th className="text-left px-3 sm:px-4 py-3 font-extrabold text-muted-foreground uppercase tracking-wider whitespace-nowrap hidden sm:table-cell">Cancha</th>
+                  <th className="text-left px-3 sm:px-4 py-3 font-extrabold text-muted-foreground uppercase tracking-wider whitespace-nowrap">Partido</th>
+                  <th className="text-right px-3 sm:px-4 py-3 font-extrabold text-muted-foreground uppercase tracking-wider whitespace-nowrap hidden md:table-cell">Abono</th>
+                  <th className="text-right px-3 sm:px-4 py-3 font-extrabold text-muted-foreground uppercase tracking-wider whitespace-nowrap">Total</th>
+                  <th className="text-center px-3 sm:px-4 py-3 font-extrabold text-muted-foreground uppercase tracking-wider whitespace-nowrap">Estado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/40">
+                {filteredBookings.slice(0, 50).map((row: any, idx: number) => (
+                  <tr key={row.id} className="hover:bg-secondary/30 transition-colors">
+                    <td className="px-3 sm:px-4 py-2.5 text-muted-foreground font-medium">{idx + 1}</td>
+                    <td className="px-3 sm:px-4 py-2.5">
+                      <div className="font-bold text-foreground capitalize">{row.customer_name || 'Cliente'}</div>
+                      {row.customer_phone && (
+                        <div className="text-[10px] text-muted-foreground">{row.customer_phone}</div>
+                      )}
+                    </td>
+                    <td className="px-3 sm:px-4 py-2.5 hidden sm:table-cell">
+                      <span className="font-semibold text-foreground/90 uppercase">{row.pitches?.name || '—'}</span>
+                    </td>
+                    <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap">
+                      <div className="font-semibold text-foreground">
+                        {new Date(row.start_time).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {new Date(row.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })}
+                      </div>
+                    </td>
+                    <td className="px-3 sm:px-4 py-2.5 text-right hidden md:table-cell">
+                      <span className="font-semibold text-sky-600 dark:text-sky-400">{fmt(Number(row.deposit_amount || 0))}</span>
+                    </td>
+                    <td className="px-3 sm:px-4 py-2.5 text-right">
+                      <span className="font-extrabold text-foreground">{fmt(getBookingIncome(row))}</span>
+                    </td>
+                    <td className="px-3 sm:px-4 py-2.5 text-center">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${
+                        row.status === 'confirmed'
+                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                          : row.status === 'pending'
+                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                            : 'bg-rose-500/10 text-rose-500'
+                      }`}>
+                        {row.status === 'confirmed' ? <CheckCircle2 size={10} /> : row.status === 'pending' ? <AlertCircle size={10} /> : <XCircle size={10} />}
+                        {row.status === 'confirmed' ? 'Aprobada' : row.status === 'pending' ? 'Pendiente' : 'Cancelada'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              {/* Totales al pie de la tabla */}
+              <tfoot>
+                <tr className="bg-secondary/50 border-t-2 border-border/80">
+                  <td colSpan={4} className="px-3 sm:px-4 py-3 font-extrabold text-xs text-foreground">Totales del período</td>
+                  <td className="px-3 sm:px-4 py-3 text-right hidden md:table-cell">
+                    <span className="font-extrabold text-sky-600 dark:text-sky-400">{fmt(totalDeposit)}</span>
+                  </td>
+                  <td className="px-3 sm:px-4 py-3 text-right">
+                    <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{fmt(totalIncome)}</span>
+                  </td>
+                  <td className="px-3 sm:px-4 py-3 text-center">
+                    <span className="text-[10px] font-bold text-muted-foreground">{confirmed.length}/{filteredBookings.length} conf.</span>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Accesos rápidos */}
