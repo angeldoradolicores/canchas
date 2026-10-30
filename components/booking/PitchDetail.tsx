@@ -830,8 +830,9 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                 (typeof currentPitch.amenities === 'string' && currentPitch.amenities.toLowerCase().includes('techada')) ??
                 (Array.isArray(currentPitch.amenities) && currentPitch.amenities.some((a: string) => typeof a === 'string' && a.toLowerCase().includes('techada')))
               );
+
               return (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 mt-3 sm:mt-4 w-full">
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-3 mt-3 sm:mt-4 w-full">
                   {[
                     ['Tipo', currentPitch.type || 'Fútbol 5'],
                     ['Superficie', currentPitch.surface || 'Sintética'],
@@ -839,12 +840,12 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                   ].map(([k, v]) => (
                     <div
                       key={k}
-                      className="p-3.5 sm:p-3.5 bg-emerald-500/5 dark:bg-emerald-500/10 rounded-2xl sm:rounded-xl border border-emerald-500/10 dark:border-emerald-500/20 shadow-xs flex flex-col items-center justify-center text-center transition-all hover:scale-[1.02] duration-200 w-full"
+                      className="p-2 sm:p-3.5 bg-emerald-500/5 dark:bg-emerald-500/10 rounded-xl border border-emerald-500/10 dark:border-emerald-500/20 shadow-xs flex flex-col items-center justify-center text-center transition-all hover:scale-[1.02] duration-200 w-full min-w-0"
                     >
-                      <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
+                      <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5 truncate w-full">
                         {k}
                       </p>
-                      <p className="font-black text-xs sm:text-sm text-emerald-700 dark:text-emerald-400 leading-tight">
+                      <p className="font-black text-[11px] sm:text-sm text-emerald-700 dark:text-emerald-400 leading-tight truncate w-full">
                         {v}
                       </p>
                     </div>

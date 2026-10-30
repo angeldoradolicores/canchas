@@ -440,7 +440,6 @@ export function OwnerDashboard() {
         </div>
       </div>
 
-      Grid Stat Cards Fila 3 — Métricas Adicionales
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 w-full max-w-full min-w-0">
 
       </div>
@@ -751,10 +750,10 @@ export function OwnerDashboard() {
                     </td>
                     <td className="px-3 sm:px-4 py-2.5 text-center">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${row.status === 'confirmed'
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                          : row.status === 'pending'
-                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                            : 'bg-rose-500/10 text-rose-500'
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        : row.status === 'pending'
+                          ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                          : 'bg-rose-500/10 text-rose-500'
                         }`}>
                         {row.status === 'confirmed' ? <CheckCircle2 size={10} /> : row.status === 'pending' ? <AlertCircle size={10} /> : <XCircle size={10} />}
                         {row.status === 'confirmed' ? 'Aprobada' : row.status === 'pending' ? 'Pendiente' : 'Cancelada'}

@@ -313,7 +313,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
           <div className="w-full py-3 px-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex flex-col items-center justify-center gap-1">
             {/* Nombre del Complejo (Ahora es el elemento más grande y protagonista) */}
             {((pitch as any).companies?.name || (pitch as any).company?.name) && (
-              <span className="text-base sm:text-lg font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300 text-center truncate max-w-full">
+              <span className="text-base sm:text-lg font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300 text-center max-w-full">
                 {((pitch as any).companies?.name || (pitch as any).company?.name)}
               </span>
             )}
@@ -1007,7 +1007,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                       </div>
 
                       {/* Título del Complejo */}
-                      <h4 className="font-extrabold text-xs sm:text-sm text-foreground uppercase truncate leading-tight">
+                      <h4 className="font-extrabold text-xs sm:text-sm text-foreground uppercase leading-tight">
                         {comp.name}
                       </h4>
 

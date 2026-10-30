@@ -402,8 +402,8 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
                 return (
                   <div className="grid grid-cols-3 gap-2.5">
                     <div className="p-3 bg-secondary/40 rounded-2xl border border-border/60">
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase block mb-0.5">Modalidad</span>
-                      <span className="text-xs sm:text-sm font-extrabold text-foreground truncate block">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase block mb-0.5">Modalidades</span>
+                      <span className="text-xs sm:text-sm font-extrabold text-foreground block">
                         {(currentPitch as any).supported_types?.join(', ') || currentPitch.type || 'Fútbol 5'}
                       </span>
                     </div>

@@ -133,10 +133,24 @@ export function ManualBookingModal({
   const [error, setError] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dateScrollRef = useRef<HTMLDivElement>(null);
+  const todayButtonRef = useRef<HTMLButtonElement>(null);
   const supabase = createClient();
 
   useEffect(() => {
     if (today && !selectedDate) setSelectedDate(today);
+  }, [today]);
+
+  // Auto-scroll date carousel to today when modal opens
+  useEffect(() => {
+    if (!today || !dateScrollRef.current || !todayButtonRef.current) return;
+    const container = dateScrollRef.current;
+    const todayBtn = todayButtonRef.current;
+    const containerLeft = container.getBoundingClientRect().left;
+    const btnLeft = todayBtn.getBoundingClientRect().left;
+    const offset = btnLeft - containerLeft - container.clientWidth / 2 + todayBtn.clientWidth / 2;
+    container.scrollLeft += offset;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today]);
 
   // Fetch taken slots – including linked pitches for combined canchas
@@ -357,12 +371,13 @@ export function ManualBookingModal({
             <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
               <CalendarDays size={12} /> Fecha
             </label>
-            <div className="flex overflow-x-auto gap-2 pb-1 scrollbar-hide snap-x">
+            <div ref={dateScrollRef} className="flex overflow-x-auto gap-2 pb-1 scrollbar-hide snap-x">
               {nextDays.map(d => {
                 const isSel = selectedDate === d.dateStr;
                 return (
                   <button
                     key={d.dateStr}
+                    ref={d.isToday ? todayButtonRef : undefined}
                     onClick={() => { setSelectedDate(d.dateStr); setSelectedTimes([]); }}
                     className={`flex-shrink-0 snap-start min-w-[62px] p-2.5 rounded-xl border text-center transition-all ${isSel
                       ? 'bg-primary text-white border-primary shadow-md ring-2 ring-primary/30'
