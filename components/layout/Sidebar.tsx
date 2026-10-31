@@ -33,7 +33,7 @@ export function Sidebar() {
     ['Retos y Jugadores', Swords, '/community'],
     ['Campeonatos', Trophy, '/tournaments'],
     ['Escuelas de fútbol', GraduationCap, '/schools'],
-    ['Tour del Producto', Sparkles, '/tour.html'],
+    // ['Tour del Producto', Sparkles, '/tour.html'],
     ['Mi perfil', User, '/profile'],
   ] as const;
 

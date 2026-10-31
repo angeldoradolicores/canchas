@@ -361,6 +361,18 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
       const firstDept = first.department || (first as any)?.companies?.department;
       if (firstDept) setDepartment(firstDept);
 
+      // Autocompletar el barrio de las canchas seleccionadas o del complejo
+      const foundNeigh = selected.find(p => p.neighborhood)?.neighborhood
+        || selected.find(p => p.custom_pricing?.neighborhood)?.custom_pricing?.neighborhood
+        || selected.find(p => p.custom_pricing?.barrio)?.custom_pricing?.barrio
+        || (first as any)?.neighborhood
+        || (first as any)?.custom_pricing?.neighborhood
+        || (first as any)?.custom_pricing?.barrio
+        || (first as any)?.zone
+        || (first as any)?.companies?.zone
+        || '';
+      if (foundNeigh) setNeighborhood(foundNeigh);
+
       const pLat = (typeof first.lat === 'number' && !isNaN(first.lat)) ? first.lat : (Number(first.custom_pricing?.lat) || Number((first as any)?.companies?.lat));
       const pLng = (typeof first.lng === 'number' && !isNaN(first.lng)) ? first.lng : (Number(first.custom_pricing?.lng) || Number((first as any)?.companies?.lng));
       if (pLat && pLng) {

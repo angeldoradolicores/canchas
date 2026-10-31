@@ -231,6 +231,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
   const handleFormatToggle = (format: string) => {
     if (format === 'Todos') {
       setSelectedFormats([]); // Limpia el filtro para mostrar todos
+      setOpenDropdown(null); // Al elegir cualquier formato se cierra automáticamente
       return;
     }
 
@@ -536,6 +537,23 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
   const [showCalendarWidget, setShowCalendarWidget] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<'format' | null>(null);
   const [activeTimeCategory, setActiveTimeCategory] = useState<'manana' | 'tarde' | 'noche'>('noche');
+  const formatDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Cerrar el selector de formato automáticamente al tocar o hacer clic fuera
+  useEffect(() => {
+    if (openDropdown !== 'format') return;
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (formatDropdownRef.current && !formatDropdownRef.current.contains(e.target as Node)) {
+        setOpenDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [openDropdown]);
 
   // Próximas 6 fechas rápidas desde hoy
   const nextDays = useMemo(() => {
@@ -1290,38 +1308,111 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                 </div>
               </div>
 
-              {/* Formato (Desplegable) */}
-              <div className="flex flex-col gap-1.5 relative z-10">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                  <Grid2X2 size={12} /> Formato
-                </label>
+              {/* Formato (Desplegable Mejorado Multiselección) */}
+              <div className="flex flex-col gap-1.5 relative z-20" ref={formatDropdownRef}>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Grid2X2 size={12} /> Formato
+                  </label>
+                  {selectedFormats.length > 0 && (
+                    <span className="text-[10px] font-extrabold text-primary px-2 py-0.5 rounded-full bg-primary/10">
+                      {selectedFormats.length} {selectedFormats.length === 1 ? 'elegido' : 'elegidos'}
+                    </span>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => setOpenDropdown(openDropdown === 'format' ? null : 'format')}
-                  className="w-full min-h-[46px] px-4 py-2 rounded-xl border text-sm font-bold transition-all flex justify-between items-center bg-card text-foreground border-border hover:border-primary/40 focus:ring-2 focus:ring-primary/30"
+                  className={`w-full min-h-[46px] px-4 py-2 rounded-xl border text-sm font-bold transition-all flex justify-between items-center bg-card text-foreground cursor-pointer ${
+                    openDropdown === 'format'
+                      ? 'border-primary ring-2 ring-primary/20 shadow-sm'
+                      : 'border-border hover:border-primary/40'
+                  }`}
                 >
                   <span className="truncate">
-                    {selectedFormats.length === 0 ? 'Cualquier formato' : selectedFormats.join(', ')}
+                    {selectedFormats.length === 0
+                      ? 'Cualquier formato'
+                      : selectedFormats.length <= 2
+                      ? selectedFormats.join(', ')
+                      : `${selectedFormats.length} formatos seleccionados`}
                   </span>
-                  <ChevronDown size={16} className={`flex-shrink-0 transition-transform text-muted-foreground ${openDropdown === 'format' ? 'rotate-180' : ''}`} />
+                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    {selectedFormats.length > 0 && (
+                      <span className="w-5 h-5 rounded-full bg-primary text-white text-[10px] font-black flex items-center justify-center">
+                        {selectedFormats.length}
+                      </span>
+                    )}
+                    <ChevronDown size={16} className={`transition-transform text-muted-foreground ${openDropdown === 'format' ? 'rotate-180 text-primary' : ''}`} />
+                  </div>
                 </button>
                 {openDropdown === 'format' && (
-                  <div className="absolute top-[100%] mt-1 left-0 right-0 p-2 bg-card border border-border rounded-xl shadow-xl flex flex-col gap-1 animate-in fade-in slide-in-from-top-1 z-20 max-h-48 overflow-y-auto">
-                    {['Todos', 'Fútbol 5', 'Fútbol 6', 'Fútbol 7', 'Fútbol 11'].map(f => {
-                      const isActive = f === 'Todos' ? selectedFormats.length === 0 : selectedFormats.includes(f);
+                  <div className="absolute top-[100%] mt-1.5 left-0 right-0 p-2 bg-card border border-border rounded-2xl shadow-2xl flex flex-col gap-1 animate-in fade-in slide-in-from-top-1 z-30 ring-1 ring-border/50">
+                    {/* Opción Cualquier formato (Cierra inmediatamente) */}
+                    <button
+                      type="button"
+                      onClick={() => handleFormatToggle('Todos')}
+                      className={`py-2 px-3 rounded-xl text-sm font-bold text-left transition-all flex justify-between items-center cursor-pointer ${
+                        selectedFormats.length === 0 ? 'bg-primary/15 text-primary' : 'text-foreground hover:bg-secondary'
+                      }`}
+                    >
+                      <div className="flex flex-col">
+                        <span>Cualquier formato</span>
+                        <span className="text-[10px] text-muted-foreground font-normal">Mostrar canchas de cualquier tamaño</span>
+                      </div>
+                      {selectedFormats.length === 0 && <CheckCircle2 size={16} className="text-primary shrink-0" />}
+                    </button>
+
+                    <div className="h-px bg-border/60 my-1" />
+
+                    {/* Opciones individuales multiselección */}
+                    {['Fútbol 5', 'Fútbol 6', 'Fútbol 7', 'Fútbol 11'].map(f => {
+                      const isActive = selectedFormats.includes(f);
                       return (
                         <button
                           key={f}
                           type="button"
                           onClick={() => handleFormatToggle(f)}
-                          className={`py-2 px-3 rounded-lg text-sm font-bold text-left transition-all flex justify-between items-center ${isActive ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-primary/5 hover:text-primary'
-                            }`}
+                          className={`py-2 px-3 rounded-xl text-sm font-bold text-left transition-all flex justify-between items-center cursor-pointer ${
+                            isActive ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-secondary'
+                          }`}
                         >
-                          <span>{f === 'Todos' ? 'Cualquier formato' : f}</span>
-                          {isActive && <CheckCircle2 size={16} className="text-primary" />}
+                          <div className="flex items-center gap-2">
+                            <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-colors ${
+                              isActive ? 'bg-primary border-primary text-white' : 'border-muted-foreground/40 bg-card'
+                            }`}>
+                              {isActive && <CheckCircle2 size={12} className="text-white" />}
+                            </div>
+                            <span>{f}</span>
+                          </div>
+                          {isActive && <span className="text-[10px] font-bold text-primary">Seleccionado</span>}
                         </button>
                       );
                     })}
+
+                    {/* Footer de confirmación y cierre rápido */}
+                    <div className="pt-2 mt-1 border-t border-border/60 flex items-center justify-between gap-2 px-1">
+                      {selectedFormats.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFormats([])}
+                          className="text-xs text-muted-foreground hover:text-foreground font-bold px-2 py-1.5 rounded-lg hover:bg-secondary transition-colors cursor-pointer"
+                        >
+                          Limpiar
+                        </button>
+                      ) : <span />}
+                      <button
+                        type="button"
+                        onClick={() => setOpenDropdown(null)}
+                        className="px-4 py-1.5 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer ml-auto"
+                      >
+                        <span>Listo</span>
+                        {selectedFormats.length > 0 && (
+                          <span className="bg-white/25 px-1.5 py-0.2 rounded-full text-[10px]">
+                            {selectedFormats.length}
+                          </span>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

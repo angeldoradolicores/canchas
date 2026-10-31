@@ -144,6 +144,7 @@ export default function BookingsPage() {
     targetLabel: string;
     color: 'sky' | 'emerald' | 'rose';
     text: string;
+    phase?: 'morphed' | 'departing';
   } | null>(null);
   const [bumpTab, setBumpTab] = useState<string | null>(null);
 
@@ -508,20 +509,30 @@ export default function BookingsPage() {
     text: string,
     customerName?: string
   ) => {
+    // Fase 1: Transformación visual inmediata (el usuario ve cambiar el badge, color e ícono con brillo)
     setAnimatingCard({
       bookingIds: ids,
       targetTab,
       targetLabel,
       color,
       text,
+      phase: 'morphed',
     });
     setBumpTab(targetTab);
+
+    // Fase 2: Tras mostrar el cambio de estado con claridad (750ms), iniciar salida suave hacia la pestaña
+    setTimeout(() => {
+      setAnimatingCard(prev => prev ? { ...prev, phase: 'departing' } : null);
+    }, 750);
+
+    // Fase 3: Concluir animación completa
     setTimeout(() => {
       setAnimatingCard(null);
-    }, 700);
+    }, 1300);
+
     setTimeout(() => {
       setBumpTab(null);
-    }, 2200);
+    }, 2400);
   };
 
   const updateStatus = async (id: string, newStatus: 'confirmed' | 'cancelled') => {
@@ -539,7 +550,7 @@ export default function BookingsPage() {
           targetTab,
           targetLabel,
           bal > 0 ? 'sky' : 'emerald',
-          bal > 0 ? '¡Aprobada! Trasladando a Por Cobrar ➔' : '¡Aprobada y Pagada! Trasladando a Cobradas ➔',
+          bal > 0 ? '¡Aprobada! Moviendo a Por Cobrar ➔' : '¡Aprobada y Pagada! Moviendo a Cobradas ➔',
           bTarget?.customer_name
         );
       } else if (newStatus === 'cancelled') {
@@ -548,10 +559,16 @@ export default function BookingsPage() {
           'cancelled',
           'Canceladas',
           'rose',
-          '¡Cancelada! Trasladando a Canceladas ➔',
+          '¡Cancelada! Moviendo a Canceladas ➔',
           bTarget?.customer_name
         );
       }
+
+      // Actualizar estado de forma reactiva e inmediata
+      setBookings(prev => prev.map(b => b.id === id
+        ? { ...b, status: newStatus, payment_status: newStatus === 'confirmed' ? 'verified' : 'rejected', reviewed_at: new Date().toISOString() }
+        : b
+      ));
 
       const token = (await supabase.auth.getSession()).data.session?.access_token;
       const res = await fetch('/api/bookings/batch-action', {
@@ -563,12 +580,7 @@ export default function BookingsPage() {
         body: JSON.stringify({ ids: [id], action: newStatus === 'confirmed' ? 'confirm' : 'cancel' }),
       });
       const json = await res.json();
-      if (res.ok) {
-        setBookings(prev => prev.map(b => b.id === id
-          ? { ...b, status: newStatus, payment_status: newStatus === 'confirmed' ? 'verified' : 'rejected', reviewed_at: new Date().toISOString() }
-          : b
-        ));
-      } else {
+      if (!res.ok) {
         console.error('[updateStatus] error:', json?.error);
       }
     } catch (err) {
@@ -702,6 +714,12 @@ export default function BookingsPage() {
         name
       );
 
+      // Actualizar reactivamente de inmediato
+      setBookings(prev => prev.map(b => ids.includes(b.id)
+        ? { ...b, status: 'confirmed', payment_status: 'verified', reviewed_at: new Date().toISOString() }
+        : b
+      ));
+
       const token = (await supabase.auth.getSession()).data.session?.access_token;
       const res = await fetch('/api/bookings/batch-action', {
         method: 'POST',
@@ -747,6 +765,13 @@ export default function BookingsPage() {
         `¡${ids.length} horas canceladas! Moviendo a Canceladas ➔`,
         'Reserva'
       );
+
+      // Actualizar reactivamente de inmediato
+      setBookings(prev => prev.map(b => ids.includes(b.id)
+        ? { ...b, status: 'cancelled', payment_status: 'rejected', reviewed_at: new Date().toISOString() }
+        : b
+      ));
+
       const token = (await supabase.auth.getSession()).data.session?.access_token;
       const res = await fetch('/api/bookings/batch-action', {
         method: 'POST',
@@ -1448,17 +1473,13 @@ export default function BookingsPage() {
                     onClick={() => dismissNewArrival(group)}
                     className={`bg-card rounded-2xl border transition-all p-3.5 sm:p-4.5 flex flex-col gap-3.5 relative overflow-hidden ${isNewlyArrived ? 'ring-2 ring-amber-500 shadow-lg shadow-amber-500/10 cursor-pointer' : 'border-border shadow-sm hover:shadow-md'
                       } ${isAnimating && animatingCard
-                        ? filterStatus !== 'all'
-                          ? animatingCard.color === 'sky'
-                            ? '-translate-y-8 scale-[0.96] opacity-0 duration-700 ease-in-out pointer-events-none ring-2 ring-sky-500 border-sky-500 bg-sky-500/10 shadow-2xl shadow-sky-500/30'
-                            : animatingCard.color === 'emerald'
-                              ? '-translate-y-8 scale-[0.96] opacity-0 duration-700 ease-in-out pointer-events-none ring-2 ring-emerald-500 border-emerald-500 bg-emerald-500/10 shadow-2xl shadow-emerald-500/30'
-                              : '-translate-y-8 scale-[0.96] opacity-0 duration-700 ease-in-out pointer-events-none ring-2 ring-rose-500 border-rose-500 bg-rose-500/10 shadow-2xl shadow-rose-500/30'
+                        ? animatingCard.phase === 'departing' && filterStatus !== 'all'
+                          ? '-translate-y-6 scale-[0.95] opacity-0 max-h-0 py-0 my-0 overflow-hidden duration-500 ease-in-out pointer-events-none'
                           : animatingCard.color === 'sky'
-                            ? 'scale-[1.02] ring-2 ring-sky-500 border-sky-500 shadow-xl shadow-sky-500/20 bg-sky-500/5 duration-500'
+                            ? 'scale-[1.01] sm:scale-[1.02] ring-4 ring-sky-500/40 border-sky-500 shadow-2xl shadow-sky-500/25 bg-sky-500/5 duration-300'
                             : animatingCard.color === 'emerald'
-                              ? 'scale-[1.02] ring-2 ring-emerald-500 border-emerald-500 shadow-xl shadow-emerald-500/20 bg-emerald-500/5 duration-500'
-                              : 'scale-[1.02] ring-2 ring-rose-500 border-rose-500 shadow-xl shadow-rose-500/20 bg-rose-500/5 duration-500'
+                              ? 'scale-[1.01] sm:scale-[1.02] ring-4 ring-emerald-500/40 border-emerald-500 shadow-2xl shadow-emerald-500/25 bg-emerald-500/5 duration-300'
+                              : 'scale-[1.01] sm:scale-[1.02] ring-4 ring-rose-500/40 border-rose-500 shadow-2xl shadow-rose-500/25 bg-rose-500/5 duration-300'
                         : ''
                       }`}
                   >
@@ -1525,7 +1546,24 @@ export default function BookingsPage() {
                     {/* Header: Estado, Categoría, Tipo y Duración */}
                     <div className="flex items-center justify-between gap-2 flex-wrap pl-1.5">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        {group.status === 'pending' ? (
+                        {isAnimating && animatingCard ? (
+                          animatingCard.targetTab === 'paid' ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-lg bg-emerald-500 text-white shadow-md animate-pulse">
+                              <CheckCircle size={12} className="text-white" />
+                              Aprobada · Pago Completo
+                            </span>
+                          ) : animatingCard.targetTab === 'pending_payment' ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-lg bg-sky-500 text-white shadow-md animate-pulse">
+                              <Receipt size={12} className="text-white" />
+                              Aprobada · Saldo Por Cobrar
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-lg bg-rose-500 text-white shadow-md animate-pulse">
+                              <XCircle size={12} className="text-white" />
+                              Cancelada
+                            </span>
+                          )
+                        ) : group.status === 'pending' ? (
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60">
                             <Clock size={12} className="text-amber-600 dark:text-amber-400" />
                             Pendiente de Aprobación
@@ -1556,10 +1594,18 @@ export default function BookingsPage() {
                         )}
                       </div>
 
-                      {/* Badge de Horas */}
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-secondary/80 text-muted-foreground border border-border/50">
-                        {group.bookings.length} {group.bookings.length === 1 ? 'hora' : 'horas'}
-                      </span>
+                      {/* Badges de Solicitud y Horas */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {group.created_at && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-lg bg-primary/10 text-primary border border-primary/20 flex items-center gap-1" title="Fecha y hora exacta en que el cliente realizó la reserva">
+                            <Clock size={10} />
+                            <span>Solicitada: {new Date(group.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}, {new Date(group.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })}</span>
+                          </span>
+                        )}
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-secondary/80 text-muted-foreground border border-border/50">
+                          {group.bookings.length} {group.bookings.length === 1 ? 'hora' : 'horas'}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Información Principal: Cliente, Cancha, Horario, Cobro (Grid Responsivo) */}
@@ -1616,10 +1662,17 @@ export default function BookingsPage() {
 
                       {/* Fecha y Horario */}
                       <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">Fecha</p>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">Partido</p>
                         <p className="font-bold text-xs sm:text-sm text-foreground capitalize leading-snug">
                           {startTime.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
                         </p>
+                        {group.created_at && (
+                          <div className="mt-1 pt-1 border-t border-border/40">
+                            <span className="text-[10px] text-muted-foreground block leading-tight">
+                              Reservó: <strong className="text-foreground font-semibold">{new Date(group.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}, {new Date(group.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })}</strong>
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Finanzas */}

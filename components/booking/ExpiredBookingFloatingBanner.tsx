@@ -5,6 +5,7 @@ import { Clock, ArrowRight, X, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { useActiveBooking, EXPIRED_GRACE_KEY, GRACE_PERIOD_SECONDS } from '@/lib/active-booking-context';
 import { useRouter, usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { getLinkedPitchIds } from '@/lib/combined-pitch-utils';
 
 export interface ExpiredGraceSnapshot {
   pitch: any;
@@ -25,11 +26,20 @@ export function ExpiredBookingFloatingBanner() {
   const [remainingGrace, setRemainingGrace] = useState<number>(0);
   const [dismissed, setDismissed] = useState(false);
 
-  /** Verifica contra Supabase si alguno de los slots ya fue reservado por otra persona */
+  /** Verifica contra Supabase si alguno de los slots ya fue reservado o bloqueado por otra persona */
   const checkSlotAvailability = useCallback(async (snap: ExpiredGraceSnapshot): Promise<boolean> => {
     try {
       const pitchId = snap.pitch?.id;
       if (!pitchId || !snap.selectedDate || !snap.selectedTimes?.length) return false;
+
+      // Obtener todos los IDs de cancha en conflicto (esta cancha + combinadas hijas o padres)
+      let allPitchIds = [pitchId];
+      if (snap.pitch) {
+        try {
+          const directLinked = getLinkedPitchIds(snap.pitch);
+          allPitchIds = Array.from(new Set([...allPitchIds, ...directLinked]));
+        } catch {}
+      }
 
       // Construir rango de fechas para el día seleccionado (UTC-5)
       const dayStart = `${snap.selectedDate}T00:00:00-05:00`;
@@ -38,27 +48,32 @@ export function ExpiredBookingFloatingBanner() {
       const { data, error } = await supabase
         .from('bookings')
         .select('start_time, status, expires_at')
-        .eq('pitch_id', pitchId)
+        .in('pitch_id', allPitchIds)
         .gte('start_time', dayStart)
         .lte('start_time', dayEnd)
-        .in('status', ['confirmed', 'pending']);
+        .in('status', ['confirmed', 'pending', 'draft']);
 
       if (error || !data) return false;
 
-      // Convertir los tiempos seleccionados a horas locales para comparar
+      const nowIso = new Date().toISOString();
+
+      // Convertir los tiempos reservados a horas locales para comparar
       const bookedHours = new Set<number>();
       for (const b of data) {
         try {
+          // Si es draft, solo cuenta si aún no ha expirado
+          if (b.status === 'draft') {
+            if (!b.expires_at || b.expires_at <= nowIso) continue;
+          }
           const d = new Date(b.start_time);
           const localH = (d.getUTCHours() - 5 + 24) % 24;
           bookedHours.add(localH);
         } catch { /* ignorar */ }
       }
 
-      // Verificar si alguno de los selectedTimes ya está confirmado por alguien
+      // Verificar si alguno de los selectedTimes ya está reservado o bloqueado
       for (const t of snap.selectedTimes) {
         const str = String(t).trim();
-        // Puede ser "7pm", "07:00", o "7"
         let hourNum = -1;
         const ampm = str.match(/^(\d+)(am|pm)$/i);
         if (ampm) {
@@ -72,7 +87,7 @@ export function ExpiredBookingFloatingBanner() {
         }
 
         if (hourNum >= 0 && bookedHours.has(hourNum)) {
-          return true; // Al menos un slot ya está tomado
+          return true; // Al menos un slot ya fue tomado por otra persona
         }
       }
 
@@ -88,6 +103,9 @@ export function ExpiredBookingFloatingBanner() {
       localStorage.removeItem(EXPIRED_GRACE_KEY);
       setSnapshot(null);
       setRemainingGrace(0);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('canchas-expired-grace-updated', { detail: null }));
+      }
     }
   }, [checkSlotAvailability]);
 
@@ -137,37 +155,53 @@ export function ExpiredBookingFloatingBanner() {
     };
   }, [checkSnapshot]);
 
-  // Suscripción realtime: cuando cambia un booking del pitch, verificar disponibilidad
+  // Suscripción realtime y eventos de visibilidad: cuando alguien reserve o cambie bookings, verificar de inmediato
   useEffect(() => {
     if (!snapshot?.pitch?.id) return;
 
     const channel = supabase
-      .channel(`grace-banner-${snapshot.pitch.id}`)
+      .channel(`grace-banner-sync-${snapshot.pitch.id}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'bookings',
-          filter: `pitch_id=eq.${snapshot.pitch.id}`,
         },
         () => {
-          // Alguien modificó una reserva de esta cancha: verificar si ya está tomada
           dismissIfTaken(snapshot);
         }
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    const handleFocusOrVisible = () => {
+      dismissIfTaken(snapshot);
+    };
+
+    window.addEventListener('visibilitychange', handleFocusOrVisible);
+    window.addEventListener('focus', handleFocusOrVisible);
+
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener('visibilitychange', handleFocusOrVisible);
+      window.removeEventListener('focus', handleFocusOrVisible);
+    };
   }, [snapshot?.pitch?.id, dismissIfTaken, supabase]);
 
-  // Contador regresivo de los 4 minutos de gracia
+  // Contador regresivo de los 4 minutos de gracia + verificación periódica cada 3 segundos
   useEffect(() => {
     if (!snapshot || remainingGrace <= 0) return;
 
+    let tickCount = 0;
     const interval = setInterval(() => {
       const elapsed = Math.floor((Date.now() - snapshot.expiredAt) / 1000);
       const left = GRACE_PERIOD_SECONDS - elapsed;
+
+      tickCount++;
+      // Cada 3 segundos verificar si otra persona tomó la hora
+      if (tickCount % 3 === 0) {
+        dismissIfTaken(snapshot);
+      }
 
       if (left <= 0) {
         // Se acabaron los 4 minutos
@@ -181,7 +215,7 @@ export function ExpiredBookingFloatingBanner() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [snapshot, remainingGrace]);
+  }, [snapshot, remainingGrace, dismissIfTaken]);
 
   // Si hay una reserva activa en curso, no mostrar el banner de expirada
   if (activeBooking && secondsLeft > 0) {

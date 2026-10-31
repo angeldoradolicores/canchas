@@ -25,23 +25,75 @@ const DATE_FILTERS: { key: DateFilter; label: string }[] = [
 function startOf(filter: DateFilter): Date {
   const now = new Date();
   switch (filter) {
-    case 'hoy': { const d = new Date(now); d.setHours(0, 0, 0, 0); return d; }
-    case 'ayer': { const d = new Date(now); d.setDate(d.getDate() - 1); d.setHours(0, 0, 0, 0); return d; }
-    case 'semana': { const d = new Date(now); const day = d.getDay(); const diff = (day + 6) % 7; d.setDate(d.getDate() - diff); d.setHours(0, 0, 0, 0); return d; }
-    case 'mes': { return new Date(now.getFullYear(), now.getMonth(), 1); }
+    case 'hoy': {
+      const d = new Date(now);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    case 'ayer': {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 1);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    case 'semana': {
+      const d = new Date(now);
+      const day = d.getDay();
+      const diff = (day + 6) % 7; // Lunes como inicio de semana
+      d.setDate(d.getDate() - diff);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    case 'mes': {
+      return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    }
     default: return new Date(0);
   }
 }
 
 function endOf(filter: DateFilter): Date {
-  if (filter === 'ayer') { const d = new Date(); d.setDate(d.getDate() - 1); d.setHours(23, 59, 59, 999); return d; }
-  const d = new Date(); d.setHours(23, 59, 59, 999); return d;
+  const now = new Date();
+  switch (filter) {
+    case 'hoy': {
+      const d = new Date(now);
+      d.setHours(23, 59, 59, 999);
+      return d;
+    }
+    case 'ayer': {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 1);
+      d.setHours(23, 59, 59, 999);
+      return d;
+    }
+    case 'semana': {
+      const d = new Date(now);
+      const day = d.getDay();
+      const diff = (day + 6) % 7;
+      d.setDate(d.getDate() - diff + 6); // Domingo al final de la semana
+      d.setHours(23, 59, 59, 999);
+      return d;
+    }
+    case 'mes': {
+      const d = new Date(now.getFullYear(), now.getMonth() + 1, 0); // Último día del mes actual
+      d.setHours(23, 59, 59, 999);
+      return d;
+    }
+    default: return new Date(8640000000000000);
+  }
 }
 
 function fmt(n: number) { return '$' + n.toLocaleString('es-CO'); }
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'America/Bogota' });
+}
+
+function fmtDateTime(iso: string) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const dateStr = d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' });
+  const timeStr = d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+  return `${dateStr}, ${timeStr}`;
 }
 
 function getLocalDateString(dateInput: string | Date): string {
@@ -59,44 +111,56 @@ function getBookingIncome(b: any): number {
   return Number(b.total_price || b.pitches?.price_per_hour || 0);
 }
 
-function MiniBarChart({ data }: { data: { label: string; value: number }[] }) {
+function MiniBarChart({ data }: { data: { weekday: string; dateLabel: string; value: number; fullDate: string }[] }) {
   const max = Math.max(...data.map(d => d.value), 1);
   return (
-    <div className="flex items-end gap-1.5 h-16 w-full">
+    <div className="flex items-end gap-1 sm:gap-2 h-20 w-full pt-1">
       {data.map((d, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-          <div
-            className="w-full rounded-t-md bg-primary/80 transition-all duration-500"
-            style={{ height: `${Math.max(4, (d.value / max) * 56)}px` }}
-            title={`${d.label}: ${d.value}`}
-          />
-          <span className="text-[9px] text-muted-foreground font-medium truncate w-full text-center block">
-            {d.label}
-          </span>
+        <div key={i} className="flex-1 flex flex-col items-center gap-1.5 min-w-0 group">
+          <div className="relative flex-1 flex flex-col justify-end w-full">
+            <div
+              className="w-full rounded-t-lg bg-primary/80 group-hover:bg-primary transition-all duration-500 min-h-[4px]"
+              style={{ height: `${Math.max(4, (d.value / max) * 44)}px` }}
+              title={`${d.fullDate}: ${d.value} confirmadas`}
+            />
+          </div>
+          <div className="flex flex-col items-center leading-none text-center w-full">
+            <span className="text-[10px] sm:text-[11px] font-bold text-foreground capitalize truncate w-full">
+              {d.weekday}
+            </span>
+            <span className="text-[8px] sm:text-[9px] text-muted-foreground capitalize truncate w-full mt-0.5 font-medium">
+              {d.dateLabel}
+            </span>
+          </div>
         </div>
       ))}
     </div>
   );
 }
 
-function WeekdayChart({ data }: { data: { label: string; value: number; income: number }[] }) {
+function WeekdayChart({ data }: { data: { weekday: string; dateLabel: string; value: number; income: number; fullDate: string }[] }) {
   const max = Math.max(...data.map(d => d.value), 1);
   const colors = ['bg-violet-400', 'bg-sky-400', 'bg-emerald-400', 'bg-primary', 'bg-amber-400', 'bg-rose-400', 'bg-pink-400'];
   return (
-    <div className="flex items-end gap-1.5 h-20 w-full">
+    <div className="flex items-end gap-1 sm:gap-2 h-24 w-full pt-1">
       {data.map((d, i) => (
         <div key={i} className="flex-1 flex flex-col items-center gap-1 min-w-0 group">
           <div className="relative flex-1 flex flex-col justify-end w-full">
             <div
-              className={`w-full rounded-t-md ${colors[i % colors.length]} opacity-80 group-hover:opacity-100 transition-all duration-500`}
-              style={{ height: `${Math.max(4, (d.value / max) * 64)}px` }}
-              title={`${d.label}: ${d.value} reservas`}
+              className={`w-full rounded-t-lg ${colors[i % colors.length]} opacity-80 group-hover:opacity-100 transition-all duration-500 min-h-[4px]`}
+              style={{ height: `${Math.max(4, (d.value / max) * 52)}px` }}
+              title={`${d.fullDate}: ${d.value} reservas`}
             />
           </div>
-          <span className="text-[9px] text-muted-foreground font-bold truncate w-full text-center block">
-            {d.label}
-          </span>
-          <span className="text-[8px] text-primary font-bold truncate w-full text-center block">
+          <div className="flex flex-col items-center leading-none text-center w-full">
+            <span className="text-[10px] sm:text-[11px] font-bold text-foreground capitalize truncate w-full">
+              {d.weekday}
+            </span>
+            <span className="text-[8px] sm:text-[9px] text-muted-foreground capitalize truncate w-full mt-0.5 font-medium">
+              {d.dateLabel}
+            </span>
+          </div>
+          <span className="text-[9px] sm:text-[10px] font-black text-primary truncate w-full text-center">
             {d.value}
           </span>
         </div>
@@ -274,24 +338,52 @@ export function OwnerDashboard() {
   const topHour = Object.entries(hourCount).sort((a, b) => b[1] - a[1])[0];
 
   const last7 = useMemo(() => {
-    const days: { label: string; value: number }[] = [];
+    const days: { weekday: string; dateLabel: string; value: number; fullDate: string }[] = [];
     for (let i = 6; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0, 0, 0, 0);
-      const next = new Date(d); next.setDate(d.getDate() + 1);
-      const label = d.toLocaleDateString('es-CO', { weekday: 'short' });
-      const value = allBookings.filter(b => { const bd = new Date(b.created_at || b.start_time); return bd >= d && bd < next && b.status === 'confirmed'; }).length;
-      days.push({ label, value });
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      const next = new Date(d);
+      next.setDate(d.getDate() + 1);
+
+      const weekday = d.toLocaleDateString('es-CO', { weekday: 'short', timeZone: 'America/Bogota' }).replace('.', '');
+      const dateLabel = `${d.getDate()} ${d.toLocaleDateString('es-CO', { month: 'short', timeZone: 'America/Bogota' }).replace('.', '')}`;
+      const fullDate = d.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'America/Bogota' });
+
+      const value = allBookings.filter(b => {
+        const bd = new Date(b.created_at || b.start_time);
+        return bd >= d && bd < next && b.status === 'confirmed';
+      }).length;
+
+      days.push({ weekday, dateLabel, value, fullDate });
     }
     return days;
   }, [allBookings]);
 
   // Actividad por día de la semana (sobre todas las reservas del período)
   const byWeekday = useMemo(() => {
-    const labels = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-    return labels.map((label, idx) => {
-      const dayBookings = filteredBookings.filter(b => new Date(b.start_time).getDay() === idx);
+    const weekdayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    const now = new Date();
+    const currDay = now.getDay();
+
+    return weekdayNames.map((weekday, idx) => {
+      // Calcular la fecha correspondiente a este día en la semana actual
+      const targetDate = new Date(now);
+      const dayDiff = idx - currDay;
+      targetDate.setDate(now.getDate() + dayDiff);
+
+      const dateLabel = `${targetDate.getDate()} ${targetDate.toLocaleDateString('es-CO', { month: 'short', timeZone: 'America/Bogota' }).replace('.', '')}`;
+      const fullDate = targetDate.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'America/Bogota' });
+
+      const dayBookings = filteredBookings.filter(b => {
+        const d = new Date(b.start_time);
+        return d.getDay() === idx;
+      });
+
       return {
-        label,
+        weekday,
+        dateLabel,
+        fullDate,
         value: dayBookings.length,
         income: dayBookings.filter(b => b.status === 'confirmed').reduce((s, b) => s + getBookingIncome(b), 0),
       };
@@ -471,9 +563,9 @@ export function OwnerDashboard() {
       )}
 
       {/* Grid Principal */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
         {/* Reservas recientes */}
-        <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-xs">
+        <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-4 sm:p-5 flex flex-col justify-start shadow-xs">
           <div className="flex items-center justify-between gap-2 pb-3 border-b border-border/60">
             <div className="min-w-0">
               <h2 className="text-base font-extrabold text-foreground truncate">Reservas recientes</h2>
@@ -485,12 +577,12 @@ export function OwnerDashboard() {
           </div>
 
           {filteredBookings.length === 0 ? (
-            <div className="py-12 flex flex-col items-center gap-2 text-muted-foreground">
+            <div className="py-12 flex flex-col items-center justify-center gap-2 text-muted-foreground">
               <CalendarDays size={32} className="opacity-30" />
               <p className="text-xs font-medium">Sin reservas en este período</p>
             </div>
           ) : (
-            <div className="space-y-2 mt-3 max-h-80 overflow-y-auto pr-1">
+            <div className="space-y-2 mt-3 overflow-y-auto max-h-[520px] pr-1">
               {filteredBookings.slice(0, 20).map((row: any) => (
                 <div key={row.id} className="flex items-center gap-2.5 p-2.5 sm:p-3 rounded-xl bg-secondary/40 border border-border/60 hover:bg-secondary/70 transition-colors">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${row.status === 'confirmed' ? 'bg-emerald-500/10 text-emerald-600' : row.status === 'pending' ? 'bg-amber-500/10 text-amber-600' : 'bg-rose-500/10 text-rose-500'}`}>
@@ -502,19 +594,23 @@ export function OwnerDashboard() {
                       {row.customer_name || 'Cliente'}
                     </div>
 
-                    {/* Línea 2: Cancha, Fecha y Hora completas con indicación de fecha del partido */}
-                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] leading-tight">
+                    {/* Línea 2: Cancha, Fecha y Hora del partido, y Fecha/Hora en que se realizó la reserva */}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-tight">
                       <span className="font-semibold text-foreground/90 uppercase">
                         {row.pitches?.name || '—'}
                       </span>
-                      <span className="text-muted-foreground/50">•</span>
+                      <span className="text-muted-foreground/40">•</span>
                       <span className="text-muted-foreground font-medium">
-                        Partido: {fmtDate(row.start_time)} ({new Date(row.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })})
+                        ⚽ Partido: <strong className="text-foreground/90 font-semibold">{fmtDate(row.start_time)}</strong> ({new Date(row.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })})
                       </span>
-                      {row.created_at && getLocalDateString(row.created_at) !== getLocalDateString(row.start_time) && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                          Reservada hoy
-                        </span>
+                      {row.created_at && (
+                        <>
+                          <span className="text-muted-foreground/40">•</span>
+                          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold bg-emerald-500/10 px-1.5 py-0.5 rounded-md border border-emerald-500/20">
+                            <Clock size={10} className="text-emerald-600 dark:text-emerald-400" />
+                            <span>Realizada: {fmtDateTime(row.created_at)}</span>
+                          </span>
+                        </>
                       )}
                     </div>
                   </div>
