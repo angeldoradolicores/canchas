@@ -85,15 +85,38 @@ function endOf(filter: DateFilter): Date {
 function fmt(n: number) { return '$' + n.toLocaleString('es-CO'); }
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'America/Bogota' });
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'America/Bogota' });
+  } catch {
+    return '—';
+  }
+}
+
+function fmtTime(iso: string) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+  } catch {
+    return '';
+  }
 }
 
 function fmtDateTime(iso: string) {
   if (!iso) return '';
-  const d = new Date(iso);
-  const dateStr = d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' });
-  const timeStr = d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
-  return `${dateStr}, ${timeStr}`;
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    const dateStr = d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' });
+    const timeStr = d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+    return `${dateStr}, ${timeStr}`;
+  } catch {
+    return '';
+  }
 }
 
 function getLocalDateString(dateInput: string | Date): string {
@@ -323,7 +346,6 @@ export function OwnerDashboard() {
   const pending = filteredBookings.filter(b => b.status === 'pending');
   const cancelled = filteredBookings.filter(b => b.status === 'cancelled' || b.status === 'rejected');
   const totalIncome = confirmed.reduce((s, b) => s + getBookingIncome(b), 0);
-  const totalDeposit = confirmed.reduce((s, b) => s + Number(b.deposit_amount || 0), 0);
   const avgIncome = confirmed.length > 0 ? Math.round(totalIncome / confirmed.length) : 0;
   const confirmRate = filteredBookings.length > 0 ? Math.round((confirmed.length / filteredBookings.length) * 100) : 0;
 
@@ -638,7 +660,7 @@ export function OwnerDashboard() {
                       </span>
                       <span className="text-muted-foreground/40">•</span>
                       <span className="text-muted-foreground font-medium">
-                        ⚽ Partido: <strong className="text-foreground/90 font-semibold">{fmtDate(row.start_time)}</strong> ({new Date(row.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })})
+                        ⚽ Partido: <strong className="text-foreground/90 font-semibold">{fmtDate(row.start_time)}</strong> {fmtTime(row.start_time) ? `(${fmtTime(row.start_time)})` : ''}
                       </span>
                       {row.created_at && (
                         <>
@@ -878,14 +900,13 @@ export function OwnerDashboard() {
                     </td>
                     <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap">
                       <div className="font-semibold text-foreground">
-                        {new Date(row.start_time).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
+                        {fmtDate(row.start_time)}
                       </div>
-                      <div className="text-[10px] text-muted-foreground">
-                        {new Date(row.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })}
-                      </div>
-                    </td>
-                    <td className="px-3 sm:px-4 py-2.5 text-right hidden md:table-cell">
-                      <span className="font-semibold text-sky-600 dark:text-sky-400">{fmt(Number(row.deposit_amount || 0))}</span>
+                      {fmtTime(row.start_time) && (
+                        <div className="text-[10px] text-muted-foreground">
+                          {fmtTime(row.start_time)}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 sm:px-4 py-2.5 text-right">
                       <span className="font-extrabold text-foreground">{fmt(getBookingIncome(row))}</span>
@@ -908,9 +929,6 @@ export function OwnerDashboard() {
               <tfoot>
                 <tr className="bg-secondary/50 border-t-2 border-border/80">
                   <td colSpan={4} className="px-3 sm:px-4 py-3 font-extrabold text-xs text-foreground">Totales del período</td>
-                  <td className="px-3 sm:px-4 py-3 text-right hidden md:table-cell">
-                    <span className="font-extrabold text-sky-600 dark:text-sky-400">{fmt(totalDeposit)}</span>
-                  </td>
                   <td className="px-3 sm:px-4 py-3 text-right">
                     <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{fmt(totalIncome)}</span>
                   </td>
