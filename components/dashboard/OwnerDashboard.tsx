@@ -114,13 +114,13 @@ function getBookingIncome(b: any): number {
 function MiniBarChart({ data }: { data: { weekday: string; dateLabel: string; value: number; fullDate: string }[] }) {
   const max = Math.max(...data.map(d => d.value), 1);
   return (
-    <div className="flex items-end gap-1 sm:gap-2 h-20 w-full pt-1">
+    <div className="flex items-end gap-1 sm:gap-2 h-24 w-full pt-1">
       {data.map((d, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1.5 min-w-0 group">
+        <div key={i} className="flex-1 flex flex-col items-center gap-1 min-w-0 group">
           <div className="relative flex-1 flex flex-col justify-end w-full">
             <div
               className="w-full rounded-t-lg bg-primary/80 group-hover:bg-primary transition-all duration-500 min-h-[4px]"
-              style={{ height: `${Math.max(4, (d.value / max) * 44)}px` }}
+              style={{ height: `${Math.max(4, (d.value / max) * 48)}px` }}
               title={`${d.fullDate}: ${d.value} confirmadas`}
             />
           </div>
@@ -132,35 +132,41 @@ function MiniBarChart({ data }: { data: { weekday: string; dateLabel: string; va
               {d.dateLabel}
             </span>
           </div>
+          {/* Número de reservas confirmadas */}
+          <span className="text-[9px] sm:text-[10px] font-black text-primary truncate w-full text-center">
+            {d.value}
+          </span>
         </div>
       ))}
     </div>
   );
 }
 
-function WeekdayChart({ data }: { data: { weekday: string; dateLabel: string; value: number; income: number; fullDate: string }[] }) {
+function WeekdayChart({ data }: { data: { weekday: string; dateLabel: string; value: number; income: number; fullDate: string; isHighlighted?: boolean; highlightTag?: string }[] }) {
   const max = Math.max(...data.map(d => d.value), 1);
   const colors = ['bg-violet-400', 'bg-sky-400', 'bg-emerald-400', 'bg-primary', 'bg-amber-400', 'bg-rose-400', 'bg-pink-400'];
   return (
     <div className="flex items-end gap-1 sm:gap-2 h-24 w-full pt-1">
       {data.map((d, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1 min-w-0 group">
+        <div key={i} className={`flex-1 flex flex-col items-center gap-1 min-w-0 group rounded-xl p-0.5 transition-all ${
+          d.isHighlighted ? 'bg-primary/10 ring-1 ring-primary/40' : ''
+        }`}>
           <div className="relative flex-1 flex flex-col justify-end w-full">
             <div
-              className={`w-full rounded-t-lg ${colors[i % colors.length]} opacity-80 group-hover:opacity-100 transition-all duration-500 min-h-[4px]`}
-              style={{ height: `${Math.max(4, (d.value / max) * 52)}px` }}
-              title={`${d.fullDate}: ${d.value} reservas`}
+              className={`w-full rounded-t-lg ${colors[i % colors.length]} ${d.isHighlighted ? 'opacity-100 ring-1 ring-primary' : 'opacity-80 group-hover:opacity-100'} transition-all duration-500 min-h-[4px]`}
+              style={{ height: `${Math.max(4, (d.value / max) * 50)}px` }}
+              title={`${d.fullDate}: ${d.value} reservas ${d.highlightTag ? `(${d.highlightTag})` : ''}`}
             />
           </div>
           <div className="flex flex-col items-center leading-none text-center w-full">
-            <span className="text-[10px] sm:text-[11px] font-bold text-foreground capitalize truncate w-full">
+            <span className={`text-[10px] sm:text-[11px] font-bold capitalize truncate w-full ${d.isHighlighted ? 'text-primary font-black' : 'text-foreground'}`}>
               {d.weekday}
             </span>
             <span className="text-[8px] sm:text-[9px] text-muted-foreground capitalize truncate w-full mt-0.5 font-medium">
-              {d.dateLabel}
+              {d.highlightTag || d.dateLabel}
             </span>
           </div>
-          <span className="text-[9px] sm:text-[10px] font-black text-primary truncate w-full text-center">
+          <span className={`text-[9px] sm:text-[10px] font-black truncate w-full text-center ${d.isHighlighted ? 'text-primary scale-110' : 'text-primary'}`}>
             {d.value}
           </span>
         </div>
@@ -360,11 +366,34 @@ export function OwnerDashboard() {
     return days;
   }, [allBookings]);
 
-  // Actividad por día de la semana (sobre todas las reservas del período)
+  // Actividad por día de la semana
+  // Para que no salgan 0 en los otros 6 días cuando el filtro es 'hoy' o 'ayer',
+  // se evalúa la distribución de la semana actual (o mes/total según filtro),
+  // destacando el día seleccionado (Hoy o Ayer).
   const byWeekday = useMemo(() => {
     const weekdayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
     const now = new Date();
     const currDay = now.getDay();
+    const yesterdayDay = (currDay + 6) % 7; // índice del día de ayer
+
+    // Determinar qué conjunto de reservas evaluar según el filtro
+    let sourceBookings = allBookings;
+    if (filter === 'mes') {
+      const from = startOf('mes').getTime();
+      const to = endOf('mes').getTime();
+      sourceBookings = allBookings.filter(b => {
+        const t = b.start_time ? new Date(b.start_time).getTime() : 0;
+        return t >= from && t <= to;
+      });
+    } else if (filter === 'semana' || filter === 'hoy' || filter === 'ayer') {
+      // Semana completa actual para que el dueño siempre pueda comparar los 7 días
+      const from = startOf('semana').getTime();
+      const to = endOf('semana').getTime();
+      sourceBookings = allBookings.filter(b => {
+        const t = b.start_time ? new Date(b.start_time).getTime() : 0;
+        return t >= from && t <= to;
+      });
+    }
 
     return weekdayNames.map((weekday, idx) => {
       // Calcular la fecha correspondiente a este día en la semana actual
@@ -375,10 +404,16 @@ export function OwnerDashboard() {
       const dateLabel = `${targetDate.getDate()} ${targetDate.toLocaleDateString('es-CO', { month: 'short', timeZone: 'America/Bogota' }).replace('.', '')}`;
       const fullDate = targetDate.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'America/Bogota' });
 
-      const dayBookings = filteredBookings.filter(b => {
+      // Agrupar estrictamente por el día del partido (start_time)
+      const dayBookings = sourceBookings.filter(b => {
         const d = new Date(b.start_time);
         return d.getDay() === idx;
       });
+
+      const isToday = idx === currDay;
+      const isYesterday = idx === yesterdayDay;
+      const isHighlighted = (filter === 'hoy' && isToday) || (filter === 'ayer' && isYesterday);
+      const highlightTag = filter === 'hoy' && isToday ? 'Hoy' : filter === 'ayer' && isYesterday ? 'Ayer' : undefined;
 
       return {
         weekday,
@@ -386,9 +421,11 @@ export function OwnerDashboard() {
         fullDate,
         value: dayBookings.length,
         income: dayBookings.filter(b => b.status === 'confirmed').reduce((s, b) => s + getBookingIncome(b), 0),
+        isHighlighted,
+        highlightTag,
       };
     });
-  }, [filteredBookings]);
+  }, [allBookings, filter]);
 
   // Métricas adicionales
   const uniqueCustomers = useMemo(() => {
@@ -645,7 +682,17 @@ export function OwnerDashboard() {
               <h2 className="text-sm font-extrabold text-foreground flex items-center gap-2">
                 <CalendarClock size={15} className="text-violet-500" /> Días más activos
               </h2>
-              <p className="text-xs text-muted-foreground">Total reservas por día de la semana</p>
+              <p className="text-xs text-muted-foreground">
+                {filter === 'hoy'
+                  ? 'Reservas de la semana (Hoy resaltado)'
+                  : filter === 'ayer'
+                  ? 'Reservas de la semana (Ayer resaltado)'
+                  : filter === 'semana'
+                  ? 'Total reservas de esta semana'
+                  : filter === 'mes'
+                  ? 'Total reservas de este mes'
+                  : 'Total reservas por día de la semana'}
+              </p>
             </div>
             <div className="mt-4"><WeekdayChart data={byWeekday} /></div>
           </div>
@@ -812,7 +859,6 @@ export function OwnerDashboard() {
                   <th className="text-left px-3 sm:px-4 py-3 font-extrabold text-muted-foreground uppercase tracking-wider whitespace-nowrap">Cliente</th>
                   <th className="text-left px-3 sm:px-4 py-3 font-extrabold text-muted-foreground uppercase tracking-wider whitespace-nowrap hidden sm:table-cell">Cancha</th>
                   <th className="text-left px-3 sm:px-4 py-3 font-extrabold text-muted-foreground uppercase tracking-wider whitespace-nowrap">Partido</th>
-                  <th className="text-right px-3 sm:px-4 py-3 font-extrabold text-muted-foreground uppercase tracking-wider whitespace-nowrap hidden md:table-cell">Abono</th>
                   <th className="text-right px-3 sm:px-4 py-3 font-extrabold text-muted-foreground uppercase tracking-wider whitespace-nowrap">Total</th>
                   <th className="text-center px-3 sm:px-4 py-3 font-extrabold text-muted-foreground uppercase tracking-wider whitespace-nowrap">Estado</th>
                 </tr>
