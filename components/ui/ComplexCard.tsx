@@ -280,7 +280,7 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
             {/* Cabecera Fija del Modal */}
             <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-secondary/60 shrink-0">
               <div className="space-y-0.5 pr-4 min-w-0">
-                <h2 className="text-lg sm:text-xl font-black uppercase text-foreground truncate leading-tight">
+                <h2 className="text-lg sm:text-xl font-black uppercase text-foreground leading-tight">
                   {complex.name}
                 </h2>
                 <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">

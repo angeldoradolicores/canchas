@@ -695,7 +695,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         <p className="text-sm text-muted-foreground">Estás a punto de iniciar una reserva en:</p>
         <div className="w-full py-3 px-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex flex-col items-center justify-center gap-1">
           {/* Nombre del Complejo (Ahora es el elemento más grande y protagonista) */}
-          <span className="text-base sm:text-lg font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300 text-center truncate max-w-full">
+          <span className="text-base sm:text-lg font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300 text-center max-w-full">
             {complexDisplayName}
           </span>
 
