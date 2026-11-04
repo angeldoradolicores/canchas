@@ -16,6 +16,20 @@ function hourLabel(h: number): string {
   return `${h12}:00 ${suffix}`;
 }
 
+function parseSlotToHour(slot: string): number | null {
+  if (!slot) return null;
+  const s = String(slot).trim();
+  const m12 = s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (m12) {
+    let h = parseInt(m12[1], 10);
+    const ap = m12[3]?.toUpperCase();
+    if (ap === 'PM' && h < 12) h += 12;
+    if (ap === 'AM' && h === 12) h = 0;
+    return h >= 0 && h <= 23 ? h : null;
+  }
+  return null;
+}
+
 function allSlots(): string[] {
   const out: string[] = [];
   for (let h = 6; h <= 23; h++) out.push(hourLabel(h));
@@ -195,13 +209,47 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 6. Clasificar cada franja horaria de 06:00 a 23:00
+    // 6. Determinar franjas horarias operativas (restringir horas que el negocio tiene cerrado)
+    let operatingHoursNumbers: number[] = [];
+
+    if (isSinglePitch) {
+      const targetPitch = pitches.find((p: any) => p.id === pitchId);
+      const configuredSlots = targetPitch?.custom_pricing?.time_slots;
+      if (Array.isArray(configuredSlots) && configuredSlots.length > 0) {
+        configuredSlots.forEach((slot: string) => {
+          const h = parseSlotToHour(slot);
+          if (h !== null && !operatingHoursNumbers.includes(h)) {
+            operatingHoursNumbers.push(h);
+          }
+        });
+      }
+    } else {
+      // Modo: Todas las canchas -> Unión de los horarios de apertura de todas las canchas activas
+      pitches.forEach((p: any) => {
+        const configuredSlots = p?.custom_pricing?.time_slots;
+        if (Array.isArray(configuredSlots) && configuredSlots.length > 0) {
+          configuredSlots.forEach((slot: string) => {
+            const h = parseSlotToHour(slot);
+            if (h !== null && !operatingHoursNumbers.includes(h)) {
+              operatingHoursNumbers.push(h);
+            }
+          });
+        }
+      });
+    }
+
+    // Si no hay configuración horaria personalizada guardada en la base de datos, fallback a franjas habituales
+    if (operatingHoursNumbers.length === 0) {
+      operatingHoursNumbers = Array.from({ length: 18 }, (_, i) => i + 6); // 6:00 a 23:00
+    }
+
+    operatingHoursNumbers.sort((a, b) => a - b);
+    const slots = operatingHoursNumbers.map(h => hourLabel(h));
+
     const freeHours: string[] = [];
     const bookedHours: string[] = [];
     const inProgressHours: string[] = [];
     const slotsDetail: any[] = [];
-
-    const slots = allSlots();
 
     for (const slot of slots) {
       const occupiedConfirmed = bookedByHour.get(slot) ?? new Set();
@@ -299,6 +347,7 @@ export async function POST(req: NextRequest) {
       success: true,
       data: {
         pitches,
+        operatingHours: slots,
         freeHours,
         bookedHours,
         inProgressHours,

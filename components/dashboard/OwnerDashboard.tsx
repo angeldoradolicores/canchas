@@ -11,6 +11,7 @@ import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { BookingReportModal } from '@/components/booking/BookingReportModal';
 
 type DateFilter = 'hoy' | 'ayer' | 'semana' | 'mes' | 'total';
 
@@ -134,66 +135,112 @@ function getBookingIncome(b: any): number {
   return Number(b.total_price || b.pitches?.price_per_hour || 0);
 }
 
-function MiniBarChart({ data }: { data: { weekday: string; dateLabel: string; value: number; fullDate: string }[] }) {
+function MiniBarChart({
+  data,
+  selectedIsoDate,
+  onSelectDate,
+}: {
+  data: { weekday: string; dateLabel: string; value: number; fullDate: string; isoDate: string }[];
+  selectedIsoDate?: string | null;
+  onSelectDate?: (isoDate: string, fullDate: string) => void;
+}) {
   const max = Math.max(...data.map(d => d.value), 1);
   return (
     <div className="flex items-end gap-1 sm:gap-2 h-24 w-full pt-1">
-      {data.map((d, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1 min-w-0 group">
-          <div className="relative flex-1 flex flex-col justify-end w-full">
-            <div
-              className="w-full rounded-t-lg bg-primary/80 group-hover:bg-primary transition-all duration-500 min-h-[4px]"
-              style={{ height: `${Math.max(4, (d.value / max) * 48)}px` }}
-              title={`${d.fullDate}: ${d.value} confirmadas`}
-            />
-          </div>
-          <div className="flex flex-col items-center leading-none text-center w-full">
-            <span className="text-[10px] sm:text-[11px] font-bold text-foreground capitalize truncate w-full">
-              {d.weekday}
+      {data.map((d, i) => {
+        const isSelected = selectedIsoDate === d.isoDate;
+        return (
+          <button
+            type="button"
+            key={i}
+            onClick={() => onSelectDate?.(d.isoDate, d.fullDate)}
+            className={`flex-1 flex flex-col items-center gap-1 min-w-0 group rounded-xl p-0.5 transition-all text-left cursor-pointer hover:bg-secondary/40 active:scale-95 ${
+              isSelected ? 'bg-primary/15 ring-2 ring-primary ring-offset-1' : ''
+            }`}
+            title={`Toca para ver datos del ${d.fullDate}: ${d.value} confirmadas`}
+          >
+            <div className="relative flex-1 flex flex-col justify-end w-full">
+              <div
+                className={`w-full rounded-t-lg transition-all duration-300 min-h-[4px] ${
+                  isSelected ? 'bg-primary opacity-100 shadow-sm' : 'bg-primary/80 group-hover:bg-primary'
+                }`}
+                style={{ height: `${Math.max(4, (d.value / max) * 48)}px` }}
+              />
+            </div>
+            <div className="flex flex-col items-center leading-none text-center w-full">
+              <span className={`text-[10px] sm:text-[11px] font-bold capitalize truncate w-full ${
+                isSelected ? 'text-primary font-black' : 'text-foreground'
+              }`}>
+                {d.weekday}
+              </span>
+              <span className="text-[8px] sm:text-[9px] text-muted-foreground capitalize truncate w-full mt-0.5 font-medium">
+                {d.dateLabel}
+              </span>
+            </div>
+            {/* Número de reservas confirmadas */}
+            <span className={`text-[9px] sm:text-[10px] font-black truncate w-full text-center ${
+              isSelected ? 'text-primary scale-110' : 'text-primary'
+            }`}>
+              {d.value}
             </span>
-            <span className="text-[8px] sm:text-[9px] text-muted-foreground capitalize truncate w-full mt-0.5 font-medium">
-              {d.dateLabel}
-            </span>
-          </div>
-          {/* Número de reservas confirmadas */}
-          <span className="text-[9px] sm:text-[10px] font-black text-primary truncate w-full text-center">
-            {d.value}
-          </span>
-        </div>
-      ))}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function WeekdayChart({ data }: { data: { weekday: string; dateLabel: string; value: number; income: number; fullDate: string; isHighlighted?: boolean; highlightTag?: string }[] }) {
+function WeekdayChart({
+  data,
+  selectedIsoDate,
+  onSelectDate,
+}: {
+  data: { weekday: string; dateLabel: string; value: number; income: number; fullDate: string; isoDate: string; isHighlighted?: boolean; highlightTag?: string }[];
+  selectedIsoDate?: string | null;
+  onSelectDate?: (isoDate: string, fullDate: string) => void;
+}) {
   const max = Math.max(...data.map(d => d.value), 1);
   const colors = ['bg-violet-400', 'bg-sky-400', 'bg-emerald-400', 'bg-primary', 'bg-amber-400', 'bg-rose-400', 'bg-pink-400'];
   return (
     <div className="flex items-end gap-1 sm:gap-2 h-24 w-full pt-1">
-      {data.map((d, i) => (
-        <div key={i} className={`flex-1 flex flex-col items-center gap-1 min-w-0 group rounded-xl p-0.5 transition-all ${
-          d.isHighlighted ? 'bg-primary/10 ring-1 ring-primary/40' : ''
-        }`}>
-          <div className="relative flex-1 flex flex-col justify-end w-full">
-            <div
-              className={`w-full rounded-t-lg ${colors[i % colors.length]} ${d.isHighlighted ? 'opacity-100 ring-1 ring-primary' : 'opacity-80 group-hover:opacity-100'} transition-all duration-500 min-h-[4px]`}
-              style={{ height: `${Math.max(4, (d.value / max) * 50)}px` }}
-              title={`${d.fullDate}: ${d.value} reservas ${d.highlightTag ? `(${d.highlightTag})` : ''}`}
-            />
-          </div>
-          <div className="flex flex-col items-center leading-none text-center w-full">
-            <span className={`text-[10px] sm:text-[11px] font-bold capitalize truncate w-full ${d.isHighlighted ? 'text-primary font-black' : 'text-foreground'}`}>
-              {d.weekday}
+      {data.map((d, i) => {
+        const isSelected = selectedIsoDate === d.isoDate;
+        return (
+          <button
+            type="button"
+            key={i}
+            onClick={() => onSelectDate?.(d.isoDate, d.fullDate)}
+            className={`flex-1 flex flex-col items-center gap-1 min-w-0 group rounded-xl p-0.5 transition-all text-left cursor-pointer hover:bg-secondary/40 active:scale-95 ${
+              isSelected ? 'bg-primary/20 ring-2 ring-primary ring-offset-1' : d.isHighlighted ? 'bg-primary/10 ring-1 ring-primary/40' : ''
+            }`}
+            title={`Toca para ver datos del ${d.fullDate}: ${d.value} reservas ${d.highlightTag ? `(${d.highlightTag})` : ''}`}
+          >
+            <div className="relative flex-1 flex flex-col justify-end w-full">
+              <div
+                className={`w-full rounded-t-lg ${colors[i % colors.length]} ${
+                  isSelected ? 'opacity-100 ring-2 ring-primary' : d.isHighlighted ? 'opacity-100 ring-1 ring-primary' : 'opacity-80 group-hover:opacity-100'
+                } transition-all duration-300 min-h-[4px]`}
+                style={{ height: `${Math.max(4, (d.value / max) * 50)}px` }}
+              />
+            </div>
+            <div className="flex flex-col items-center leading-none text-center w-full">
+              <span className={`text-[10px] sm:text-[11px] font-bold capitalize truncate w-full ${
+                isSelected ? 'text-primary font-black underline' : d.isHighlighted ? 'text-primary font-black' : 'text-foreground'
+              }`}>
+                {d.weekday}
+              </span>
+              <span className="text-[8px] sm:text-[9px] text-muted-foreground capitalize truncate w-full mt-0.5 font-medium">
+                {d.highlightTag || d.dateLabel}
+              </span>
+            </div>
+            <span className={`text-[9px] sm:text-[10px] font-black truncate w-full text-center ${
+              isSelected || d.isHighlighted ? 'text-primary scale-110' : 'text-primary'
+            }`}>
+              {d.value}
             </span>
-            <span className="text-[8px] sm:text-[9px] text-muted-foreground capitalize truncate w-full mt-0.5 font-medium">
-              {d.highlightTag || d.dateLabel}
-            </span>
-          </div>
-          <span className={`text-[9px] sm:text-[10px] font-black truncate w-full text-center ${d.isHighlighted ? 'text-primary scale-110' : 'text-primary'}`}>
-            {d.value}
-          </span>
-        </div>
-      ))}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -246,6 +293,8 @@ export function OwnerDashboard() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
   const [filter, setFilter] = useState<DateFilter>('hoy');
+  const [selectedDay, setSelectedDay] = useState<{ isoDate: string; fullDate: string } | null>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [newPendingToast, setNewPendingToast] = useState<string | null>(null);
 
   const fetchStats = useCallback(async () => {
@@ -310,6 +359,14 @@ export function OwnerDashboard() {
   const pitches: any[] = stats?.pitches || [];
 
   const filteredBookings = useMemo(() => {
+    if (selectedDay) {
+      return allBookings.filter(b => {
+        const matchYmd = b.start_time ? getLocalDateString(b.start_time) : '';
+        const createdYmd = b.created_at ? getLocalDateString(b.created_at) : '';
+        return matchYmd === selectedDay.isoDate || createdYmd === selectedDay.isoDate;
+      });
+    }
+
     if (filter === 'total') return allBookings;
     const from = startOf(filter);
     const to = endOf(filter);
@@ -325,7 +382,7 @@ export function OwnerDashboard() {
 
       return isCreatedInPeriod || isMatchInPeriod;
     });
-  }, [allBookings, filter]);
+  }, [allBookings, filter, selectedDay]);
 
   // Todas las pendientes del complejo en total
   const allPending = useMemo(() => {
@@ -366,7 +423,7 @@ export function OwnerDashboard() {
   const topHour = Object.entries(hourCount).sort((a, b) => b[1] - a[1])[0];
 
   const last7 = useMemo(() => {
-    const days: { weekday: string; dateLabel: string; value: number; fullDate: string }[] = [];
+    const days: { weekday: string; dateLabel: string; value: number; fullDate: string; isoDate: string }[] = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
@@ -377,13 +434,14 @@ export function OwnerDashboard() {
       const weekday = d.toLocaleDateString('es-CO', { weekday: 'short', timeZone: 'America/Bogota' }).replace('.', '');
       const dateLabel = `${d.getDate()} ${d.toLocaleDateString('es-CO', { month: 'short', timeZone: 'America/Bogota' }).replace('.', '')}`;
       const fullDate = d.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'America/Bogota' });
+      const isoDate = getLocalDateString(d);
 
       const value = allBookings.filter(b => {
         const bd = new Date(b.created_at || b.start_time);
         return bd >= d && bd < next && b.status === 'confirmed';
       }).length;
 
-      days.push({ weekday, dateLabel, value, fullDate });
+      days.push({ weekday, dateLabel, value, fullDate, isoDate });
     }
     return days;
   }, [allBookings]);
@@ -425,6 +483,7 @@ export function OwnerDashboard() {
 
       const dateLabel = `${targetDate.getDate()} ${targetDate.toLocaleDateString('es-CO', { month: 'short', timeZone: 'America/Bogota' }).replace('.', '')}`;
       const fullDate = targetDate.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'America/Bogota' });
+      const isoDate = getLocalDateString(targetDate);
 
       // Agrupar estrictamente por el día del partido (start_time)
       const dayBookings = sourceBookings.filter(b => {
@@ -441,6 +500,7 @@ export function OwnerDashboard() {
         weekday,
         dateLabel,
         fullDate,
+        isoDate,
         value: dayBookings.length,
         income: dayBookings.filter(b => b.status === 'confirmed').reduce((s, b) => s + getBookingIncome(b), 0),
         isHighlighted,
@@ -497,9 +557,20 @@ export function OwnerDashboard() {
           <p className="text-[10px] font-bold text-primary tracking-widest uppercase mb-0.5">PANEL DE NEGOCIO</p>
           <h1 className="text-xl sm:text-2xl font-black text-foreground capitalize truncate">Hola, {profile?.full_name?.split(' ')[0]} 👋</h1>
         </div>
-        <button onClick={fetchStats} className="self-start sm:self-auto bg-secondary border border-border hover:bg-secondary/80 text-foreground px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0">
-          <Activity size={13} className="text-primary" /> Actualizar
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="bg-card border border-border hover:bg-secondary text-foreground px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+          >
+            <BarChart3 size={13} className="text-primary" /> Reporte Ejecutivo
+          </button>
+          <button
+            onClick={fetchStats}
+            className="bg-secondary border border-border hover:bg-secondary/80 text-foreground px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+          >
+            <Activity size={13} className="text-primary" /> Actualizar
+          </button>
+        </div>
       </div>
 
       {/* Filtros de fecha (Scroll Horizontal adaptable para móviles) */}
@@ -508,18 +579,42 @@ export function OwnerDashboard() {
           {DATE_FILTERS.map(f => (
             <button
               key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap shrink-0 border cursor-pointer ${filter === f.key
-                ? 'bg-primary text-white border-primary shadow-xs'
-                : 'bg-card border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
+              onClick={() => {
+                setFilter(f.key);
+                setSelectedDay(null);
+              }}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap shrink-0 border cursor-pointer ${
+                filter === f.key && !selectedDay
+                  ? 'bg-primary text-white border-primary shadow-xs'
+                  : 'bg-card border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
                 }`}
             >
               {f.label}
             </button>
           ))}
         </div>
+
+        {selectedDay && (
+          <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-primary/10 border border-primary/30 text-xs font-bold animate-in fade-in slide-in-from-top-1">
+            <span className="flex items-center gap-1.5 text-primary">
+              <CalendarDays size={14} />
+              <span>Filtrando por día: <strong className="capitalize underline">{selectedDay.fullDate}</strong></span>
+            </span>
+            <button
+              onClick={() => setSelectedDay(null)}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary text-[11px] transition-colors cursor-pointer"
+              title="Volver al período general"
+            >
+              <X size={12} />
+              <span>Quitar filtro de día</span>
+            </button>
+          </div>
+        )}
+
         <span className="text-[11px] font-medium text-muted-foreground">
-          {filteredBookings.length} reservas en el período
+          {selectedDay
+            ? `${filteredBookings.length} reservas registradas para el ${selectedDay.fullDate}`
+            : `${filteredBookings.length} reservas en el período`}
         </span>
       </div>
 
@@ -695,7 +790,19 @@ export function OwnerDashboard() {
               </h2>
               <p className="text-xs text-muted-foreground">Reservas confirmadas por día</p>
             </div>
-            <div className="mt-4"><MiniBarChart data={last7} /></div>
+            <div className="mt-4">
+              <MiniBarChart
+                data={last7}
+                selectedIsoDate={selectedDay?.isoDate}
+                onSelectDate={(iso, full) => {
+                  if (selectedDay?.isoDate === iso) {
+                    setSelectedDay(null);
+                  } else {
+                    setSelectedDay({ isoDate: iso, fullDate: full });
+                  }
+                }}
+              />
+            </div>
           </div>
 
           {/* Actividad por día de la semana */}
@@ -716,7 +823,19 @@ export function OwnerDashboard() {
                   : 'Total reservas por día de la semana'}
               </p>
             </div>
-            <div className="mt-4"><WeekdayChart data={byWeekday} /></div>
+            <div className="mt-4">
+              <WeekdayChart
+                data={byWeekday}
+                selectedIsoDate={selectedDay?.isoDate}
+                onSelectDate={(iso, full) => {
+                  if (selectedDay?.isoDate === iso) {
+                    setSelectedDay(null);
+                  } else {
+                    setSelectedDay({ isoDate: iso, fullDate: full });
+                  }
+                }}
+              />
+            </div>
           </div>
 
           {/* Estado general */}
@@ -942,21 +1061,14 @@ export function OwnerDashboard() {
         )}
       </div>
 
-      {/* Accesos rápidos */}
-      {/* <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 pt-2">
-        {[
-          { label: 'Ver reservas', href: '/dashboard/bookings', icon: <CalendarDays size={16} /> },
-          { label: 'Mis canchas', href: '/dashboard/pitches', icon: <Grid2X2 size={16} /> },
-          { label: 'Torneos', href: '/dashboard/tournaments', icon: <Trophy size={16} /> },
-          { label: 'Perfil', href: '/dashboard/profile', icon: <Users size={16} /> },
-        ].map(item => (
-          <Link key={item.href} href={item.href} className="flex items-center gap-2 p-3 rounded-xl border border-border bg-card hover:bg-primary/5 hover:border-primary/30 transition-all group min-w-0">
-            <span className="text-primary shrink-0 group-hover:scale-110 transition-transform">{item.icon}</span>
-            <span className="text-xs font-bold truncate">{item.label}</span>
-            <ArrowRight size={12} className="ml-auto text-muted-foreground shrink-0 opacity-40 group-hover:opacity-100 transition-opacity" />
-          </Link>
-        ))}
-      </div> */}
+      {/* Modal de Reporte Ejecutivo */}
+      <BookingReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        bookings={allBookings}
+        pitches={pitches}
+        companyName={stats?.company?.name || profile?.full_name}
+      />
     </section>
   );
 }

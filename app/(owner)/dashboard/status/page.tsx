@@ -345,6 +345,7 @@ export default function CreateStatusPage() {
 
   const [forTomorrow, setForTomorrow] = useState(false);
   const [selPitch, setSelPitch] = useState<string>('all');
+  const [operatingHours, setOperatingHours] = useState<string[]>(ALL_HOURS);
   const [hours, setHours] = useState<string[]>([]);
   const [freeSet, setFreeSet] = useState<Set<string>>(new Set());
   const [bookedSet, setBookedSet] = useState<Set<string>>(new Set());
@@ -471,6 +472,8 @@ export default function CreateStatusPage() {
               if (hJson.data.pitches?.length > 0 && pitchList.length === 0) {
                 setPitches(hJson.data.pitches);
               }
+              const opHours: string[] = hJson.data.operatingHours ?? ALL_HOURS;
+              setOperatingHours(opHours);
               const free: string[] = hJson.data.freeHours ?? [];
               const booked: string[] = hJson.data.bookedHours ?? [];
               const inProg: string[] = hJson.data.inProgressHours ?? [];
@@ -615,6 +618,8 @@ export default function CreateStatusPage() {
       if (json.data?.pitches?.length > 0 && pitches.length === 0) {
         setPitches(json.data.pitches);
       }
+      const opHours: string[] = json.data?.operatingHours ?? ALL_HOURS;
+      setOperatingHours(opHours);
       const free: string[] = json.data?.freeHours ?? [];
       const booked: string[] = json.data?.bookedHours ?? [];
       const inProg: string[] = json.data?.inProgressHours ?? [];
@@ -682,6 +687,7 @@ export default function CreateStatusPage() {
     const suf = hh >= 12 ? 'PM' : 'AM';
     const h12 = hh % 12 === 0 ? 12 : hh % 12;
     const label = `${h12}:${mm} ${suf}`;
+    setOperatingHours(prev => prev.includes(label) ? prev : sortH([...prev, label]));
     if (hours.includes(label) || hours.length >= MAX_H) return;
     setHours(p => [...p, label]);
     setCustomTime('');
@@ -953,73 +959,82 @@ export default function CreateStatusPage() {
         </div>
       </div>
 
-      {/* Grid de franjas horarias con diseño idéntico al Horario */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-1">
-        {ALL_HOURS.map(h => {
-          const isSelected = hours.includes(h);
-          const isBooked = bookedSet.has(h);
-          const isInProgress = inProgressSet.has(h);
-          const isFree = freeSet.has(h);
-          const slotInfo = slotsDetailMap[h];
+      {/* Grid de franjas horarias restringidas al horario operativo del negocio */}
+      {operatingHours.length === 0 ? (
+        <div className="bg-secondary/40 border border-border rounded-xl p-4 text-center">
+          <p className="text-xs text-muted-foreground">No hay horarios de atención configurados para esta cancha o fecha.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-1">
+          {operatingHours.map(h => {
+            const isSelected = hours.includes(h);
+            const isBooked = bookedSet.has(h);
+            const isInProgress = inProgressSet.has(h);
+            const isFree = freeSet.has(h);
+            const slotInfo = slotsDetailMap[h];
 
-          let cardClass = '';
-          let badgeLabel = '';
-          let badgeColor = '';
-          let subInfo = '';
+            let cardClass = '';
+            let badgeLabel = '';
+            let badgeColor = '';
+            let subInfo = '';
 
-          if (isBooked) {
-            cardClass = 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 opacity-80 cursor-not-allowed';
-            badgeLabel = '✗ Reservada';
-            badgeColor = 'bg-rose-500/20 text-rose-700 dark:text-rose-300';
-            if (slotInfo?.details?.[0]?.customer_name) {
-              subInfo = slotInfo.details[0].customer_name;
-            } else if (slotInfo?.bookedCount) {
-              subInfo = `${slotInfo.bookedCount} ocupada${slotInfo.bookedCount > 1 ? 's' : ''}`;
+            if (isBooked) {
+              cardClass = 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 opacity-80 cursor-not-allowed';
+              badgeLabel = '✗ Reservada';
+              badgeColor = 'bg-rose-500/20 text-rose-700 dark:text-rose-300 font-extrabold';
+              if (slotInfo?.details?.[0]?.customer_name) {
+                subInfo = slotInfo.details[0].customer_name;
+              } else if (slotInfo?.bookedCount) {
+                subInfo = `${slotInfo.bookedCount} ocupada${slotInfo.bookedCount > 1 ? 's' : ''}`;
+              }
+            } else if (isSelected) {
+              cardClass = 'bg-emerald-600 text-white border-emerald-500 shadow-md ring-2 ring-emerald-400 font-extrabold cursor-pointer';
+              badgeLabel = '✓ En póster';
+              badgeColor = 'bg-white/20 text-white font-extrabold';
+              subInfo = 'Seleccionada';
+            } else if (isInProgress) {
+              cardClass = 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/40 hover:bg-amber-500/25 cursor-pointer';
+              badgeLabel = '⏳ Siendo reservada';
+              badgeColor = 'bg-amber-500/25 text-amber-800 dark:text-amber-200 font-extrabold animate-pulse';
+              subInfo = 'En proceso de checkout';
+            } else if (isFree) {
+              cardClass = 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-900 dark:text-emerald-200 border-emerald-500/40 hover:border-emerald-500/60 cursor-pointer font-bold';
+              badgeLabel = '🟢 Disponible';
+              badgeColor = 'bg-emerald-500/20 text-emerald-900 dark:text-emerald-300 font-extrabold';
+              if (selPitch === 'all' && slotInfo?.freeCount) {
+                subInfo = `${slotInfo.freeCount} canchas libres`;
+              } else {
+                subInfo = 'Libre para reservar';
+              }
+            } else {
+              cardClass = 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700 cursor-pointer';
+              badgeLabel = '🟢 Disponible';
+              badgeColor = 'bg-secondary text-muted-foreground';
             }
-          } else if (isSelected) {
-            cardClass = 'bg-emerald-600 text-white border-emerald-500 shadow-md ring-2 ring-emerald-400 font-extrabold';
-            badgeLabel = '✓ En póster';
-            badgeColor = 'bg-white/20 text-white';
-          } else if (isInProgress) {
-            cardClass = 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/40 hover:bg-amber-500/25';
-            badgeLabel = '⏳ Siendo reservada';
-            badgeColor = 'bg-amber-500/25 text-amber-800 dark:text-amber-200';
-            subInfo = 'En checkout';
-          } else if (isFree) {
-            cardClass = 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-900 dark:text-emerald-200 border-emerald-500/40 hover:border-emerald-500/60 cursor-pointer font-bold';
-            badgeLabel = '🟢 Disponible';
-            badgeColor = 'bg-emerald-500/20 text-emerald-900 dark:text-emerald-300 font-extrabold';
-            if (selPitch === 'all' && slotInfo?.freeCount) {
-              subInfo = `${slotInfo.freeCount} canchas libres`;
-            }
-          } else {
-            cardClass = 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
-            badgeLabel = 'Disponible';
-            badgeColor = 'bg-secondary text-muted-foreground';
-          }
 
-          return (
-            <button
-              key={h}
-              onClick={() => toggleHour(h)}
-              disabled={isBooked}
-              className={`relative p-2 rounded-xl border text-left transition-all flex flex-col justify-between min-h-[58px] ${cardClass}`}
-            >
-              <div className="flex items-center justify-between w-full">
-                <span className="font-extrabold text-xs tracking-tight">{h}</span>
-                <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${badgeColor}`}>
-                  {badgeLabel}
-                </span>
-              </div>
-              {subInfo && (
-                <div className="text-[10px] font-medium opacity-80 truncate mt-1">
-                  {subInfo}
+            return (
+              <button
+                key={h}
+                onClick={() => toggleHour(h)}
+                disabled={isBooked}
+                className={`relative p-2 rounded-xl border text-left transition-all flex flex-col justify-between min-h-[58px] ${cardClass}`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-extrabold text-xs tracking-tight">{h}</span>
+                  <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${badgeColor}`}>
+                    {badgeLabel}
+                  </span>
                 </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
+                {subInfo && (
+                  <div className="text-[10px] font-medium opacity-80 truncate mt-1">
+                    {subInfo}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Leyenda interactiva */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-bold uppercase tracking-wide bg-secondary/30 p-2.5 rounded-xl border border-border">
