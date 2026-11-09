@@ -6,6 +6,7 @@ import { Logo } from '@/components/layout/Logo';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { PushNotificationManager } from '@/components/PushNotificationManager';
 
 export default function OwnerLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -101,7 +102,7 @@ function OwnerAuthGuard({ children }: { children: React.ReactNode }) {
 
 function OwnerLayoutInner({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { profile, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const pathname = usePathname();
 
   const items = [
@@ -118,6 +119,9 @@ function OwnerLayoutInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="app-shell bg-[#f5f7f5]">
+      {/* Gestor global de Push Notifications y Sonido para Dueños PWA */}
+      <PushNotificationManager userId={user?.id} />
+
       {/* Drawer móvil B2B */}
       {mobileOpen && (
         <>

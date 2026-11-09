@@ -37,7 +37,7 @@ interface BookingReportModalProps {
 }
 
 type Period = 'today' | 'week' | 'month' | 'quarter' | 'year' | 'custom';
-type ReportTab = 'overview' | 'pitches' | 'hours' | 'cancellations' | 'customers';
+type ReportTab = 'overview' | 'pitches' | 'hours' | 'cancellations' | 'customers' | 'entities';
 
 interface PeriodOption {
   key: Period;
@@ -48,11 +48,13 @@ interface PeriodOption {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatCOP(n: number) {
-  return `$${Math.round(n).toLocaleString('es-CO')}`;
+  const val = typeof n === 'number' && !isNaN(n) ? n : Number(n) || 0;
+  return `$${Math.round(val).toLocaleString('es-CO')}`;
 }
 
 function pct(part: number, total: number) {
-  if (total === 0) return '0%';
+  if (!total || isNaN(total) || total <= 0) return '0%';
+  if (!part || isNaN(part) || part <= 0) return '0%';
   return `${Math.round((part / total) * 100)}%`;
 }
 
@@ -108,28 +110,36 @@ const PERIOD_OPTIONS: PeriodOption[] = [
 ];
 
 function getBookingIncome(b: any): number {
-  return Number(b.total_price || b.pitches?.price_per_hour || 0);
+  if (!b) return 0;
+  const val = Number(b.total_price ?? b.pitches?.price_per_hour ?? 0);
+  return isNaN(val) ? 0 : val;
 }
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
 
-export function BookingReportModal({ isOpen, onClose, bookings, pitches, companyName }: BookingReportModalProps) {
+export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [], companyName }: BookingReportModalProps) {
   const [period, setPeriod] = useState<Period>('month');
   const [activeTab, setActiveTab] = useState<ReportTab>('overview');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
+
+  const safeBookings = useMemo(() => Array.isArray(bookings) ? bookings : [], [bookings]);
+  const safePitches = useMemo(() => Array.isArray(pitches) ? pitches : [], [pitches]);
 
   // ── Rango y filtrado ────────────────────────────────────────────────────────
   const { from, to } = useMemo(() => getPeriodRange(period, customFrom, customTo), [period, customFrom, customTo]);
 
   // Todas las reservas en el rango de fecha
   const inRangeBookings = useMemo(() => {
-    return bookings.filter(b => {
-      if (b.status === 'draft') return false;
-      const d = new Date(b.start_time || b.created_at);
+    return safeBookings.filter(b => {
+      if (!b || b.status === 'draft') return false;
+      const timeVal = b.start_time || b.created_at;
+      if (!timeVal) return false;
+      const d = new Date(timeVal);
+      if (isNaN(d.getTime())) return false;
       return d >= from && d <= to;
     });
-  }, [bookings, from, to]);
+  }, [safeBookings, from, to]);
 
   // Clasificación por estado
   const confirmedBookings = useMemo(() => inRangeBookings.filter(b => b.status === 'confirmed'), [inRangeBookings]);
@@ -166,13 +176,13 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
   const byCourt = useMemo(() => {
     const map: Record<string, { id: string; name: string; count: number; revenue: number; cancelledCount: number; lostRevenue: number }> = {};
 
-    pitches.forEach(p => {
+    safePitches.forEach(p => {
       map[p.id] = { id: p.id, name: p.name, count: 0, revenue: 0, cancelledCount: 0, lostRevenue: 0 };
     });
 
     inRangeBookings.forEach(b => {
       const id = b.pitch_id;
-      const name = b.pitches?.name || pitches.find(p => p.id === id)?.name || 'Cancha';
+      const name = b.pitches?.name || safePitches.find(p => p.id === id)?.name || 'Cancha';
       if (!map[id]) {
         map[id] = { id, name, count: 0, revenue: 0, cancelledCount: 0, lostRevenue: 0 };
       }
@@ -186,7 +196,7 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
     });
 
     return Object.values(map).sort((a, b) => b.revenue - a.revenue);
-  }, [inRangeBookings, pitches]);
+  }, [inRangeBookings, safePitches]);
 
   const topCourt = byCourt.length > 0 && byCourt[0].revenue > 0 ? byCourt[0] : null;
   const maxCourtRevenue = Math.max(...byCourt.map(c => c.revenue), 1);
@@ -200,7 +210,9 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
 
     confirmedBookings.forEach(b => {
       try {
+        if (!b?.start_time) return;
         const d = new Date(b.start_time);
+        if (isNaN(d.getTime())) return;
         const h = parseInt(d.toLocaleString('es-CO', { hour: 'numeric', hour12: false, timeZone: 'America/Bogota' }), 10);
         if (map[h]) {
           map[h].count++;
@@ -223,7 +235,9 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
 
     confirmedBookings.forEach(b => {
       try {
+        if (!b?.start_time) return;
         const d = new Date(b.start_time);
+        if (isNaN(d.getTime())) return;
         const h = parseInt(d.toLocaleString('es-CO', { hour: 'numeric', hour12: false, timeZone: 'America/Bogota' }), 10);
         if (h >= 6 && h < 12) manana++;
         else if (h >= 12 && h < 18) tarde++;
@@ -269,6 +283,93 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
     return set.size;
   }, [confirmedBookings]);
 
+  // ── Reporte Ejecutivo: Entidades, Escuelas y Turnos Fijos ───────────────────
+  const entitiesReport = useMemo(() => {
+    const map: Record<string, {
+      id: string;
+      name: string;
+      type: 'entity' | 'school' | 'contract';
+      pitchName: string;
+      paymentMethod: string;
+      customRate: number;
+      totalBookings: number;
+      confirmedBookings: number;
+      pendingBookings: number;
+      totalBilled: number;
+      totalReceivable: number;
+      daysPlayed: { date: string; time: string; status: string; pitch: string }[];
+    }> = {};
+
+    inRangeBookings.forEach(b => {
+      const isEntity = b.client_type === 'entity';
+      const isSchool = b.client_type === 'school';
+      const isContract = b.booking_type === 'contract' || (b.customer_name && b.customer_name.includes('[Contrato'));
+
+      if (!isEntity && !isSchool && !isContract) return;
+
+      const entityName = (b.client_entity_name || b.customer_name || 'Sin nombre').trim();
+      const type: 'entity' | 'school' | 'contract' = isEntity ? 'entity' : (isSchool ? 'school' : 'contract');
+      const key = `${type}-${entityName.toLowerCase()}-${b.pitch_id || 'p'}`;
+
+      if (!map[key]) {
+        map[key] = {
+          id: key,
+          name: entityName,
+          type,
+          pitchName: b.pitches?.name || 'Cancha',
+          paymentMethod: b.payment_method || 'efectivo',
+          customRate: Number(b.custom_rate || b.total_price || b.pitches?.price_per_hour || 0),
+          totalBookings: 0,
+          confirmedBookings: 0,
+          pendingBookings: 0,
+          totalBilled: 0,
+          totalReceivable: 0,
+          daysPlayed: [],
+        };
+      }
+
+      const rec = map[key];
+      rec.totalBookings++;
+      const inc = getBookingIncome(b);
+
+      if (b.status === 'confirmed') {
+        rec.confirmedBookings++;
+        rec.totalBilled += inc;
+      } else if (b.status === 'pending') {
+        rec.pendingBookings++;
+      }
+
+      if (b.payment_method === 'cuenta_cobrar' || b.payment_method === 'credito') {
+        rec.totalReceivable += inc;
+      }
+
+      if (b.start_time) {
+        rec.daysPlayed.push({
+          date: new Date(b.start_time).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', weekday: 'short', timeZone: 'America/Bogota' }),
+          time: new Date(b.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' }),
+          status: b.status,
+          pitch: b.pitches?.name || 'Cancha',
+        });
+      }
+    });
+
+    const list = Object.values(map).sort((a, b) => b.totalBilled - a.totalBilled);
+    const totalEntities = list.length;
+    const totalBilledAll = list.reduce((s, e) => s + e.totalBilled, 0);
+    const totalReceivableAll = list.reduce((s, e) => s + e.totalReceivable, 0);
+    const totalMatchesAll = list.reduce((s, e) => s + e.confirmedBookings, 0);
+    const avgRateAll = totalMatchesAll > 0 ? Math.round(totalBilledAll / totalMatchesAll) : 0;
+
+    return {
+      list,
+      totalEntities,
+      totalBilledAll,
+      totalReceivableAll,
+      totalMatchesAll,
+      avgRateAll,
+    };
+  }, [inRangeBookings]);
+
   // ── Exportación a PDF / Impresión Ejecutiva ──────────────────────────────────
   const handleDownloadPDF = useCallback(() => {
     const periodLabel = PERIOD_OPTIONS.find(p => p.key === period)?.label || 'Período';
@@ -298,6 +399,17 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
         <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;">${b.pitches?.name || 'Cancha'}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center;">${b.start_time ? new Date(b.start_time).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '—'}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;color:#e11d48;font-weight:700;">${formatCOP(getBookingIncome(b))}</td>
+      </tr>
+    `).join('');
+
+    const entityRows = entitiesReport.list.map((e, i) => `
+      <tr>
+        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;font-weight:700;">${i + 1}. ${e.name} (${e.type === 'entity' ? 'Entidad' : e.type === 'school' ? 'Escuela' : 'Turno Fijo'})</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;">${e.pitchName}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600;">${formatCOP(e.customRate)}/h</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700;">${e.confirmedBookings}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:800;color:#0f766e;">${formatCOP(e.totalBilled)}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;color:#b45309;font-weight:700;">${e.totalReceivable > 0 ? formatCOP(e.totalReceivable) : '$0'}</td>
       </tr>
     `).join('');
 
@@ -400,6 +512,26 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
       </thead>
       <tbody>
         ${topHoursRows}
+      </tbody>
+    </table>
+  </div>` : ''}
+
+  ${entityRows.length > 0 ? `
+  <div class="section">
+    <div class="section-title">🏢 Control Corporativo: Entidades, Escuelas y Turnos Fijos</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Entidad / Escuela</th>
+          <th>Cancha</th>
+          <th style="text-align:right;">Tarifa Acordada</th>
+          <th style="text-align:center;">Partidos</th>
+          <th style="text-align:right;">Total Facturado</th>
+          <th style="text-align:right;">Por Cobrar (Crédito)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${entityRows}
       </tbody>
     </table>
   </div>` : ''}
@@ -547,7 +679,8 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
         <div className="px-5 border-b border-border bg-card flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0">
           {[
             { key: 'overview', label: 'Resumen Ejecutivo', icon: <TrendingUp size={14} /> },
-            { key: 'pitches', label: 'Rendimiento Canchas', icon: <Building2 size={14} /> },
+            { key: 'entities', label: 'Entidades & Escuelas', icon: <Building2 size={14} /> },
+            { key: 'pitches', label: 'Rendimiento Canchas', icon: <Layers size={14} /> },
             { key: 'hours', label: 'Horas Pico', icon: <Clock size={14} /> },
             { key: 'cancellations', label: 'Canceladas & Fuga', icon: <XCircle size={14} /> },
             { key: 'customers', label: 'Top Clientes', icon: <Users size={14} /> },
@@ -856,6 +989,194 @@ export function BookingReportModal({ isOpen, onClose, bookings, pitches, company
                           </td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ═══════════════ PESTAÑA: ENTIDADES & ESCUELAS DE FÚTBOL ═══════════════ */}
+          {activeTab === 'entities' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-sm font-black text-foreground flex items-center gap-2">
+                  <Building2 size={16} className="text-primary" />
+                  Reporte Ejecutivo: Entidades, Escuelas de Fútbol y Turnos Fijos
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Control corporativo de contratos, tarifas acordadas, días jugados y cuentas por cobrar
+                </p>
+              </div>
+
+              {/* KPIs de Entidades y Escuelas */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="bg-card border border-border rounded-2xl p-4 shadow-xs">
+                  <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block mb-1">
+                    Entidades & Escuelas
+                  </span>
+                  <div className="text-xl sm:text-2xl font-black text-foreground">
+                    {entitiesReport.totalEntities}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground font-semibold mt-1 block">
+                    Registradas en el período
+                  </span>
+                </div>
+
+                <div className="bg-card border border-border rounded-2xl p-4 shadow-xs">
+                  <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block mb-1">
+                    Partidos Jugados
+                  </span>
+                  <div className="text-xl sm:text-2xl font-black text-foreground">
+                    {entitiesReport.totalMatchesAll}
+                  </div>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1 block">
+                    Sesiones confirmadas
+                  </span>
+                </div>
+
+                <div className="bg-card border border-border rounded-2xl p-4 shadow-xs">
+                  <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block mb-1">
+                    Total Facturado
+                  </span>
+                  <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                    {formatCOP(entitiesReport.totalBilledAll)}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground font-semibold mt-1 block">
+                    Promedio {formatCOP(entitiesReport.avgRateAll)}/partido
+                  </span>
+                </div>
+
+                <div className="bg-card border border-amber-500/30 bg-amber-500/5 rounded-2xl p-4 shadow-xs">
+                  <span className="text-[10px] font-extrabold text-amber-700 dark:text-amber-400 uppercase tracking-wider block mb-1">
+                    Cuentas por Cobrar (Crédito)
+                  </span>
+                  <div className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400">
+                    {formatCOP(entitiesReport.totalReceivableAll)}
+                  </div>
+                  <span className="text-[10px] text-amber-700/80 dark:text-amber-400/80 font-semibold mt-1 block">
+                    Pendientes de liquidación
+                  </span>
+                </div>
+              </div>
+
+              {/* Tabla Detallada */}
+              {entitiesReport.list.length === 0 ? (
+                <div className="text-center py-12 bg-card border border-border rounded-3xl space-y-2 p-6">
+                  <Building2 size={36} className="text-muted-foreground/30 mx-auto mb-1" />
+                  <p className="text-sm font-bold text-foreground">Sin registros de entidades o escuelas en este rango</p>
+                  <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                    Al agendar una reserva manual o turno fijo, selecciona el tipo <strong>Entidad</strong> o <strong>Escuela de Fútbol</strong> para que aparezca automáticamente en este reporte con sus días jugados y tarifas acordadas.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-border rounded-2xl bg-card shadow-xs">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-secondary/40 border-b border-border text-left">
+                        <th className="p-3.5 font-extrabold text-muted-foreground uppercase">Entidad / Escuela</th>
+                        <th className="p-3.5 font-extrabold text-muted-foreground uppercase">Cancha</th>
+                        <th className="p-3.5 font-extrabold text-muted-foreground uppercase">Tarifa Acordada</th>
+                        <th className="p-3.5 font-extrabold text-muted-foreground uppercase">Forma de Pago</th>
+                        <th className="p-3.5 font-extrabold text-muted-foreground uppercase text-center">Partidos</th>
+                        <th className="p-3.5 font-extrabold text-muted-foreground uppercase text-right">Total Facturado</th>
+                        <th className="p-3.5 font-extrabold text-muted-foreground uppercase text-right">Por Cobrar</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {entitiesReport.list.map((ent, idx) => {
+                        const isSchool = ent.type === 'school';
+                        const isEntity = ent.type === 'entity';
+                        return (
+                          <tr key={ent.id || idx} className="hover:bg-secondary/20 transition-colors">
+                            <td className="p-3.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-base shrink-0">{isEntity ? '🏢' : isSchool ? '⚽' : '📋'}</span>
+                                <div className="min-w-0">
+                                  <p className="font-extrabold text-foreground truncate uppercase">{ent.name}</p>
+                                  <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-secondary text-muted-foreground uppercase">
+                                    {isEntity ? 'Entidad' : isSchool ? 'Escuela' : 'Turno Fijo'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Días jugados */}
+                              {ent.daysPlayed.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1 max-w-md">
+                                  {ent.daysPlayed.slice(0, 5).map((dp, i) => (
+                                    <span
+                                      key={i}
+                                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${
+                                        dp.status === 'confirmed'
+                                          ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+                                          : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
+                                      }`}
+                                    >
+                                      {dp.date} {dp.time}
+                                    </span>
+                                  ))}
+                                  {ent.daysPlayed.length > 5 && (
+                                    <span className="text-[9px] text-muted-foreground font-semibold py-0.5">
+                                      +{ent.daysPlayed.length - 5} más
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+
+                            <td className="p-3.5 font-bold uppercase text-foreground/90 whitespace-nowrap">
+                              {ent.pitchName}
+                            </td>
+
+                            <td className="p-3.5 font-extrabold text-foreground whitespace-nowrap">
+                              {formatCOP(ent.customRate)}/h
+                            </td>
+
+                            <td className="p-3.5 whitespace-nowrap">
+                              <span
+                                className={`inline-block text-[10px] font-extrabold px-2 py-0.5 rounded-lg border ${
+                                  ent.paymentMethod === 'cuenta_cobrar'
+                                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                                    : ent.paymentMethod === 'credito'
+                                    ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30'
+                                    : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                                }`}
+                              >
+                                {ent.paymentMethod === 'cuenta_cobrar'
+                                  ? 'Cuenta por Cobrar'
+                                  : ent.paymentMethod === 'credito'
+                                  ? 'Crédito'
+                                  : ent.paymentMethod === 'transferencia'
+                                  ? 'Transferencia'
+                                  : 'Efectivo'}
+                              </span>
+                            </td>
+
+                            <td className="p-3.5 text-center font-extrabold text-foreground">
+                              {ent.confirmedBookings}
+                              {ent.pendingBookings > 0 && (
+                                <span className="text-[9px] text-amber-600 dark:text-amber-400 block font-normal">
+                                  ({ent.pendingBookings} pend.)
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="p-3.5 text-right font-black text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                              {formatCOP(ent.totalBilled)}
+                            </td>
+
+                            <td className="p-3.5 text-right font-black whitespace-nowrap">
+                              {ent.totalReceivable > 0 ? (
+                                <span className="text-amber-600 dark:text-amber-400">
+                                  {formatCOP(ent.totalReceivable)}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground font-normal">$0</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

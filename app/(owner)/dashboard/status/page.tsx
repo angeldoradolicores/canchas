@@ -918,7 +918,7 @@ export default function CreateStatusPage() {
   const selectAllFree = () => {
     const minNow = bogotaNow().min;
     const available = Array.from(freeSet)
-      .filter(h => forTomorrow || h2min(h) > minNow)
+      .filter(h => (operatingHours.length === 0 || operatingHours.includes(h)) && (forTomorrow || h2min(h) > minNow))
       .sort((a, b) => h2min(a) - h2min(b));
     setHours(available.slice(0, MAX_H));
     setNotice({

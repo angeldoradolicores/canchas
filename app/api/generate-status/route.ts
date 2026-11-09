@@ -19,10 +19,18 @@ function hourLabel(h: number): string {
 function parseSlotToHour(slot: string): number | null {
   if (!slot) return null;
   const s = String(slot).trim();
-  const m12 = s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-  if (m12) {
-    let h = parseInt(m12[1], 10);
-    const ap = m12[3]?.toUpperCase();
+  const m = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i);
+  if (m) {
+    let h = parseInt(m[1], 10);
+    const ap = m[3]?.toUpperCase();
+    if (ap === 'PM' && h < 12) h += 12;
+    if (ap === 'AM' && h === 12) h = 0;
+    return h >= 0 && h <= 23 ? h : null;
+  }
+  const mSolo = s.match(/^(\d{1,2})\s*(AM|PM)?$/i);
+  if (mSolo) {
+    let h = parseInt(mSolo[1], 10);
+    const ap = mSolo[2]?.toUpperCase();
     if (ap === 'PM' && h < 12) h += 12;
     if (ap === 'AM' && h === 12) h = 0;
     return h >= 0 && h <= 23 ? h : null;
@@ -36,33 +44,54 @@ function allSlots(): string[] {
   return out;
 }
 
-function parseBookingHours(startTime: string, endTime?: string): { startH: number; endH: number } {
-  const sDate = new Date(startTime);
-  const parts = new Intl.DateTimeFormat('es-CO', {
-    timeZone: TZ,
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(sDate);
-  let startH = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
-  if (startH === 24) startH = 0;
+function getCustomPricing(p: any): any {
+  if (!p?.custom_pricing) return {};
+  if (typeof p.custom_pricing === 'string') {
+    try {
+      return JSON.parse(p.custom_pricing);
+    } catch {
+      return {};
+    }
+  }
+  return p.custom_pricing;
+}
 
-  let endH = startH + 1;
-  if (endTime) {
-    const eDate = new Date(endTime);
-    const eParts = new Intl.DateTimeFormat('es-CO', {
+function parseBookingHours(startTime: string, endTime?: string): { startH: number; endH: number } {
+  try {
+    if (!startTime) return { startH: -1, endH: -1 };
+    const sDate = new Date(startTime);
+    if (isNaN(sDate.getTime())) return { startH: -1, endH: -1 };
+
+    const parts = new Intl.DateTimeFormat('es-CO', {
       timeZone: TZ,
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
-    }).formatToParts(eDate);
-    let h = parseInt(eParts.find(p => p.type === 'hour')?.value || '0', 10);
-    if (h === 24) h = 0;
-    if (h > startH) {
-      endH = h;
+    }).formatToParts(sDate);
+    let startH = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+    if (startH === 24) startH = 0;
+
+    let endH = startH + 1;
+    if (endTime) {
+      const eDate = new Date(endTime);
+      if (!isNaN(eDate.getTime())) {
+        const eParts = new Intl.DateTimeFormat('es-CO', {
+          timeZone: TZ,
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        }).formatToParts(eDate);
+        let h = parseInt(eParts.find(p => p.type === 'hour')?.value || '0', 10);
+        if (h === 24) h = 0;
+        if (h > startH) {
+          endH = h;
+        }
+      }
     }
+    return { startH, endH };
+  } catch {
+    return { startH: -1, endH: -1 };
   }
-  return { startH, endH };
 }
 
 export async function POST(req: NextRequest) {
@@ -112,7 +141,7 @@ export async function POST(req: NextRequest) {
       console.error('[generate-status] Error fetching pitches:', pitchErr);
     }
 
-    const pitches = (allPitches ?? []).filter((p: any) => p.custom_pricing?.is_active !== false);
+    const pitches = (allPitches ?? []).filter((p: any) => getCustomPricing(p)?.is_active !== false);
 
     if (pitches.length === 0) {
       return NextResponse.json({
@@ -180,6 +209,7 @@ export async function POST(req: NextRequest) {
       }
 
       const { startH, endH } = parseBookingHours(b.start_time, b.end_time);
+      if (startH < 0) continue;
 
       for (let h = startH; h < endH && h <= 23; h++) {
         if (h < 6) continue;
@@ -214,7 +244,7 @@ export async function POST(req: NextRequest) {
 
     if (isSinglePitch) {
       const targetPitch = pitches.find((p: any) => p.id === pitchId);
-      const configuredSlots = targetPitch?.custom_pricing?.time_slots;
+      const configuredSlots = getCustomPricing(targetPitch)?.time_slots;
       if (Array.isArray(configuredSlots) && configuredSlots.length > 0) {
         configuredSlots.forEach((slot: string) => {
           const h = parseSlotToHour(slot);
@@ -226,7 +256,7 @@ export async function POST(req: NextRequest) {
     } else {
       // Modo: Todas las canchas -> Unión de los horarios de apertura de todas las canchas activas
       pitches.forEach((p: any) => {
-        const configuredSlots = p?.custom_pricing?.time_slots;
+        const configuredSlots = getCustomPricing(p)?.time_slots;
         if (Array.isArray(configuredSlots) && configuredSlots.length > 0) {
           configuredSlots.forEach((slot: string) => {
             const h = parseSlotToHour(slot);

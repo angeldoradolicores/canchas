@@ -49,7 +49,7 @@ const DURATIONS = [
   { key: '1m', label: '1 Mes', weeks: 4 },
   { key: '3m', label: '3 Meses', weeks: 13 },
   { key: '6m', label: '6 Meses', weeks: 26 },
-  { key: '1y', label: '1 Año', weeks: 52 },
+  { key: '1y', label: '12 Meses (1 Año)', weeks: 52 },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -116,7 +116,11 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
     return d.toISOString().split('T')[0];
   });
 
-  // Cliente
+  // Cliente y Tipo de Turno Fijo
+  const [clientType, setClientType] = useState<'standard' | 'entity' | 'school'>('standard');
+  const [clientEntityName, setClientEntityName] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'transferencia' | 'credito' | 'cuenta_cobrar'>('efectivo');
+  const [customRate, setCustomRate] = useState<string>('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerNote, setCustomerNote] = useState('');
@@ -142,14 +146,21 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
     return dates.sort();
   }, [selectedDays, selectedSlots, startDate, durationObj.weeks]);
 
-  // Precio por hora de la cancha
+  // Precio por hora de la cancha y tarifa acordada
   const pricePerHour = useMemo(() => {
     if (!selectedPitch) return 0;
     return selectedPitch.price_per_hour || 0;
   }, [selectedPitch]);
 
+  const effectiveRate = useMemo(() => {
+    if (customRate && !isNaN(Number(customRate)) && Number(customRate) > 0) {
+      return Number(customRate);
+    }
+    return pricePerHour;
+  }, [customRate, pricePerHour]);
+
   const totalSessions = allDates.length * selectedSlots.length;
-  const totalPrice = totalSessions * pricePerHour;
+  const totalPrice = totalSessions * effectiveRate;
 
   const pitchAllowedSlots: string[] | null = useMemo(() => {
     const slots = (selectedPitch as any)?.custom_pricing?.time_slots;
@@ -176,9 +187,14 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
 
       const daysText = DAYS_OF_WEEK.filter(d => selectedDays.includes(d.key)).map(d => d.label).join(', ');
       const slotsText = selectedSlots.map(fmt12).join(', ');
+      const entityLabel = clientType === 'entity' && clientEntityName.trim()
+        ? `[Entidad: ${clientEntityName.trim()}] `
+        : clientType === 'school' && clientEntityName.trim()
+        ? `[Escuela: ${clientEntityName.trim()}] `
+        : '';
       // Nombre que identifica claramente el contrato en la base de datos y calendario
-      const contractCustomerName = `${customerName.trim()} [Contrato: ${daysText} ${slotsText}]`;
-      const contractTag = `[CONTRATO FIJO · ${DAYS_OF_WEEK.filter(d => selectedDays.includes(d.key)).map(d => d.full).join(', ')} · ${slotsText}]`;
+      const contractCustomerName = `${entityLabel}${customerName.trim()} [Contrato: ${daysText} ${slotsText}]`;
+      const contractTag = `[CONTRATO FIJO · ${clientType === 'entity' ? 'ENTIDAD: ' + clientEntityName : clientType === 'school' ? 'ESCUELA: ' + clientEntityName : 'PARTICULAR'} · Pago: ${paymentMethod === 'cuenta_cobrar' ? 'Cuenta por Cobrar' : paymentMethod.toUpperCase()} · Tarifa: ${formatCOP(effectiveRate)}/h · ${DAYS_OF_WEEK.filter(d => selectedDays.includes(d.key)).map(d => d.full).join(', ')} · ${slotsText}]`;
       const noteWithTag = `${contractTag}${customerNote ? ` · ${customerNote}` : ''}`;
 
       // Enviar fechas con feedback de progreso interactivo
@@ -208,6 +224,11 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
                 customer_phone: customerPhone,
                 note: noteWithTag,
                 is_contract: true,
+                client_type: clientType,
+                client_entity_name: clientEntityName.trim() || undefined,
+                payment_method: paymentMethod,
+                custom_rate: effectiveRate,
+                total_price: effectiveRate,
               },
             }),
           });
@@ -240,7 +261,7 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
     } finally {
       setLoading(false);
     }
-  }, [selectedPitch, selectedDays, selectedSlots, customerName, customerPhone, customerNote, allDates, supabase, onSuccess]);
+  }, [selectedPitch, selectedDays, selectedSlots, customerName, customerPhone, customerNote, allDates, effectiveRate, clientType, clientEntityName, paymentMethod, supabase, onSuccess]);
 
   // ── Navegación entre pasos ──────────────────────────────────────────────────
 
@@ -477,17 +498,105 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
           {/* ── STEP 3: Cliente ── */}
           {step === 'customer' && (
             <div className="space-y-4">
-              <h3 className="text-sm font-black text-foreground mb-1">Datos del cliente</h3>
+              <h3 className="text-sm font-black text-foreground mb-1">Clasificación y Datos del Turno Fijo</h3>
+
+              {/* Combobox / Selector: Entidades, Escuelas de Fútbol o Particular */}
+              <div>
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                  Tipo de Turno Fijo / Cliente
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { key: 'standard', label: 'Particular', icon: '👤', desc: 'Cliente normal' },
+                    { key: 'entity', label: 'Entidad', icon: '🏢', desc: 'Empresa / Club' },
+                    { key: 'school', label: 'Escuela de Fútbol', icon: '⚽', desc: 'Formativo / Liga' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => {
+                        setClientType(opt.key);
+                        if (opt.key === 'standard') setClientEntityName('');
+                      }}
+                      className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 text-xs font-bold transition-all text-center cursor-pointer ${
+                        clientType === opt.key
+                          ? 'bg-violet-500/15 border-violet-500 text-violet-700 dark:text-violet-300 shadow-sm'
+                          : 'border-border bg-card text-muted-foreground hover:border-violet-400/40'
+                      }`}
+                    >
+                      <span className="text-xl">{opt.icon}</span>
+                      <span className="font-extrabold">{opt.label}</span>
+                      <span className="text-[9px] text-muted-foreground font-normal">{opt.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Campos condicionales para Entidad o Escuela */}
+              {clientType !== 'standard' && (
+                <div className="p-3.5 rounded-2xl bg-violet-500/10 border border-violet-500/25 space-y-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
+                      {clientType === 'entity' ? '🏢 Nombre de la Entidad o Empresa *' : '⚽ Nombre de la Escuela de Fútbol *'}
+                    </label>
+                    <input
+                      type="text"
+                      value={clientEntityName}
+                      onChange={e => setClientEntityName(e.target.value)}
+                      placeholder={clientType === 'entity' ? 'Ej: Club Deportivo Nariño / Bancolombia' : 'Ej: Escuela de Fútbol Semilleros'}
+                      className="w-full border border-violet-300 dark:border-violet-700 bg-card rounded-xl px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-foreground uppercase tracking-wider block mb-1">
+                        Forma de Pago Acordada
+                      </label>
+                      <select
+                        value={paymentMethod}
+                        onChange={e => setPaymentMethod(e.target.value as any)}
+                        className="w-full border border-violet-300 dark:border-violet-700 bg-card rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      >
+                        <option value="cuenta_cobrar">📄 Crédito / Cuenta por Cobrar</option>
+                        <option value="transferencia">💳 Transferencia bancaria</option>
+                        <option value="efectivo">💵 Efectivo por partido</option>
+                        <option value="credito">🏦 Crédito institucional</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-foreground uppercase tracking-wider block mb-1">
+                        Tarifa Acordada (COP) / Hora
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-bold">$</span>
+                        <input
+                          type="number"
+                          value={customRate}
+                          onChange={e => setCustomRate(e.target.value)}
+                          placeholder={pricePerHour ? String(pricePerHour) : '70000'}
+                          min={0}
+                          className="w-full pl-6 pr-3 py-2 border border-violet-300 dark:border-violet-700 bg-card rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        />
+                      </div>
+                      <p className="text-[9px] text-muted-foreground mt-0.5">
+                        {customRate ? `Tarifa especial: ${formatCOP(effectiveRate)}/h` : `Tarifa estándar: ${formatCOP(pricePerHour)}/h`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1.5">
-                  <User size={12} /> Nombre completo *
+                  <User size={12} /> Representante o Responsable *
                 </label>
                 <input
                   type="text"
                   value={customerName}
                   onChange={e => setCustomerName(e.target.value)}
-                  placeholder="Nombre del cliente"
+                  placeholder="Nombre de la persona encargada"
                   className="w-full border border-border bg-card rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500"
                 />
               </div>
@@ -512,9 +621,9 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
                 <textarea
                   value={customerNote}
                   onChange={e => setCustomerNote(e.target.value)}
-                  placeholder="Ej: Grupo de amigos, pagan el mismo día..."
-                  rows={3}
-                  className="w-full border border-border bg-card rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500"
+                  placeholder="Ej: Turno fijo semanal, factura a final de mes, pactado por 12 meses..."
+                  rows={2}
+                  className="w-full border border-border bg-card rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500"
                 />
               </div>
             </div>
@@ -527,6 +636,18 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
 
               {/* Resumen */}
               <div className="bg-violet-500/10 border border-violet-500/30 rounded-2xl p-4 space-y-3">
+                {/* Entidad / Escuela Badge si aplica */}
+                {clientType !== 'standard' && (
+                  <div className="flex items-center gap-2 p-2 bg-violet-500/20 rounded-xl text-violet-700 dark:text-violet-300 font-bold text-xs">
+                    <span>{clientType === 'entity' ? '🏢 ENTIDAD' : '⚽ ESCUELA'}</span>
+                    <span>·</span>
+                    <span className="uppercase">{clientEntityName || customerName}</span>
+                    <span className="ml-auto text-[10px] px-2 py-0.5 rounded-md bg-violet-600 text-white">
+                      {paymentMethod === 'cuenta_cobrar' ? 'Cuenta por Cobrar' : paymentMethod.toUpperCase()}
+                    </span>
+                  </div>
+                )}
+
                 <div className="flex items-start gap-3">
                   <div className="p-2 bg-violet-500/20 rounded-lg shrink-0">
                     <span className="text-lg">⚽</span>
@@ -542,7 +663,7 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
                     <Calendar size={14} className="text-violet-500" />
                   </div>
                   <div>
-                    <p className="text-[11px] font-bold text-muted-foreground uppercase">Días</p>
+                    <p className="text-[11px] font-bold text-muted-foreground uppercase">Días y Duración</p>
                     <p className="font-black text-foreground">
                       {DAYS_OF_WEEK.filter(d => selectedDays.includes(d.key)).map(d => d.full).join(', ')}
                     </p>
@@ -568,7 +689,7 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
                     <User size={14} className="text-violet-500" />
                   </div>
                   <div>
-                    <p className="text-[11px] font-bold text-muted-foreground uppercase">Cliente</p>
+                    <p className="text-[11px] font-bold text-muted-foreground uppercase">Responsable / Contacto</p>
                     <p className="font-black text-foreground">{customerName}</p>
                     {customerPhone && <p className="text-xs text-muted-foreground">{customerPhone}</p>}
                     {customerNote && <p className="text-xs italic text-muted-foreground mt-0.5">"{customerNote}"</p>}
@@ -581,9 +702,12 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
                       <DollarSign size={14} className="text-violet-500" />
                     </div>
                     <div>
-                      <p className="text-[11px] font-bold text-muted-foreground uppercase">Valor estimado</p>
+                      <p className="text-[11px] font-bold text-muted-foreground uppercase">Valor total del contrato</p>
                       <p className="font-black text-violet-600 dark:text-violet-400 text-lg">{formatCOP(totalPrice)}</p>
-                      <p className="text-xs text-muted-foreground">{totalSessions} sesiones × {formatCOP(pricePerHour)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {totalSessions} turnos × {formatCOP(effectiveRate)} por hora
+                        {customRate ? ' (Tarifa personalizada pactada)' : ''}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -591,7 +715,7 @@ export function ContractBookingModal({ pitches, onClose, onSuccess }: ContractBo
 
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
                 <p className="text-xs text-amber-700 dark:text-amber-300 font-semibold">
-                  ⚠️ Se crearán <strong>{totalSessions} reservas</strong> automáticamente. Los horarios que ya estén ocupados se omitirán sin bloquear el resto.
+                  ⚠️ Se crearán <strong>{totalSessions} reservas</strong> con los horarios pactados. Al vencer los 12 meses o duración elegida, quedará registrado en el historial para rehabilitarlo de inmediato con un solo clic.
                 </p>
               </div>
 

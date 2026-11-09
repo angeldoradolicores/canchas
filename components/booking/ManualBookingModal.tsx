@@ -105,6 +105,13 @@ export function ManualBookingModal({
   initialPitchId,
   initialDate,
   initialTime,
+  initialCustomerName,
+  initialCustomerPhone,
+  initialCustomRate,
+  initialNote,
+  initialClientType,
+  initialClientEntityName,
+  initialIsLoyaltyFree,
 }: {
   pitches: Pitch[];
   onClose: () => void;
@@ -112,18 +119,46 @@ export function ManualBookingModal({
   initialPitchId?: string;
   initialDate?: string;
   initialTime?: string;
+  initialCustomerName?: string;
+  initialCustomerPhone?: string;
+  initialCustomRate?: string;
+  initialNote?: string;
+  initialClientType?: 'standard' | 'entity' | 'school';
+  initialClientEntityName?: string;
+  initialIsLoyaltyFree?: boolean;
 }) {
   const today = useToday();
   const [selectedPitch, setSelectedPitch] = useState<Pitch | null>(
     (initialPitchId && pitches.find(p => p.id === initialPitchId)) || pitches[0] || null
   );
-  const [selectedDate, setSelectedDate] = useState(initialDate || '');
+
+  // Si es cortesía por fidelización (20 canchas), sugerir el próximo domingo
+  const getNextSundayStr = () => {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = (7 - day) % 7 || 7;
+    d.setDate(d.getDate() + diff);
+    return d.toISOString().split('T')[0];
+  };
+
+  const [selectedDate, setSelectedDate] = useState(() => {
+    if (initialDate) return initialDate;
+    if (initialIsLoyaltyFree) return getNextSundayStr();
+    return '';
+  });
   const [selectedTimes, setSelectedTimes] = useState<string[]>(initialTime ? [initialTime] : []);
   const initialTimeAppliedRef = useRef(false);
   const [activeCategory, setActiveCategory] = useState<'manana' | 'tarde' | 'noche'>('noche');
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [customerNote, setCustomerNote] = useState('');
+  const [customerName, setCustomerName] = useState(initialCustomerName || '');
+  const [customerPhone, setCustomerPhone] = useState(initialCustomerPhone || '');
+  const [customerNote, setCustomerNote] = useState(
+    initialNote || (initialIsLoyaltyFree ? '🎁 Cancha de cortesía por 20 partidos jugados (Fidelización Domingo sin costo)' : '')
+  );
+  const [clientType, setClientType] = useState<'standard' | 'entity' | 'school'>(initialClientType || 'standard');
+  const [clientEntityName, setClientEntityName] = useState(initialClientEntityName || '');
+  const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'transferencia' | 'credito' | 'cuenta_cobrar'>('efectivo');
+  const [customRate, setCustomRate] = useState(initialIsLoyaltyFree ? '0' : (initialCustomRate || ''));
+  const [isLoyaltyFree, setIsLoyaltyFree] = useState(!!initialIsLoyaltyFree);
   const [file, setFile] = useState<File | null>(null);
   const [imgPreview, setImgPreview] = useState<string | null>(null);
 
@@ -239,6 +274,14 @@ export function ManualBookingModal({
         customer_name: customerName,
         customer_phone: customerPhone,
         note: customerNote,
+        ...(clientType !== 'standard' ? { client_type: clientType } : {}),
+        ...(clientEntityName.trim() ? { client_entity_name: clientEntityName.trim() } : {}),
+        ...(paymentMethod !== 'efectivo' ? { payment_method: paymentMethod } : {}),
+        ...(isLoyaltyFree
+          ? { is_loyalty_free: true, custom_rate: 0, total_price: 0 }
+          : (customRate && !isNaN(Number(customRate)) && Number(customRate) >= 0
+              ? { custom_rate: Number(customRate), total_price: Number(customRate) }
+              : {})),
       };
 
       const { data: sessData } = await supabase.auth.getSession();
@@ -335,6 +378,19 @@ export function ManualBookingModal({
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
+
+          {/* Banner de Fidelización (Regalo por 20 canchas jugadas) */}
+          {isLoyaltyFree && (
+            <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-amber-500/15 border-2 border-amber-500/40 text-amber-900 dark:text-amber-200">
+              <span className="text-2xl shrink-0">🎁</span>
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide">Cortesía de Fidelización (20 Canchas)</p>
+                <p className="text-[11px] leading-snug mt-0.5">
+                  Este cliente ha completado 20 partidos. Se le otorga este turno <strong>gratis ($0)</strong> un domingo a discreción del administrador.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* ── Selector de Cancha ── */}
           <div>
@@ -565,8 +621,80 @@ export function ManualBookingModal({
             />
           </div>
 
-          {/* ── Comprobante de Pago ── */}
-          <div className="space-y-2">
+          {/* ── Tipo de cliente ── */}
+          <div className="space-y-3">
+            <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider">Tipo de cliente</label>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { key: 'standard', label: 'Estándar', icon: '👤' },
+                { key: 'entity', label: 'Entidad', icon: '🏢' },
+                { key: 'school', label: 'Escuela', icon: '⚽' },
+              ] as const).map(opt => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => { setClientType(opt.key); setClientEntityName(''); }}
+                  className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 text-xs font-bold transition-all cursor-pointer ${
+                    clientType === opt.key
+                      ? 'bg-primary/10 border-primary text-primary'
+                      : 'border-border bg-secondary/40 text-muted-foreground hover:border-primary/40'
+                  }`}
+                >
+                  <span className="text-lg">{opt.icon}</span>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {clientType !== 'standard' && (
+              <div className="space-y-3 p-3 rounded-xl bg-secondary/40 border border-border">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Nombre de la {clientType === 'entity' ? 'entidad' : 'escuela'} *
+                  </label>
+                  <input
+                    type="text"
+                    value={clientEntityName}
+                    onChange={e => setClientEntityName(e.target.value)}
+                    placeholder={clientType === 'entity' ? 'Ej: Club Deportivo Nariño' : 'Ej: Escuela Semilleros FC'}
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Forma de pago</label>
+                  <select
+                    value={paymentMethod}
+                    onChange={e => setPaymentMethod(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  >
+                    <option value="efectivo">Efectivo</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="credito">Crédito</option>
+                    <option value="cuenta_cobrar">Cuenta por cobrar</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Tarifa acordada (COP)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-bold">$</span>
+                    <input
+                      type="number"
+                      value={customRate}
+                      onChange={e => setCustomRate(e.target.value)}
+                      placeholder="70000"
+                      min={0}
+                      className="w-full pl-7 pr-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">Deja vacío para usar la tarifa estándar de la cancha</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── Comprobante de Pago ── */}          <div className="space-y-2">
             <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
               Comprobante de Pago (Opcional)
             </label>

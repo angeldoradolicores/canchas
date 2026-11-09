@@ -484,6 +484,12 @@ export async function POST(req: NextRequest) {
       // Campos adicionales opcionales (no requieren validación estricta)
       const note = typeof payload?.note === 'string' ? payload.note.slice(0, 500) : undefined;
       const isContract = !!payload?.is_contract;
+      const isLoyaltyFree = !!payload?.is_loyalty_free;
+      const clientType = ['standard', 'entity', 'school'].includes(payload?.client_type) ? payload.client_type : 'standard';
+      const clientEntityName = typeof payload?.client_entity_name === 'string' ? payload.client_entity_name.slice(0, 200) : undefined;
+      const paymentMethod = ['efectivo', 'transferencia', 'credito', 'cuenta_cobrar'].includes(payload?.payment_method) ? payload.payment_method : 'efectivo';
+      const customRate = typeof payload?.custom_rate === 'number' && payload.custom_rate >= 0 ? payload.custom_rate : undefined;
+      const effectivePrice = isLoyaltyFree ? 0 : (customRate !== undefined ? customRate : (typeof payload?.total_price === 'number' ? payload.total_price : undefined));
 
       // Verificar que la cancha le pertenece al dueño
       const isOwner = await verifyPitchOwnership(ownerId, pitch_id);
@@ -525,6 +531,7 @@ export async function POST(req: NextRequest) {
             status: 'confirmed',
             payment_status: 'verified',
             source: 'owner_panel',
+            ...(effectivePrice !== undefined ? { total_price: effectivePrice } : {}),
           },
           extended: {
             pitch_id,
@@ -536,8 +543,14 @@ export async function POST(req: NextRequest) {
             status: 'confirmed',
             payment_status: 'verified',
             source: 'owner_panel',
+            ...(effectivePrice !== undefined ? { total_price: effectivePrice } : {}),
             ...(note ? { note } : {}),
             ...(isContract ? { booking_type: 'contract' } : {}),
+            ...(clientType !== 'standard' ? { client_type: clientType } : {}),
+            ...(clientEntityName ? { client_entity_name: clientEntityName } : {}),
+            ...(paymentMethod !== 'efectivo' ? { payment_method: paymentMethod } : {}),
+            ...(customRate !== undefined ? { custom_rate: customRate } : {}),
+            ...(isLoyaltyFree ? { is_loyalty_free: true } : {}),
           },
           start_time: startIso,
           end_time: endIso,
@@ -615,6 +628,12 @@ export async function POST(req: NextRequest) {
               source: 'owner_panel',
               reviewed_at: new Date().toISOString(),
               reviewed_by: ownerId,
+              ...(effectivePrice !== undefined ? { total_price: effectivePrice } : {}),
+              ...(clientType !== 'standard' ? { client_type: clientType } : {}),
+              ...(clientEntityName ? { client_entity_name: clientEntityName } : {}),
+              ...(paymentMethod !== 'efectivo' ? { payment_method: paymentMethod } : {}),
+              ...(customRate !== undefined ? { custom_rate: customRate } : {}),
+              ...(isLoyaltyFree ? { is_loyalty_free: true } : {}),
             })
             .eq('id', existing.id)
             .select()

@@ -647,6 +647,39 @@ export async function POST(req: NextRequest) {
           console.error('[WhatsApp Notification error]:', err);
         }
 
+        // Notificar por Web Push al dueño de la cancha
+        try {
+          const { data: pitchOwner } = await supabase
+            .from('pitches')
+            .select('user_id, name, company_id')
+            .eq('id', validPitchId)
+            .single();
+
+          let targetOwnerId = pitchOwner?.user_id;
+          if (!targetOwnerId && pitchOwner?.company_id) {
+            const { data: comp } = await supabase
+              .from('companies')
+              .select('owner_id')
+              .eq('id', pitchOwner.company_id)
+              .single();
+            targetOwnerId = comp?.owner_id;
+          }
+
+          if (targetOwnerId) {
+            const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+            fetch(`${appBaseUrl}/api/send-push`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: targetOwnerId,
+                title: '⚽ Cancheros: Reserva por aprobar',
+                message: `Nueva reserva en ${pitchOwner?.name || 'tu cancha'} de ${customer_name.trim()}. Comprobante subido.`,
+                url: '/dashboard/bookings',
+              }),
+            }).catch(() => {});
+          }
+        } catch { /* no crítico */ }
+
         // Invalidar caché de disponibilidad para este pitch+fecha
         // para que la próxima consulta refleje las horas ya tomadas
         try {

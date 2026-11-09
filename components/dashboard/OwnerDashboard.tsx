@@ -5,13 +5,15 @@ import {
   ArrowRight, CalendarDays, DollarSign, Grid2X2,
   TrendingUp, Clock, CheckCircle2, AlertCircle, Trophy, XCircle,
   BarChart3, Wallet, Star, Activity, Zap, ChevronRight, Users, Bell, X,
-  TrendingDown, Target, CalendarClock, Hash, FileText, Layers
+  TrendingDown, Target, CalendarClock, Hash, FileText, Layers, Gift, Sparkles
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { BookingReportModal } from '@/components/booking/BookingReportModal';
+import { ManualBookingModal } from '@/components/booking/ManualBookingModal';
+import { playPendingAlertSound, triggerSystemNotification } from '@/lib/push-notifications';
 
 type DateFilter = 'hoy' | 'ayer' | 'semana' | 'mes' | 'total';
 
@@ -154,23 +156,20 @@ function MiniBarChart({
             type="button"
             key={i}
             onClick={() => onSelectDate?.(d.isoDate, d.fullDate)}
-            className={`flex-1 flex flex-col items-center gap-1 min-w-0 group rounded-xl p-0.5 transition-all text-left cursor-pointer hover:bg-secondary/40 active:scale-95 ${
-              isSelected ? 'bg-primary/15 ring-2 ring-primary ring-offset-1' : ''
-            }`}
+            className={`flex-1 flex flex-col items-center gap-1 min-w-0 group rounded-xl p-0.5 transition-all text-left cursor-pointer hover:bg-secondary/40 active:scale-95 ${isSelected ? 'bg-primary/15 ring-2 ring-primary ring-offset-1' : ''
+              }`}
             title={`Toca para ver datos del ${d.fullDate}: ${d.value} confirmadas`}
           >
             <div className="relative flex-1 flex flex-col justify-end w-full">
               <div
-                className={`w-full rounded-t-lg transition-all duration-300 min-h-[4px] ${
-                  isSelected ? 'bg-primary opacity-100 shadow-sm' : 'bg-primary/80 group-hover:bg-primary'
-                }`}
+                className={`w-full rounded-t-lg transition-all duration-300 min-h-[4px] ${isSelected ? 'bg-primary opacity-100 shadow-sm' : 'bg-primary/80 group-hover:bg-primary'
+                  }`}
                 style={{ height: `${Math.max(4, (d.value / max) * 48)}px` }}
               />
             </div>
             <div className="flex flex-col items-center leading-none text-center w-full">
-              <span className={`text-[10px] sm:text-[11px] font-bold capitalize truncate w-full ${
-                isSelected ? 'text-primary font-black' : 'text-foreground'
-              }`}>
+              <span className={`text-[10px] sm:text-[11px] font-bold capitalize truncate w-full ${isSelected ? 'text-primary font-black' : 'text-foreground'
+                }`}>
                 {d.weekday}
               </span>
               <span className="text-[8px] sm:text-[9px] text-muted-foreground capitalize truncate w-full mt-0.5 font-medium">
@@ -178,9 +177,8 @@ function MiniBarChart({
               </span>
             </div>
             {/* Número de reservas confirmadas */}
-            <span className={`text-[9px] sm:text-[10px] font-black truncate w-full text-center ${
-              isSelected ? 'text-primary scale-110' : 'text-primary'
-            }`}>
+            <span className={`text-[9px] sm:text-[10px] font-black truncate w-full text-center ${isSelected ? 'text-primary scale-110' : 'text-primary'
+              }`}>
               {d.value}
             </span>
           </button>
@@ -210,32 +208,28 @@ function WeekdayChart({
             type="button"
             key={i}
             onClick={() => onSelectDate?.(d.isoDate, d.fullDate)}
-            className={`flex-1 flex flex-col items-center gap-1 min-w-0 group rounded-xl p-0.5 transition-all text-left cursor-pointer hover:bg-secondary/40 active:scale-95 ${
-              isSelected ? 'bg-primary/20 ring-2 ring-primary ring-offset-1' : d.isHighlighted ? 'bg-primary/10 ring-1 ring-primary/40' : ''
-            }`}
+            className={`flex-1 flex flex-col items-center gap-1 min-w-0 group rounded-xl p-0.5 transition-all text-left cursor-pointer hover:bg-secondary/40 active:scale-95 ${isSelected ? 'bg-primary/20 ring-2 ring-primary ring-offset-1' : d.isHighlighted ? 'bg-primary/10 ring-1 ring-primary/40' : ''
+              }`}
             title={`Toca para ver datos del ${d.fullDate}: ${d.value} reservas ${d.highlightTag ? `(${d.highlightTag})` : ''}`}
           >
             <div className="relative flex-1 flex flex-col justify-end w-full">
               <div
-                className={`w-full rounded-t-lg ${colors[i % colors.length]} ${
-                  isSelected ? 'opacity-100 ring-2 ring-primary' : d.isHighlighted ? 'opacity-100 ring-1 ring-primary' : 'opacity-80 group-hover:opacity-100'
-                } transition-all duration-300 min-h-[4px]`}
+                className={`w-full rounded-t-lg ${colors[i % colors.length]} ${isSelected ? 'opacity-100 ring-2 ring-primary' : d.isHighlighted ? 'opacity-100 ring-1 ring-primary' : 'opacity-80 group-hover:opacity-100'
+                  } transition-all duration-300 min-h-[4px]`}
                 style={{ height: `${Math.max(4, (d.value / max) * 50)}px` }}
               />
             </div>
             <div className="flex flex-col items-center leading-none text-center w-full">
-              <span className={`text-[10px] sm:text-[11px] font-bold capitalize truncate w-full ${
-                isSelected ? 'text-primary font-black underline' : d.isHighlighted ? 'text-primary font-black' : 'text-foreground'
-              }`}>
+              <span className={`text-[10px] sm:text-[11px] font-bold capitalize truncate w-full ${isSelected ? 'text-primary font-black underline' : d.isHighlighted ? 'text-primary font-black' : 'text-foreground'
+                }`}>
                 {d.weekday}
               </span>
               <span className="text-[8px] sm:text-[9px] text-muted-foreground capitalize truncate w-full mt-0.5 font-medium">
                 {d.highlightTag || d.dateLabel}
               </span>
             </div>
-            <span className={`text-[9px] sm:text-[10px] font-black truncate w-full text-center ${
-              isSelected || d.isHighlighted ? 'text-primary scale-110' : 'text-primary'
-            }`}>
+            <span className={`text-[9px] sm:text-[10px] font-black truncate w-full text-center ${isSelected || d.isHighlighted ? 'text-primary scale-110' : 'text-primary'
+              }`}>
               {d.value}
             </span>
           </button>
@@ -296,6 +290,7 @@ export function OwnerDashboard() {
   const [selectedDay, setSelectedDay] = useState<{ isoDate: string; fullDate: string } | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
   const [newPendingToast, setNewPendingToast] = useState<string | null>(null);
+  const [loyaltyGiftClient, setLoyaltyGiftClient] = useState<{ name: string; phone: string } | null>(null);
 
   const fetchStats = useCallback(async () => {
     setLoading(true);
@@ -325,7 +320,7 @@ export function OwnerDashboard() {
     fetchStats();
   }, [user?.id, authLoading, fetchStats, router]);
 
-  // Realtime: escuchar nuevas reservas pending
+  // Realtime: escuchar nuevas reservas pending con alerta de sonido llamativo
   useEffect(() => {
     if (!user?.id) return;
 
@@ -338,8 +333,13 @@ export function OwnerDashboard() {
       }, (payload: any) => {
         if (payload.new?.status === 'pending') {
           const name = payload.new.customer_name || 'Un cliente';
-          setNewPendingToast(`📩 Nueva reserva pendiente de ${name}`);
-          setTimeout(() => setNewPendingToast(null), 7000);
+          setNewPendingToast(`🔔 Nueva reserva por aprobar de ${name}`);
+          playPendingAlertSound();
+          triggerSystemNotification(
+            '⚽ Cancheros: Reserva por aprobar',
+            `Cliente ${name} subió comprobante y espera tu confirmación.`
+          );
+          setTimeout(() => setNewPendingToast(null), 8000);
           fetchStats(); // Refrescar estadísticas automáticamente
         }
       })
@@ -347,7 +347,17 @@ export function OwnerDashboard() {
         event: 'UPDATE',
         schema: 'public',
         table: 'bookings',
-      }, () => {
+      }, (payload: any) => {
+        if (payload.new?.status === 'pending' && payload.old?.status !== 'pending') {
+          const name = payload.new.customer_name || 'Un cliente';
+          setNewPendingToast(`🔔 Reserva por aprobar de ${name}`);
+          playPendingAlertSound();
+          triggerSystemNotification(
+            '⚽ Cancheros: Reserva por aprobar',
+            `Cliente ${name} subió comprobante y espera tu confirmación.`
+          );
+          setTimeout(() => setNewPendingToast(null), 8000);
+        }
         fetchStats(); // Cualquier cambio refresca
       })
       .subscribe();
@@ -408,17 +418,24 @@ export function OwnerDashboard() {
 
   const incomeByPitch = pitches.map(p => {
     const pb = confirmed.filter(b => b.pitch_id === p.id);
-    return { name: p.name, income: pb.reduce((s, b) => s + getBookingIncome(b), 0), count: pb.length, id: p.id };
+    return { name: p.name || 'Cancha', income: pb.reduce((s, b) => s + getBookingIncome(b), 0), count: pb.length, id: p.id };
   }).sort((a, b) => b.income - a.income);
 
   const demandByPitch = pitches.map(p => ({
-    name: p.name, count: filteredBookings.filter(b => b.pitch_id === p.id).length,
+    name: p.name || 'Cancha', count: filteredBookings.filter(b => b.pitch_id === p.id).length,
   })).sort((a, b) => b.count - a.count);
   const maxDemand = Math.max(...demandByPitch.map(p => p.count), 1);
 
   const hourCount: Record<string, number> = {};
   confirmed.forEach(b => {
-    try { const h = new Date(b.start_time).getHours(); const lbl = `${h}:00`; hourCount[lbl] = (hourCount[lbl] || 0) + 1; } catch { }
+    try {
+      if (!b.start_time) return;
+      const d = new Date(b.start_time);
+      if (isNaN(d.getTime())) return;
+      const h = d.getHours();
+      const lbl = `${h}:00`;
+      hourCount[lbl] = (hourCount[lbl] || 0) + 1;
+    } catch { }
   });
   const topHour = Object.entries(hourCount).sort((a, b) => b[1] - a[1])[0];
 
@@ -487,7 +504,9 @@ export function OwnerDashboard() {
 
       // Agrupar estrictamente por el día del partido (start_time)
       const dayBookings = sourceBookings.filter(b => {
+        if (!b?.start_time) return false;
         const d = new Date(b.start_time);
+        if (isNaN(d.getTime())) return false;
         return d.getDay() === idx;
       });
 
@@ -516,6 +535,32 @@ export function OwnerDashboard() {
   }, [filteredBookings]);
 
   const cancelRate = filteredBookings.length > 0 ? Math.round((cancelled.length / filteredBookings.length) * 100) : 0;
+
+  // Clientes con 20 o más canchas confirmadas (Alerta de Fidelización)
+  const loyaltyClients = useMemo(() => {
+    const map: Record<string, { name: string; phone: string; confirmedCount: number; lastDate: string }> = {};
+
+    allBookings.filter(b => b.status === 'confirmed').forEach(b => {
+      const key = (b.customer_phone || b.customer_name || '').trim().toLowerCase();
+      if (!key) return;
+      if (!map[key]) {
+        map[key] = {
+          name: b.customer_name || 'Cliente frecuente',
+          phone: b.customer_phone || '',
+          confirmedCount: 0,
+          lastDate: b.start_time,
+        };
+      }
+      map[key].confirmedCount++;
+      if (b.start_time && (!map[key].lastDate || new Date(b.start_time) > new Date(map[key].lastDate))) {
+        map[key].lastDate = b.start_time;
+      }
+    });
+
+    return Object.values(map)
+      .filter(c => c.confirmedCount >= 20)
+      .sort((a, b) => b.confirmedCount - a.confirmedCount);
+  }, [allBookings]);
 
   // Ingresos proyectados: extrapolar el mes actual basado en los días transcurridos
   const projectedMonthIncome = useMemo(() => {
@@ -555,7 +600,7 @@ export function OwnerDashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-bold text-primary tracking-widest uppercase mb-0.5">PANEL DE NEGOCIO</p>
-          <h1 className="text-xl sm:text-2xl font-black text-foreground capitalize truncate">Hola, {profile?.full_name?.split(' ')[0]} 👋</h1>
+          <h1 className="text-xl sm:text-2xl font-black text-foreground capitalize truncate">Hola, {profile?.full_name?.split(' ')[0] || 'Dueño'} 👋</h1>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
           <button
@@ -573,6 +618,52 @@ export function OwnerDashboard() {
         </div>
       </div>
 
+      {/* ── ALERTA DE FIDELIZACIÓN (BENEFICIO POR 20 CANCHAS COMPLETADAS) ── */}
+      {loyaltyClients.length > 0 && (
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent border border-amber-500/35 p-4 sm:p-5 shadow-xs animate-in fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md">
+                <Gift size={20} className="animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-extrabold text-foreground">
+                    ¡Beneficio de Fidelización por 20 Canchas!
+                  </h3>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500 text-white uppercase tracking-wider">
+                    {loyaltyClients.length} {loyaltyClients.length === 1 ? 'Cliente' : 'Clientes'}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
+                  Los clientes que alcanzan 20 partidos califican para recibir <strong>1 cancha de cortesía ($0)</strong> en día domingo a discreción del administrador.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2 border-t border-amber-500/20">
+            {loyaltyClients.slice(0, 6).map((cl, i) => (
+              <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-card border border-amber-500/30 shadow-2xs">
+                <div className="min-w-0 pr-2">
+                  <p className="font-bold text-xs truncate capitalize text-foreground">{cl.name}</p>
+                  <p className="text-[10px] text-amber-700 dark:text-amber-400 font-extrabold">
+                    ⚽ {cl.confirmedCount} canchas jugadas
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setLoyaltyGiftClient({ name: cl.name, phone: cl.phone })}
+                  className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-[11px] font-black rounded-xl transition-all shadow-xs flex items-center gap-1 shrink-0 cursor-pointer"
+                >
+                  <Gift size={12} /> Regalar Domingo
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Filtros de fecha (Scroll Horizontal adaptable para móviles) */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 no-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0">
@@ -583,10 +674,9 @@ export function OwnerDashboard() {
                 setFilter(f.key);
                 setSelectedDay(null);
               }}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap shrink-0 border cursor-pointer ${
-                filter === f.key && !selectedDay
-                  ? 'bg-primary text-white border-primary shadow-xs'
-                  : 'bg-card border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap shrink-0 border cursor-pointer ${filter === f.key && !selectedDay
+                ? 'bg-primary text-white border-primary shadow-xs'
+                : 'bg-card border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
                 }`}
             >
               {f.label}
@@ -815,12 +905,12 @@ export function OwnerDashboard() {
                 {filter === 'hoy'
                   ? 'Reservas de la semana (Hoy resaltado)'
                   : filter === 'ayer'
-                  ? 'Reservas de la semana (Ayer resaltado)'
-                  : filter === 'semana'
-                  ? 'Total reservas de esta semana'
-                  : filter === 'mes'
-                  ? 'Total reservas de este mes'
-                  : 'Total reservas por día de la semana'}
+                    ? 'Reservas de la semana (Ayer resaltado)'
+                    : filter === 'semana'
+                      ? 'Total reservas de esta semana'
+                      : filter === 'mes'
+                        ? 'Total reservas de este mes'
+                        : 'Total reservas por día de la semana'}
               </p>
             </div>
             <div className="mt-4">
@@ -887,7 +977,7 @@ export function OwnerDashboard() {
                 return (
                   <div key={p.id} className="space-y-1">
                     <div className="flex justify-between text-xs font-semibold">
-                      <span className="flex items-center gap-1  max-w-[140px]">{i === 0 && <Zap size={11} className="text-amber-500 shrink-0" />}{p.name.toUpperCase()}</span>
+                      <span className="flex items-center gap-1 max-w-[140px]">{i === 0 && <Zap size={11} className="text-amber-500 shrink-0" />}{(p.name || 'Cancha').toUpperCase()}</span>
                       <span className="text-foreground font-extrabold shrink-0">{fmt(p.income)}</span>
                     </div>
                     <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
@@ -912,11 +1002,11 @@ export function OwnerDashboard() {
           {demandByPitch.length === 0 ? <p className="text-xs text-muted-foreground mt-4">Sin datos aún.</p> : (
             <div className="mt-4 space-y-3">
               {demandByPitch.map((p, i) => (
-                <div key={`${i}-${p.name}`} className="space-y-1">
+                <div key={`${i}-${p.name || 'cancha'}`} className="space-y-1">
                   <div className="flex justify-between text-xs font-semibold">
                     <span className="flex items-center gap-1.5 truncate max-w-[140px]">
                       <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 ${i === 0 ? 'bg-amber-400 text-white' : i === 1 ? 'bg-zinc-300 text-zinc-700' : i === 2 ? 'bg-orange-300 text-white' : 'bg-secondary text-muted-foreground'}`}>{i + 1}</span>
-                      <span className="">{p.name.toUpperCase()}</span>
+                      <span>{(p.name || 'Cancha').toUpperCase()}</span>
                     </span>
                     <span className="text-muted-foreground shrink-0">{p.count} res.</span>
                   </div>
@@ -955,7 +1045,7 @@ export function OwnerDashboard() {
                 return (
                   <Link key={pitch.id} href="/dashboard/pitches" className="flex items-center justify-between p-2.5 rounded-xl bg-secondary/40 hover:bg-secondary/70 border border-border/60 transition-colors group">
                     <div className="min-w-0 pr-2">
-                      <div className="font-bold text-xs sm:text-sm truncate">{pitch.name.toUpperCase()}</div>
+                      <div className="font-bold text-xs sm:text-sm truncate">{(pitch.name || 'Cancha').toUpperCase()}</div>
                       <div className="text-[11px] text-muted-foreground truncate">{pConf} reservas · {fmt(pInc)}</div>
                     </div>
                     <ChevronRight size={14} className="text-muted-foreground shrink-0 opacity-60 group-hover:opacity-100 transition-all" />
@@ -1069,6 +1159,21 @@ export function OwnerDashboard() {
         pitches={pitches}
         companyName={stats?.company?.name || profile?.full_name}
       />
+
+      {/* Modal para agendar Cancha de Cortesía de Domingo ($0) por Fidelización */}
+      {loyaltyGiftClient && (
+        <ManualBookingModal
+          pitches={pitches}
+          initialIsLoyaltyFree={true}
+          initialCustomerName={loyaltyGiftClient.name}
+          initialCustomerPhone={loyaltyGiftClient.phone}
+          onClose={() => setLoyaltyGiftClient(null)}
+          onSuccess={() => {
+            setLoyaltyGiftClient(null);
+            fetchStats();
+          }}
+        />
+      )}
     </section>
   );
 }

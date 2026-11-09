@@ -123,3 +123,61 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 });
+
+// ===== 4. WEB PUSH NOTIFICATIONS (Para PWA móvil en Android / iPhone / PC) =====
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = {
+      title: '⚽ Cancheros - Notificación',
+      body: event.data ? event.data.text() : 'Tienes una reserva pendiente por aprobar.',
+    };
+  }
+
+  const title = data.title || '⚽ Cancheros: Reserva por aprobar';
+  const options = {
+    body: data.body || 'Un cliente subió su comprobante de pago y espera tu aprobación.',
+    icon: data.icon || '/icon-192x192.png',
+    badge: data.badge || '/icon-96x96.png',
+    tag: data.tag || 'booking-pending-alert',
+    renotify: true,
+    requireInteraction: true,
+    vibrate: data.vibrate || [350, 150, 350, 150, 500],
+    data: {
+      url: data.url || '/dashboard/bookings',
+      dateOfArrival: Date.now(),
+    },
+    actions: [
+      { action: 'open_bookings', title: '👀 Ver y Aprobar' },
+      { action: 'close', title: 'Cerrar' },
+    ],
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Clic en la notificación: enfocar ventana abierta o navegar a la ruta
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  if (event.action === 'close') return;
+
+  const targetUrl = event.notification.data?.url || '/dashboard/bookings';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if (client.url.includes('/dashboard') && 'focus' in client) {
+          if ('navigate' in client) {
+            client.navigate(targetUrl);
+          }
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
