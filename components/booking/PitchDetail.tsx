@@ -16,6 +16,7 @@ import { getPitchLocation } from '@/lib/pitch-location';
 import { cleanAddress } from '@/lib/complex-utils';
 import { PaymentMethodLogo } from '@/components/ui/PaymentMethodLogo';
 import { CreditCard } from 'lucide-react';
+import { isSlotPassed } from '@/lib/utils';
 
 
 interface PitchDetailProps {
@@ -82,6 +83,12 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
 
   // Auth & Favorites & ActiveBooking hooks
   const { user, profile } = useAuth();
+  const isOwnerUser = profile?.role === 'owner' || profile?.role === 'superadmin' || user?.user_metadata?.role === 'owner';
+  const currentPitchOwnerId =
+    (currentPitch as any)?.companies?.owner_id ||
+    (currentPitch as any)?.company?.owner_id ||
+    null;
+  const isOwnPitch = !!(isOwnerUser && user?.id && currentPitchOwnerId === user.id);
   const { isFavorite: checkFav, toggleFavorite: doToggleFav, isFavoriteComplex, toggleFavoriteComplex } = useFavorites();
   const complexId = currentPitch.company_id || (currentPitch as any)?.companies?.id || (currentPitch as any)?.company?.id;
   const isFavorite = complexId ? isFavoriteComplex(complexId) : checkFav(currentPitch.id);
@@ -119,7 +126,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
       try {
         const { data, error } = await supabase
           .from('pitches')
-          .select('*, companies(id, name, address, zone)')
+          .select('*, companies(id, name, address, zone, owner_id)')
           .eq('company_id', compId)
           .order('created_at', { ascending: true });
 
@@ -374,6 +381,15 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
     return `${h12}:00 ${ampm}`;
   }
   const toggleTime = (slot: string) => {
+    if (!isOwnPitch && isSlotPassed(selectedDate, slot, 5)) {
+      setAlertState({
+        isOpen: true,
+        type: 'warning',
+        title: '⏰ Horario no disponible',
+        message: 'Esta hora ya ha pasado (límite de 5 minutos de gracia superado). Por favor elige un horario posterior para continuar.',
+      });
+      return;
+    }
     if (selectedTimes.includes(slot)) {
       setSelectedTimes(prev => prev.filter(s => s !== slot));
     } else if (selectedTimes.length >= 4) {
@@ -1363,6 +1379,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                         const ampm = hNum < 12 ? 'am' : 'pm';
                         const h12 = hNum === 0 ? 12 : hNum > 12 ? hNum - 12 : hNum;
                         const slotPrice = getSlotPrice(slot);
+                        const isPassed = isSlotPassed(selectedDate, slot, 5);
 
                         let secondsLeft = 0;
                         if (isDraft && slotData?.expires_at) {
@@ -1374,42 +1391,50 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
 
                         let btnClass = 'bg-card hover:bg-primary/10 border-border text-foreground';
                         if (isSel) {
-                          btnClass = 'bg-primary text-white border-primary shadow-md';
+                          btnClass = isPassed && isOwnPitch
+                            ? 'bg-amber-600 text-white border-amber-500 shadow-md ring-2 ring-amber-500/30'
+                            : 'bg-primary text-white border-primary shadow-md';
                         } else if (isTaken) {
                           if (isDraft) {
                             btnClass = 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/40 ring-1 ring-amber-500/20 cursor-not-allowed';
                           } else {
                             btnClass = 'bg-red-500/10 text-red-400 border-red-500/20 cursor-not-allowed opacity-60';
                           }
+                        } else if (isPassed) {
+                          if (isOwnPitch) {
+                            btnClass = 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-500 dark:text-amber-400 cursor-pointer';
+                          } else {
+                            btnClass = 'bg-secondary/30 text-muted-foreground/40 border-border/40 cursor-not-allowed opacity-50';
+                          }
                         }
 
                         return (
                           <button
                             key={`${activeTimeCategory}-${slot}`}
-                            disabled={isTaken}
+                            disabled={isTaken || (!isOwnPitch && isPassed)}
                             type="button"
-                            onClick={() => {
-                              if (selectedTimes.includes(slot)) {
-                                setSelectedTimes(prev => prev.filter(s => s !== slot));
-                              } else if (selectedTimes.length >= 4) {
-                                setAlertState({
-                                  isOpen: true,
-                                  type: 'warning',
-                                  title: '⏰ Límite de horas alcanzado',
-                                  message: 'Solo puedes reservar un máximo de 4 horas por transacción. Si necesitas más tiempo, crea una nueva reserva.',
-                                });
-                              } else {
-                                setSelectedTimes(prev => [...prev, slot].sort());
-                              }
-                            }}
+                            onClick={() => toggleTime(slot)}
                             className={`p-2 sm:p-2 rounded-2xl sm:rounded-xl border text-center transition-all select-none font-bold text-[11px] sm:text-xs relative overflow-hidden ${btnClass}`}
+                            title={isPassed ? (isOwnPitch ? 'Horario en curso o transcurrido (habilitado para dueño)' : 'Esta hora ya ha pasado (límite de 5 minutos de gracia superado)') : undefined}
                           >
                             <span className="block leading-tight">{h12}:00</span>
                             <span className="text-[9px] uppercase opacity-75">{ampm}</span>
-                            {!isTaken && (
+                            {!isTaken && !isPassed && (
                               <span className={`text-[9px] block mt-0.5 ${isSel ? 'text-white/90' : 'text-primary'}`}>
                                 ${slotPrice.toLocaleString('es-CO')}
                               </span>
+                            )}
+                            {isPassed && !isTaken && (
+                              <div className="mt-0.5">
+                                <span className={`text-[8.5px] font-black uppercase block tracking-tight ${isOwnPitch ? (isSel ? 'text-white/90' : 'text-amber-500 dark:text-amber-400') : 'text-muted-foreground/60'}`}>
+                                  {isOwnPitch ? 'Ya inició' : 'Ya pasó'}
+                                </span>
+                                {isOwnPitch && (
+                                  <span className={`text-[8.5px] block font-semibold ${isSel ? 'text-white/90' : 'text-amber-500 dark:text-amber-400'}`}>
+                                    ${slotPrice.toLocaleString('es-CO')}
+                                  </span>
+                                )}
+                              </div>
                             )}
 
                             {/* Overlay de estado de reserva con cronómetro */}
@@ -1455,6 +1480,14 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                   <span>Total estimado:</span>
                   <span className="text-primary">${totalPrice.toLocaleString('es-CO')}</span>
                 </div>
+              </div>
+            )}
+
+            {/* Advertencia para Dueño reservando horas pasadas o en curso */}
+            {isOwnPitch && selectedTimes.some(slot => isSlotPassed(selectedDate, slot, 5)) && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 dark:text-amber-400 text-xs flex items-center gap-2.5 font-medium">
+                <span className="text-base shrink-0">⚠️</span>
+                <span><strong>Modo Dueño/Administrador:</strong> Has seleccionado horarios que ya iniciaron o pasaron. Cuentas con permiso para agendarlos en tu propia cancha.</span>
               </div>
             )}
 

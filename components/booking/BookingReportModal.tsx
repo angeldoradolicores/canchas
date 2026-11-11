@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   X,
   BarChart3,
@@ -34,9 +34,10 @@ interface BookingReportModalProps {
   bookings: any[];
   pitches: any[];
   companyName?: string;
+  initialTab?: ReportTab;
 }
 
-type Period = 'today' | 'week' | 'month' | 'quarter' | 'year' | 'custom';
+type Period = 'today' | 'week' | 'fortnight' | 'month' | 'quarter' | 'year' | 'custom';
 type ReportTab = 'overview' | 'pitches' | 'hours' | 'cancellations' | 'customers' | 'entities';
 
 interface PeriodOption {
@@ -66,35 +67,60 @@ function fmt12(h: number) {
 
 function getPeriodRange(period: Period, customFrom?: string, customTo?: string): { from: Date; to: Date } {
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-
-  const ago = (days: number) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - days + 1);
-    return d;
-  };
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const d = now.getDate();
 
   switch (period) {
     case 'today': {
-      const from = new Date(today);
-      const to = new Date(today.getTime() + 86400000 - 1);
+      const from = new Date(y, m, d, 0, 0, 0, 0);
+      const to = new Date(y, m, d, 23, 59, 59, 999);
       return { from, to };
     }
     case 'week': {
-      return { from: ago(7), to: new Date(today.getTime() + 86400000 - 1) };
+      // Semana natural de Lunes a Domingo
+      const day = now.getDay(); // 0 = Domingo, 1 = Lunes, ...
+      const diffToMonday = day === 0 ? -6 : 1 - day;
+      const from = new Date(y, m, d + diffToMonday, 0, 0, 0, 0);
+      const to = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 6, 23, 59, 59, 999);
+      return { from, to };
+    }
+    case 'fortnight': {
+      // Quincena natural: 1 al 15 o 16 al fin de mes
+      if (d <= 15) {
+        const from = new Date(y, m, 1, 0, 0, 0, 0);
+        const to = new Date(y, m, 15, 23, 59, 59, 999);
+        return { from, to };
+      } else {
+        const from = new Date(y, m, 16, 0, 0, 0, 0);
+        const to = new Date(y, m + 1, 0, 23, 59, 59, 999);
+        return { from, to };
+      }
     }
     case 'month': {
-      return { from: ago(30), to: new Date(today.getTime() + 86400000 - 1) };
+      // Mes natural: Día 1 al último día del mes
+      const from = new Date(y, m, 1, 0, 0, 0, 0);
+      const to = new Date(y, m + 1, 0, 23, 59, 59, 999);
+      return { from, to };
     }
     case 'quarter': {
-      return { from: ago(90), to: new Date(today.getTime() + 86400000 - 1) };
+      // Trimestre natural (Q1: Ene-Mar, Q2: Abr-Jun, Q3: Jul-Sep, Q4: Oct-Dic)
+      const qIndex = Math.floor(m / 3);
+      const qStartMonth = qIndex * 3;
+      const from = new Date(y, qStartMonth, 1, 0, 0, 0, 0);
+      const to = new Date(y, qStartMonth + 3, 0, 23, 59, 59, 999);
+      return { from, to };
     }
     case 'year': {
-      return { from: ago(365), to: new Date(today.getTime() + 86400000 - 1) };
+      // Año natural: 1 de Enero al 31 de Diciembre
+      const from = new Date(y, 0, 1, 0, 0, 0, 0);
+      const to = new Date(y, 11, 31, 23, 59, 59, 999);
+      return { from, to };
     }
     case 'custom': {
-      const from = customFrom ? new Date(customFrom + 'T00:00:00-05:00') : ago(30);
-      const to = customTo ? new Date(customTo + 'T23:59:59-05:00') : new Date();
+      const ago30 = new Date(y, m, d - 30, 0, 0, 0, 0);
+      const from = customFrom ? new Date(customFrom + 'T00:00:00-05:00') : ago30;
+      const to = customTo ? new Date(customTo + 'T23:59:59-05:00') : new Date(y, m, d, 23, 59, 59, 999);
       return { from, to };
     }
   }
@@ -102,10 +128,11 @@ function getPeriodRange(period: Period, customFrom?: string, customTo?: string):
 
 const PERIOD_OPTIONS: PeriodOption[] = [
   { key: 'today', label: 'Hoy', badge: '24h' },
-  { key: 'week', label: 'Esta Semana', badge: '7 días' },
-  { key: 'month', label: 'Este Mes', badge: '30 días' },
-  { key: 'quarter', label: 'Trimestre', badge: '90 días' },
-  { key: 'year', label: 'Anual', badge: '365 días' },
+  { key: 'week', label: 'Esta Semana', badge: 'Lun – Dom' },
+  { key: 'fortnight', label: 'Quincena', badge: '1-15 o 16-Fin' },
+  { key: 'month', label: 'Este Mes', badge: 'Día 1 a Fin' },
+  { key: 'quarter', label: 'Trimestre', badge: 'Trim. Natural' },
+  { key: 'year', label: 'Año en Curso', badge: '1 Ene – 31 Dic' },
   { key: 'custom', label: 'Personalizado', badge: 'Rango libre' },
 ];
 
@@ -117,11 +144,18 @@ function getBookingIncome(b: any): number {
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
 
-export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [], companyName }: BookingReportModalProps) {
+export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [], companyName, initialTab = 'overview' }: BookingReportModalProps) {
   const [period, setPeriod] = useState<Period>('month');
-  const [activeTab, setActiveTab] = useState<ReportTab>('overview');
+  const [activeTab, setActiveTab] = useState<ReportTab>(initialTab);
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
+
+  // Sincronizar tab si se abre con una pestaña específica
+  useEffect(() => {
+    if (initialTab && isOpen) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab, isOpen]);
 
   const safeBookings = useMemo(() => Array.isArray(bookings) ? bookings : [], [bookings]);
   const safePitches = useMemo(() => Array.isArray(pitches) ? pitches : [], [pitches]);
@@ -152,7 +186,17 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
   }, [confirmedBookings]);
 
   const depositRevenue = useMemo(() => {
-    return confirmedBookings.reduce((sum, b) => sum + Number(b.deposit_amount || 0), 0);
+    return confirmedBookings.reduce((sum, b) => {
+      let d = Number(b.deposit_amount || 0);
+      if (d === 0 && b.source !== 'owner_panel' && b.pitches && !b.is_loyalty_free) {
+        const customPricing = b.pitches.custom_pricing || {};
+        const isFixed = customPricing.booking_type === 'fixed';
+        const pct = customPricing.booking_percentage || b.pitches.booking_percentage || 50;
+        const tPrice = getBookingIncome(b);
+        d = isFixed ? Number(customPricing.booking_fixed || 0) : (tPrice * Number(pct)) / 100;
+      }
+      return sum + d;
+    }, 0);
   }, [confirmedBookings]);
 
   const lostRevenue = useMemo(() => {
@@ -283,7 +327,9 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
     return set.size;
   }, [confirmedBookings]);
 
-  // ── Reporte Ejecutivo: Entidades, Escuelas y Turnos Fijos ───────────────────
+  // ── Reporte Ejecutivo: Entidades, Escuelas y Turnos Fijos con Trazabilidad Anual/Mensual ───
+  const [selectedEntityTrace, setSelectedEntityTrace] = useState<any | null>(null);
+
   const entitiesReport = useMemo(() => {
     const map: Record<string, {
       id: string;
@@ -297,13 +343,31 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
       pendingBookings: number;
       totalBilled: number;
       totalReceivable: number;
-      daysPlayed: { date: string; time: string; status: string; pitch: string }[];
+      daysPlayed: { date: string; time: string; status: string; pitch: string; iso: string; price: number }[];
+      allTimeHistory: {
+        totalMatches: number;
+        totalBilled: number;
+        totalReceivable: number;
+        byYear: Record<number, {
+          year: number;
+          matches: number;
+          total: number;
+          months: Record<number, {
+            month: number;
+            monthName: string;
+            matches: number;
+            total: number;
+            items: { id: string; date: string; dayOfWeek: string; time: string; pitch: string; status: string; price: number }[];
+          }>;
+        }>;
+      };
     }> = {};
 
-    inRangeBookings.forEach(b => {
+    // 1. Procesar todo el historial histórico (meses y años) de safeBookings para trazabilidad
+    safeBookings.forEach(b => {
       const isEntity = b.client_type === 'entity';
       const isSchool = b.client_type === 'school';
-      const isContract = b.booking_type === 'contract' || (b.customer_name && b.customer_name.includes('[Contrato'));
+      const isContract = b.booking_type === 'contract' || (b.customer_name && (b.customer_name.includes('[Contrato') || b.customer_name.includes('[Turno Fijo') || b.customer_name.includes('[ENTIDAD') || b.customer_name.includes('[ESCUELA')));
 
       if (!isEntity && !isSchool && !isContract) return;
 
@@ -317,7 +381,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
           name: entityName,
           type,
           pitchName: b.pitches?.name || 'Cancha',
-          paymentMethod: b.payment_method || 'efectivo',
+          paymentMethod: b.payment_method || 'cuenta_cobrar',
           customRate: Number(b.custom_rate || b.total_price || b.pitches?.price_per_hour || 0),
           totalBookings: 0,
           confirmedBookings: 0,
@@ -325,39 +389,94 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
           totalBilled: 0,
           totalReceivable: 0,
           daysPlayed: [],
+          allTimeHistory: {
+            totalMatches: 0,
+            totalBilled: 0,
+            totalReceivable: 0,
+            byYear: {},
+          },
         };
       }
 
       const rec = map[key];
-      rec.totalBookings++;
       const inc = getBookingIncome(b);
 
-      if (b.status === 'confirmed') {
-        rec.confirmedBookings++;
-        rec.totalBilled += inc;
-      } else if (b.status === 'pending') {
-        rec.pendingBookings++;
-      }
-
-      if (b.payment_method === 'cuenta_cobrar' || b.payment_method === 'credito') {
-        rec.totalReceivable += inc;
-      }
-
+      // Agregar a trazabilidad histórica multianual
       if (b.start_time) {
-        rec.daysPlayed.push({
-          date: new Date(b.start_time).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', weekday: 'short', timeZone: 'America/Bogota' }),
-          time: new Date(b.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' }),
-          status: b.status,
-          pitch: b.pitches?.name || 'Cancha',
-        });
+        const d = new Date(b.start_time);
+        if (!isNaN(d.getTime())) {
+          const year = d.getFullYear();
+          const month = d.getMonth() + 1;
+          const monthName = d.toLocaleDateString('es-CO', { month: 'long', timeZone: 'America/Bogota' });
+
+          rec.allTimeHistory.totalMatches++;
+          if (b.status === 'confirmed') rec.allTimeHistory.totalBilled += inc;
+          if (b.payment_method === 'cuenta_cobrar' || b.payment_method === 'credito') {
+            rec.allTimeHistory.totalReceivable += inc;
+          }
+
+          if (!rec.allTimeHistory.byYear[year]) {
+            rec.allTimeHistory.byYear[year] = { year, matches: 0, total: 0, months: {} };
+          }
+          const yRec = rec.allTimeHistory.byYear[year];
+          yRec.matches++;
+          if (b.status === 'confirmed') yRec.total += inc;
+
+          if (!yRec.months[month]) {
+            yRec.months[month] = { month, monthName, matches: 0, total: 0, items: [] };
+          }
+          const mRec = yRec.months[month];
+          mRec.matches++;
+          if (b.status === 'confirmed') mRec.total += inc;
+
+          mRec.items.push({
+            id: b.id,
+            date: d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' }),
+            dayOfWeek: d.toLocaleDateString('es-CO', { weekday: 'short', timeZone: 'America/Bogota' }),
+            time: d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' }),
+            pitch: b.pitches?.name || 'Cancha',
+            status: b.status,
+            price: inc,
+          });
+        }
+      }
+
+      // Si está en el rango seleccionado de fechas del modal
+      const timeVal = b.start_time || b.created_at;
+      if (timeVal) {
+        const d = new Date(timeVal);
+        if (!isNaN(d.getTime()) && d >= from && d <= to) {
+          rec.totalBookings++;
+          if (b.status === 'confirmed') {
+            rec.confirmedBookings++;
+            rec.totalBilled += inc;
+          } else if (b.status === 'pending') {
+            rec.pendingBookings++;
+          }
+
+          if (b.payment_method === 'cuenta_cobrar' || b.payment_method === 'credito') {
+            rec.totalReceivable += inc;
+          }
+
+          if (b.start_time) {
+            rec.daysPlayed.push({
+              date: new Date(b.start_time).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', weekday: 'short', timeZone: 'America/Bogota' }),
+              time: new Date(b.start_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' }),
+              status: b.status,
+              pitch: b.pitches?.name || 'Cancha',
+              iso: b.start_time,
+              price: inc,
+            });
+          }
+        }
       }
     });
 
-    const list = Object.values(map).sort((a, b) => b.totalBilled - a.totalBilled);
+    const list = Object.values(map).sort((a, b) => b.allTimeHistory.totalBilled - a.allTimeHistory.totalBilled);
     const totalEntities = list.length;
-    const totalBilledAll = list.reduce((s, e) => s + e.totalBilled, 0);
-    const totalReceivableAll = list.reduce((s, e) => s + e.totalReceivable, 0);
-    const totalMatchesAll = list.reduce((s, e) => s + e.confirmedBookings, 0);
+    const totalBilledAll = list.reduce((s, e) => s + (e.totalBilled || e.allTimeHistory.totalBilled), 0);
+    const totalReceivableAll = list.reduce((s, e) => s + (e.totalReceivable || e.allTimeHistory.totalReceivable), 0);
+    const totalMatchesAll = list.reduce((s, e) => s + (e.confirmedBookings || e.allTimeHistory.totalMatches), 0);
     const avgRateAll = totalMatchesAll > 0 ? Math.round(totalBilledAll / totalMatchesAll) : 0;
 
     return {
@@ -368,13 +487,14 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
       totalMatchesAll,
       avgRateAll,
     };
-  }, [inRangeBookings]);
+  }, [safeBookings, from, to]);
 
   // ── Exportación a PDF / Impresión Ejecutiva ──────────────────────────────────
   const handleDownloadPDF = useCallback(() => {
     const periodLabel = PERIOD_OPTIONS.find(p => p.key === period)?.label || 'Período';
     const dateRange = `${from.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })} – ${to.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}`;
     const generatedAt = new Date().toLocaleString('es-CO', { dateStyle: 'long', timeStyle: 'short', timeZone: 'America/Bogota' });
+    const pendingBalance = Math.max(0, totalRevenue - depositRevenue);
 
     const courtRows = byCourt.map((c, i) => `
       <tr>
@@ -385,17 +505,39 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
       </tr>
     `).join('');
 
-    const topHoursRows = byHour.filter(h => h.count > 0).slice(0, 6).map((h, i) => `
+    const topCustomersRows = topCustomers.map((c, i) => {
+      const isVip = c.bookingsCount >= 10;
+      const isFrequent = c.bookingsCount >= 5;
+      const tierBadge = isVip
+        ? '<span style="background:#fef3c7;color:#b45309;padding:2px 8px;border-radius:12px;font-weight:800;font-size:10px;">VIP ORO</span>'
+        : isFrequent
+          ? '<span style="background:#ecfdf5;color:#047857;padding:2px 8px;border-radius:12px;font-weight:700;font-size:10px;">FRECUENTE</span>'
+          : '<span style="background:#f1f5f9;color:#475569;padding:2px 8px;border-radius:12px;font-weight:600;font-size:10px;">ACTIVO</span>';
+
+      return `
+        <tr>
+          <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;font-weight:800;color:#64748b;text-align:center;">#${i + 1}</td>
+<td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;font-weight:700;color:#0f172a;text-transform:capitalize;">${c.name}</td>
+          <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;color:#475569;font-weight:500;">${c.phone || '—'}</td>
+          <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:800;color:#0f172a;">${c.bookingsCount}</td>
+          <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:800;color:#0f766e;">${formatCOP(c.totalSpent)}</td>
+          <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;text-align:center;">${tierBadge}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const topHoursRows = byHour.filter(h => h.count > 0).slice(0, 8).map((h, i) => `
       <tr>
-        <td style="padding:9px 14px;border-bottom:1px solid #e2e8f0;font-weight:700;">#${i + 1} ${h.label}</td>
-        <td style="padding:9px 14px;border-bottom:1px solid #e2e8f0;text-align:center;">${h.count} reservas</td>
+        <td style="padding:9px 14px;border-bottom:1px solid #e2e8f0;font-weight:700;color:#0f172a;">#${i + 1} &nbsp;  ${h.label}</td>
+        <td style="padding:9px 14px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700;">${h.count} partidos</td>
         <td style="padding:9px 14px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:700;color:#0f766e;">${formatCOP(h.revenue)}</td>
+        <td style="padding:9px 14px;border-bottom:1px solid #e2e8f0;text-align:right;color:#64748b;font-weight:600;">${pct(h.count, confirmedCount)} del volumen</td>
       </tr>
     `).join('');
 
     const cancelRows = cancelledBookings.slice(0, 10).map((b, i) => `
       <tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;">${i + 1}. ${b.customer_name || 'Cliente'}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;text-transform:capitalize;">${i + 1}. ${b.customer_name || 'Cliente'}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;">${b.pitches?.name || 'Cancha'}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center;">${b.start_time ? new Date(b.start_time).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '—'}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;color:#e11d48;font-weight:700;">${formatCOP(getBookingIncome(b))}</td>
@@ -404,8 +546,8 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
 
     const entityRows = entitiesReport.list.map((e, i) => `
       <tr>
-        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;font-weight:700;">${i + 1}. ${e.name} (${e.type === 'entity' ? 'Entidad' : e.type === 'school' ? 'Escuela' : 'Turno Fijo'})</td>
-        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;">${e.pitchName}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;font-weight:700;text-transform:capitalize;">${i + 1}. ${e.name} (${e.type === 'entity' ? 'Entidad' : e.type === 'school' ? 'Escuela' : 'Turno Fijo'})</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-transform:capitalize;">${e.pitchName}</td>
         <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600;">${formatCOP(e.customRate)}/h</td>
         <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700;">${e.confirmedBookings}</td>
         <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:800;color:#0f766e;">${formatCOP(e.totalBilled)}</td>
@@ -426,7 +568,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
     .subtitle { font-size: 13px; color: #475569; margin-top: 4px; font-weight: 500; }
     .meta-box { text-align: right; font-size: 11px; color: #64748b; line-height: 1.6; }
     .meta-box strong { color: #0f172a; }
-    .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
     .kpi-card { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px; text-align: left; }
     .kpi-card .lbl { font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
     .kpi-card .val { font-size: 22px; font-weight: 900; color: #0f172a; }
@@ -450,7 +592,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
   <div class="header">
     <div>
       <div class="title-h1">${companyName || 'Complejo Deportivo'}</div>
-      <div class="subtitle">Informe Ejecutivo de Gestión y Rendimiento Financiero</div>
+      <div class="subtitle">Informe Ejecutivo de Gestión, Ocupación y Rendimiento Financiero</div>
     </div>
     <div class="meta-box">
       <div><strong>Período:</strong> ${periodLabel} (${dateRange})</div>
@@ -461,9 +603,32 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
 
   <div class="kpi-row">
     <div class="kpi-card highlight">
-      <div class="lbl">Recaudo Total Confirmado</div>
+      <div class="lbl">Total Facturado Confirmado</div>
       <div class="val">${formatCOP(totalRevenue)}</div>
       <div class="sub">${confirmedCount} partidos aprobados</div>
+    </div>
+    <div class="kpi-card">
+      <div class="lbl">Total Abonos Recaudados</div>
+      <div class="val" style="color:#0f766e;">${formatCOP(depositRevenue)}</div>
+      <div class="sub">${pct(depositRevenue, totalRevenue)} recaudado en anticipo</div>
+    </div>
+    <div class="kpi-card">
+      <div class="lbl">Saldo Pendiente por Cobrar</div>
+      <div class="val" style="color:#b45309;">${formatCOP(pendingBalance)}</div>
+      <div class="sub">Cobro en taquilla / crédito</div>
+    </div>
+    <div class="kpi-card">
+      <div class="lbl">Clientes Únicos / Usuarios</div>
+      <div class="val" style="color:#4f46e5;">${uniqueCustomersCount}</div>
+      <div class="sub">Jugadores distintos en período</div>
+    </div>
+  </div>
+
+  <div class="kpi-row" style="margin-bottom:28px;">
+    <div class="kpi-card">
+      <div class="lbl">Hora Pico Más Demandada</div>
+      <div class="val" style="font-size:18px;">${peakHour ? ` ${peakHour.label}` : 'N/A'}</div>
+      <div class="sub">${peakHour ? `${peakHour.count} partidos jugados` : 'Sin registros'}</div>
     </div>
     <div class="kpi-card">
       <div class="lbl">Tasa de Efectividad</div>
@@ -483,7 +648,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
   </div>
 
   <div class="section">
-    <div class="section-title">📊 Rendimiento y Cuota de Facturación por Cancha</div>
+    <div class="section-title"> Rendimiento y Cuota de Facturación por Cancha</div>
     <table>
       <thead>
         <tr>
@@ -499,15 +664,36 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
     </table>
   </div>
 
+  ${topCustomersRows ? `
+  <div class="section">
+    <div class="section-title"> Top 10 Clientes Frecuentes con Mayor Asistencia</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align:center;">#</th>
+          <th>Nombre del Cliente</th>
+          <th>Teléfono / Contacto</th>
+          <th style="text-align:center;">Partidos Jugados</th>
+          <th style="text-align:right;">Gasto Total Aportado</th>
+          <th style="text-align:center;">Categoría</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${topCustomersRows}
+      </tbody>
+    </table>
+  </div>` : ''}
+
   ${topHoursRows ? `
   <div class="section">
-    <div class="section-title">⏰ Franjas Horarias con Mayor Recaudo (Top Demandadas)</div>
+    <div class="section-title"> Franjas Horarias con Mayor Recaudo (Horas Pico Demandadas)</div>
     <table>
       <thead>
         <tr>
           <th>Horario</th>
           <th style="text-align:center;">Volumen Reservas</th>
           <th style="text-align:right;">Ingreso Generado</th>
+          <th style="text-align:right;">Cuota de Demanda</th>
         </tr>
       </thead>
       <tbody>
@@ -518,7 +704,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
 
   ${entityRows.length > 0 ? `
   <div class="section">
-    <div class="section-title">🏢 Control Corporativo: Entidades, Escuelas y Turnos Fijos</div>
+    <div class="section-title">Control Corporativo: Entidades, Escuelas y Turnos Fijos</div>
     <table>
       <thead>
         <tr>
@@ -538,7 +724,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
 
   ${cancelledBookings.length > 0 ? `
   <div class="section">
-    <div class="section-title">⚠️ Control de Cancelaciones y Pérdida de Ocupación</div>
+    <div class="section-title"> Control de Cancelaciones y Pérdida de Ocupación</div>
     <table>
       <thead>
         <tr>
@@ -566,7 +752,142 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
     win.document.write(html);
     win.document.close();
     setTimeout(() => { win.focus(); win.print(); }, 400);
-  }, [period, from, to, companyName, byCourt, byHour, cancelledBookings, totalRevenue, confirmedCount, totalBookingsCount, successRate, averageTicket, cancelledCount, cancellationRate, lostRevenue]);
+  }, [period, from, to, companyName, byCourt, byHour, cancelledBookings, totalRevenue, depositRevenue, confirmedCount, totalBookingsCount, successRate, averageTicket, cancelledCount, cancellationRate, lostRevenue, topCustomers, uniqueCustomersCount, entitiesReport, peakHour]);
+
+  // ── Impresión de Hoja de Trazabilidad y Estado de Cuenta Individual ───────────
+  const handlePrintSingleTraceability = useCallback((ent: any) => {
+    if (!ent) return;
+    const generatedAt = new Date().toLocaleString('es-CO', { dateStyle: 'long', timeStyle: 'short', timeZone: 'America/Bogota' });
+    const years = Object.values(ent.allTimeHistory?.byYear || {}).sort((a: any, b: any) => b.year - a.year);
+
+    let rowsHtml = '';
+    years.forEach((y: any) => {
+      const months = Object.values(y.months || {}).sort((a: any, b: any) => b.month - a.month);
+      rowsHtml += `
+        <tr style="background:#f1f5f9;">
+          <td colspan="5" style="padding:9px 12px;font-weight:900;color:#0f172a;text-transform:uppercase;font-size:11px;letter-spacing:0.05em;border-top:2px solid #cbd5e1;border-bottom:1.5px solid #cbd5e1;">
+            AÑO ${y.year} — ${y.matches} turnos / partidos acumulados (${formatCOP(y.total)})
+          </td>
+        </tr>
+      `;
+      months.forEach((m: any) => {
+        rowsHtml += `
+          <tr style="background:#f8fafc;">
+            <td colspan="5" style="padding:7px 12px;font-weight:700;color:#475569;font-size:11px;border-bottom:1px solid #e2e8f0;">
+              • Mes de ${m.monthName} (${m.matches} turnos — ${formatCOP(m.total)})
+            </td>
+          </tr>
+        `;
+        m.items.forEach((it: any, idx: number) => {
+          const statusBadge = it.status === 'confirmed'
+            ? '<span style="color:#0f766e;font-weight:bold;">Aprobado</span>'
+            : (it.status === 'pending' ? '<span style="color:#b45309;font-weight:bold;">Por Aprobar</span>' : '<span style="color:#e11d48;font-weight:bold;">Cancelado</span>');
+          rowsHtml += `
+            <tr>
+              <td style="padding:7px 12px;border-bottom:1px solid #f1f5f9;color:#64748b;font-weight:600;">${idx + 1}</td>
+              <td style="padding:7px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;">${it.dayOfWeek.toUpperCase()}, ${it.date} — ${it.time}</td>
+              <td style="padding:7px 12px;border-bottom:1px solid #f1f5f9;">${it.pitch}</td>
+              <td style="padding:7px 12px;border-bottom:1px solid #f1f5f9;text-align:center;">${statusBadge}</td>
+              <td style="padding:7px 12px;border-bottom:1px solid #f1f5f9;text-align:right;font-weight:700;color:#0f172a;">${formatCOP(it.price)}</td>
+            </tr>
+          `;
+        });
+      });
+    });
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Trazabilidad Turno Fijo – ${ent.name}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; background: #fff; padding: 36px; line-height: 1.45; }
+    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 20px; }
+    .title-h1 { font-size: 22px; font-weight: 900; }
+    .subtitle { font-size: 13px; color: #475569; margin-top: 4px; }
+    .meta-box { text-align: right; font-size: 11px; color: #64748b; line-height: 1.6; }
+    .info-card { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px; margin-bottom: 22px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .info-item .lbl { font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 3px; }
+    .info-item .val { font-size: 15px; font-weight: 900; color: #0f172a; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+    th { background: #0f172a; color: #fff; padding: 8px 12px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 50px; padding-top: 20px; }
+    .sign-line { border-top: 1.5px solid #0f172a; padding-top: 8px; text-align: center; font-size: 11px; font-weight: 700; color: #334155; }
+    @media print { body { padding: 20px; } @page { margin: 1.5cm; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="title-h1">${companyName || 'Complejo Deportivo'}</div>
+      <div class="subtitle">Hoja Oficial de Trazabilidad y Estado de Cuenta — Turno Fijo / Convenio</div>
+    </div>
+    <div class="meta-box">
+      <div><strong>Fecha Emisión:</strong> ${generatedAt}</div>
+      <div><strong>Cliente / Titular:</strong> ${ent.name}</div>
+      <div><strong>Categoría:</strong> ${ent.type === 'entity' ? 'Entidad / Empresa' : (ent.type === 'school' ? 'Escuela de Fútbol' : 'Turno Fijo')}</div>
+    </div>
+  </div>
+
+  <div class="info-card">
+    <div class="info-item">
+      <div class="lbl">Cancha Asignada</div>
+      <div class="val">${ent.pitchName}</div>
+    </div>
+    <div class="info-item">
+      <div class="lbl">Tarifa Acordada</div>
+      <div class="val">${formatCOP(ent.customRate)}/hora</div>
+    </div>
+    <div class="info-item">
+      <div class="lbl">Partidos Históricos</div>
+      <div class="val">${ent.allTimeHistory?.totalMatches || 0} turnos</div>
+    </div>
+    <div class="info-item">
+      <div class="lbl">Total Facturado Histórico</div>
+      <div class="val" style="color:#0f766e;">${formatCOP(ent.allTimeHistory?.totalBilled || 0)}</div>
+    </div>
+  </div>
+
+  ${ent.allTimeHistory?.totalReceivable > 0 ? `
+    <div style="background:#fffbeb;border:1px solid #fde68a;padding:10px 16px;border-radius:10px;margin-bottom:20px;font-size:12px;color:#92400e;">
+      <strong>⚠️ Cuenta por Cobrar Vigente:</strong> Se registran <strong>${formatCOP(ent.allTimeHistory.totalReceivable)}</strong> bajo modalidad de Crédito / Cuenta por Cobrar.
+    </div>
+  ` : ''}
+
+  <h3 style="font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;color:#0f172a;">Historial Cronológico de Turnos (Meses y Años)</h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:30px;">#</th>
+        <th>Fecha y Horario</th>
+        <th>Cancha</th>
+        <th style="text-align:center;">Estado</th>
+        <th style="text-align:right;">Valor Liquidado</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rowsHtml || '<tr><td colspan="5" style="text-align:center;padding:16px;">Sin registros históricos</td></tr>'}
+    </tbody>
+  </table>
+
+  <div class="signatures">
+    <div>
+      <div class="sign-line">Administración / Gerencia<br />${companyName || 'Complejo Deportivo'}</div>
+    </div>
+    <div>
+      <div class="sign-line">Representante Autorizado<br />${ent.name}</div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank', 'width=950,height=750,scrollbars=yes');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => { win.focus(); win.print(); }, 400);
+  }, [companyName]);
 
   if (!isOpen) return null;
 
@@ -596,13 +917,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={handleDownloadPDF}
-              className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
-              title="Descargar o imprimir reporte ejecutivo"
-            >
-              <Download size={14} /> Imprimir / PDF
-            </button>
+
             <button
               onClick={onClose}
               className="p-2 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
@@ -625,11 +940,10 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
                   <button
                     key={p.key}
                     onClick={() => setPeriod(p.key)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer border ${
-                      isActive
-                        ? 'bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100 shadow-xs'
-                        : 'bg-card border-border text-muted-foreground hover:bg-secondary hover:text-foreground'
-                    }`}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer border ${isActive
+                      ? 'bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100 shadow-xs'
+                      : 'bg-card border-border text-muted-foreground hover:bg-secondary hover:text-foreground'
+                      }`}
                   >
                     <span>{p.label}</span>
                   </button>
@@ -690,11 +1004,10 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key as ReportTab)}
-                className={`flex items-center gap-1.5 px-3 py-2.5 border-b-2 text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  isActive
-                    ? 'border-foreground text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
+                className={`flex items-center gap-1.5 px-3 py-2.5 border-b-2 text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${isActive
+                  ? 'border-foreground text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
               >
                 {tab.icon}
                 <span>{tab.label}</span>
@@ -925,9 +1238,8 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
                       <div className="flex-1">
                         <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
                           <div
-                            className={`h-full rounded-full transition-all duration-300 ${
-                              i === 0 ? 'bg-amber-500' : 'bg-foreground'
-                            }`}
+                            className={`h-full rounded-full transition-all duration-300 ${i === 0 ? 'bg-amber-500' : 'bg-foreground'
+                              }`}
                             style={{ width: `${pctVal}%` }}
                           />
                         </div>
@@ -1081,6 +1393,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
                         <th className="p-3.5 font-extrabold text-muted-foreground uppercase text-center">Partidos</th>
                         <th className="p-3.5 font-extrabold text-muted-foreground uppercase text-right">Total Facturado</th>
                         <th className="p-3.5 font-extrabold text-muted-foreground uppercase text-right">Por Cobrar</th>
+                        <th className="p-3.5 font-extrabold text-muted-foreground uppercase text-center">Trazabilidad</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/60">
@@ -1091,7 +1404,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
                           <tr key={ent.id || idx} className="hover:bg-secondary/20 transition-colors">
                             <td className="p-3.5">
                               <div className="flex items-center gap-2">
-                                <span className="text-base shrink-0">{isEntity ? '🏢' : isSchool ? '⚽' : '📋'}</span>
+                                <span className="text-base shrink-0">{isEntity ? '' : isSchool ? '' : ''}</span>
                                 <div className="min-w-0">
                                   <p className="font-extrabold text-foreground truncate uppercase">{ent.name}</p>
                                   <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-secondary text-muted-foreground uppercase">
@@ -1103,21 +1416,20 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
                               {/* Días jugados */}
                               {ent.daysPlayed.length > 0 && (
                                 <div className="mt-2 flex flex-wrap gap-1 max-w-md">
-                                  {ent.daysPlayed.slice(0, 5).map((dp, i) => (
+                                  {ent.daysPlayed.slice(0, 4).map((dp, i) => (
                                     <span
                                       key={i}
-                                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${
-                                        dp.status === 'confirmed'
-                                          ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
-                                          : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
-                                      }`}
+                                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${dp.status === 'confirmed'
+                                        ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+                                        : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
+                                        }`}
                                     >
                                       {dp.date} {dp.time}
                                     </span>
                                   ))}
-                                  {ent.daysPlayed.length > 5 && (
+                                  {ent.daysPlayed.length > 4 && (
                                     <span className="text-[9px] text-muted-foreground font-semibold py-0.5">
-                                      +{ent.daysPlayed.length - 5} más
+                                      +{ent.daysPlayed.length - 4} más
                                     </span>
                                   )}
                                 </div>
@@ -1134,21 +1446,20 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
 
                             <td className="p-3.5 whitespace-nowrap">
                               <span
-                                className={`inline-block text-[10px] font-extrabold px-2 py-0.5 rounded-lg border ${
-                                  ent.paymentMethod === 'cuenta_cobrar'
-                                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
-                                    : ent.paymentMethod === 'credito'
+                                className={`inline-block text-[10px] font-extrabold px-2 py-0.5 rounded-lg border ${ent.paymentMethod === 'cuenta_cobrar'
+                                  ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                                  : ent.paymentMethod === 'credito'
                                     ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30'
                                     : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
-                                }`}
+                                  }`}
                               >
                                 {ent.paymentMethod === 'cuenta_cobrar'
                                   ? 'Cuenta por Cobrar'
                                   : ent.paymentMethod === 'credito'
-                                  ? 'Crédito'
-                                  : ent.paymentMethod === 'transferencia'
-                                  ? 'Transferencia'
-                                  : 'Efectivo'}
+                                    ? 'Crédito'
+                                    : ent.paymentMethod === 'transferencia'
+                                      ? 'Transferencia'
+                                      : 'Efectivo'}
                               </span>
                             </td>
 
@@ -1173,6 +1484,17 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
                               ) : (
                                 <span className="text-muted-foreground font-normal">$0</span>
                               )}
+                            </td>
+
+                            <td className="p-3.5 text-center whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedEntityTrace(ent)}
+                                className="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-black text-[11px] transition-all flex items-center gap-1.5 mx-auto cursor-pointer shadow-xs active:scale-95"
+                                title="Ver trazabilidad histórica completa por meses y años"
+                              >
+                                Historial
+                              </button>
                             </td>
                           </tr>
                         );
@@ -1213,8 +1535,9 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
                         <tr key={i} className="hover:bg-secondary/20 transition-colors">
                           <td className="p-3 font-bold text-foreground">
                             <span className="inline-block w-5 text-muted-foreground font-medium">{i + 1}.</span>
-                            {cust.name}
+                            {cust.name.charAt(0).toUpperCase() + cust.name.slice(1).toLowerCase()}
                           </td>
+
                           <td className="p-3 text-muted-foreground font-medium">{cust.phone || '—'}</td>
                           <td className="p-3 text-center font-bold text-foreground">{cust.bookingsCount}</td>
                           <td className="p-3 text-right font-black text-foreground">{formatCOP(cust.totalSpent)}</td>
@@ -1238,10 +1561,179 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
             onClick={handleDownloadPDF}
             className="flex items-center gap-2 px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs"
           >
-            <Printer size={14} /> Imprimir / Exportar PDF
+            <Printer size={14} /> VER PDF
           </button>
         </div>
       </div>
+
+      {/* ═══════════════ MODAL DE TRAZABILIDAD MULTIANUAL (DETALLE POR CLIENTE) ═══════════════ */}
+      {selectedEntityTrace && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="bg-background border border-border rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-card shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-10 w-10 rounded-2xl bg-violet-600 text-white flex items-center justify-center shrink-0 shadow-xs font-black">
+                  <CalendarDays size={20} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-black text-foreground truncate">
+                      {selectedEntityTrace.name}
+                    </h3>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-500 border border-violet-500/20 uppercase">
+                      {selectedEntityTrace.type === 'entity' ? 'Entidad / Empresa' : (selectedEntityTrace.type === 'school' ? 'Escuela de Fútbol' : 'Turno Fijo')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Cancha: <strong>{selectedEntityTrace.pitchName}</strong> · Trazabilidad histórica completa por meses y años
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handlePrintSingleTraceability(selectedEntityTrace)}
+                  className="px-3 py-1.5 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-border"
+                  title="Imprimir Hoja Oficial de Trazabilidad y Estado de Cuenta"
+                >
+                  <Printer size={13} />
+                  <span className="hidden sm:inline">Descargar Historial</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedEntityTrace(null)}
+                  className="p-1.5 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Resumen KPIs */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-4 border-b border-border bg-secondary/15 shrink-0">
+              <div className="p-3 bg-card border border-border rounded-2xl">
+                <p className="text-[10px] font-extrabold uppercase text-muted-foreground">Tarifa Acordada</p>
+                <p className="text-sm font-black text-foreground mt-0.5">{formatCOP(selectedEntityTrace.customRate)}/h</p>
+                <p className="text-[10px] text-muted-foreground truncate capitalize">{selectedEntityTrace.paymentMethod.replace('_', ' ')}</p>
+              </div>
+              <div className="p-3 bg-card border border-border rounded-2xl">
+                <p className="text-[10px] font-extrabold uppercase text-muted-foreground">Partidos Históricos</p>
+                <p className="text-sm font-black text-foreground mt-0.5">{selectedEntityTrace.allTimeHistory?.totalMatches || 0} turnos</p>
+                <p className="text-[10px] text-emerald-500 font-bold">Acumulado total</p>
+              </div>
+              <div className="p-3 bg-card border border-border rounded-2xl">
+                <p className="text-[10px] font-extrabold uppercase text-muted-foreground">Total Facturado</p>
+                <p className="text-sm font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{formatCOP(selectedEntityTrace.allTimeHistory?.totalBilled || 0)}</p>
+                <p className="text-[10px] text-muted-foreground">Partidos aprobados</p>
+              </div>
+              <div className="p-3 bg-card border border-border rounded-2xl">
+                <p className="text-[10px] font-extrabold uppercase text-muted-foreground">Cuenta por Cobrar</p>
+                <p className={`text-sm font-black mt-0.5 ${selectedEntityTrace.allTimeHistory?.totalReceivable > 0 ? 'text-amber-500' : 'text-foreground'}`}>
+                  {formatCOP(selectedEntityTrace.allTimeHistory?.totalReceivable || 0)}
+                </p>
+                <p className="text-[10px] text-muted-foreground">Saldo pendiente</p>
+              </div>
+            </div>
+
+            {/* Listado agrupado por Año y Mes */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {Object.keys(selectedEntityTrace.allTimeHistory?.byYear || {}).length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Calendar size={32} className="mx-auto mb-2 opacity-30" />
+                  <p className="text-xs font-semibold">No se registran turnos históricos para esta entidad</p>
+                </div>
+              ) : (
+                Object.values(selectedEntityTrace.allTimeHistory.byYear)
+                  .sort((a: any, b: any) => b.year - a.year)
+                  .map((yearGroup: any) => (
+                    <div key={yearGroup.year} className="border border-border rounded-2xl overflow-hidden bg-card shadow-xs">
+                      {/* Cabecera Año */}
+                      <div className="px-4 py-2.5 bg-secondary/50 border-b border-border flex items-center justify-between">
+                        <span className="text-xs font-black text-foreground flex items-center gap-1.5">
+                          Año {yearGroup.year}
+                        </span>
+                        <div className="flex items-center gap-3 text-xs font-bold">
+                          <span className="text-muted-foreground">{yearGroup.matches} partidos</span>
+                          <span className="text-emerald-500">{formatCOP(yearGroup.total)}</span>
+                        </div>
+                      </div>
+
+                      {/* Meses del Año */}
+                      <div className="divide-y divide-border/60">
+                        {Object.values(yearGroup.months)
+                          .sort((a: any, b: any) => b.month - a.month)
+                          .map((monthGroup: any) => (
+                            <div key={monthGroup.month} className="p-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-bold text-violet-500 capitalize flex items-center gap-1">
+                                  • Mes de {monthGroup.monthName}
+                                </span>
+                                <span className="text-[11px] font-bold text-muted-foreground">
+                                  {monthGroup.matches} turnos · {formatCOP(monthGroup.total)}
+                                </span>
+                              </div>
+
+                              <div className="overflow-x-auto rounded-xl border border-border/60">
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="bg-secondary/20 text-muted-foreground text-[10px] uppercase font-black">
+                                      <th className="p-2 text-left">Fecha y Hora</th>
+                                      <th className="p-2 text-left">Cancha</th>
+                                      <th className="p-2 text-center">Estado</th>
+                                      <th className="p-2 text-right">Valor</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-border/40">
+                                    {monthGroup.items.map((it: any) => (
+                                      <tr key={it.id} className="hover:bg-secondary/15 transition-colors">
+                                        <td className="p-2 font-medium text-foreground">
+                                          <span className="uppercase text-[10px] text-muted-foreground font-black mr-1">{it.dayOfWeek}</span>
+                                          {it.date} — <span className="font-bold">{it.time}</span>
+                                        </td>
+                                        <td className="p-2 text-muted-foreground">{it.pitch}</td>
+                                        <td className="p-2 text-center">
+                                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${it.status === 'confirmed'
+                                            ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                                            : (it.status === 'pending'
+                                              ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                                              : 'bg-rose-500/10 text-rose-500 border border-rose-500/20')
+                                            }`}>
+                                            {it.status === 'confirmed' ? 'Aprobado' : (it.status === 'pending' ? 'Por Aprobar' : 'Cancelado')}
+                                          </span>
+                                        </td>
+                                        <td className="p-2 text-right font-black text-foreground">
+                                          {formatCOP(it.price)}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  ))
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-3 border-t border-border bg-card shrink-0 flex items-center justify-between">
+              <span className="text-[11px] text-muted-foreground">
+                Complejo: <strong>{companyName || 'Canchas'}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedEntityTrace(null)}
+                className="px-4 py-1.5 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground font-bold text-xs transition-all cursor-pointer"
+              >
+                Cerrar Trazabilidad
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

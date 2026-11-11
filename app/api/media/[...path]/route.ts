@@ -15,6 +15,11 @@ export async function GET(
       return new NextResponse('Not found', { status: 404 });
     }
 
+    // ── Protección contra path traversal ──
+    if (key.includes('..') || key.includes('\0') || key.startsWith('/')) {
+      return new NextResponse('Invalid path', { status: 400 });
+    }
+
     const client = getR2Client();
     const bucket = process.env.R2_BUCKET_NAME || '';
 

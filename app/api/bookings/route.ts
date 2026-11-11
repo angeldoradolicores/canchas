@@ -12,6 +12,8 @@ import { fetchConflictingPitchIds } from '@/lib/combined-pitch-utils';
 import { uploadToR2, isR2Configured } from '@/lib/storage/r2';
 import { safeServerErrorResponse } from '@/lib/error-handler';
 import { withCache, cache, TTL } from '@/lib/cache';
+import { isSlotPassed } from '@/lib/utils';
+import { validateImageUpload } from '@/lib/image-upload-validator';
 
 
 function getAdminSupabase() {
@@ -199,6 +201,31 @@ export async function POST(req: NextRequest) {
 
       const { pitch_id, selected_date, selected_times } = parseResult.data;
       const effectiveUserId = verifiedUserId || parseResult.data.user_id || null;
+
+      // Determinar si el usuario es dueño específicamente de ESTA cancha (no de otras)
+      let isOwnerOfThisPitch = false;
+      if (verifiedUserId) {
+        const { data: pitchOwnerCheck } = await supabase
+          .from('pitches')
+          .select('id, company_id, companies!inner(owner_id)')
+          .eq('id', pitch_id)
+          .maybeSingle();
+
+        const pitchOwnerId = (pitchOwnerCheck as any)?.companies?.owner_id;
+        if (pitchOwnerId && pitchOwnerId === verifiedUserId) {
+          isOwnerOfThisPitch = true;
+        } else if (authedUser?.user_metadata?.role === 'superadmin') {
+          isOwnerOfThisPitch = true;
+        }
+      }
+
+      // Validar si el horario ya pasó: permitido ÚNICAMENTE para el dueño en su propia cancha
+      if (!isOwnerOfThisPitch && selected_times.some((slot: string) => isSlotPassed(selected_date, slot, 5))) {
+        return NextResponse.json(
+          { error: 'No puedes reservar horarios que ya pasaron (límite de 5 minutos de gracia superado).' },
+          { status: 400 }
+        );
+      }
 
       // Seguridad: verificar si el usuario ya tiene el límite de horas en proceso activas
       if (effectiveUserId) {
@@ -457,30 +484,59 @@ export async function POST(req: NextRequest) {
       const effectiveUserId = verifiedUserId || parseResult.data.user_id || null;
       let validPitchId = pitch_id;
 
+      // Determinar si el usuario es dueño específicamente de ESTA cancha (no de otras)
+      let isOwnerOfThisPitch = false;
+      if (verifiedUserId) {
+        const { data: pitchOwnerCheck } = await supabase
+          .from('pitches')
+          .select('id, company_id, companies!inner(owner_id)')
+          .eq('id', pitch_id)
+          .maybeSingle();
+
+        const pitchOwnerId = (pitchOwnerCheck as any)?.companies?.owner_id;
+        if (pitchOwnerId && pitchOwnerId === verifiedUserId) {
+          isOwnerOfThisPitch = true;
+        } else if (authedUser?.user_metadata?.role === 'superadmin') {
+          isOwnerOfThisPitch = true;
+        }
+      }
+
+      // Validar si el horario ya pasó: permitido ÚNICAMENTE para el dueño en su propia cancha
+      if (!isOwnerOfThisPitch && selected_times.some((slot: string) => isSlotPassed(selected_date, slot, 5))) {
+        return NextResponse.json(
+          { error: 'No puedes reservar horarios que ya pasaron (límite de 5 minutos de gracia superado).' },
+          { status: 400 }
+        );
+      }
+
 
       let paymentProofUrl: string | null = null;
 
-      // Subida segura del comprobante con validación de tipo y tamaño
+      // Subida segura del comprobante con validación de magic bytes reales
       if (file_base64) {
         try {
-          const match = file_base64.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
+          const match = file_base64.match(/^data:(image\/[a-zA-Z0-9+.\-]+);base64,(.+)$/);
           let buffer: Buffer;
-          let contentType = 'image/jpeg';
 
           if (match) {
-            contentType = match[1];
             buffer = Buffer.from(match[2], 'base64');
           } else {
             buffer = Buffer.from(file_base64, 'base64');
           }
 
-          // Límite de seguridad: 5MB exactos en buffer
-          if (buffer.length > 5 * 1024 * 1024) {
-            return NextResponse.json({ error: 'El comprobante supera el tamaño máximo de 5MB' }, { status: 400 });
+          // ── Validación real con magic bytes: no confiamos en el MIME declarado ──
+          const validation = validateImageUpload(buffer, {
+            allowVideo: false,       // comprobantes: solo imágenes
+            maxBytes: 5 * 1024 * 1024, // 5 MB máximo
+            rejectGif: true,         // sin GIF para comprobantes
+          });
+
+          if (!validation.ok) {
+            return NextResponse.json({ error: validation.error }, { status: 400 });
           }
 
-          const safeExt = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
-          const filePath = `receipts/${effectiveUserId || 'guest'}_${Date.now()}.${safeExt}`;
+          const { contentType, ext } = validation;
+          const filePath = `receipts/${effectiveUserId || 'guest'}_${Date.now()}.${ext}`;
 
           if (isR2Configured()) {
             try {
@@ -517,6 +573,19 @@ export async function POST(req: NextRequest) {
       const newExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
       const hasBookingIds = Array.isArray(booking_ids) && booking_ids.length > 0;
 
+      // Calcular abono por slot (dividido equitativamente entre las horas seleccionadas)
+      const safeTotal = typeof total_price === 'number' && total_price > 0 ? total_price : null;
+      const safeDeposit = typeof deposit_amount === 'number' && deposit_amount > 0 ? deposit_amount : null;
+
+      // Abono por slot = depósito total / número de horas seleccionadas
+      // Esto permite que cada fila de booking en la DB tenga su porción real del abono
+      const depositPerSlot = (safeDeposit && sortedTimes.length > 0)
+        ? Math.round(safeDeposit / sortedTimes.length)
+        : null;
+      const totalPerSlot = (safeTotal && sortedTimes.length > 0)
+        ? Math.round(safeTotal / sortedTimes.length)
+        : null;
+
       const baseUpdatePayload: any = {
         customer_name: customer_name.trim(),
         customer_phone: customer_phone || '',
@@ -527,24 +596,53 @@ export async function POST(req: NextRequest) {
       };
       if (effectiveUserId) baseUpdatePayload.user_id = effectiveUserId;
 
-      const updatedBookings = [];
+      // Payload extendido con los campos financieros (con fallback si las columnas no existen en DB)
+      const extendedUpdatePayload: any = {
+        ...baseUpdatePayload,
+        ...(totalPerSlot !== null ? { total_price: totalPerSlot } : {}),
+        ...(depositPerSlot !== null ? { deposit_amount: depositPerSlot } : {}),
+      };
 
+      // Variable para trackear si la DB soporta deposit_amount/total_price
+      let _supportsFinancialCols: boolean | null = null;
+      const updatedBookings: any[] = [];
+
+      // ── Estrategia 1: Actualizar directamente por IDs del lock ──────────────
       if (hasBookingIds) {
-        // Estrategia 1: Actualizar directamente por IDs del lock si existen
+        // Intentar primero con columnas financieras
         const { data: bulkData, error: bulkError } = await supabase
           .from('bookings')
-          .update(baseUpdatePayload)
+          .update(extendedUpdatePayload)
           .in('id', booking_ids!)
           .select();
 
-        if (bulkError) {
+        if (!bulkError) {
+          _supportsFinancialCols = true;
+          if (bulkData && bulkData.length > 0) updatedBookings.push(...bulkData);
+        } else if (
+          bulkError.code === 'PGRST204' ||
+          bulkError.code === '42703' ||
+          bulkError.message?.includes('column') ||
+          bulkError.message?.includes('schema cache')
+        ) {
+          // Columnas financieras no existen → fallback al payload base
+          _supportsFinancialCols = false;
+          const { data: fallbackData, error: fallbackErr } = await supabase
+            .from('bookings')
+            .update(baseUpdatePayload)
+            .in('id', booking_ids!)
+            .select();
+          if (!fallbackErr && fallbackData && fallbackData.length > 0) {
+            updatedBookings.push(...fallbackData);
+          } else if (fallbackErr) {
+            console.error('[create_booking] Error en update por IDs (fallback):', fallbackErr);
+          }
+        } else {
           console.error('[create_booking] Error en update por IDs:', bulkError);
-        } else if (bulkData && bulkData.length > 0) {
-          updatedBookings.push(...bulkData);
         }
       }
 
-      // Estrategia 2: Para cualquier slot restante no cubierto por los IDs
+      // ── Estrategia 2: Slots no cubiertos por IDs ────────────────────────────
       if (updatedBookings.length < sortedTimes.length) {
         const alreadyUpdatedSlots = new Set(
           updatedBookings.map((b: any) => {
@@ -562,7 +660,7 @@ export async function POST(req: NextRequest) {
         for (const slot of remainingSlots) {
           const { startIso: startTimeIso, endIso: endTimeIso } = computeSlotIsoTimes(selected_date, slot);
 
-          // Verificar si existe conflicto en la cancha o canchas combinadas/hijas vinculadas
+          // Verificar conflictos
           const { data: conflictRows } = await supabase
             .from('bookings')
             .select('id, pitch_id, user_id, status, expires_at')
@@ -582,13 +680,13 @@ export async function POST(req: NextRequest) {
           }
 
           const existing = (conflictRows || []).find((b: any) => b.pitch_id === validPitchId) || null;
+          // Elegir payload según soporte detectado
+          const chosenPayload = _supportsFinancialCols === false ? baseUpdatePayload : extendedUpdatePayload;
 
           if (existing) {
-            // Si ya está confirmada, o pendiente por otro cliente (o usuario anónimo diferente)
             if (existing.status === 'confirmed' || existing.status === 'pending') {
               const isSameAuthedUser = Boolean(effectiveUserId && existing.user_id && existing.user_id === effectiveUserId);
               const isSameBookingDraft = Boolean(hasBookingIds && booking_ids?.includes(existing.id));
-
               if (!isSameAuthedUser && !isSameBookingDraft) {
                 return NextResponse.json(
                   { error: `La hora ${slot} ya ha sido reservada o está en proceso por otro usuario.` },
@@ -597,13 +695,32 @@ export async function POST(req: NextRequest) {
               }
             }
 
-            // Actualizar el registro existente (borrador, cancelado o del mismo usuario)
-            const { data: updated, error: updateErr } = await supabase
+            let { data: updated, error: updateErr } = await supabase
               .from('bookings')
-              .update(baseUpdatePayload)
+              .update(chosenPayload)
               .eq('id', existing.id)
               .select()
               .single();
+
+            // Fallback automático si columnas financieras aún no existen
+            if (updateErr && (
+              updateErr.code === 'PGRST204' ||
+              updateErr.code === '42703' ||
+              updateErr.message?.includes('column') ||
+              updateErr.message?.includes('schema cache')
+            )) {
+              _supportsFinancialCols = false;
+              const retry = await supabase
+                .from('bookings')
+                .update(baseUpdatePayload)
+                .eq('id', existing.id)
+                .select()
+                .single();
+              updated = retry.data;
+              updateErr = retry.error;
+            } else if (!updateErr) {
+              _supportsFinancialCols = true;
+            }
 
             if (updateErr || !updated) {
               console.error(`Error actualizando booking id ${existing.id}:`, updateErr);
@@ -614,19 +731,43 @@ export async function POST(req: NextRequest) {
             }
             updatedBookings.push(updated);
           } else {
-            // No existe ningún registro (o el borrador fue limpiado): insertar directamente como pendiente
-            const newBookingData = {
+            // Insertar nuevo registro
+            const newBookingBase = {
               pitch_id: validPitchId,
               start_time: startTimeIso,
               end_time: endTimeIso,
               ...baseUpdatePayload,
             };
+            const newBookingExtended = {
+              pitch_id: validPitchId,
+              start_time: startTimeIso,
+              end_time: endTimeIso,
+              ...extendedUpdatePayload,
+            };
 
-            const { data: inserted, error: insertErr } = await supabase
+            let { data: inserted, error: insertErr } = await supabase
               .from('bookings')
-              .insert(newBookingData)
+              .insert(_supportsFinancialCols === false ? newBookingBase : newBookingExtended)
               .select()
               .single();
+
+            if (insertErr && (
+              insertErr.code === 'PGRST204' ||
+              insertErr.code === '42703' ||
+              insertErr.message?.includes('column') ||
+              insertErr.message?.includes('schema cache')
+            )) {
+              _supportsFinancialCols = false;
+              const retry = await supabase
+                .from('bookings')
+                .insert(newBookingBase)
+                .select()
+                .single();
+              inserted = retry.data;
+              insertErr = retry.error;
+            } else if (!insertErr) {
+              _supportsFinancialCols = true;
+            }
 
             if (insertErr || !inserted) {
               console.error(`Error insertando booking para slot ${slot}:`, insertErr);

@@ -6,6 +6,7 @@ import { Pitch } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import { useToday } from '@/lib/use-today';
 import { isCombinedPitch, getLinkedPitchIds } from '@/lib/combined-pitch-utils';
+import { isSlotPassed } from '@/lib/utils';
 
 const TIME_CATEGORIES = [
   { key: 'manana', icon: '', label: 'Mañana', slots: ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00'] },
@@ -109,8 +110,6 @@ export function ManualBookingModal({
   initialCustomerPhone,
   initialCustomRate,
   initialNote,
-  initialClientType,
-  initialClientEntityName,
   initialIsLoyaltyFree,
 }: {
   pitches: Pitch[];
@@ -123,8 +122,6 @@ export function ManualBookingModal({
   initialCustomerPhone?: string;
   initialCustomRate?: string;
   initialNote?: string;
-  initialClientType?: 'standard' | 'entity' | 'school';
-  initialClientEntityName?: string;
   initialIsLoyaltyFree?: boolean;
 }) {
   const today = useToday();
@@ -154,10 +151,8 @@ export function ManualBookingModal({
   const [customerNote, setCustomerNote] = useState(
     initialNote || (initialIsLoyaltyFree ? '🎁 Cancha de cortesía por 20 partidos jugados (Fidelización Domingo sin costo)' : '')
   );
-  const [clientType, setClientType] = useState<'standard' | 'entity' | 'school'>(initialClientType || 'standard');
-  const [clientEntityName, setClientEntityName] = useState(initialClientEntityName || '');
-  const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'transferencia' | 'credito' | 'cuenta_cobrar'>('efectivo');
   const [customRate, setCustomRate] = useState(initialIsLoyaltyFree ? '0' : (initialCustomRate || ''));
+  const [depositAmount, setDepositAmount] = useState('');
   const [isLoyaltyFree, setIsLoyaltyFree] = useState(!!initialIsLoyaltyFree);
   const [file, setFile] = useState<File | null>(null);
   const [imgPreview, setImgPreview] = useState<string | null>(null);
@@ -274,9 +269,9 @@ export function ManualBookingModal({
         customer_name: customerName,
         customer_phone: customerPhone,
         note: customerNote,
-        ...(clientType !== 'standard' ? { client_type: clientType } : {}),
-        ...(clientEntityName.trim() ? { client_entity_name: clientEntityName.trim() } : {}),
-        ...(paymentMethod !== 'efectivo' ? { payment_method: paymentMethod } : {}),
+        ...(depositAmount && !isNaN(Number(depositAmount)) && Number(depositAmount) >= 0
+          ? { deposit_amount: Number(depositAmount) }
+          : {}),
         ...(isLoyaltyFree
           ? { is_loyalty_free: true, custom_rate: 0, total_price: 0 }
           : (customRate && !isNaN(Number(customRate)) && Number(customRate) >= 0
@@ -508,6 +503,7 @@ export function ManualBookingModal({
                     const ampm = hNum < 12 ? 'am' : 'pm';
                     const h12 = hNum === 0 ? 12 : hNum > 12 ? hNum - 12 : hNum;
                     const hasCustomPrice = !!(customPricing[slot]);
+                    const isPassed = !isDisabled && isSlotPassed(selectedDate, slot, 0);
 
                     return (
                       <button
@@ -523,7 +519,9 @@ export function ManualBookingModal({
                               : 'bg-red-50 text-red-300 border-red-200 cursor-not-allowed dark:bg-red-950/20 dark:border-red-900/30'
                           : isSel
                             ? 'bg-primary text-white border-primary shadow-md ring-2 ring-primary/30 scale-[1.02]'
-                            : 'bg-card hover:bg-primary/10 border-border text-foreground hover:border-primary/40'
+                            : isPassed
+                              ? 'bg-amber-500/5 hover:bg-amber-500/15 border-amber-500/30 text-foreground'
+                              : 'bg-card hover:bg-primary/10 border-border text-foreground hover:border-primary/40'
                           }`}
                       >
                         {isDisabled ? (
@@ -548,12 +546,16 @@ export function ManualBookingModal({
                             )}
                           </div>
                         ) : (
-                          <div className="flex items-baseline gap-1 whitespace-nowrap">
-                            <span className="text-sm font-extrabold leading-none">{h12}:00</span>
-                            <span className="text-[10px] uppercase opacity-75 font-semibold">{ampm}</span>
-                            {/* {hasCustomPrice && !isSel && (
-                              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-orange-400 rounded-full" title="Precio especial" />
-                            )} */}
+                          <div className="flex flex-col items-center justify-center">
+                            <div className="flex items-baseline gap-1 whitespace-nowrap">
+                              <span className="text-sm font-extrabold leading-none">{h12}:00</span>
+                              <span className="text-[10px] uppercase opacity-75 font-semibold">{ampm}</span>
+                            </div>
+                            {isPassed && (
+                              <span className={`text-[7.5px] font-black uppercase tracking-tight mt-0.5 ${isSel ? 'text-white/90' : 'text-amber-600 dark:text-amber-400'}`}>
+                                En curso
+                              </span>
+                            )}
                           </div>
                         )}
                       </button>
@@ -569,17 +571,35 @@ export function ManualBookingModal({
                 {selectedTimes.sort().map(t => {
                   const hN = parseInt(t.split(':')[0]);
                   const lbl = `${hN > 12 ? hN - 12 : hN === 0 ? 12 : hN}:00 ${hN < 12 ? 'am' : 'pm'}`;
+                  const tPassed = isSlotPassed(selectedDate, t, 0);
                   return (
                     <button
                       key={t}
                       type="button"
                       onClick={() => toggleTime(t)}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/25 text-[11px] font-bold hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors ${
+                        tPassed
+                          ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
+                          : 'bg-primary/10 text-primary border border-primary/25 hover:bg-red-50 hover:text-red-600 hover:border-red-200'
+                      }`}
                     >
-                      {lbl} <X size={9} />
+                      {lbl} {tPassed && '· ⚠️'} <X size={9} />
                     </button>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Aviso para el Dueño cuando seleccionó una hora que ya pasó o está en curso */}
+            {selectedTimes.some(slot => isSlotPassed(selectedDate, slot, 0)) && (
+              <div className="mt-2.5 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2 text-xs">
+                <span className="text-sm">⚠️</span>
+                <div className="text-amber-800 dark:text-amber-300">
+                  <p className="font-bold">Horario ya iniciado o avanzado</p>
+                  <p className="text-[11px] text-amber-700/90 dark:text-amber-400/90 mt-0.5">
+                    Has seleccionado una hora que ya ha comenzado. Como administrador del complejo tienes autorización para registrarla y confirmar el partido en cualquier momento.
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -621,80 +641,66 @@ export function ManualBookingModal({
             />
           </div>
 
-          {/* ── Tipo de cliente ── */}
-          <div className="space-y-3">
-            <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider">Tipo de cliente</label>
-            <div className="grid grid-cols-3 gap-2">
-              {([
-                { key: 'standard', label: 'Estándar', icon: '👤' },
-                { key: 'entity', label: 'Entidad', icon: '🏢' },
-                { key: 'school', label: 'Escuela', icon: '⚽' },
-              ] as const).map(opt => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() => { setClientType(opt.key); setClientEntityName(''); }}
-                  className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 text-xs font-bold transition-all cursor-pointer ${
-                    clientType === opt.key
-                      ? 'bg-primary/10 border-primary text-primary'
-                      : 'border-border bg-secondary/40 text-muted-foreground hover:border-primary/40'
-                  }`}
-                >
-                  <span className="text-lg">{opt.icon}</span>
-                  {opt.label}
-                </button>
-              ))}
+          {/* ── Finanzas & Abono ── */}
+          <div className="space-y-3 pt-3 border-t border-border">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+                Finanzas: Tarifa & Abono
+              </label>
+              {isLoyaltyFree && (
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 uppercase">
+                  🎁 Cortesía Domingo ($0)
+                </span>
+              )}
             </div>
 
-            {clientType !== 'standard' && (
-              <div className="space-y-3 p-3 rounded-xl bg-secondary/40 border border-border">
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                    Nombre de la {clientType === 'entity' ? 'entidad' : 'escuela'} *
-                  </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
+                  Tarifa por Hora (COP)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-bold">$</span>
                   <input
-                    type="text"
-                    value={clientEntityName}
-                    onChange={e => setClientEntityName(e.target.value)}
-                    placeholder={clientType === 'entity' ? 'Ej: Club Deportivo Nariño' : 'Ej: Escuela Semilleros FC'}
-                    className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    type="number"
+                    value={customRate}
+                    onChange={e => setCustomRate(e.target.value)}
+                    placeholder={pricePerHour ? String(pricePerHour) : '80000'}
+                    disabled={isLoyaltyFree}
+                    className="w-full pl-7 pr-3 py-2 bg-card border border-border rounded-xl outline-none focus:border-primary text-xs font-bold"
                   />
                 </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Forma de pago</label>
-                  <select
-                    value={paymentMethod}
-                    onChange={e => setPaymentMethod(e.target.value as any)}
-                    className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  >
-                    <option value="efectivo">Efectivo</option>
-                    <option value="transferencia">Transferencia</option>
-                    <option value="credito">Crédito</option>
-                    <option value="cuenta_cobrar">Cuenta por cobrar</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Tarifa acordada (COP)</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-bold">$</span>
-                    <input
-                      type="number"
-                      value={customRate}
-                      onChange={e => setCustomRate(e.target.value)}
-                      placeholder="70000"
-                      min={0}
-                      className="w-full pl-7 pr-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    />
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">Deja vacío para usar la tarifa estándar de la cancha</p>
-                </div>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {customRate ? `Personalizado: ${Number(customRate).toLocaleString('es-CO')}/h` : `Estándar: ${pricePerHour.toLocaleString('es-CO')}/h`}
+                </p>
               </div>
-            )}
+
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
+                  Abono Inicial Recibido (COP)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-bold">$</span>
+                  <input
+                    type="number"
+                    value={depositAmount}
+                    onChange={e => setDepositAmount(e.target.value)}
+                    placeholder="0"
+                    disabled={isLoyaltyFree}
+                    className="w-full pl-7 pr-3 py-2 bg-card border border-border rounded-xl outline-none focus:border-primary text-xs font-bold text-primary"
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {depositAmount && Number(depositAmount) > 0
+                    ? `Abonó $${Number(depositAmount).toLocaleString('es-CO')} · Saldo pendiente: $${Math.max(0, totalPrice - Number(depositAmount)).toLocaleString('es-CO')}`
+                    : 'Deja en 0 si cobrará la totalidad al jugar'}
+                </p>
+              </div>
+            </div>
           </div>
 
-          {/* ── Comprobante de Pago ── */}          <div className="space-y-2">
+          {/* ── Comprobante de Pago ── */}
+          <div className="space-y-2">
             <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
               Comprobante de Pago (Opcional)
             </label>
@@ -729,7 +735,7 @@ export function ManualBookingModal({
                 </div>
               )}
             </div>
-            <input ref={fileInputRef} type="file" className="hidden" accept="image/*,application/pdf" onChange={handleFileChange} />
+            <input ref={fileInputRef} type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={handleFileChange} />
           </div>
 
           {error && (
@@ -828,8 +834,22 @@ export function ManualBookingModal({
               </div>
               <div className="flex justify-between items-center pt-2 border-t border-border/50">
                 <span className="text-muted-foreground font-semibold">Total a cobrar:</span>
-                <span className="font-black text-sm text-emerald-600 dark:text-emerald-400">${totalPrice.toLocaleString('es-CO')}</span>
+                <span className="font-black text-sm text-foreground">${totalPrice.toLocaleString('es-CO')}</span>
               </div>
+              {depositAmount && Number(depositAmount) > 0 && (
+                <>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-muted-foreground font-semibold">Abono recibido:</span>
+                    <span className="font-black text-primary">${Number(depositAmount).toLocaleString('es-CO')}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-muted-foreground font-semibold">Saldo por cobrar en local:</span>
+                    <span className="font-black text-amber-600 dark:text-amber-400">
+                      ${Math.max(0, totalPrice - Number(depositAmount)).toLocaleString('es-CO')}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="flex gap-2 pt-1 w-full">

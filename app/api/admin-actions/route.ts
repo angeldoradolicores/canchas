@@ -482,7 +482,7 @@ export async function POST(req: NextRequest) {
 
       const { pitch_id, selected_date, selected_times, customer_name, customer_phone } = validation.data;
       // Campos adicionales opcionales (no requieren validación estricta)
-      const note = typeof payload?.note === 'string' ? payload.note.slice(0, 500) : undefined;
+      const note = typeof payload?.note === 'string' ? payload.note.slice(0, 2000) : undefined;
       const isContract = !!payload?.is_contract;
       const isLoyaltyFree = !!payload?.is_loyalty_free;
       const clientType = ['standard', 'entity', 'school'].includes(payload?.client_type) ? payload.client_type : 'standard';
@@ -490,6 +490,12 @@ export async function POST(req: NextRequest) {
       const paymentMethod = ['efectivo', 'transferencia', 'credito', 'cuenta_cobrar'].includes(payload?.payment_method) ? payload.payment_method : 'efectivo';
       const customRate = typeof payload?.custom_rate === 'number' && payload.custom_rate >= 0 ? payload.custom_rate : undefined;
       const effectivePrice = isLoyaltyFree ? 0 : (customRate !== undefined ? customRate : (typeof payload?.total_price === 'number' ? payload.total_price : undefined));
+      const depositAmount = typeof payload?.deposit_amount === 'number' && payload.deposit_amount >= 0 ? payload.deposit_amount : undefined;
+
+      // Calcular abono y total por slot si hay múltiples horas seleccionadas
+      const depositPerSlot = depositAmount !== undefined && selected_times.length > 0
+        ? Math.round(depositAmount / selected_times.length)
+        : undefined;
 
       // Verificar que la cancha le pertenece al dueño
       const isOwner = await verifyPitchOwnership(ownerId, pitch_id);
@@ -531,7 +537,6 @@ export async function POST(req: NextRequest) {
             status: 'confirmed',
             payment_status: 'verified',
             source: 'owner_panel',
-            ...(effectivePrice !== undefined ? { total_price: effectivePrice } : {}),
           },
           extended: {
             pitch_id,
@@ -544,6 +549,7 @@ export async function POST(req: NextRequest) {
             payment_status: 'verified',
             source: 'owner_panel',
             ...(effectivePrice !== undefined ? { total_price: effectivePrice } : {}),
+            ...(depositPerSlot !== undefined ? { deposit_amount: depositPerSlot } : {}),
             ...(note ? { note } : {}),
             ...(isContract ? { booking_type: 'contract' } : {}),
             ...(clientType !== 'standard' ? { client_type: clientType } : {}),
@@ -616,28 +622,50 @@ export async function POST(req: NextRequest) {
           }
 
           // Reutilizar registro cancelado o expirado
-          const { data: updated, error: updateErr } = await supabase
+          const updatePayloadExtended: any = {
+            user_id: item.base.user_id,
+            customer_name: item.base.customer_name,
+            customer_phone: item.base.customer_phone,
+            end_time: item.base.end_time,
+            status: 'confirmed',
+            payment_status: 'verified',
+            source: 'owner_panel',
+            reviewed_at: new Date().toISOString(),
+            reviewed_by: ownerId,
+            ...(effectivePrice !== undefined ? { total_price: effectivePrice } : {}),
+            ...(depositPerSlot !== undefined ? { deposit_amount: depositPerSlot } : {}),
+            ...(clientType !== 'standard' ? { client_type: clientType } : {}),
+            ...(clientEntityName ? { client_entity_name: clientEntityName } : {}),
+            ...(paymentMethod !== 'efectivo' ? { payment_method: paymentMethod } : {}),
+            ...(customRate !== undefined ? { custom_rate: customRate } : {}),
+            ...(isLoyaltyFree ? { is_loyalty_free: true } : {}),
+          };
+
+          const updatePayloadBase: any = {
+            user_id: item.base.user_id,
+            customer_name: item.base.customer_name,
+            customer_phone: item.base.customer_phone,
+            end_time: item.base.end_time,
+            status: 'confirmed',
+            payment_status: 'verified',
+            source: 'owner_panel',
+            reviewed_at: new Date().toISOString(),
+            reviewed_by: ownerId,
+          };
+
+          let { data: updated, error: updateErr } = await supabase
             .from('bookings')
-            .update({
-              user_id: item.base.user_id,
-              customer_name: item.base.customer_name,
-              customer_phone: item.base.customer_phone,
-              end_time: item.base.end_time,
-              status: 'confirmed',
-              payment_status: 'verified',
-              source: 'owner_panel',
-              reviewed_at: new Date().toISOString(),
-              reviewed_by: ownerId,
-              ...(effectivePrice !== undefined ? { total_price: effectivePrice } : {}),
-              ...(clientType !== 'standard' ? { client_type: clientType } : {}),
-              ...(clientEntityName ? { client_entity_name: clientEntityName } : {}),
-              ...(paymentMethod !== 'efectivo' ? { payment_method: paymentMethod } : {}),
-              ...(customRate !== undefined ? { custom_rate: customRate } : {}),
-              ...(isLoyaltyFree ? { is_loyalty_free: true } : {}),
-            })
+            .update((_supportsContractColumns === false) ? updatePayloadBase : updatePayloadExtended)
             .eq('id', existing.id)
             .select()
             .single();
+
+          if (updateErr && (updateErr.code === 'PGRST204' || updateErr.code === '42703' || updateErr.message?.includes('column') || updateErr.message?.includes('schema cache'))) {
+            _supportsContractColumns = false;
+            const retry = await supabase.from('bookings').update(updatePayloadBase).eq('id', existing.id).select().single();
+            updated = retry.data;
+            updateErr = retry.error;
+          }
 
           if (updateErr) {
             if (isContract) {
@@ -656,8 +684,8 @@ export async function POST(req: NextRequest) {
             .select()
             .single();
 
-          // Si falla porque las columnas note o booking_type no existen en Supabase (PGRST204), fallback seguro
-          if (insertErr && insertErr.code === 'PGRST204') {
+          // Si falla porque columnas extendidas no existen en Supabase, fallback seguro a item.base nativo
+          if (insertErr && (insertErr.code === 'PGRST204' || insertErr.code === '42703' || insertErr.message?.includes('column') || insertErr.message?.includes('schema cache'))) {
             _supportsContractColumns = false;
             const retry = await supabase
               .from('bookings')
@@ -747,6 +775,346 @@ export async function POST(req: NextRequest) {
           pitches: pitches || [],
           recentBookings: bookings,
         }
+      });
+    }
+
+    // ── 10. ACCIÓN: CREATE_CONTRACT_BATCH (Turno Fijo — todas las fechas en un solo request) ──
+    if (action === 'create_contract_batch') {
+      if (!ownerId) {
+        return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+      }
+
+      // Validación de campos esenciales
+      const pitch_id = typeof payload?.pitch_id === 'string' ? payload.pitch_id : null;
+      const dates: string[] = Array.isArray(payload?.dates) ? payload.dates.filter((d: any) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) : [];
+      const slots: string[] = Array.isArray(payload?.selected_times) ? payload.selected_times.filter((s: any) => typeof s === 'string' && /^\d{2}:\d{2}$/.test(s)) : [];
+      const customerName = typeof payload?.customer_name === 'string' && payload.customer_name.trim().length >= 2 ? payload.customer_name.trim() : 'Turno Fijo';
+      const customerPhone = typeof payload?.customer_phone === 'string' ? payload.customer_phone.slice(0, 25) : '';
+      const note = typeof payload?.note === 'string' ? payload.note.slice(0, 2000) : undefined;
+      const clientType = ['standard', 'entity', 'school'].includes(payload?.client_type) ? payload.client_type : 'standard';
+      const clientEntityName = typeof payload?.client_entity_name === 'string' ? payload.client_entity_name.slice(0, 200) : undefined;
+      const paymentMethod = ['efectivo', 'transferencia', 'credito', 'cuenta_cobrar'].includes(payload?.payment_method) ? payload.payment_method : 'efectivo';
+      const customRate = typeof payload?.custom_rate === 'number' && payload.custom_rate >= 0 ? payload.custom_rate : undefined;
+      const totalPrice = typeof payload?.total_price === 'number' ? payload.total_price : undefined;
+      const effectiveRate = customRate !== undefined ? customRate : totalPrice;
+
+      // ── Esquema de cobro del turno fijo ──────────────────────────────────────
+      // billing_scheme determina cómo se cobra el contrato:
+      //   'por_sesion'          → precio por cada sesión (igual que antes)
+      //   'mes_anticipado'      → se cobra el mes completo de una vez
+      //   'mes_vencido'         → se acumula a crédito por mes
+      //   'quincenal_anticipado'→ se cobra la quincena completa de una vez
+      //   'quincenal_vencido'   → se acumula a crédito por quincena
+      //   'total_anticipado'    → se cobra el 100% del plan completo de una vez
+      const VALID_BILLING_SCHEMES = [
+        'por_sesion', 'mes_anticipado', 'mes_vencido',
+        'quincenal_anticipado', 'quincenal_vencido', 'total_anticipado',
+      ];
+      const billingScheme: string = VALID_BILLING_SCHEMES.includes(payload?.billing_scheme)
+        ? payload.billing_scheme
+        : 'por_sesion';
+
+      // Para esquemas de plan (no por sesión), el precio guardado por reserva es la tarifa/hora acordada.
+      // La totalidad del plan se calcula en el frontend y se muestra al dueño en la confirmación.
+      // En la DB cada booking almacena la tarifa por sesión (custom_rate), y el billing_scheme
+      // indica al dashboard cómo interpretarlo para el cobro global.
+      const effectivePrice = effectiveRate; // tarifa por sesión acordada
+
+      if (!pitch_id) return NextResponse.json({ error: 'ID de cancha requerido' }, { status: 400 });
+      if (dates.length === 0) return NextResponse.json({ error: 'No se proporcionaron fechas válidas' }, { status: 400 });
+      if (slots.length === 0) return NextResponse.json({ error: 'No se proporcionaron horarios válidos' }, { status: 400 });
+      if (dates.length * slots.length > 1500) return NextResponse.json({ error: 'Demasiadas reservas en un solo batch (máximo 1500)' }, { status: 400 });
+
+      // Verificar que la cancha pertenece al dueño
+      const isOwner = await verifyPitchOwnership(ownerId, pitch_id);
+      if (!isOwner) {
+        return NextResponse.json({ error: 'No tienes permisos para agendar en esta cancha' }, { status: 403 });
+      }
+
+      const conflictingPitchIds = await fetchConflictingPitchIds(supabase, pitch_id);
+      const createdBookings: any[] = [];
+      const skippedConflicts: any[] = [];
+
+      // Construir todos los inserts (soporta lista explícita de sesiones o producto fecha × slot)
+      const rawSessions = Array.isArray(payload?.sessions) ? payload.sessions : [];
+      const inserts: any[] = [];
+
+      if (rawSessions.length > 0) {
+        for (const s of rawSessions) {
+          const date = typeof s?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.date) ? s.date : null;
+          const slot = typeof s?.slot === 'string' && /^\d{2}:\d{2}$/.test(s.slot)
+            ? s.slot
+            : (typeof s?.time === 'string' && /^\d{2}:\d{2}$/.test(s.time) ? s.time : null);
+          if (date && slot) {
+            const { startIso, endIso } = computeSlotIsoTimes(date, slot);
+            inserts.push({
+              base: {
+                pitch_id,
+                user_id: ownerId,
+                customer_name: customerName,
+                customer_phone: customerPhone,
+                start_time: startIso,
+                end_time: endIso,
+                status: 'confirmed',
+                payment_status: billingScheme === 'por_sesion' ? 'pending' : 'verified',
+                source: 'owner_panel',
+                booking_type: 'contract',
+                ...(effectivePrice !== undefined ? { total_price: effectivePrice, custom_rate: effectivePrice } : {}),
+                ...(note ? { note } : {}),
+                payment_method: paymentMethod,
+              },
+              extended: {
+                pitch_id,
+                user_id: ownerId,
+                customer_name: customerName,
+                customer_phone: customerPhone,
+                start_time: startIso,
+                end_time: endIso,
+                status: 'confirmed',
+                payment_status: billingScheme === 'por_sesion' ? 'pending' : 'verified',
+                source: 'owner_panel',
+                booking_type: 'contract',
+                ...(effectivePrice !== undefined ? { total_price: effectivePrice, custom_rate: effectivePrice } : {}),
+                ...(note ? { note } : {}),
+                ...(clientType !== 'standard' ? { client_type: clientType } : {}),
+                ...(clientEntityName ? { client_entity_name: clientEntityName } : {}),
+                payment_method: paymentMethod,
+                billing_scheme: billingScheme,
+              },
+              start_time: startIso,
+            });
+          }
+        }
+      } else {
+        for (const date of dates) {
+          for (const slot of slots) {
+            const { startIso, endIso } = computeSlotIsoTimes(date, slot);
+            inserts.push({
+              base: {
+                pitch_id,
+                user_id: ownerId,
+                customer_name: customerName,
+                customer_phone: customerPhone,
+                start_time: startIso,
+                end_time: endIso,
+                status: 'confirmed',
+                payment_status: billingScheme === 'por_sesion' ? 'pending' : 'verified',
+                source: 'owner_panel',
+                booking_type: 'contract',
+                ...(effectivePrice !== undefined ? { total_price: effectivePrice, custom_rate: effectivePrice } : {}),
+                ...(note ? { note } : {}),
+                payment_method: paymentMethod,
+              },
+              extended: {
+                pitch_id,
+                user_id: ownerId,
+                customer_name: customerName,
+                customer_phone: customerPhone,
+                start_time: startIso,
+                end_time: endIso,
+                status: 'confirmed',
+                payment_status: billingScheme === 'por_sesion' ? 'pending' : 'verified',
+                source: 'owner_panel',
+                booking_type: 'contract',
+                ...(effectivePrice !== undefined ? { total_price: effectivePrice, custom_rate: effectivePrice } : {}),
+                ...(note ? { note } : {}),
+                ...(clientType !== 'standard' ? { client_type: clientType } : {}),
+                ...(clientEntityName ? { client_entity_name: clientEntityName } : {}),
+                payment_method: paymentMethod,
+                billing_scheme: billingScheme,
+              },
+              start_time: startIso,
+            });
+          }
+        }
+      }
+
+      // ── Ajuste del payment_status según billing_scheme ─────────────────────
+      // 'por_sesion': cada reserva queda como 'pending' (se cobra al llegar al partido)
+      // Planes (mes_anticipado, etc.): queda como 'verified' (se cobra el plan completo al inicio)
+      const contractPaymentStatus = billingScheme === 'por_sesion' ? 'pending' : 'verified';
+
+      // Helper para normalizar timestamps a clave ISO UTC para comparación infalible
+      const toIsoKey = (s: string | Date) => {
+        try {
+          const d = new Date(s);
+          return isNaN(d.getTime()) ? String(s) : d.toISOString();
+        } catch {
+          return String(s);
+        }
+      };
+
+      // Obtener todos los conflictos de una sola consulta para eficiencia
+      const allStartTimes = inserts.map(i => i.start_time);
+      const { data: allConflictRows } = await supabase
+        .from('bookings')
+        .select('id, pitch_id, status, expires_at, start_time, source')
+        .in('pitch_id', conflictingPitchIds)
+        .in('start_time', allStartTimes);
+
+      // Indexar conflictos por timestamp UTC normalizado para lookup O(1)
+      const conflictsByTime: Record<string, any[]> = {};
+      for (const row of (allConflictRows || [])) {
+        if (!row.start_time) continue;
+        const key = toIsoKey(row.start_time);
+        if (!conflictsByTime[key]) conflictsByTime[key] = [];
+        conflictsByTime[key].push(row);
+      }
+
+      for (const item of inserts) {
+        const itemKey = toIsoKey(item.start_time);
+        const conflictRows = conflictsByTime[itemKey] || [];
+
+        // Para contratos: solo bloqueamos si hay una reserva activa de cliente externo
+        // (pending o confirmed desde fuentes distintas al panel del dueño en esta cancha principal)
+        // Las reservas confirmed/pending propias del owner_panel en la misma cancha se reutilizan (update)
+        const activeConflict = conflictRows.find((b: any) => {
+          // Siempre bloquear si hay reserva activa en cancha vinculada/combinada (no la misma)
+          if (b.pitch_id !== pitch_id) {
+            if (['confirmed', 'pending'].includes(b.status)) return true;
+            if (b.status === 'draft' && b.expires_at && new Date(b.expires_at) > new Date()) return true;
+          } else {
+            // En la misma cancha: bloquear solo reservas de clientes externos (no owner_panel)
+            if (b.source !== 'owner_panel' && ['confirmed', 'pending'].includes(b.status)) return true;
+            if (b.status === 'draft' && b.expires_at && new Date(b.expires_at) > new Date()) return true;
+          }
+          return false;
+        });
+
+        if (activeConflict) {
+          skippedConflicts.push({ slot: item.start_time, reason: 'Hora ya ocupada por reserva de cliente externo' });
+          continue;
+        }
+
+        const updatePayloadExtended: any = {
+          user_id: item.base.user_id,
+          customer_name: item.base.customer_name,
+          customer_phone: item.base.customer_phone,
+          end_time: item.base.end_time,
+          status: 'confirmed',
+          payment_status: billingScheme === 'por_sesion' ? 'pending' : 'verified',
+          source: 'owner_panel',
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: ownerId,
+          booking_type: 'contract',
+          ...(effectivePrice !== undefined ? { total_price: effectivePrice } : {}),
+          ...(note ? { note } : {}),
+          ...(clientType !== 'standard' ? { client_type: clientType } : {}),
+          ...(clientEntityName ? { client_entity_name: clientEntityName } : {}),
+          payment_method: paymentMethod,
+          billing_scheme: billingScheme,
+          ...(customRate !== undefined ? { custom_rate: customRate } : {}),
+        };
+
+        const updatePayloadBase: any = {
+          user_id: item.base.user_id,
+          customer_name: item.base.customer_name,
+          customer_phone: item.base.customer_phone,
+          end_time: item.base.end_time,
+          status: 'confirmed',
+          payment_status: billingScheme === 'por_sesion' ? 'pending' : 'verified',
+          source: 'owner_panel',
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: ownerId,
+          booking_type: 'contract',
+          ...(effectivePrice !== undefined ? { total_price: effectivePrice } : {}),
+          ...(note ? { note } : {}),
+          payment_method: paymentMethod,
+          ...(customRate !== undefined ? { custom_rate: customRate } : {}),
+        };
+
+        // Buscar registro existente (cualquier estado: cancelled, expirado, o del owner_panel) para reutilizar en lugar de insertar
+        const existing = conflictRows.find((b: any) => b.pitch_id === pitch_id) || null;
+
+        if (existing) {
+          let updatePayload = (_supportsContractColumns === false) ? updatePayloadBase : updatePayloadExtended;
+          let { data: updated, error: updateErr } = await supabase
+            .from('bookings')
+            .update(updatePayload)
+            .eq('id', existing.id)
+            .select()
+            .single();
+
+          if (updateErr && (updateErr.code === 'PGRST204' || updateErr.code === '42703' || updateErr.message?.includes('column') || updateErr.message?.includes('schema cache'))) {
+            _supportsContractColumns = false;
+            const retry = await supabase.from('bookings').update(updatePayloadBase).eq('id', existing.id).select().single();
+            updated = retry.data;
+            updateErr = retry.error;
+          }
+
+          if (updateErr) {
+            skippedConflicts.push({ slot: item.start_time, reason: updateErr.message });
+          } else if (updated) {
+            createdBookings.push(updated);
+          }
+        } else {
+          // Insertar nueva, con fallback automático si las columnas extendidas no existen en DB
+          let payloadToInsert = (_supportsContractColumns === false) ? item.base : item.extended;
+          let { data: inserted, error: insertErr } = await supabase
+            .from('bookings')
+            .insert(payloadToInsert)
+            .select()
+            .single();
+
+          if (insertErr && (insertErr.code === 'PGRST204' || insertErr.code === '42703' || insertErr.message?.includes('column') || insertErr.message?.includes('schema cache'))) {
+            _supportsContractColumns = false;
+            const retry = await supabase.from('bookings').insert(item.base).select().single();
+            inserted = retry.data;
+            insertErr = retry.error;
+          } else if (!insertErr && _supportsContractColumns === null) {
+            _supportsContractColumns = true;
+          }
+
+          if (insertErr) {
+            if (insertErr.code === '23505') {
+              // Si ya existía un registro previo en DB para esa misma hora, intentar actualizarlo
+              const { data: dupRow } = await supabase
+                .from('bookings')
+                .select('id, status')
+                .eq('pitch_id', pitch_id)
+                .eq('start_time', item.start_time)
+                .maybeSingle();
+
+              if (dupRow) {
+                const { data: updatedDup, error: updateDupErr } = await supabase
+                  .from('bookings')
+                  .update((_supportsContractColumns === false) ? updatePayloadBase : updatePayloadExtended)
+                  .eq('id', dupRow.id)
+                  .select()
+                  .single();
+
+                if (!updateDupErr && updatedDup) {
+                  createdBookings.push(updatedDup);
+                  continue;
+                }
+              }
+              skippedConflicts.push({ slot: item.start_time, reason: 'Hora ya ocupada en base de datos' });
+            } else {
+              skippedConflicts.push({ slot: item.start_time, reason: insertErr.message });
+            }
+          } else if (inserted) {
+            createdBookings.push(inserted);
+          }
+        }
+      }
+
+      if (payload?.strict && skippedConflicts.length > 0) {
+        return NextResponse.json({
+          success: false,
+          error: `No se puede guardar el turno fijo: Se detectaron ${skippedConflicts.length} horario(s) en conflicto ya ocupados. No está permitido omitir fechas de turno fijo.`,
+          skipped_conflicts: skippedConflicts,
+          total_created: createdBookings.length,
+          total_skipped: skippedConflicts.length,
+        }, { status: 409 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: createdBookings,
+        booking_ids: createdBookings.map(b => b.id),
+        skipped_conflicts: skippedConflicts,
+        total_created: createdBookings.length,
+        total_skipped: skippedConflicts.length,
       });
     }
 

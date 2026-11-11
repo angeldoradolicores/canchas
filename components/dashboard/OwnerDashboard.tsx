@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase/client';
 import { BookingReportModal } from '@/components/booking/BookingReportModal';
 import { ManualBookingModal } from '@/components/booking/ManualBookingModal';
 import { playPendingAlertSound, triggerSystemNotification } from '@/lib/push-notifications';
+import { getBookingRemainingPayment } from '@/lib/remaining-payment-utils';
 
 type DateFilter = 'hoy' | 'ayer' | 'semana' | 'mes' | 'total';
 
@@ -135,6 +136,25 @@ function getLocalDateString(dateInput: string | Date): string {
 
 function getBookingIncome(b: any): number {
   return Number(b.total_price || b.pitches?.price_per_hour || 0);
+}
+
+function getBookingDeposit(b: any): number {
+  if (!b) return 0;
+  if (b.deposit_amount !== undefined && b.deposit_amount !== null && Number(b.deposit_amount) > 0) {
+    return Number(b.deposit_amount);
+  }
+  // Fallback si no tiene deposit_amount pero es reserva web de cliente
+  if (b.source !== 'owner_panel' && b.pitches && !b.is_loyalty_free) {
+    const customPricing = b.pitches.custom_pricing || {};
+    const isFixed = customPricing.booking_type === 'fixed';
+    const pct = customPricing.booking_percentage || b.pitches.booking_percentage || 50;
+    const tPrice = getBookingIncome(b);
+    if (isFixed) {
+      return Number(customPricing.booking_fixed || 0);
+    }
+    return (tPrice * Number(pct)) / 100;
+  }
+  return 0;
 }
 
 function MiniBarChart({
@@ -413,6 +433,13 @@ export function OwnerDashboard() {
   const pending = filteredBookings.filter(b => b.status === 'pending');
   const cancelled = filteredBookings.filter(b => b.status === 'cancelled' || b.status === 'rejected');
   const totalIncome = confirmed.reduce((s, b) => s + getBookingIncome(b), 0);
+  const totalDeposits = confirmed.reduce((s, b) => s + getBookingDeposit(b), 0);
+  const totalRemainingPaid = confirmed.reduce((s, b) => {
+    const rem = getBookingRemainingPayment(b);
+    return s + Number(rem?.amount || b.remaining_amount_paid || 0);
+  }, 0);
+  const totalCollected = totalDeposits + totalRemainingPaid;
+  const pendingCollection = Math.max(0, totalIncome - totalCollected);
   const avgIncome = confirmed.length > 0 ? Math.round(totalIncome / confirmed.length) : 0;
   const confirmRate = filteredBookings.length > 0 ? Math.round((confirmed.length / filteredBookings.length) * 100) : 0;
 
@@ -714,7 +741,14 @@ export function OwnerDashboard() {
           <StatCard icon={<CheckCircle2 size={18} className="text-emerald-600 shrink-0" />} title="Reservas confirmadas" value={confirmed.length} sub={`de ${filteredBookings.length} totales`} accent="bg-emerald-500" onClick={() => router.push('/dashboard/bookings')} />
         </div>
         <div className="min-w-0">
-          <StatCard icon={<DollarSign size={18} className="text-primary shrink-0" />} title="Ingresos confirmados" value={fmt(totalIncome)} sub={`${confirmed.length} pagos aprobados`} accent="bg-primary" />
+          <StatCard
+            icon={<DollarSign size={18} className="text-primary shrink-0" />}
+            title="Total Facturado"
+            value={fmt(totalIncome)}
+            sub={`Abonos: ${fmt(totalDeposits)} · Saldo: ${fmt(totalRemainingPaid)}`}
+            accent="bg-primary"
+            onClick={() => router.push('/dashboard/bookings')}
+          />
         </div>
         <div className="min-w-0">
           <StatCard
@@ -776,8 +810,40 @@ export function OwnerDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 w-full max-w-full min-w-0">
+      {/* Resumen Financiero Real de Caja (Abonos + Saldos vs Facturado) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 w-full max-w-full min-w-0">
+        <div className="p-3.5 rounded-2xl bg-card border border-border flex items-center justify-between shadow-sm">
+          <div>
+            <span className="text-[10px] font-black uppercase text-muted-foreground tracking-wider block">Facturado Total</span>
+            <span className="text-lg font-black text-foreground">{fmt(totalIncome)}</span>
+            <span className="text-[10px] text-muted-foreground block mt-0.5">{confirmed.length} reservas confirmadas</span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0">
+            <DollarSign size={20} />
+          </div>
+        </div>
 
+        <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between shadow-sm">
+          <div>
+            <span className="text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-300 tracking-wider block">Dinero en Caja (Recaudado)</span>
+            <span className="text-lg font-black text-emerald-700 dark:text-emerald-400">{fmt(totalCollected)}</span>
+            <span className="text-[10px] text-muted-foreground block mt-0.5">Abonos: {fmt(totalDeposits)} · Saldos: {fmt(totalRemainingPaid)}</span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold shrink-0">
+            <CheckCircle2 size={20} />
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between shadow-sm">
+          <div>
+            <span className="text-[10px] font-black uppercase text-amber-800 dark:text-amber-300 tracking-wider block">Por Cobrar en Cancha</span>
+            <span className="text-lg font-black text-amber-700 dark:text-amber-400">{fmt(pendingCollection)}</span>
+            <span className="text-[10px] text-muted-foreground block mt-0.5">Saldo pendiente al momento de jugar</span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold shrink-0">
+            <Wallet size={20} />
+          </div>
+        </div>
       </div>
 
       {/* Banner de aviso para reservas pendientes de otras fechas */}

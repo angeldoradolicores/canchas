@@ -21,6 +21,93 @@ export interface RemainingPaymentData {
   splits?: PaymentSplitItem[];
 }
 
+/** Un abono/pago parcial en el historial */
+export interface PaymentEntry {
+  id: string;             // UUID único del abono
+  amount: number;         // Monto cobrado en este abono
+  method: string;         // Método de pago (cash, transfer, etc.)
+  splits?: PaymentSplitItem[]; // Si fue pago mixto
+  proofUrl?: string | null;   // Foto del comprobante (opcional)
+  notes?: string;         // Nota del pago
+  at: string;             // ISO timestamp de cuando se registró
+  by?: string;            // ID del usuario que registró
+  // Campos de auditoría de edición:
+  editedAt?: string;      // ISO timestamp de la última edición
+  editedBy?: string;      // ID del usuario que editó
+  previousAmount?: number;  // Monto anterior antes de editar
+  previousMethod?: string;  // Método anterior antes de editar
+  previousNotes?: string;   // Nota anterior antes de editar
+}
+
+/**
+ * Calcula el total abonado sumando todos los pagos del historial
+ */
+export function getTotalPaid(paymentHistory: PaymentEntry[] | null | undefined): number {
+  if (!Array.isArray(paymentHistory) || paymentHistory.length === 0) return 0;
+  return paymentHistory.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+}
+
+/**
+ * Parsea el payment_history de una reserva (soporta string JSON, array, o fallback en columnas/proof_url)
+ */
+export function parsePaymentHistory(booking: any): PaymentEntry[] {
+  const raw = booking?.payment_history;
+  if (Array.isArray(raw) && raw.length > 0) return raw as PaymentEntry[];
+  if (typeof raw === 'string' && raw.trim().length > 0) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed as PaymentEntry[];
+    } catch { /* ignorar */ }
+  }
+
+  // Fallback 1: Si no hay columna payment_history, revisar si está embebido en payment_proof_url
+  if (typeof booking?.payment_proof_url === 'string' && booking.payment_proof_url.includes('###remaining:')) {
+    try {
+      const parts = booking.payment_proof_url.split('###remaining:');
+      const parsed = JSON.parse(parts[1]);
+      if (parsed && typeof parsed === 'object') {
+        if (Array.isArray(parsed.history) && parsed.history.length > 0) {
+          return parsed.history as PaymentEntry[];
+        }
+        if (parsed.amount && Number(parsed.amount) > 0) {
+          return [{
+            id: `pay_legacy_${booking.id || Date.now()}`,
+            amount: Number(parsed.amount),
+            method: parsed.method || 'cash',
+            splits: parsed.splits,
+            proofUrl: parsed.proofUrl || parsed.proof_url || null,
+            notes: parsed.notes || '',
+            at: parsed.at || booking.updated_at || new Date().toISOString(),
+            by: parsed.by,
+          }];
+        }
+      }
+    } catch { /* ignorar */ }
+  }
+
+  // Fallback 2: Si hay remaining_payment_amount en columnas nativas sin payment_history
+  if (booking?.remaining_payment_amount && Number(booking.remaining_payment_amount) > 0) {
+    let splits: PaymentSplitItem[] | undefined;
+    if (booking.remaining_payment_splits) {
+      splits = typeof booking.remaining_payment_splits === 'string'
+        ? JSON.parse(booking.remaining_payment_splits)
+        : booking.remaining_payment_splits;
+    }
+    return [{
+      id: `pay_legacy_${booking.id || Date.now()}`,
+      amount: Number(booking.remaining_payment_amount),
+      method: booking.remaining_payment_method || 'cash',
+      splits,
+      proofUrl: booking.remaining_payment_proof_url || null,
+      notes: booking.remaining_payment_notes || '',
+      at: booking.remaining_payment_at || booking.updated_at || new Date().toISOString(),
+      by: booking.remaining_payment_by,
+    }];
+  }
+
+  return [];
+}
+
 export const PAYMENT_METHODS: { id: PaymentMethod; label: string; icon: string; shortLabel: string }[] = [
   { id: 'cash', label: 'Efectivo', icon: '💵', shortLabel: 'Efectivo' },
   { id: 'transfer', label: 'Transferencia', icon: '📲', shortLabel: 'Transferencia' },

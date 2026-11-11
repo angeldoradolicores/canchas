@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
 import { getAuthenticatedUser } from '@/lib/auth-guard';
 import { uploadToR2, isR2Configured } from '@/lib/storage/r2';
+import { validateImageUpload } from '@/lib/image-upload-validator';
 
 const BUCKET = 'school-images';
 
@@ -31,23 +32,23 @@ export async function POST(req: NextRequest) {
     const file = formData.get('file') as File | null;
     if (!file) return NextResponse.json({ error: 'No se recibió ningún archivo' }, { status: 400 });
 
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const allowedExts = ['jpg', 'jpeg', 'png', 'webp'];
-    const allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
-
-    if (!allowedExts.includes(ext) || (file.type && !allowedMimes.includes(file.type))) {
-      return NextResponse.json({ error: 'Formato no permitido. Solo se aceptan imágenes JPG, PNG o WebP.' }, { status: 400 });
-    }
-
-    // Límite de 4MB (las imágenes comprimidas en el cliente pesan ~150KB - 250KB)
-    if (file.size > 4 * 1024 * 1024) {
-      return NextResponse.json({ error: 'La imagen excede el límite permitido de 4 MB' }, { status: 400 });
-    }
-
-    const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+    // ── Leer buffer primero para validar con magic bytes reales ──
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const contentType = file.type || `image/${ext}`;
+
+    // ── Validación de seguridad: solo imágenes JPG, PNG, WebP — NO confiamos en file.type ──
+    const validation = validateImageUpload(buffer, {
+      allowVideo: false,
+      maxBytes: 4 * 1024 * 1024, // 4 MB
+      rejectGif: true,            // sin GIF para imágenes de escuela
+    });
+
+    if (!validation.ok) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
+    const { contentType, ext } = validation;
+    const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
 
     // ── Si Cloudflare R2 está configurado, usar R2 ──
     if (isR2Configured()) {

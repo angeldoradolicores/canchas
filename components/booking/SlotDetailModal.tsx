@@ -12,6 +12,7 @@ import {
   calculateRemainingBalance,
   formatPaymentMethod,
 } from '@/lib/remaining-payment-utils';
+import { getContractBillingInfo } from '@/lib/contract-billing';
 
 interface SlotDetailModalProps {
   data: {
@@ -22,6 +23,7 @@ interface SlotDetailModalProps {
     relatedBookings?: any[];
     isOperating: boolean;
   };
+  allBookings?: any[];
   onClose: () => void;
   onApprove?: (booking: any) => void;
   onBatchApprove?: (bookings: any[], customerName: string, pitchName: string, totalPrice: number, depositAmount: number) => void;
@@ -31,6 +33,8 @@ interface SlotDetailModalProps {
   onViewProof?: (url: string) => void;
   onGoToList?: (booking: any) => void;
   onCreateManual?: (pitch: any, dateStr: string, slot: string) => void;
+  customerMatchesCount?: number;
+  onOpenContractTrace?: () => void;
 }
 
 export function SlotDetailModal({
@@ -44,6 +48,9 @@ export function SlotDetailModal({
   onViewProof,
   onGoToList,
   onCreateManual,
+  customerMatchesCount,
+  onOpenContractTrace,
+  allBookings,
 }: SlotDetailModalProps) {
   const { pitch, slot, dateStr, booking, relatedBookings = [], isOperating } = data;
 
@@ -150,17 +157,43 @@ export function SlotDetailModal({
   const isPending = booking?.status === 'pending' || relatedList.some(b => b.status === 'pending');
   const isConfirmed = booking?.status === 'confirmed' || relatedList.some(b => b.status === 'confirmed');
 
-  // Precios consolidados para todas las horas/canchas reservadas
+  // Detección de Turno Fijo / Contrato y su esquema de cobro
+  const contractInfo = useMemo(() => {
+    return getContractBillingInfo(booking, allBookings || relatedList);
+  }, [booking, allBookings, relatedList]);
+
+  // Precios consolidados para todas las horas/canchas reservadas.
+  // Si es un contrato con cobro de plan (mensualidad, quincena o total),
+  // se cobra el valor del plan/ciclo correspondiente en vez de la tarifa individual por sesión.
   const tPrice = useMemo(() => {
+    if (contractInfo.isContract && contractInfo.isPlanBilling && contractInfo.cycleToCollect > 0) {
+      return contractInfo.cycleToCollect;
+    }
     if (relatedList.length > 1) {
       return relatedList.reduce((sum, b) => {
         return sum + Number(b.total_price || b.pitches?.price_per_hour || pitch?.price_per_hour || 80000);
       }, 0);
     }
     return Number(booking?.total_price || pitch?.price_per_hour || 80000);
-  }, [relatedList, booking, pitch]);
+  }, [contractInfo, relatedList, booking, pitch]);
+
+  const isCreditOrContract = useMemo(() => {
+    if (!booking) return false;
+    if (booking.payment_method === 'cuenta_cobrar' || booking.payment_method === 'credito') return true;
+    if (booking.is_contract || booking.booking_type === 'contract') return true;
+    const name = booking.customer_name || '';
+    return name.includes('[Turno Fijo') || name.includes('[Contrato') || name.includes('[ENTIDAD') || name.includes('[ESCUELA');
+  }, [booking]);
 
   const dAmount = useMemo(() => {
+    // Si es crédito / cuenta por cobrar o turno fijo sin abono registrado, el abono es estrictamente 0
+    if (isCreditOrContract) {
+      if (relatedList.length > 1) {
+        return relatedList.reduce((sum, b) => sum + Number(b.deposit_amount || 0), 0);
+      }
+      return Number(booking?.deposit_amount || 0);
+    }
+
     if (relatedList.length > 1) {
       const explicitDeposit = relatedList.reduce((sum, b) => sum + Number(b.deposit_amount || 0), 0);
       if (explicitDeposit > 0) return explicitDeposit;
@@ -168,7 +201,8 @@ export function SlotDetailModal({
       return Number(booking?.deposit_amount || 0);
     }
 
-    if (pitch) {
+    // Solo si es una reserva web normal de cliente con anticipo obligatorio
+    if (pitch && booking?.source !== 'owner_panel') {
       const customPricing = pitch.custom_pricing || {};
       const isFixed = customPricing.booking_type === 'fixed';
       const pct = customPricing.booking_percentage || pitch.booking_percentage || 50;
@@ -177,8 +211,8 @@ export function SlotDetailModal({
       }
       return (tPrice * Number(pct)) / 100;
     }
-    return (tPrice * 50) / 100;
-  }, [relatedList, booking, pitch, hoursCount, tPrice]);
+    return Number(booking?.deposit_amount || 0);
+  }, [relatedList, booking, pitch, hoursCount, tPrice, isCreditOrContract]);
 
   const remainingInfo = booking ? getBookingRemainingPayment(booking) : null;
   const remPaid = useMemo(() => {
@@ -418,33 +452,85 @@ export function SlotDetailModal({
               </div>
             </div>
 
+            {/* Contador de Canchas / Historial del Cliente */}
+            {typeof customerMatchesCount === 'number' && customerMatchesCount > 0 && (
+              <div className="flex items-center justify-between p-2.5 rounded-2xl bg-secondary/40 border border-border">
+                <div className="flex items-center gap-2">
+                  <span className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
+                    ⚽
+                  </span>
+                  <div>
+                    <p className="text-xs font-bold text-foreground">
+                      {customerMatchesCount} {customerMatchesCount === 1 ? 'partido confirmado' : 'partidos confirmados'}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">Historial acumulado de este cliente</p>
+                  </div>
+                </div>
+                {customerMatchesCount >= 20 ? (
+                  <span className="px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-black">
+                    🎁 VIP 20+ (Cortesía Domingo)
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-muted-foreground font-semibold">
+                    {20 - customerMatchesCount} para cortesía VIP
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* 4. Desglose Financiero */}
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="p-2.5 rounded-xl bg-secondary/30 border border-border/70">
                 <p className="text-[10px] uppercase font-bold text-muted-foreground">
-                  {isMultiHour ? `Total (${hoursCount}h)` : 'Valor Turno'}
+                  {contractInfo.isContract
+                    ? (contractInfo.isPlanBilling ? 'Total Plan' : 'Valor Sesión')
+                    : (isMultiHour ? `Total (${hoursCount}h)` : 'Valor Turno')}
                 </p>
                 <p className="font-black text-xs sm:text-sm text-foreground mt-0.5">
                   ${tPrice.toLocaleString('es-CO')}
                 </p>
               </div>
-              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <p className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-300">
-                  {isMultiHour ? 'Separación' : 'Anticipo'}
+
+              {isCreditOrContract ? (
+                <div className="p-2.5 rounded-xl bg-violet-500/10 border border-violet-500/20">
+                  <p className="text-[10px] uppercase font-bold text-violet-700 dark:text-violet-300 truncate">
+                    {contractInfo.isContract ? contractInfo.billingSchemeLabel : 'Modalidad'}
+                  </p>
+                  <p className="font-black text-[11px] text-violet-700 dark:text-violet-300 mt-1 truncate" title={contractInfo.billingSchemeLabel || 'Cuenta por Cobrar (Crédito)'}>
+                    {contractInfo.isContract ? (contractInfo.isPlanBilling ? contractInfo.cycleLabel : 'Por Sesión') : 'Por Cobrar'}
+                  </p>
+                </div>
+              ) : (
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  <p className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-300">
+                    {isMultiHour ? 'Separación' : 'Anticipo'}
+                  </p>
+                  <p className="font-black text-xs sm:text-sm text-emerald-700 dark:text-emerald-300 mt-0.5">
+                    ${dAmount.toLocaleString('es-CO')}
+                  </p>
+                </div>
+              )}
+
+              <div className={`p-2.5 rounded-xl border ${isCreditOrContract ? 'bg-amber-500/10 border-amber-500/20' : (balance > 0 ? 'bg-sky-500/10 border-sky-500/20' : 'bg-secondary/30 border-border/70')}`}>
+                <p className={`text-[10px] uppercase font-bold ${isCreditOrContract ? 'text-amber-700 dark:text-amber-300' : (balance > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-muted-foreground')}`}>
+                  {isCreditOrContract ? 'Por Cobrar' : 'Saldo Restante'}
                 </p>
-                <p className="font-black text-xs sm:text-sm text-emerald-700 dark:text-emerald-300 mt-0.5">
-                  ${dAmount.toLocaleString('es-CO')}
-                </p>
-              </div>
-              <div className={`p-2.5 rounded-xl border ${balance > 0 ? 'bg-sky-500/10 border-sky-500/20' : 'bg-secondary/30 border-border/70'}`}>
-                <p className={`text-[10px] uppercase font-bold ${balance > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-muted-foreground'}`}>
-                  Saldo Restante
-                </p>
-                <p className={`font-black text-xs sm:text-sm mt-0.5 ${balance > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-foreground'}`}>
-                  ${Math.max(0, balance).toLocaleString('es-CO')}
+                <p className={`font-black text-xs sm:text-sm mt-0.5 ${isCreditOrContract ? 'text-amber-700 dark:text-amber-300' : (balance > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-foreground')}`}>
+                  ${Math.max(0, isCreditOrContract ? (tPrice - remPaid) : balance).toLocaleString('es-CO')}
                 </p>
               </div>
             </div>
+
+            {/* Botón de Trazabilidad Directa si es Contrato / Turno Fijo */}
+            {isCreditOrContract && onOpenContractTrace && (
+              <button
+                type="button"
+                onClick={onOpenContractTrace}
+                className="w-full py-2 px-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer active:scale-98"
+              >
+                📋 Ver Hoja de Trazabilidad del Contrato
+              </button>
+            )}
 
             {/* 5. Comprobante de Pago (si existe) */}
             {proofUrl && (
@@ -524,9 +610,17 @@ export function SlotDetailModal({
                   type="button"
                   onClick={() => {
                     onClose();
-                    const combinedBooking = isMultiHour
-                      ? { ...booking, total_price: tPrice, deposit_amount: dAmount, remaining_amount_paid: remPaid }
-                      : booking;
+                    const relatedPlanBookings = (contractInfo.isContract && contractInfo.isPlanBilling && contractInfo.relatedBookingIds.length > 0)
+                      ? (allBookings || []).filter(b => contractInfo.relatedBookingIds.includes(b.id))
+                      : (isMultiHour ? relatedList : [booking]);
+
+                    const combinedBooking = {
+                      ...booking,
+                      total_price: tPrice,
+                      deposit_amount: dAmount,
+                      remaining_amount_paid: remPaid,
+                      bookings: relatedPlanBookings.length > 0 ? relatedPlanBookings : [booking],
+                    };
                     onCollectBalance?.(combinedBooking);
                   }}
                   className="w-full py-2.5 px-3 rounded-xl font-extrabold text-xs bg-sky-600 hover:bg-sky-700 active:scale-95 text-white transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
@@ -534,7 +628,9 @@ export function SlotDetailModal({
                   <Receipt size={15} />
                   <span>
                     Cobrar Saldo en Local (${Math.max(0, balance).toLocaleString('es-CO')})
-                    {isMultiHour && ` · ${hoursCount} Horas`}
+                    {contractInfo.isContract && contractInfo.isPlanBilling
+                      ? ` · ${contractInfo.billingSchemeLabel}`
+                      : (isMultiHour && ` · ${hoursCount} Horas`)}
                   </span>
                 </button>
               )}

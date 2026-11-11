@@ -1757,7 +1757,7 @@ function NewPitchForm() {
               <h2 className="font-bold text-base border-b border-border pb-3 text-foreground">Galería Multimedia</h2>
 
               <div className="flex flex-wrap gap-2 w-full max-w-full">
-                <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple onChange={handleFileUpload} className="hidden" />
+                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" multiple onChange={handleFileUpload} className="hidden" />
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}

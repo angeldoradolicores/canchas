@@ -3,8 +3,12 @@
 -- Ejecutar en: Supabase Dashboard -> SQL Editor -> New Query -> Run
 -- ==============================================================================
 
--- 1. Columnas para clasificación de Entidades, Escuelas y Tarifas personalizadas en bookings
+-- 1. Columnas para clasificación de Entidades, Escuelas, Tarifas y Finanzas en bookings
 ALTER TABLE public.bookings 
+  ADD COLUMN IF NOT EXISTS total_price numeric,
+  ADD COLUMN IF NOT EXISTS deposit_amount numeric DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS note text,
+  ADD COLUMN IF NOT EXISTS booking_type text DEFAULT 'standard',
   ADD COLUMN IF NOT EXISTS client_type text DEFAULT 'standard',
   ADD COLUMN IF NOT EXISTS client_entity_name text,
   ADD COLUMN IF NOT EXISTS payment_method text DEFAULT 'efectivo',
@@ -12,6 +16,7 @@ ALTER TABLE public.bookings
   ADD COLUMN IF NOT EXISTS is_loyalty_free boolean DEFAULT false;
 
 -- 2. Índices para consultas y reportes rápidos
+CREATE INDEX IF NOT EXISTS idx_bookings_booking_type ON public.bookings(booking_type);
 CREATE INDEX IF NOT EXISTS idx_bookings_client_type ON public.bookings(client_type);
 CREATE INDEX IF NOT EXISTS idx_bookings_payment_method ON public.bookings(payment_method);
 CREATE INDEX IF NOT EXISTS idx_bookings_is_loyalty_free ON public.bookings(is_loyalty_free);

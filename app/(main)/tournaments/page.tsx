@@ -1581,7 +1581,7 @@ export default function TournamentsPage() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp"
                     multiple
                     className="hidden"
                     onChange={e => e.target.files && handleImageUpload(e.target.files)}

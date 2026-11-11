@@ -494,7 +494,7 @@ export default function PublicProfilePage() {
         {/* ─── Cambiar foto ─── */}
         {isOwnProfile && (
           <div className="mt-4">
-            <input type="file" accept="image/*" ref={fileInputRef} onChange={handleAvatarUpload} className="hidden" />
+            <input type="file" accept="image/jpeg,image/png,image/webp" ref={fileInputRef} onChange={handleAvatarUpload} className="hidden" />
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadingAvatar}

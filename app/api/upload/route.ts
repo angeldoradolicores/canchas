@@ -4,6 +4,7 @@ import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
 import { getAuthenticatedUser } from '@/lib/auth-guard';
 import { uploadToR2, isR2Configured } from '@/lib/storage/r2';
 import { safeServerErrorResponse } from '@/lib/error-handler';
+import { validateImageUpload, safeUploadPath } from '@/lib/image-upload-validator';
 
 function getServiceSupabase() {
   return createClient(
@@ -30,37 +31,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No se recibió ningún archivo' }, { status: 400 });
     }
 
-    const isVideo = file.type.startsWith('video/');
-    const isImage = file.type.startsWith('image/');
+    // ── Leer buffer primero para validar con magic bytes reales ──
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
-    if (!isImage && !isVideo) {
-      return NextResponse.json({ error: 'Tipo de archivo no permitido. Solo se aceptan imágenes o videos.' }, { status: 400 });
+    // ── Validación de seguridad: magic bytes + tamaño (no confiamos en file.type) ──
+    const isReceiptOrAvatar = uploadType === 'receipt' || uploadType === 'avatar';
+    const validation = validateImageUpload(buffer, {
+      allowVideo: !isReceiptOrAvatar, // comprobantes y avatares: solo imágenes
+      maxBytes: isReceiptOrAvatar ? 5 * 1024 * 1024 : 50 * 1024 * 1024, // 5MB imágenes, 50MB videos
+      rejectGif: uploadType === 'avatar', // sin GIF para avatares
+    });
+
+    if (!validation.ok) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    // Tamaño máximo: 50MB para videos, 10MB para imágenes
-    const maxSizeBytes = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
-    if (file.size > maxSizeBytes) {
-      return NextResponse.json({
-        error: `El archivo excede el tamaño máximo permitido (${isVideo ? '50 MB' : '10 MB'}).`
-      }, { status: 400 });
-    }
-
-    const ALLOWED_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'mp4', 'mov', 'webm']);
-    const ext = file.name.split('.').pop()?.toLowerCase() || (isVideo ? 'mp4' : 'jpg');
-    if (!ALLOWED_EXTS.has(ext)) {
-      return NextResponse.json({
-        error: 'Extensión no permitida. Solo se aceptan formatos seguros: JPG, PNG, WEBP, MP4, MOV, WEBM.'
-      }, { status: 400 });
-    }
+    const { contentType, ext, isVideo } = validation;
     const folder = uploadType === 'receipt' ? 'comprobantes' : `${uploadType}s`;
     const userPrefix = user?.id || 'public';
     const timestamp = Date.now();
     const randomSuffix = Math.random().toString(36).substring(2, 9);
+    // Ruta generada desde el servidor, nunca desde datos del cliente
     const filePath = `${folder}/${userPrefix}/${timestamp}_${randomSuffix}.${ext}`;
-
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const contentType = file.type || (isVideo ? 'video/mp4' : `image/${ext}`);
     const isPrivate = uploadType === 'receipt';
 
     // ── 1. Si Cloudflare R2 está configurado, usar R2 ──

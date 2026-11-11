@@ -85,9 +85,10 @@ export async function cacheProofImage(url: string): Promise<void> {
     const cache = await caches.open(PROOFS_CACHE_NAME);
     const existing = await cache.match(cleanUrl);
     if (!existing) {
-      // Descargar silenciosamente y guardar en la memoria local del dispositivo
-      const res = await fetch(cleanUrl, { mode: 'cors' }).catch(() => null);
-      if (res && res.ok) {
+      // Intentar descargar; si hay bloqueo CORS (R2 sin CORS config) se ignora silenciosamente
+      const res = await fetch(cleanUrl, { mode: 'no-cors' }).catch(() => null);
+      // mode: 'no-cors' devuelve respuesta opaca (type==='opaque') que no podemos leer pero sí cachear
+      if (res && (res.ok || res.type === 'opaque')) {
         await cache.put(cleanUrl, res.clone());
       }
     }

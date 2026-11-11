@@ -16,6 +16,9 @@ import Link from 'next/link';
    TIPOS
 ══════════════════════════════════════════════════════════ */
 type FormatId = 'story' | 'post' | 'square';
+// New types for extended poster customization
+type TemplateId = 'classic' | 'hero' | 'split' | 'neon' | 'minimal' | 'gradient' | 'overlay' | 'gallery';
+type FontStyle = 'inter' | 'roboto' | 'poppins' | 'lato' | 'playfair';
 type Pattern = 'none' | 'dots' | 'diagonal' | 'pitch';
 type CardStyle = 'round' | 'pill' | 'solid';
 type LogoStyle = 'badge' | 'tint' | 'original';
@@ -30,7 +33,14 @@ interface Cfg {
   order: SectionId[]; hidden: SectionId[];
   name: string; address: string; title: string; tag: string;
   message: string; phone: string; cta: string; website: string;
+  // New fields for extended poster
+  templateId: TemplateId;
+  fontStyle: FontStyle;
+  pitchImageUrl?: string;
+  showPitchImage: boolean;
+  imageOverlay: number; // 0-1 opacity
 }
+
 
 /* ══════════════════════════════════════════════════════════
    CONSTANTES
@@ -70,13 +80,32 @@ const LOGO = '';
 const STORE = 'cancheros-status-v4';
 
 const DEFAULTS: Cfg = {
-  format: 'story', pattern: 'pitch', cardStyle: 'round', logoStyle: 'original',
-  logoSize: 140, nameSize: 64, align: 'left', padding: 70,
-  order: ['header', 'title', 'hours', 'message', 'footer'], hidden: [],
-  name: '', address: '', title: 'Horarios Disponibles',
-  tag: '', message: '', phone: '', cta: 'Reserva ahora', website: 'CANCHEROS.SITE',
+  format: 'story',
+  pattern: 'pitch',
+  cardStyle: 'round',
+  logoStyle: 'original',
+  logoSize: 140,
+  nameSize: 64,
+  align: 'left',
+  padding: 70,
+  order: ['header', 'title', 'hours', 'message', 'footer'],
+  hidden: [],
+  name: '',
+  address: '',
+  title: 'Horarios Disponibles',
+  tag: '',
+  message: '',
+  phone: '',
+  cta: 'Reserva ahora',
+  website: 'CANCHEROS.SITE',
   pal: PRESETS[0].p,
+  // New defaults
+  templateId: 'classic',
+  fontStyle: 'inter',
+  showPitchImage: false,
+  imageOverlay: 0.4,
 };
+
 
 /* ══════════════════════════════════════════════════════════
    COLOR UTILS
@@ -1184,7 +1213,7 @@ export default function CreateStatusPage() {
 
         <label className="cursor-pointer w-full py-2.5 rounded-xl text-xs font-bold border border-dashed border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1.5 mt-2 hover:bg-emerald-500/20 transition-colors">
           <Upload size={13} /> Subir mi propio logo
-          <input type="file" accept="image/*" className="hidden"
+          <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
             onChange={e => {
               const f = e.target.files?.[0];
               if (!f) return;

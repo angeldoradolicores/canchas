@@ -7,7 +7,8 @@ import {
   Loader2, CheckCircle, XCircle, FileText, CalendarDays,
   LayoutList, Calendar as CalendarIcon, Plus, X, Download, Clock,
   ChevronLeft, ChevronRight, Wrench, Search, AlertTriangle, Bell,
-  Receipt, DollarSign, Sparkles, Camera, Phone, BarChart3, Repeat
+  Receipt, DollarSign, Sparkles, Camera, Phone, BarChart3, Repeat,
+  Table, LayoutGrid, Building2, MessageCircle, History
 } from 'lucide-react';
 import { useToday } from '@/lib/use-today';
 import { ManualBookingModal } from '@/components/booking/ManualBookingModal';
@@ -21,7 +22,10 @@ import {
   getBookingOriginalProof,
   formatPaymentMethod,
   calculateRemainingBalance,
+  parsePaymentHistory,
+  getTotalPaid,
 } from '@/lib/remaining-payment-utils';
+import { getContractBillingInfo } from '@/lib/contract-billing';
 import { SlotDetailModal } from '@/components/booking/SlotDetailModal';
 import {
   saveOfflineData,
@@ -48,6 +52,14 @@ function getLocalDateString(dateInput: string | Date): string {
     month: '2-digit',
     day: '2-digit'
   }).format(d);
+}
+
+function isContractOrCreditBooking(b: any): boolean {
+  if (!b) return false;
+  if (b.payment_method === 'cuenta_cobrar' || b.payment_method === 'credito') return true;
+  if (b.is_contract || b.booking_type === 'contract') return true;
+  const name = b.customer_name || '';
+  return name.includes('Turno Fijo') || name.includes('Contrato') || name.includes('ENTIDAD') || name.includes('ESCUELA');
 }
 
 // ── Shared AudioContext para evitar fuga de recursos ──────────────────────
@@ -108,6 +120,10 @@ export default function BookingsPage() {
   const [companyName, setCompanyName] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [showManualBooking, setShowManualBooking] = useState(false);
+  const [scheduleDisplay, setScheduleDisplay] = useState<'grid' | 'table'>('grid');
+  const [scheduleTableSearch, setScheduleTableSearch] = useState('');
+  const [schedulePitchFilter, setSchedulePitchFilter] = useState<string>('all');
+  const [reportInitialTab, setReportInitialTab] = useState<'overview' | 'entities'>('overview');
 
   // Modal de visualización de comprobante enriquecido (Anticipo y Saldo)
   const [proofModalData, setProofModalData] = useState<{ url: string; title: string } | null>(null);
@@ -155,6 +171,7 @@ export default function BookingsPage() {
     dateStr: string;
     booking: any | null;
     isOperating: boolean;
+    relatedBookings?: any[];
   } | null>(null);
   const [manualBookingPrefill, setManualBookingPrefill] = useState<{
     pitchId?: string;
@@ -808,28 +825,73 @@ export default function BookingsPage() {
 
     if (targetIds.length > 0) {
       const bObj = bookings.find(b => targetIds.includes(b.id));
-      triggerStatusAnimation(
-        targetIds,
-        'paid',
-        'Cobradas',
-        'emerald',
-        '¡Saldo cobrado con éxito! Moviendo a Cobradas ➔',
-        bObj?.customer_name
-      );
 
       setBookings(prev =>
         prev.map(b => {
           if (!targetIds.includes(b.id)) return b;
+
+          const currentHistory = parsePaymentHistory(b);
+          let newHistory: any[];
+          const editIdx = currentHistory.findIndex((e: any) => e.id === updatedData?.id);
+          if (editIdx >= 0) {
+            newHistory = [...currentHistory];
+            newHistory[editIdx] = updatedData;
+          } else {
+            newHistory = [...currentHistory, updatedData];
+          }
+
+          const totalPaid = getTotalPaid(newHistory);
+
           return {
             ...b,
+            payment_history: newHistory,
             remaining_payment_status: 'completed',
-            remaining_amount_paid: updatedData?.amount || b.remaining_amount_paid,
+            remaining_amount_paid: totalPaid > 0 ? totalPaid : (updatedData?.amount || b.remaining_amount_paid),
             remaining_payment_method: updatedData?.method || b.remaining_payment_method,
             remaining_payment_proof_url: updatedData?.proofUrl || updatedData?.proof_url || b.remaining_payment_proof_url,
             remaining_paid_at: updatedData?.at || new Date().toISOString(),
           };
         })
       );
+
+      // Calcular si el saldo total quedó cubierto al 100% o si aún queda saldo por cobrar
+      const contractInfo = bObj ? getContractBillingInfo(bObj, bookings) : null;
+      const isPlanContract = !!(contractInfo?.isContract && contractInfo?.isPlanBilling);
+      const totalCost = isPlanContract && contractInfo && contractInfo.cycleToCollect > 0
+        ? contractInfo.cycleToCollect
+        : Number(bObj?.total_price || 0);
+
+      const existingHistory = parsePaymentHistory(bObj);
+      const isEdit = existingHistory.some((e: any) => e.id === updatedData?.id);
+      let simulatedHistory: any[];
+      if (isEdit) {
+        simulatedHistory = existingHistory.map((e: any) => e.id === updatedData?.id ? updatedData : e);
+      } else {
+        simulatedHistory = [...existingHistory, updatedData];
+      }
+      const totalPaidCalc = getTotalPaid(simulatedHistory);
+      const depositAmt = Number(bObj?.deposit_amount || 0);
+      const remainingBal = Math.max(0, totalCost - depositAmt - totalPaidCalc);
+
+      if (remainingBal <= 0) {
+        triggerStatusAnimation(
+          targetIds,
+          'paid',
+          'Cobradas',
+          'emerald',
+          '¡Saldo 100% cobrado! Moviendo a Cobradas ➔',
+          bObj?.customer_name
+        );
+      } else {
+        triggerStatusAnimation(
+          targetIds,
+          'pending_payment',
+          'Por Cobrar',
+          'sky',
+          `¡Abono registrado! Saldo pendiente: $${remainingBal.toLocaleString('es-CO')}`,
+          bObj?.customer_name
+        );
+      }
     }
 
     // Recargar datos en segundo plano para sincronizar al 100% con Supabase
@@ -864,6 +926,141 @@ export default function BookingsPage() {
     return result;
   }, []);
 
+  // Historial acumulado y contador de canchas jugadas por cada cliente
+  const customerStats = useMemo(() => {
+    const map: Record<string, { total: number; confirmed: number; name: string; phone: string }> = {};
+    bookings.forEach(b => {
+      if (!b) return;
+      const key = (b.customer_phone || b.customer_name || '').trim().toLowerCase();
+      if (!key) return;
+      if (!map[key]) {
+        map[key] = { total: 0, confirmed: 0, name: b.customer_name || 'Cliente', phone: b.customer_phone || '' };
+      }
+      map[key].total++;
+      if (b.status === 'confirmed') map[key].confirmed++;
+    });
+    return map;
+  }, [bookings]);
+
+  // Reservas activas para la Vista Tabla dentro de Horarios con búsqueda avanzada por nombre, número, hora y fecha
+  const scheduleTableBookings = useMemo(() => {
+    const range = getDaysRange(selectedDate, calView);
+    const q = scheduleTableSearch.trim().toLowerCase();
+
+    return bookings.filter(b => {
+      if (!b || b.status === 'draft') return false;
+      const bDateStr = getLocalDateString(b.start_time);
+      if (calView === 'month') {
+        if (bDateStr.substring(0, 7) !== selectedDate.substring(0, 7)) return false;
+      } else {
+        if (!range.includes(bDateStr)) return false;
+      }
+
+      // Filtro por cancha específica si está seleccionada
+      if (schedulePitchFilter !== 'all' && b.pitch_id !== schedulePitchFilter) {
+        return false;
+      }
+
+      // Filtro por término de búsqueda (nombre, teléfono, hora, fecha, entidad, cancha)
+      if (q) {
+        const nameMatch = (b.customer_name || '').toLowerCase().includes(q);
+        const entityMatch = (b.client_entity_name || '').toLowerCase().includes(q);
+        const phoneMatch = (b.customer_phone || '').includes(q);
+        const pitchMatch = (b.pitches?.name || '').toLowerCase().includes(q);
+
+        // Búsqueda por hora (ej: "5", "5:00", "17", "17:00", "5 pm", "5pm", "17h")
+        const sDate = new Date(b.start_time);
+        const h24 = sDate.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Bogota' });
+        const h12 = sDate.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' }).toLowerCase().replace(/\s+/g, '');
+        const hourOnly = String(parseInt(h24.split(':')[0], 10));
+        const timeMatch = h24.includes(q) || h12.includes(q) || hourOnly === q;
+
+        // Búsqueda por fecha (ej: "9", "nov", "noviembre", "lunes", "2026-11-09")
+        const dateReadable = sDate.toLocaleDateString('es-CO', {
+          weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Bogota'
+        }).toLowerCase();
+        const dateMatch = bDateStr.includes(q) || dateReadable.includes(q);
+
+        if (!nameMatch && !entityMatch && !phoneMatch && !pitchMatch && !timeMatch && !dateMatch) {
+          return false;
+        }
+      }
+
+      return true;
+    }).sort((a, b) => {
+      const ta = new Date(a.start_time).getTime();
+      const tb = new Date(b.start_time).getTime();
+      return ta - tb;
+    });
+  }, [bookings, selectedDate, calView, getDaysRange, schedulePitchFilter, scheduleTableSearch]);
+
+  // Agrupación de reservas por cancha para mostrarlas separadas (no todas juntas)
+  const scheduleBookingsByPitch = useMemo(() => {
+    const targetPitches = schedulePitchFilter === 'all'
+      ? pitches
+      : pitches.filter(p => p.id === schedulePitchFilter);
+
+    const pitchMap = new Map<string, { pitch: any; bookings: any[]; totalIncome: number }>();
+
+    targetPitches.forEach(p => {
+      pitchMap.set(p.id, { pitch: p, bookings: [], totalIncome: 0 });
+    });
+
+    scheduleTableBookings.forEach(b => {
+      const pid = b.pitch_id;
+      let entry = pitchMap.get(pid);
+      if (!entry) {
+        entry = { pitch: b.pitches || { id: pid, name: 'Cancha' }, bookings: [], totalIncome: 0 };
+        pitchMap.set(pid, entry);
+      }
+      entry.bookings.push(b);
+      entry.totalIncome += Number(b.total_price || b.pitches?.price_per_hour || entry.pitch.price_per_hour || 0);
+    });
+
+    return Array.from(pitchMap.values());
+  }, [pitches, schedulePitchFilter, scheduleTableBookings]);
+
+  // Helper para calcular finanzas consolidadas de una reserva (soporta tanto individuales como contratos)
+  const getBookingEffectiveFinancials = useCallback((b: any) => {
+    let tPrice = Number(b.total_price || b.pitches?.price_per_hour || 0);
+    let dAmount = Number(b.deposit_amount || 0);
+    const bHistory = parsePaymentHistory(b);
+    let bPaidHist = getTotalPaid(bHistory);
+    const remInfo = getBookingRemainingPayment(b);
+    let remPaid = bPaidHist > 0 ? bPaidHist : Number(remInfo?.amount || b.remaining_amount_paid || 0);
+
+    const bContract = getContractBillingInfo(b, bookings);
+    if (bContract.isContract && bContract.isPlanBilling) {
+      if (bContract.cycleToCollect > 0) {
+        tPrice = bContract.cycleToCollect;
+      }
+      const relatedIds = bContract.relatedBookingIds;
+      if (relatedIds.length > 0) {
+        const contractBookings = bookings.filter(cb => relatedIds.includes(cb.id));
+        const allHistEntries: any[] = [];
+        for (const cb of contractBookings) {
+          for (const h of parsePaymentHistory(cb)) {
+            if (!allHistEntries.some((e: any) => e.id === h.id)) {
+              allHistEntries.push(h);
+            }
+          }
+        }
+        if (allHistEntries.length > 0) {
+          remPaid = getTotalPaid(allHistEntries);
+        } else {
+          remPaid = Math.max(...contractBookings.map(cb => Number(cb.remaining_amount_paid || 0)), remPaid);
+        }
+        dAmount = contractBookings.reduce((sum, cb) => sum + Number(cb.deposit_amount || 0), 0);
+      }
+    }
+
+    const balance = calculateRemainingBalance(tPrice, dAmount, remPaid);
+    const isPaid = balance <= 0 && (dAmount + remPaid > 0 || tPrice === 0);
+    const hasPendingBalance = balance > 0;
+
+    return { tPrice, dAmount, remPaid, balance, isPaid, hasPendingBalance };
+  }, [bookings]);
+
   // Filtrado Unificado para la Lista
   const filteredBookings = useMemo(() => {
     const rangeDates = getDaysRange(selectedDate, calView);
@@ -877,18 +1074,12 @@ export default function BookingsPage() {
         matchStatus = b.status === 'pending';
       } else if (filterStatus === 'pending_payment') {
         // Reservas confirmadas con saldo pendiente por cobrar en el local
-        const tPrice = Number(b.pitches?.price_per_hour || 0);
-        const pct = b.pitches?.booking_percentage ?? 50;
-        const dAmount = (tPrice * Number(pct)) / 100;
-        const remInfo = getBookingRemainingPayment(b);
-        const remPaid = Number(remInfo?.amount || 0);
-        const bal = calculateRemainingBalance(tPrice, dAmount, remPaid);
-        matchStatus = b.status === 'confirmed' && bal > 0;
+        const { hasPendingBalance } = getBookingEffectiveFinancials(b);
+        matchStatus = b.status === 'confirmed' && hasPendingBalance;
       } else if (filterStatus === 'paid') {
         // Reservas confirmadas con saldo 100% cubierto / pagado
-        const remInfo = getBookingRemainingPayment(b);
-        const remPaid = Number(remInfo?.amount || 0);
-        matchStatus = b.status === 'confirmed' && remPaid > 0;
+        const { isPaid } = getBookingEffectiveFinancials(b);
+        matchStatus = b.status === 'confirmed' && isPaid;
       } else if (filterStatus === 'confirmed') {
         matchStatus = b.status === 'confirmed';
       } else if (filterStatus === 'cancelled') {
@@ -955,10 +1146,40 @@ export default function BookingsPage() {
       const bProof = b.payment_proof_url?.trim() || null;
       const bCreated = new Date(b.created_at || b.start_time).getTime();
       const bDateStr = getLocalDateString(b.start_time);
+      const bContract = getContractBillingInfo(b, bookings);
+      const isContractPlan = bContract.isContract && bContract.isPlanBilling;
 
       // Buscar si ya existe un grupo que pertenezca a la misma reserva/transacción
       const existingGroup = groupsList.find((g: any) => {
         if (g.status !== b.status) return false;
+
+        // 0. Si es un CONTRATO / TURNO FIJO con modalidad agrupada
+        // CADA CONTRATO SE COBRA POR SEPARADO (no mezclar contratos de 280k con otros de 300k del mismo usuario)
+        if (isContractPlan) {
+          const gFirstBooking = g.bookings?.[0];
+          const gContract = gFirstBooking ? getContractBillingInfo(gFirstBooking, bookings) : null;
+          if (gContract?.isContract && gContract?.isPlanBilling) {
+            // Si ambos tienen Contract ID (CID:xxx), DEBEN COINCIDIR EXACTAMENTE
+            if (bContract.contractId && gContract.contractId) {
+              return bContract.contractId === gContract.contractId;
+            }
+            // Si uno tiene CID y el otro tiene un CID diferente, NO agrupar
+            if (bContract.contractId !== gContract.contractId) {
+              return false;
+            }
+            // Mismo conjunto de IDs relacionados
+            if (bContract.relatedBookingIds.includes(g.id) || gContract.relatedBookingIds.includes(b.id)) {
+              return true;
+            }
+            // Fallback para contratos sin CID: mismo nombre exacto (incluyendo horario de turno fijo) y cancha
+            const sameExactCustomer = (b.customer_name || '').trim().toLowerCase() === (g.customer_name || '').trim().toLowerCase();
+            if (sameExactCustomer && g.pitch_id === b.pitch_id) {
+              return true;
+            }
+            return false;
+          }
+          return false;
+        }
 
         // 1. Si ambos tienen comprobante de pago: deben ser idénticos para agruparse
         //    (Incluso si son canchas diferentes, si comparten el mismo comprobante pertenecen a la misma compra)
@@ -989,9 +1210,12 @@ export default function BookingsPage() {
         return sameCustomer && bDateStr === gDateStr && diffMs <= 3 * 60 * 1000;
       });
 
+      const isCreditOrContract = isContractOrCreditBooking(b);
       const tPrice = b.total_price || b.pitches?.price_per_hour || 80000;
-      let dAmount = b.deposit_amount || 0;
-      if (dAmount === 0 && b.pitches) {
+      let dAmount = Number(b.deposit_amount || 0);
+
+      // Solo si es una reserva web normal de cliente con anticipo obligatorio (no turno fijo, no crédito, no manual del dueño)
+      if (dAmount === 0 && b.pitches && !isCreditOrContract && b.source !== 'owner_panel') {
         const customPricing = b.pitches.custom_pricing || {};
         const isFixed = customPricing.booking_type === 'fixed';
         const pct = customPricing.booking_percentage || b.pitches.booking_percentage || 50;
@@ -1006,15 +1230,18 @@ export default function BookingsPage() {
       }
 
       const remainingInfo = getBookingRemainingPayment(b);
-      const bRemainingPaid = Number(remainingInfo?.amount || 0);
-      const bRemainingMethod = remainingInfo?.method || null;
-      const bRemainingProof = remainingInfo?.proofUrl || null;
-      const bRemainingPaidAt = remainingInfo?.at || null;
+      const bHistory = parsePaymentHistory(b);
+      const bHistoryTotal = getTotalPaid(bHistory);
+      const bRemainingPaid = bHistoryTotal > 0 ? bHistoryTotal : Number(remainingInfo?.amount || 0);
+      const bRemainingMethod = remainingInfo?.method || (bHistory[bHistory.length - 1]?.method) || null;
+      const bRemainingProof = remainingInfo?.proofUrl || (bHistory[bHistory.length - 1]?.proofUrl) || null;
+      const bRemainingPaidAt = remainingInfo?.at || (bHistory[bHistory.length - 1]?.at) || null;
 
       if (existingGroup) {
         existingGroup.bookings.push(b);
         existingGroup.total_price += tPrice;
         existingGroup.deposit_amount += dAmount;
+        existingGroup.is_credit_contract = existingGroup.is_credit_contract || isCreditOrContract;
         if (!existingGroup.pitch_ids) {
           existingGroup.pitch_ids = [existingGroup.pitch_id];
         }
@@ -1028,9 +1255,26 @@ export default function BookingsPage() {
         if (b.payment_proof_url && !existingGroup.payment_proof_url) {
           existingGroup.payment_proof_url = b.payment_proof_url;
         }
-        if (bRemainingPaid > 0) {
+
+        // Incorporar pagos del historial sin duplicados
+        if (!existingGroup.payment_history) {
+          existingGroup.payment_history = [];
+        }
+        for (const entry of bHistory) {
+          if (!existingGroup.payment_history.some((e: any) => e.id === entry.id)) {
+            existingGroup.payment_history.push(entry);
+          }
+        }
+
+        if (existingGroup.payment_history.length > 0) {
+          existingGroup.remaining_amount_paid = getTotalPaid(existingGroup.payment_history);
+        } else if (isContractPlan) {
+          // Si es un plan de contrato sin payment_history, no sumar repetidamente el mismo pago por cada partido
+          existingGroup.remaining_amount_paid = Math.max(existingGroup.remaining_amount_paid || 0, bRemainingPaid);
+        } else if (bRemainingPaid > 0) {
           existingGroup.remaining_amount_paid = (existingGroup.remaining_amount_paid || 0) + bRemainingPaid;
         }
+
         if (bRemainingMethod && !existingGroup.remaining_payment_method) {
           existingGroup.remaining_payment_method = bRemainingMethod;
         }
@@ -1063,7 +1307,11 @@ export default function BookingsPage() {
           pitches: b.pitches,
           start_time: b.start_time,
           source: b.source,
+          note: b.note,
+          contract_id: b.contract_id,
+          billing_scheme: b.billing_scheme,
           payment_proof_url: b.payment_proof_url,
+          payment_history: [...bHistory],
           remaining_amount_paid: bRemainingPaid,
           remaining_payment_method: bRemainingMethod,
           remaining_payment_proof_url: bRemainingProof,
@@ -1073,6 +1321,7 @@ export default function BookingsPage() {
           bookings: [b],
           total_price: tPrice,
           deposit_amount: dAmount,
+          is_credit_contract: isCreditOrContract,
         });
       }
     });
@@ -1136,16 +1385,30 @@ export default function BookingsPage() {
             </button>
           </div>
           <button
-            onClick={() => setShowReportModal(true)}
-            className="flex items-center gap-2 px-3 py-2 border border-border bg-card hover:bg-secondary text-xs font-bold rounded-xl transition-all w-full sm:w-auto justify-center"
+            onClick={() => {
+              setReportInitialTab('overview');
+              setShowReportModal(true);
+            }}
+            className="flex items-center gap-2 px-3 py-2 border border-border bg-card hover:bg-secondary text-xs font-bold rounded-xl transition-all w-full sm:w-auto justify-center cursor-pointer shadow-xs"
+            title="Ver reporte ejecutivo de ingresos, canchas y horas pico"
           >
             <BarChart3 size={15} className="text-[#008744]" /> Reporte
           </button>
+          {/* <button
+            onClick={() => {
+              setReportInitialTab('entities');
+              setShowReportModal(true);
+            }}
+            className="flex items-center gap-2 px-3 py-2 border border-violet-500/30 bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 text-xs font-bold rounded-xl transition-all w-full sm:w-auto justify-center cursor-pointer shadow-xs"
+            title="Ver reporte ejecutivo y trazabilidad histórica de contratos, convenios, escuelas y entidades"
+          >
+            <Building2 size={15} /> Contratos & Trazabilidad
+          </button> */}
           <button
             onClick={() => setShowContractModal(true)}
-            className="flex items-center gap-2 px-3 py-2 border border-violet-500/40 bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 text-xs font-bold rounded-xl transition-all w-full sm:w-auto justify-center"
+            className="flex items-center gap-2 px-3 py-2 border border-violet-500/40 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl transition-all w-full sm:w-auto justify-center cursor-pointer shadow-xs"
           >
-            <Repeat size={15} /> Turno Fijo
+            Turno Fijo
           </button>
           <button
             onClick={() => setShowManualBooking(true)}
@@ -1220,26 +1483,50 @@ export default function BookingsPage() {
           )}
         </div>
 
-        {/* Botones de Rango (Día, Semana, 15 Días, Mes) */}
-        <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
-          {[
-            { key: 'day', label: 'Hoy', icon: '' },
-            { key: 'week', label: 'Semana', icon: '' },
-            { key: 'biweek', label: 'Quincena', icon: '' },
-            { key: 'month', label: 'Mes', icon: '' },
-          ].map(v => (
-            <button
-              key={v.key}
-              onClick={() => {
-                setCalView(v.key as CalendarView);
-                if (listDateFilter === 'all') setListDateFilter('selected');
-              }}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${calView === v.key ? 'bg-primary/10 border-primary text-primary shadow-sm' : 'bg-secondary/40 border-transparent text-muted-foreground hover:bg-secondary'}`}
-            >
-              <span>{v.icon}</span>
-              {v.label}
-            </button>
-          ))}
+        {/* Controles de visualización y rango */}
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {viewMode === 'schedule' && (
+            <div className="flex bg-secondary p-1 rounded-xl border border-border shrink-0">
+              <button
+                type="button"
+                onClick={() => setScheduleDisplay('grid')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${scheduleDisplay === 'grid' ? 'bg-card text-primary shadow-xs border border-border/60' : 'text-muted-foreground hover:text-foreground'}`}
+                title="Vista clásica de cuadrícula por canchas y horas"
+              >
+                <LayoutGrid size={13} /> Cuadrícula
+              </button>
+              <button
+                type="button"
+                onClick={() => setScheduleDisplay('table')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${scheduleDisplay === 'table' ? 'bg-card text-primary shadow-xs border border-border/60' : 'text-muted-foreground hover:text-foreground'}`}
+                title="Vista tabla detallada: cliente, número, fecha, cancha, abono, total"
+              >
+                <Table size={13} /> Tabla Detallada
+              </button>
+            </div>
+          )}
+
+          {/* Botones de Rango (Día, Semana, 15 Días, Mes) */}
+          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+            {[
+              { key: 'day', label: 'Hoy', icon: '' },
+              { key: 'week', label: 'Semana', icon: '' },
+              { key: 'biweek', label: 'Quincena', icon: '' },
+              { key: 'month', label: 'Mes', icon: '' },
+            ].map(v => (
+              <button
+                key={v.key}
+                onClick={() => {
+                  setCalView(v.key as CalendarView);
+                  if (listDateFilter === 'all') setListDateFilter('selected');
+                }}
+                className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${calView === v.key ? 'bg-primary/10 border-primary text-primary shadow-sm' : 'bg-secondary/40 border-transparent text-muted-foreground hover:bg-secondary'}`}
+              >
+                <span>{v.icon}</span>
+                {v.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -1282,17 +1569,11 @@ export default function BookingsPage() {
                   } else if (st.key === 'pending') {
                     matchSt = b.status === 'pending';
                   } else if (st.key === 'pending_payment') {
-                    const tPrice = Number(b.pitches?.price_per_hour || 0);
-                    const pct = b.pitches?.booking_percentage ?? 50;
-                    const dAmount = (tPrice * Number(pct)) / 100;
-                    const remInfo = getBookingRemainingPayment(b);
-                    const remPaid = Number(remInfo?.amount || 0);
-                    const bal = calculateRemainingBalance(tPrice, dAmount, remPaid);
-                    matchSt = b.status === 'confirmed' && bal > 0;
+                    const { hasPendingBalance } = getBookingEffectiveFinancials(b);
+                    matchSt = b.status === 'confirmed' && hasPendingBalance;
                   } else if (st.key === 'paid') {
-                    const remInfo = getBookingRemainingPayment(b);
-                    const remPaid = Number(remInfo?.amount || 0);
-                    matchSt = b.status === 'confirmed' && remPaid > 0;
+                    const { isPaid } = getBookingEffectiveFinancials(b);
+                    matchSt = b.status === 'confirmed' && isPaid;
                   } else {
                     matchSt = b.status === st.key;
                   }
@@ -1447,18 +1728,65 @@ export default function BookingsPage() {
                   cancelled: 'bg-red-100 text-red-600 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
                 };
 
-                const tPrice = group.total_price;
+                // Si es un contrato/turno fijo con esquema de plan, sincronizar el precio total del plan completo
+                const firstB = group.bookings?.[0];
+                const groupContractInfo = firstB ? getContractBillingInfo(firstB, bookings) : null;
+                const isPlanContract = !!(groupContractInfo?.isContract && groupContractInfo?.isPlanBilling);
+                const isContractBooking = !!(
+                  groupContractInfo?.isContract ||
+                  group.is_credit_contract ||
+                  group.contract_id ||
+                  group.bookings?.some((b: any) => isContractOrCreditBooking(b))
+                );
+
+                const firstBooking = group.bookings?.[0] || group;
+                const lastBooking = group.bookings?.[group.bookings.length - 1] || group;
+                const startDateStr = firstBooking?.start_time ? new Date(firstBooking.start_time).toLocaleDateString('es-CO', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                  timeZone: 'America/Bogota',
+                }) : '';
+                const endDateStr = lastBooking?.start_time ? new Date(lastBooking.start_time).toLocaleDateString('es-CO', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                  timeZone: 'America/Bogota',
+                }) : '';
+
+                const distinctDays = Array.from(
+                  new Set(
+                    (group.bookings || []).map((b: any) =>
+                      new Date(b.start_time).toLocaleDateString('es-CO', { weekday: 'long', timeZone: 'America/Bogota' })
+                    )
+                  )
+                ).map((d: any) => String(d).charAt(0).toUpperCase() + String(d).slice(1));
+
+                const distinctSlotTimes = Array.from(
+                  new Set(
+                    (group.bookings || []).map((b: any) => {
+                      const bStart = new Date(b.start_time);
+                      const bEnd = new Date(b.end_time || bStart.getTime() + 3600000);
+                      const startFmt = bStart.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+                      const endFmt = bEnd.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+                      return `${startFmt} – ${endFmt}`;
+                    })
+                  )
+                );
+
+                const tPrice = (isPlanContract && groupContractInfo && groupContractInfo.cycleToCollect > 0)
+                  ? groupContractInfo.cycleToCollect
+                  : group.total_price;
                 const dAmount = group.deposit_amount;
                 const originalProof =
                   getBookingOriginalProof(group.payment_proof_url) ||
                   getBookingOriginalProof(group.bookings?.find((b: any) => b.payment_proof_url)?.payment_proof_url);
                 const remainingPaid = group.remaining_amount_paid || 0;
                 const balance = calculateRemainingBalance(tPrice, dAmount, remainingPaid);
-                const isFullyPaid = balance <= 0 || remainingPaid > 0;
+                const isFullyPaid = balance <= 0 && (dAmount + remainingPaid > 0 || tPrice === 0);
                 const isNewlyArrived = group.bookings.some((b: any) => newlyArrivedIds.has(b.id));
 
                 const isMultiHour = group.bookings.length > 1;
-                const lastBooking = group.bookings[group.bookings.length - 1];
                 const lastEnd = lastBooking?.end_time
                   ? new Date(lastBooking.end_time)
                   : new Date(new Date(lastBooking?.start_time || group.start_time).getTime() + 60 * 60 * 1000);
@@ -1602,9 +1930,15 @@ export default function BookingsPage() {
                             <span>Solicitada: {new Date(group.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}, {new Date(group.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })}</span>
                           </span>
                         )}
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-secondary/80 text-muted-foreground border border-border/50">
-                          {group.bookings.length} {group.bookings.length === 1 ? 'hora' : 'horas'}
-                        </span>
+                        {isContractBooking ? (
+                          <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800">
+                            {group.bookings.length} {group.bookings.length === 1 ? 'partido' : 'partidos'}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-secondary/80 text-muted-foreground border border-border/50">
+                            {group.bookings.length} {group.bookings.length === 1 ? 'hora' : 'horas'}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -1616,6 +1950,22 @@ export default function BookingsPage() {
                         <p className="font-extrabold text-sm text-foreground capitalize leading-snug break-words">
                           {group.customer_name || 'Anónimo'}
                         </p>
+                        {/* Contador de Partidos del Cliente */}
+                        {(() => {
+                          const custKey = (group.customer_phone || group.customer_name || '').trim().toLowerCase();
+                          const matches = customerStats[custKey]?.confirmed || 0;
+                          return matches > 0 ? (
+                            <div className="mt-1 flex items-center gap-1">
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black flex items-center gap-1 ${matches >= 20
+                                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                : 'bg-primary/10 text-primary border border-primary/20'
+                                }`}>
+                                ⚽ {matches} {matches === 1 ? 'cancha' : 'canchas'}
+                                {matches >= 20 && ' · 🎁 VIP'}
+                              </span>
+                            </div>
+                          ) : null;
+                        })()}
                         {group.customer_phone && (
                           <div className="flex items-center gap-2 mt-1">
                             <a
@@ -1662,16 +2012,30 @@ export default function BookingsPage() {
 
                       {/* Fecha y Horario */}
                       <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">Partido</p>
-                        <p className="font-bold text-xs sm:text-sm text-foreground capitalize leading-snug">
-                          {startTime.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
-                        </p>
-                        {group.created_at && (
-                          <div className="mt-1 pt-1 border-t border-border/40">
-                            <span className="text-[10px] text-muted-foreground block leading-tight">
-                              Reservó: <strong className="text-foreground font-semibold">{new Date(group.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}, {new Date(group.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })}</strong>
+                        {isContractBooking ? (
+                          <>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">Vigencia Turno Fijo</p>
+                            <p className="font-extrabold text-xs sm:text-sm text-foreground leading-snug">
+                              {startDateStr} <span className="text-muted-foreground font-normal">al</span> {endDateStr}
+                            </p>
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-violet-600 dark:text-violet-400 mt-1">
+                              📅 {distinctDays.join(', ')} ({group.bookings.length} {group.bookings.length === 1 ? 'partido' : 'partidos'})
                             </span>
-                          </div>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">Partido</p>
+                            <p className="font-bold text-xs sm:text-sm text-foreground capitalize leading-snug">
+                              {startTime.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
+                            </p>
+                            {group.created_at && (
+                              <div className="mt-1 pt-1 border-t border-border/40">
+                                <span className="text-[10px] text-muted-foreground block leading-tight">
+                                  Reservó: <strong className="text-foreground font-semibold">{new Date(group.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}, {new Date(group.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })}</strong>
+                                </span>
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
 
@@ -1681,13 +2045,23 @@ export default function BookingsPage() {
                         <p className="font-extrabold text-xs sm:text-sm text-foreground">
                           ${tPrice.toLocaleString('es-CO')}
                         </p>
-                        {dAmount > 0 && (
+                        {group.is_credit_contract ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-violet-600 dark:text-violet-400 mt-0.5 px-1.5 py-0.5 rounded bg-violet-500/10 border border-violet-500/20">
+                            📋 Cuenta por Cobrar
+                          </span>
+                        ) : dAmount > 0 ? (
                           <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
                             Abono: ${dAmount.toLocaleString('es-CO')}
                           </p>
+                        ) : (
+                          <p className="text-[10px] text-muted-foreground mt-0.5">Sin abono previo</p>
                         )}
                         {group.status === 'confirmed' && (
-                          isFullyPaid ? (
+                          group.is_credit_contract ? (
+                            <span className="text-[11px] font-black text-amber-600 dark:text-amber-400 mt-0.5 block">
+                              Por Cobrar: ${Math.max(0, tPrice - dAmount - (group.remaining_amount_paid || 0)).toLocaleString('es-CO')}
+                            </span>
+                          ) : isFullyPaid ? (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
                               <CheckCircle size={10} /> Saldo pagado
                             </span>
@@ -1700,8 +2074,24 @@ export default function BookingsPage() {
                       </div>
                     </div>
 
-                    {/* Desglose de horas - siempre visible (1 hora o más) */}
-                    {group.bookings?.length > 0 && (
+                    {/* Desglose de horas / Horario fijo */}
+                    {isContractBooking ? (
+                      <div className="flex flex-wrap items-center gap-2 pl-1.5 py-1">
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                          Hora Fija:
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 font-extrabold text-xs border border-emerald-300/60 dark:border-emerald-700/60 shadow-2xs">
+                          <Clock size={13} className="text-emerald-600 dark:text-emerald-400" />
+                          <span>{distinctDays.join(', ')} · {distinctSlotTimes.join(' / ')}</span>
+                        </span>
+                        <span className="text-[11px] font-semibold text-muted-foreground">
+                          · Cancha: <strong className="text-foreground">{group.pitch_names?.join(' + ') || group.pitches?.name || 'Cancha'}</strong>
+                        </span>
+                        <span className="text-[11px] font-medium text-muted-foreground">
+                          · {startDateStr} al {endDateStr} ({group.bookings.length} {group.bookings.length === 1 ? 'partido' : 'partidos'})
+                        </span>
+                      </div>
+                    ) : group.bookings?.length > 0 ? (
                       <div className="flex flex-wrap items-center gap-1.5 pl-1.5">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mr-0.5">
                           Turnos:
@@ -1730,7 +2120,7 @@ export default function BookingsPage() {
                           );
                         })}
                       </div>
-                    )}
+                    ) : null}
 
                     {/* Barra de Acciones y Comprobantes (Limpia, organizada, sin sobrecarga visual) */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-border/40 pl-1.5">
@@ -1771,32 +2161,61 @@ export default function BookingsPage() {
                           </button>
                         )}
 
-                        {/* Botón Cobrar Saldo: ÚNICAMENTE cuando está en la pestaña 'Por Cobrar' (pending_payment) debajo de los comprobantes, color suave */}
-                        {filterStatus === 'pending_payment' && !isFullyPaid && (
+                        {/* Botón Cobrar Saldo / Realizar Abono: visible SIEMPRE que la reserva esté confirmada y tenga saldo pendiente */}
+                        {group.status === 'confirmed' && !isFullyPaid && balance > 0 && (
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setSelectedBookingForRemainingPayment(group);
+                              setSelectedBookingForRemainingPayment({
+                                ...group,
+                                total_price: tPrice,
+                              });
                             }}
                             className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-700/60 rounded-xl shadow-2xs transition-all cursor-pointer"
-                            title="Registrar cobro de saldo en físico"
+                            title="Registrar abono o cobro de saldo"
                           >
                             <DollarSign size={13} className="text-emerald-600 dark:text-emerald-400" />
-                            <span>Cobrar saldo (${balance.toLocaleString('es-CO')})</span>
+                            <span>
+                              {remainingPaid > 0
+                                ? `Realizar abono (Resta: $${balance.toLocaleString('es-CO')})`
+                                : `Cobrar saldo ($${balance.toLocaleString('es-CO')})`}
+                            </span>
                           </button>
                         )}
 
+                        {/* Botón Ver Abonos / Historial: visible SIEMPRE que existan abonos realizados */}
+                        {group.status === 'confirmed' && (remainingPaid > 0 || (group.payment_history && group.payment_history.length > 0)) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedBookingForRemainingPayment({
+                                ...group,
+                                total_price: tPrice,
+                              });
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-sky-700 dark:text-sky-300 border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
+                            title="Ver historial de abonos y comprobantes"
+                          >
+                            <Clock size={12} /> Ver Abonos (${remainingPaid.toLocaleString('es-CO')})
+                          </button>
+                        )}
+
+                        {/* Si ya está 100% pagado, botón para ver o editar */}
                         {group.status === 'confirmed' && isFullyPaid && (
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setSelectedBookingForRemainingPayment(group);
+                              setSelectedBookingForRemainingPayment({
+                                ...group,
+                                total_price: tPrice,
+                              });
                             }}
-                            className="text-[11px] text-muted-foreground hover:text-foreground underline cursor-pointer"
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground underline cursor-pointer"
                           >
-                            Editar pago
+                            <History size={12} /> Historial / Editar pago
                           </button>
                         )}
                       </div>
@@ -1900,70 +2319,477 @@ export default function BookingsPage() {
       ) : (
         /* Vista de Horarios (Día individual o Matriz Vertical de Horas x Columnas de Días) */
         <div className="space-y-4">
-          {calView === 'month' ? (
-            <div className="bg-card p-4 rounded-2xl border border-border shadow-sm">
-              <h3 className="font-bold text-sm mb-2 flex items-center gap-2"><CalendarDays size={16} className="text-primary" /> Resumen Mensual</h3>
-              <p className="text-xs text-muted-foreground mb-4">Haz clic sobre cualquier día para inspeccionar el horario de ese día.</p>
-              <div className="grid grid-cols-7 gap-1">
-                <MonthlyBookingSummary bookings={bookings} selectedDate={selectedDate} onSelectDate={(d) => { setSelectedDate(d); setCalView('day'); }} />
-              </div>
-            </div>
-          ) : (
-            <>
-              {calView === 'day' && (
-                <div className="flex items-center justify-between bg-card p-2 px-3 rounded-2xl border border-border shadow-sm">
-                  <button onClick={() => {
-                    const [y, m, d] = selectedDate.split('-').map(Number);
-                    const dt = new Date(y, m - 1, d - 1);
-                    setSelectedDate(getLocalDateString(dt));
-                  }} className="p-1.5 rounded-xl border border-border hover:bg-secondary transition-colors">
-                    <ChevronLeft size={16} />
-                  </button>
-                  <p className="text-xs sm:text-sm font-bold capitalize text-foreground">
-                    {selectedDate ? formatSelectedDateText(selectedDate) : ''}
+          {scheduleDisplay === 'table' ? (
+            <div className="space-y-4">
+              {/* Encabezado informativo de la tabla */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-card p-3.5 rounded-2xl border border-border shadow-xs">
+                <div>
+                  <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <Table size={16} className="text-primary" /> Tabla Detallada de Horarios y Reservas
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Partidos organizados por cancha para {calView === 'month' ? 'este mes' : (calView === 'day' ? (selectedDate ? formatSelectedDateText(selectedDate) : 'la fecha seleccionada') : 'este rango')}.
                   </p>
-                  <button onClick={() => {
-                    const [y, m, d] = selectedDate.split('-').map(Number);
-                    const dt = new Date(y, m - 1, d + 1);
-                    setSelectedDate(getLocalDateString(dt));
-                  }} className="p-1.5 rounded-xl border border-border hover:bg-secondary transition-colors">
-                    <ChevronRight size={16} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">
+                    {scheduleTableBookings.length} {scheduleTableBookings.length === 1 ? 'partido' : 'partidos'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Barra de Filtros: Búsqueda rápida + Pestañas de Canchas */}
+              <div className="space-y-2.5 bg-card/60 p-3 rounded-2xl border border-border/80">
+                {/* Input de Búsqueda */}
+                <div className="relative">
+                  <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={scheduleTableSearch}
+                    onChange={e => setScheduleTableSearch(e.target.value)}
+                    placeholder="Buscar por cliente, teléfono, hora (ej. 5:00, 17:00), fecha, cancha o entidad..."
+                    className="w-full pl-9 pr-8 py-2 bg-background border border-border rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  {scheduleTableSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setScheduleTableSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Filtro rápido por Cancha (Pills) */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+                  <button
+                    type="button"
+                    onClick={() => setSchedulePitchFilter('all')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${schedulePitchFilter === 'all'
+                      ? 'bg-primary text-white shadow-xs'
+                      : 'bg-card border border-border text-muted-foreground hover:text-foreground'
+                      }`}
+                  >
+                    <span>🏟️ Todas las Canchas</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${schedulePitchFilter === 'all' ? 'bg-white/20 text-white' : 'bg-secondary text-muted-foreground'
+                      }`}>
+                      {bookings.filter(b => {
+                        if (!b || b.status === 'draft') return false;
+                        const bDateStr = getLocalDateString(b.start_time);
+                        return calView === 'month'
+                          ? bDateStr.substring(0, 7) === selectedDate.substring(0, 7)
+                          : getDaysRange(selectedDate, calView).includes(bDateStr);
+                      }).length}
+                    </span>
                   </button>
+
+                  {pitches.map(p => {
+                    const count = bookings.filter(b => {
+                      if (!b || b.status === 'draft' || b.pitch_id !== p.id) return false;
+                      const bDateStr = getLocalDateString(b.start_time);
+                      return calView === 'month'
+                        ? bDateStr.substring(0, 7) === selectedDate.substring(0, 7)
+                        : getDaysRange(selectedDate, calView).includes(bDateStr);
+                    }).length;
+
+                    const isSel = schedulePitchFilter === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setSchedulePitchFilter(p.id)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${isSel
+                          ? 'bg-primary text-white shadow-xs'
+                          : 'bg-card border border-border text-muted-foreground hover:text-foreground'
+                          }`}
+                      >
+                        <span>⚽ {p.name}</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${isSel ? 'bg-white/20 text-white' : 'bg-secondary text-muted-foreground'
+                          }`}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Si no hay ningún partido en toda la búsqueda / filtro */}
+              {scheduleTableBookings.length === 0 ? (
+                <div className="text-center py-16 bg-card border border-border rounded-3xl p-6">
+                  <CalendarIcon size={36} className="text-muted-foreground/30 mx-auto mb-2" />
+                  <p className="text-sm font-bold text-foreground">
+                    {scheduleTableSearch
+                      ? `No se encontraron partidos que coincidan con "${scheduleTableSearch}"`
+                      : 'No hay partidos agendados en esta fecha / rango'}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {scheduleTableSearch
+                      ? 'Intenta con otro nombre, número, hora o fecha'
+                      : 'Usa los botones superiores para cambiar de fecha o rango'}
+                  </p>
+                </div>
+              ) : (
+                /* Bloques Separados por Cancha */
+                <div className="space-y-4">
+                  {scheduleBookingsByPitch.map(entry => {
+                    // Si el usuario está buscando y esta cancha no tiene coincidencias, no mostrar la tarjeta vacía
+                    if (entry.bookings.length === 0 && (scheduleTableSearch.trim() || schedulePitchFilter !== 'all')) {
+                      return null;
+                    }
+
+                    const pitchName = entry.pitch.name || 'Cancha';
+                    const pitchType = entry.pitch.type || 'Fútbol';
+                    const pitchRate = Number(entry.pitch.price_per_hour || 0);
+
+                    return (
+                      <div key={entry.pitch.id} className="rounded-2xl border border-border bg-card shadow-xs overflow-hidden">
+                        {/* Cabecera de la Cancha */}
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 px-4 py-3 bg-secondary/50 border-b border-border">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-black text-sm shrink-0">
+                              ⚽
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-black text-sm text-foreground uppercase tracking-wide">
+                                  {pitchName}
+                                </h4>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
+                                  {pitchType}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground mt-0.5">
+                                Tarifa estándar: <strong className="text-foreground">${pitchRate.toLocaleString('es-CO')}/h</strong>
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 self-end sm:self-auto">
+                            <span className="text-[11px] font-semibold text-muted-foreground">
+                              Facturado: <strong className="text-foreground">${entry.totalIncome.toLocaleString('es-CO')}</strong>
+                            </span>
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-primary/10 text-primary border border-primary/20 shrink-0">
+                              {entry.bookings.length} {entry.bookings.length === 1 ? 'partido' : 'partidos'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Contenido: Si la cancha no tiene reservas en la fecha seleccionada */}
+                        {entry.bookings.length === 0 ? (
+                          <div className="p-6 text-center text-xs text-muted-foreground">
+                            No hay partidos agendados en <strong className="text-foreground">{pitchName}</strong> para esta fecha.
+                          </div>
+                        ) : (
+                          /* Tabla de reservas de ESTA cancha */
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="bg-secondary/30 border-b border-border text-left text-muted-foreground text-[10px] font-black uppercase tracking-wider">
+                                  <th className="p-3">Nombre Cliente</th>
+                                  <th className="p-3">Número / Contacto</th>
+                                  <th className="p-3">Fecha y Hora</th>
+                                  <th className="p-3 text-right">Abono</th>
+                                  <th className="p-3 text-right">Total</th>
+                                  <th className="p-3 text-center">Estado / Cobro</th>
+                                  <th className="p-3 text-center">Acciones</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-border/60">
+                                {entry.bookings.map((b: any) => {
+                                  const isContract = isContractOrCreditBooking(b);
+                                  const contractInfo = isContract ? getContractBillingInfo(b, bookings) : null;
+                                  const isPlanContract = !!(contractInfo?.isContract && contractInfo?.isPlanBilling);
+                                  const sDate = new Date(b.start_time);
+                                  const eDate = b.end_time ? new Date(b.end_time) : new Date(sDate.getTime() + 3600000);
+                                  const custKey = (b.customer_phone || b.customer_name || '').trim().toLowerCase();
+                                  const confirmedMatches = customerStats[custKey]?.confirmed || 0;
+                                  const baseSessionPrice = Number(b.total_price || b.pitches?.price_per_hour || entry.pitch.price_per_hour || 80000);
+                                  const tPrice = (isPlanContract && contractInfo && contractInfo.cycleToCollect > 0)
+                                    ? contractInfo.cycleToCollect
+                                    : baseSessionPrice;
+
+                                  // Abono real con fallback inteligente para reservas web previas al script SQL
+                                  let dAmount = Number(b.deposit_amount || 0);
+                                  if (dAmount === 0 && !isContract && b.payment_method !== 'cuenta_cobrar' && b.source !== 'owner_panel') {
+                                    const customPricing = (b.pitches || entry.pitch).custom_pricing || {};
+                                    const isFixed = customPricing.booking_type === 'fixed';
+                                    const pct = customPricing.booking_percentage || (b.pitches || entry.pitch).booking_percentage || 50;
+                                    const start = new Date(b.start_time);
+                                    const end = b.end_time ? new Date(b.end_time) : new Date(start.getTime() + 60 * 60 * 1000);
+                                    const hoursCount = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60)));
+                                    if (isFixed) {
+                                      dAmount = Number(customPricing.booking_fixed || 0) * hoursCount;
+                                    } else {
+                                      dAmount = (tPrice * Number(pct)) / 100;
+                                    }
+                                  }
+
+                                  const bHist = parsePaymentHistory(b);
+                                  const bPaidHist = getTotalPaid(bHist);
+                                  const remInfo = getBookingRemainingPayment(b);
+                                  const remPaid = bPaidHist > 0 ? bPaidHist : Number(remInfo?.amount || b.remaining_amount_paid || 0);
+                                  const balance = Math.max(0, tPrice - dAmount - remPaid);
+                                  const phoneClean = b.customer_phone ? b.customer_phone.replace(/\D/g, '') : '';
+
+                                  // Fecha y hora en que se creó la reserva
+                                  const createdDate = b.created_at ? new Date(b.created_at) : null;
+                                  const createdStr = createdDate ? createdDate.toLocaleDateString('es-CO', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                    hour12: true,
+                                    timeZone: 'America/Bogota',
+                                  }) : null;
+
+                                  return (
+                                    <tr key={b.id} className="hover:bg-secondary/25 transition-colors">
+                                      {/* Nombre Cliente */}
+                                      <td className="p-3">
+                                        <div className="font-bold text-foreground">
+                                          {b.customer_name || 'Anónimo'}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                          {isContract ? (
+                                            <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20">
+                                              {b.client_type === 'school' ? 'Escuela' : (b.client_type === 'entity' ? 'Entidad' : 'Turno Fijo')}
+                                            </span>
+                                          ) : (
+                                            <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-secondary text-muted-foreground">
+                                              Particular
+                                            </span>
+                                          )}
+                                          {confirmedMatches > 0 && (
+                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold flex items-center gap-0.5 ${confirmedMatches >= 20
+                                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                              : 'bg-primary/10 text-primary border border-primary/20'
+                                              }`}>
+                                              ⚽ {confirmedMatches} {confirmedMatches === 1 ? 'partido' : 'partidos'}
+                                              {confirmedMatches >= 20 && ' · 🎁 VIP'}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </td>
+
+                                      {/* Número / Contacto */}
+                                      <td className="p-3 whitespace-nowrap">
+                                        {phoneClean ? (
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="font-semibold text-foreground">{b.customer_phone}</span>
+                                            <a
+                                              href={`https://wa.me/57${phoneClean}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="px-1.5 py-0.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-[10px] border border-emerald-500/20 inline-flex items-center gap-1 cursor-pointer"
+                                              title="Escribir por WhatsApp"
+                                            >
+                                              <MessageCircle size={11} /> WA
+                                            </a>
+                                          </div>
+                                        ) : (
+                                          <span className="text-muted-foreground">—</span>
+                                        )}
+                                      </td>
+
+                                      {/* Fecha y Hora del Partido + Hora Reservada */}
+                                      <td className="p-3 whitespace-nowrap">
+                                        <div className="font-bold text-foreground capitalize">
+                                          {sDate.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
+                                        </div>
+                                        <div className="text-[11px] text-primary font-black">
+                                          {sDate.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })} – {eDate.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })}
+                                        </div>
+                                        {createdStr && (
+                                          <div className="text-[9px] text-muted-foreground font-semibold mt-0.5 flex items-center gap-1">
+                                            <span>📝 Reservada:</span>
+                                            <span className="text-foreground/75 capitalize">{createdStr}</span>
+                                          </div>
+                                        )}
+                                      </td>
+
+                                      {/* Abono */}
+                                      <td className="p-3 text-right whitespace-nowrap">
+                                        {isContract || b.payment_method === 'cuenta_cobrar' ? (
+                                          <div>
+                                            <span className="font-black text-violet-600 dark:text-violet-400">$0</span>
+                                            <span className="block text-[9px] text-muted-foreground font-bold">Cuenta Cobrar</span>
+                                          </div>
+                                        ) : dAmount > 0 ? (
+                                          <div>
+                                            <span className="font-black text-emerald-600 dark:text-emerald-400">
+                                              ${dAmount.toLocaleString('es-CO')}
+                                            </span>
+                                            <span className="block text-[8px] text-muted-foreground font-bold">
+                                              {b.deposit_amount ? 'Real en DB' : 'Calculado 50%'}
+                                            </span>
+                                          </div>
+                                        ) : (
+                                          <span className="text-muted-foreground">$0</span>
+                                        )}
+                                      </td>
+
+                                      {/* Total */}
+                                      <td className="p-3 text-right whitespace-nowrap">
+                                        <div className="flex flex-col items-end">
+                                          <span className="font-black text-foreground">
+                                            ${tPrice.toLocaleString('es-CO')}
+                                          </span>
+                                          {isPlanContract && contractInfo && (
+                                            <span className="text-[9px] font-extrabold text-violet-600 dark:text-violet-400">
+                                              {contractInfo.billingSchemeLabel}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </td>
+
+                                      {/* Estado / Cobro */}
+                                      <td className="p-3 text-center whitespace-nowrap">
+                                        <div className="flex flex-col items-center gap-1">
+                                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${b.status === 'confirmed'
+                                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                            : (b.status === 'pending'
+                                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                              : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20')
+                                            }`}>
+                                            {b.status === 'confirmed' ? 'Aprobado' : (b.status === 'pending' ? 'Por Aprobar' : 'Cancelado')}
+                                          </span>
+
+                                          {isContract || b.payment_method === 'cuenta_cobrar' ? (
+                                            <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">
+                                              Por Cobrar: ${Math.max(0, tPrice - dAmount - remPaid).toLocaleString('es-CO')}
+                                            </span>
+                                          ) : b.status === 'confirmed' ? (
+                                            balance <= 0 && (dAmount + remPaid > 0 || tPrice === 0) ? (
+                                              <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
+                                                Pagado
+                                              </span>
+                                            ) : (
+                                              <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">
+                                                Saldo: ${balance.toLocaleString('es-CO')}
+                                              </span>
+                                            )
+                                          ) : null}
+                                        </div>
+                                      </td>
+
+                                      {/* Acciones */}
+                                      <td className="p-3 text-center whitespace-nowrap">
+                                        <div className="flex items-center justify-center gap-1.5">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const relBookings = (isPlanContract && contractInfo && contractInfo.relatedBookingIds.length > 0)
+                                                ? bookings.filter((x: any) => contractInfo.relatedBookingIds.includes(x.id))
+                                                : [b];
+                                              setSelectedSlotDetail({
+                                                pitch: b.pitches || entry.pitch,
+                                                slot: sDate.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Bogota' }),
+                                                dateStr: getLocalDateString(b.start_time),
+                                                booking: b,
+                                                relatedBookings: relBookings.length > 0 ? relBookings : [b],
+                                                isOperating: true,
+                                              });
+                                            }}
+                                            className="px-2.5 py-1 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground font-bold text-[11px] border border-border transition-colors cursor-pointer"
+                                          >
+                                            Ver Detalle
+                                          </button>
+                                          {isContract && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setReportInitialTab('entities');
+                                                setShowReportModal(true);
+                                              }}
+                                              className="p-1 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 border border-violet-500/20 transition-colors cursor-pointer"
+                                              title="Ver Trazabilidad Completa del Contrato"
+                                            >
+                                              <Repeat size={12} />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
+            </div>
+          ) : (
+            calView === 'month' ? (
+              <div className="bg-card p-4 rounded-2xl border border-border shadow-sm">
+                <h3 className="font-bold text-sm mb-2 flex items-center gap-2"><CalendarDays size={16} className="text-primary" /> Resumen Mensual</h3>
+                <p className="text-xs text-muted-foreground mb-4">Haz clic sobre cualquier día para inspeccionar el horario de ese día.</p>
+                <div className="grid grid-cols-7 gap-1">
+                  <MonthlyBookingSummary bookings={bookings} selectedDate={selectedDate} onSelectDate={(d) => { setSelectedDate(d); setCalView('day'); }} />
+                </div>
+              </div>
+            ) : (
+              <>
+                {calView === 'day' && (
+                  <div className="flex items-center justify-between bg-card p-2 px-3 rounded-2xl border border-border shadow-sm">
+                    <button onClick={() => {
+                      const [y, m, d] = selectedDate.split('-').map(Number);
+                      const dt = new Date(y, m - 1, d - 1);
+                      setSelectedDate(getLocalDateString(dt));
+                    }} className="p-1.5 rounded-xl border border-border hover:bg-secondary transition-colors">
+                      <ChevronLeft size={16} />
+                    </button>
+                    <p className="text-xs sm:text-sm font-bold capitalize text-foreground">
+                      {selectedDate ? formatSelectedDateText(selectedDate) : ''}
+                    </p>
+                    <button onClick={() => {
+                      const [y, m, d] = selectedDate.split('-').map(Number);
+                      const dt = new Date(y, m - 1, d + 1);
+                      setSelectedDate(getLocalDateString(dt));
+                    }} className="p-1.5 rounded-xl border border-border hover:bg-secondary transition-colors">
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
 
-              {pitches.map(pitch => (
-                calView === 'day' ? (
-                  <PitchScheduleCard
-                    key={pitch.id}
-                    pitch={pitch}
-                    selectedDate={selectedDate}
-                    supabase={supabase}
-                    allPitches={pitches}
-                    allBookings={bookings}
-                    onCancel={updateStatus}
-                    onCancelRequest={handleCancelRequest}
-                    onViewProof={(url: string) => openProofModal(url, 'Comprobante de Pago')}
-                    onSelectSlot={setSelectedSlotDetail}
-                  />
-                ) : (
-                  <PitchGridMatrixCard
-                    key={pitch.id}
-                    pitch={pitch}
-                    dates={getDaysRange(selectedDate, calView)}
-                    supabase={supabase}
-                    allPitches={pitches}
-                    allBookings={bookings}
-                    onDayClick={(dateStr: string) => { setSelectedDate(dateStr); setCalView('day'); }}
-                    onViewProof={(url: string) => openProofModal(url, 'Comprobante de Pago')}
-                    onSelectSlot={setSelectedSlotDetail}
-                  />
-                )
-              ))}
-              {pitches.length === 0 && (
-                <div className="text-center py-12 text-sm text-muted-foreground bg-card rounded-2xl border border-border">No hay canchas registradas.</div>
-              )}
-            </>
+                {pitches.map(pitch => (
+                  calView === 'day' ? (
+                    <PitchScheduleCard
+                      key={pitch.id}
+                      pitch={pitch}
+                      selectedDate={selectedDate}
+                      supabase={supabase}
+                      allPitches={pitches}
+                      allBookings={bookings}
+                      onCancel={updateStatus}
+                      onCancelRequest={handleCancelRequest}
+                      onViewProof={(url: string) => openProofModal(url, 'Comprobante de Pago')}
+                      onSelectSlot={setSelectedSlotDetail}
+                    />
+                  ) : (
+                    <PitchGridMatrixCard
+                      key={pitch.id}
+                      pitch={pitch}
+                      dates={getDaysRange(selectedDate, calView)}
+                      supabase={supabase}
+                      allPitches={pitches}
+                      allBookings={bookings}
+                      onDayClick={(dateStr: string) => { setSelectedDate(dateStr); setCalView('day'); }}
+                      onViewProof={(url: string) => openProofModal(url, 'Comprobante de Pago')}
+                      onSelectSlot={setSelectedSlotDetail}
+                    />
+                  )
+                ))}
+                {pitches.length === 0 && (
+                  <div className="text-center py-12 text-sm text-muted-foreground bg-card rounded-2xl border border-border">No hay canchas registradas.</div>
+                )}
+              </>
+            )
           )}
         </div>
       )}
@@ -1990,6 +2816,7 @@ export default function BookingsPage() {
       {selectedSlotDetail && (
         <SlotDetailModal
           data={selectedSlotDetail}
+          allBookings={bookings}
           onClose={() => setSelectedSlotDetail(null)}
           onApprove={(b) => {
             handleApproveRequest(b);
@@ -2019,6 +2846,12 @@ export default function BookingsPage() {
           onCreateManual={(p, d, s) => {
             setManualBookingPrefill({ pitchId: p.id, date: d, time: s });
             setShowManualBooking(true);
+          }}
+          customerMatchesCount={selectedSlotDetail?.booking ? (customerStats[(selectedSlotDetail.booking.customer_phone || selectedSlotDetail.booking.customer_name || '').trim().toLowerCase()]?.confirmed || 0) : 0}
+          onOpenContractTrace={() => {
+            setReportInitialTab('entities');
+            setShowReportModal(true);
+            setSelectedSlotDetail(null);
           }}
         />
       )}
@@ -2320,6 +3153,7 @@ export default function BookingsPage() {
           isOpen={!!selectedBookingForRemainingPayment}
           onClose={() => setSelectedBookingForRemainingPayment(null)}
           booking={selectedBookingForRemainingPayment}
+          allBookings={bookings}
           onSuccess={handleRemainingPaymentSuccess}
         />
       )}
@@ -2404,6 +3238,7 @@ export default function BookingsPage() {
         bookings={bookings}
         pitches={pitches}
         companyName={companyName}
+        initialTab={reportInitialTab}
       />
 
       {/* ── Modal de Contrato Fijo / Turno Recurrente ── */}
@@ -2650,8 +3485,11 @@ function findUserDayBookings(
     }
     depositAmount += d;
 
+    const bHist = parsePaymentHistory(b);
+    const bPaidHist = getTotalPaid(bHist);
     const remInfo = getBookingRemainingPayment(b);
-    remainingPaid += Number(remInfo?.amount || b.remaining_amount_paid || 0);
+    const bPaid = bPaidHist > 0 ? bPaidHist : Number(remInfo?.amount || b.remaining_amount_paid || 0);
+    remainingPaid += bPaid;
   });
 
   const balance = calculateRemainingBalance(totalPrice, depositAmount, remainingPaid);

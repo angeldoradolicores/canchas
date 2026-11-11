@@ -13,6 +13,7 @@ import { CancelBookingModal } from '@/components/booking/CancelBookingModal';
 import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
 import { isCombinedPitch, getLinkedPitchIds, getConflictingPitchIds } from '@/lib/combined-pitch-utils';
 import { PaymentMethodLogo } from '@/components/ui/PaymentMethodLogo';
+import { isSlotPassed } from '@/lib/utils';
 
 
 const DEFAULT_TIME_SLOTS = [
@@ -234,6 +235,14 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   });
 
   const { user, profile } = useAuth();
+  const isOwnerUser = profile?.role === 'owner' || profile?.role === 'superadmin' || user?.user_metadata?.role === 'owner';
+
+  // ── Determinar si el usuario es dueño de la cancha ACTUAL (no de cualquier cancha) ──
+  const currentPitchOwnerId =
+    (currentPitch as any)?.companies?.owner_id ||
+    (currentPitch as any)?.company?.owner_id ||
+    null;
+  const isOwnPitch = !!(isOwnerUser && user?.id && currentPitchOwnerId === user.id);
   const supabase = createClient();
 
   // Datos de contacto del jugador (autocompletado para invitados o usuarios logueados)
@@ -290,7 +299,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         if (compId) {
           const { data, error } = await supabase
             .from('pitches')
-            .select('*, companies(id, name, address, zone)')
+            .select('*, companies(id, name, address, zone, owner_id)')
             .eq('company_id', compId)
             .order('created_at', { ascending: true });
 
@@ -304,14 +313,14 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         // Fallback: buscar por el id del pitch actual para obtener su company_id
         const { data: selfData } = await supabase
           .from('pitches')
-          .select('*, companies(id, name, address, zone)')
+          .select('*, companies(id, name, address, zone, owner_id)')
           .eq('id', currentPitch.id)
           .single();
 
         if (selfData?.company_id) {
           const { data: siblings } = await supabase
             .from('pitches')
-            .select('*, companies(id, name, address, zone)')
+            .select('*, companies(id, name, address, zone, owner_id)')
             .eq('company_id', selfData.company_id)
             .order('created_at', { ascending: true });
 
@@ -664,6 +673,15 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   }, [step, secondsLeft, loading, activeBooking, triggerExpiredAlert]);
 
   const toggleTime = (slot: string) => {
+    if (!isOwnPitch && isSlotPassed(selectedDate, slot, 5)) {
+      setAlertState({
+        isOpen: true,
+        type: 'warning',
+        title: '⏰ Horario no disponible',
+        message: 'Esta hora ya ha pasado (límite de 5 minutos de gracia superado). Por favor elige un horario posterior.',
+      });
+      return;
+    }
     if (selectedTimes.includes(slot)) {
       setSelectedTimes(prev => prev.filter(s => s !== slot));
     } else if (selectedTimes.length >= 4) {
@@ -1305,22 +1323,34 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                         const ampm = hNum < 12 ? 'am' : 'pm';
                         const h12 = hNum === 0 ? 12 : hNum > 12 ? hNum - 12 : hNum;
                         const slotPrice = getSlotPrice(slot);
+                        const isPassed = isSlotPassed(selectedDate, slot, 5);
+                        const canClick = !isTaken && (!isPassed || isOwnPitch);
 
-                        let secondsLeft = 0;
-                        if (isDraft && slotData?.expires_at) {
-                          secondsLeft = Math.floor((new Date(slotData.expires_at).getTime() - Date.now()) / 1000);
-                          if (secondsLeft <= 0) {
-                            isTaken = false;
+                        let btnClass = 'bg-card hover:bg-primary/10 border-border text-foreground hover:border-primary/40';
+                        if (isTaken) {
+                          btnClass = isDraft
+                            ? 'bg-orange-50 text-orange-400 border-orange-200 cursor-not-allowed overflow-hidden dark:bg-orange-950/20 dark:border-orange-900/30'
+                            : 'bg-red-50 text-red-300 border-red-200 cursor-not-allowed overflow-hidden dark:bg-red-950/20 dark:border-red-900/30';
+                        } else if (isPassed) {
+                          if (isOwnPitch) {
+                            btnClass = isSel
+                              ? 'bg-amber-600 text-white border-amber-500 shadow-md ring-2 ring-amber-500/30 scale-105'
+                              : 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-600 dark:text-amber-400 cursor-pointer';
+                          } else {
+                            btnClass = 'bg-secondary/30 text-muted-foreground/40 border-border/40 cursor-not-allowed opacity-50';
                           }
+                        } else if (isSel) {
+                          btnClass = 'bg-primary text-white border-primary shadow-md ring-2 ring-primary/30 scale-105';
                         }
 
                         return (
                           <button
                             key={`${activeCategory}-${slot}`}
-                            disabled={isTaken}
+                            disabled={!canClick}
                             type="button"
                             onClick={() => toggleTime(slot)}
-                            className={`p-2 sm:p-2.5 rounded-xl border text-center transition-all select-none font-bold relative min-w-0 flex flex-col items-center justify-center ${isTaken ? (isDraft ? 'bg-orange-50 text-orange-400 border-orange-200 cursor-not-allowed overflow-hidden' : 'bg-red-50 text-red-300 border-red-200 cursor-not-allowed overflow-hidden') : (isSel ? 'bg-primary text-white border-primary shadow-md ring-2 ring-primary/30 scale-105' : 'bg-card hover:bg-primary/10 border-border text-foreground hover:border-primary/40')}`}
+                            className={`p-2 sm:p-2.5 rounded-xl border text-center transition-all select-none font-bold relative min-w-0 flex flex-col items-center justify-center ${btnClass}`}
+                            title={isPassed ? (isOwnPitch ? 'Horario en curso o pasado (habilitado para dueño)' : 'Esta hora ya ha pasado (límite de 5 minutos de gracia superado)') : undefined}
                           >
                             {isTaken ? (
                               <div className="flex flex-col items-center justify-center w-full">
@@ -1337,13 +1367,26 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                                   </span>
                                 )}
                               </div>
+                            ) : isPassed ? (
+                              <div className="flex flex-col items-center justify-center w-full">
+                                <span className="text-xs sm:text-sm block leading-tight text-muted-foreground/50">{h12}:00</span>
+                                <span className={`text-[8px] uppercase font-black tracking-wider mt-0.5 ${isOwnPitch ? (isSel ? 'text-white/90' : 'text-amber-600 dark:text-amber-400') : 'text-muted-foreground/60'}`}>
+                                  {isOwnPitch ? 'YA INICIÓ' : 'YA PASÓ'}
+                                </span>
+                                {isOwnPitch && (
+                                  <span className={`text-[8.5px] sm:text-[9px] block mt-0.5 font-semibold ${isSel ? 'text-white/90 font-bold' : 'text-amber-600 dark:text-amber-400'}`}>
+                                    ${slotPrice.toLocaleString('es-CO')}
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               <>
                                 <span className="text-xs sm:text-sm block leading-tight">{h12}:00</span>
                                 <span className="text-[8.5px] sm:text-[9px] uppercase opacity-70">{ampm}</span>
                                 <span className={`text-[8.5px] sm:text-[9px] block mt-0.5 font-semibold ${isSel ? 'text-white/90 font-bold' : 'text-primary'}`}>
                                   ${slotPrice.toLocaleString('es-CO')}
-                                </span>                              </>
+                                </span>
+                              </>
                             )}
                           </button>
                         );
@@ -1352,6 +1395,13 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                   )}
                 </div>
               </div>
+
+              {isOwnPitch && selectedTimes.some(slot => isSlotPassed(selectedDate, slot, 5)) && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs flex items-center gap-2.5 font-medium">
+                  <span className="text-base shrink-0">⚠️</span>
+                  <span><strong>Modo Dueño/Administrador:</strong> Has seleccionado horarios que ya avanzaron o pasaron. Tienes autorización para reservarlos en tu propia cancha.</span>
+                </div>
+              )}
 
               {error && <p className="auth-error">{error}</p>}
 
@@ -1561,7 +1611,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                           <label className="group relative flex flex-col items-center justify-center p-3 sm:p-4 cursor-pointer text-center pt-2">
                             <input
                               type="file"
-                              accept="image/*,.pdf"
+                              accept="image/jpeg,image/png,image/webp"
                               className="hidden"
                               onChange={e => setFile(e.target.files?.[0] || null)}
                             />
@@ -1630,7 +1680,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                                     <span>Cambiar</span>
                                     <input
                                       type="file"
-                                      accept="image/*,.pdf"
+                                      accept="image/jpeg,image/png,image/webp"
                                       className="hidden"
                                       onChange={e => setFile(e.target.files?.[0] || null)}
                                     />

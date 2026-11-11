@@ -15,6 +15,7 @@ import { useActiveBooking } from '@/lib/active-booking-context';
 import { Calendar, Clock } from 'lucide-react';
 import { ComplexCard, ComplexData } from '@/components/ui/ComplexCard';
 import { groupPitchesByComplex, cleanAddress } from '@/lib/complex-utils';
+import { isSlotPassed } from '@/lib/utils';
 
 
 const DEFAULT_TIME_SLOTS = [
@@ -576,6 +577,13 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
   useEffect(() => {
     if (today && !selectedDate) setSelectedDate(today);
   }, [today]);
+
+  // Limpiar horas seleccionadas si la fecha cambia y alguna ya pasó
+  useEffect(() => {
+    if (selectedDate && selectedHours.length > 0) {
+      setSelectedHours(prev => prev.filter(slot => !isSlotPassed(selectedDate, slot, 5)));
+    }
+  }, [selectedDate]);
 
   useEffect(() => {
     const fetchPitches = async () => {
@@ -1274,11 +1282,24 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                           const hNum = parseInt(slot.split(':')[0]);
                           const ampm = hNum < 12 ? 'am' : 'pm';
                           const h12 = hNum === 0 ? 12 : hNum > 12 ? hNum - 12 : hNum;
+                          const isPassed = isSlotPassed(selectedDate, slot, 5);
+
                           return (
                             <button
                               key={slot}
                               type="button"
+                              disabled={isPassed}
+                              title={isPassed ? 'Esta hora ya ha pasado (límite de 5 minutos de gracia superado)' : undefined}
                               onClick={() => {
+                                if (isPassed) {
+                                  setAlertState({
+                                    isOpen: true,
+                                    type: 'warning',
+                                    title: '⏰ Horario no disponible',
+                                    message: 'Esta hora ya ha pasado (límite de 5 minutos de gracia superado). Por favor elige un horario posterior.',
+                                  });
+                                  return;
+                                }
                                 if (selectedHours.includes(slot)) {
                                   setSelectedHours(prev => prev.filter(x => x !== slot));
                                 } else if (selectedHours.length >= 4) {
@@ -1292,13 +1313,18 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                                   setSelectedHours(prev => [...prev, slot]);
                                 }
                               }}
-                              className={`p-2.5 rounded-xl border text-center transition-all select-none ${isSel
-                                ? 'bg-primary text-white border-primary shadow-md ring-2 ring-primary/30'
-                                : 'bg-card hover:bg-primary/10 border-border text-foreground hover:border-primary/40'
-                                }`}
+                              className={`p-2.5 rounded-xl border text-center transition-all select-none ${
+                                isPassed
+                                  ? 'bg-secondary/30 text-muted-foreground/40 border-border/40 cursor-not-allowed opacity-50'
+                                  : isSel
+                                  ? 'bg-primary text-white border-primary shadow-md ring-2 ring-primary/30'
+                                  : 'bg-card hover:bg-primary/10 border-border text-foreground hover:border-primary/40'
+                              }`}
                             >
                               <span className="text-sm font-extrabold block leading-tight">{h12}:00</span>
-                              <span className="text-[9px] uppercase font-bold opacity-70">{ampm}</span>
+                              <span className="text-[9px] uppercase font-bold opacity-70">
+                                {isPassed ? 'Ya pasó' : ampm}
+                              </span>
                             </button>
                           );
                         })}

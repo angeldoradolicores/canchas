@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateImageUpload } from '@/lib/image-upload-validator';
 
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get('url');
@@ -40,12 +41,24 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'El recurso solicitado no es una imagen' }, { status: 400 });
     }
 
-    const buffer = await response.arrayBuffer();
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // ── Validación de magic bytes reales: no confiamos en el Content-Type del servidor remoto ──
+    const validation = validateImageUpload(buffer, {
+      allowVideo: false,
+      maxBytes: 10 * 1024 * 1024, // 10 MB máximo para proxy
+      rejectGif: false,
+    });
+
+    if (!validation.ok) {
+      return NextResponse.json({ error: 'El recurso remoto no es una imagen válida.' }, { status: 400 });
+    }
 
     return new NextResponse(buffer, {
       status: 200,
       headers: {
-        'Content-Type': contentType,
+        'Content-Type': validation.contentType,
         'Cache-Control': 'public, max-age=86400, stale-while-revalidate=43200',
         'X-Content-Type-Options': 'nosniff',
       },
