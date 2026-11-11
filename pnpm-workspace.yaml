@@ -1,0 +1,5 @@
+allowBuilds:
+  '@newrelic/fn-inspect': set this to true or false
+  '@newrelic/native-metrics': set this to true or false
+  msw: set this to true or false
+  protobufjs: set this to true or false
