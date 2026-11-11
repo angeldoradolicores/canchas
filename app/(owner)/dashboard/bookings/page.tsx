@@ -22,8 +22,9 @@ import {
   getBookingOriginalProof,
   formatPaymentMethod,
   calculateRemainingBalance,
-  parsePaymentHistory,
-  getTotalPaid,
+  parsePaymentHistory as _parsePaymentHistory,
+  getTotalPaid as _getTotalPaid,
+  type PaymentEntry,
 } from '@/lib/remaining-payment-utils';
 import { getContractBillingInfo } from '@/lib/contract-billing';
 import { SlotDetailModal } from '@/components/booking/SlotDetailModal';
@@ -52,6 +53,69 @@ function getLocalDateString(dateInput: string | Date): string {
     month: '2-digit',
     day: '2-digit'
   }).format(d);
+}
+
+// Helper a prueba de fallos de caché de Turbopack para el parseo del historial de pagos
+function parsePaymentHistory(booking: any): PaymentEntry[] {
+  if (typeof _parsePaymentHistory === 'function') {
+    return _parsePaymentHistory(booking);
+  }
+  const raw = booking?.payment_history;
+  if (Array.isArray(raw) && raw.length > 0) return raw as PaymentEntry[];
+  if (typeof raw === 'string' && raw.trim().length > 0) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed as PaymentEntry[];
+    } catch { /* noop */ }
+  }
+  if (typeof booking?.payment_proof_url === 'string' && booking.payment_proof_url.includes('###remaining:')) {
+    try {
+      const parts = booking.payment_proof_url.split('###remaining:');
+      const parsed = JSON.parse(parts[1]);
+      if (parsed && typeof parsed === 'object') {
+        if (Array.isArray(parsed.history) && parsed.history.length > 0) return parsed.history as PaymentEntry[];
+        if (parsed.amount && Number(parsed.amount) > 0) {
+          return [{
+            id: `pay_legacy_${booking.id || Date.now()}`,
+            amount: Number(parsed.amount),
+            method: parsed.method || 'cash',
+            splits: parsed.splits,
+            proofUrl: parsed.proofUrl || parsed.proof_url || null,
+            notes: parsed.notes || '',
+            at: parsed.at || booking.updated_at || new Date().toISOString(),
+            by: parsed.by,
+          }];
+        }
+      }
+    } catch { /* noop */ }
+  }
+  if (booking?.remaining_payment_amount && Number(booking.remaining_payment_amount) > 0) {
+    let splits: any;
+    if (booking.remaining_payment_splits) {
+      splits = typeof booking.remaining_payment_splits === 'string'
+        ? JSON.parse(booking.remaining_payment_splits)
+        : booking.remaining_payment_splits;
+    }
+    return [{
+      id: `pay_legacy_${booking.id || Date.now()}`,
+      amount: Number(booking.remaining_payment_amount),
+      method: booking.remaining_payment_method || 'cash',
+      splits,
+      proofUrl: booking.remaining_payment_proof_url || null,
+      notes: booking.remaining_payment_notes || '',
+      at: booking.remaining_payment_at || booking.updated_at || new Date().toISOString(),
+      by: booking.remaining_payment_by,
+    }];
+  }
+  return [];
+}
+
+function getTotalPaid(paymentHistory: PaymentEntry[] | null | undefined): number {
+  if (typeof _getTotalPaid === 'function') {
+    return _getTotalPaid(paymentHistory);
+  }
+  if (!Array.isArray(paymentHistory) || paymentHistory.length === 0) return 0;
+  return paymentHistory.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 }
 
 function isContractOrCreditBooking(b: any): boolean {
@@ -124,6 +188,7 @@ export default function BookingsPage() {
   const [scheduleTableSearch, setScheduleTableSearch] = useState('');
   const [schedulePitchFilter, setSchedulePitchFilter] = useState<string>('all');
   const [reportInitialTab, setReportInitialTab] = useState<'overview' | 'entities'>('overview');
+  const [reportInitialEntityTarget, setReportInitialEntityTarget] = useState<any | null>(null);
 
   // Modal de visualización de comprobante enriquecido (Anticipo y Saldo)
   const [proofModalData, setProofModalData] = useState<{ url: string; title: string } | null>(null);
@@ -1774,14 +1839,22 @@ export default function BookingsPage() {
                   )
                 );
 
-                const tPrice = (isPlanContract && groupContractInfo && groupContractInfo.cycleToCollect > 0)
+                let tPrice = (isPlanContract && groupContractInfo && groupContractInfo.cycleToCollect > 0)
                   ? groupContractInfo.cycleToCollect
                   : group.total_price;
-                const dAmount = group.deposit_amount;
+                let dAmount = group.deposit_amount;
+                let remainingPaid = group.remaining_amount_paid || 0;
+
+                if (isPlanContract && firstB) {
+                  const eff = getBookingEffectiveFinancials(firstB);
+                  tPrice = eff.tPrice;
+                  dAmount = eff.dAmount;
+                  remainingPaid = eff.remPaid;
+                }
+
                 const originalProof =
                   getBookingOriginalProof(group.payment_proof_url) ||
                   getBookingOriginalProof(group.bookings?.find((b: any) => b.payment_proof_url)?.payment_proof_url);
-                const remainingPaid = group.remaining_amount_paid || 0;
                 const balance = calculateRemainingBalance(tPrice, dAmount, remainingPaid);
                 const isFullyPaid = balance <= 0 && (dAmount + remainingPaid > 0 || tPrice === 0);
                 const isNewlyArrived = group.bookings.some((b: any) => newlyArrivedIds.has(b.id));
@@ -2216,6 +2289,24 @@ export default function BookingsPage() {
                             className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground underline cursor-pointer"
                           >
                             <History size={12} /> Historial / Editar pago
+                          </button>
+                        )}
+
+                        {/* Botón directo a la Hoja de Trazabilidad del Contrato */}
+                        {isContractBooking && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setReportInitialEntityTarget(firstBooking || group);
+                              setReportInitialTab('entities');
+                              setShowReportModal(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-violet-50 hover:bg-violet-100 text-violet-800 dark:bg-violet-950/40 dark:hover:bg-violet-900/50 dark:text-violet-300 border border-violet-300/60 dark:border-violet-700/60 rounded-xl shadow-2xs transition-all cursor-pointer"
+                            title="Ver hoja de trazabilidad histórica completa de este contrato"
+                          >
+                            <Building2 size={13} className="text-violet-600 dark:text-violet-400" />
+                            <span>Hoja de Trazabilidad</span>
                           </button>
                         )}
                       </div>
@@ -2700,6 +2791,7 @@ export default function BookingsPage() {
                                             <button
                                               type="button"
                                               onClick={() => {
+                                                setReportInitialEntityTarget(b);
                                                 setReportInitialTab('entities');
                                                 setShowReportModal(true);
                                               }}
@@ -2848,7 +2940,8 @@ export default function BookingsPage() {
             setShowManualBooking(true);
           }}
           customerMatchesCount={selectedSlotDetail?.booking ? (customerStats[(selectedSlotDetail.booking.customer_phone || selectedSlotDetail.booking.customer_name || '').trim().toLowerCase()]?.confirmed || 0) : 0}
-          onOpenContractTrace={() => {
+          onOpenContractTrace={(targetBooking) => {
+            setReportInitialEntityTarget(targetBooking || selectedSlotDetail?.booking);
             setReportInitialTab('entities');
             setShowReportModal(true);
             setSelectedSlotDetail(null);
@@ -3234,17 +3327,22 @@ export default function BookingsPage() {
       {/* ── Modal de Reportes ── */}
       <BookingReportModal
         isOpen={showReportModal}
-        onClose={() => setShowReportModal(false)}
+        onClose={() => {
+          setShowReportModal(false);
+          setReportInitialEntityTarget(null);
+        }}
         bookings={bookings}
         pitches={pitches}
         companyName={companyName}
         initialTab={reportInitialTab}
+        initialEntityTarget={reportInitialEntityTarget}
       />
 
       {/* ── Modal de Contrato Fijo / Turno Recurrente ── */}
       {showContractModal && pitches.length > 0 && (
         <ContractBookingModal
           pitches={pitches}
+          existingBookings={bookings}
           onClose={() => setShowContractModal(false)}
           onSuccess={() => {
             setShowContractModal(false);

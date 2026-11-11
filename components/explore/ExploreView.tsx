@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useToday, BOOKING_HOURS } from '@/lib/use-today';
-import { CalendarDays, Grid2X2, ListFilter, Loader2, Search, Clock3, ChevronRight, ChevronDown, CheckCircle2, ShieldCheck, LandPlot, Navigation } from 'lucide-react';
+import { CalendarDays, Grid2X2, ListFilter, Loader2, Search, Clock3, ChevronRight, ChevronDown, CheckCircle2, ShieldCheck, LandPlot, Navigation, X } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { pitches as mockPitches } from '@/lib/mock-data';
 import { DiscoverRail } from './DiscoverRail';
@@ -408,11 +408,10 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
         message: messageNode,
         showCancel: true,
         confirmText: 'Bloquear y Continuar',
+        confirmLoadingText: 'Bloqueando horario...',
         cancelText: 'Cancelar',
         cancelButtonClassName: 'flex-1 h-12 rounded-xl font-bold flex items-center justify-center transition-all bg-destructive/10 text-destructive hover:bg-destructive/20 active:scale-95',
         onConfirm: async () => {
-          setAlertState((prev) => ({ ...prev, isOpen: false }));
-
           if (preselectedDate && Array.isArray(preselectedTime) && preselectedTime.length > 0) {
             const dayStartISO = `${preselectedDate}T00:00:00-05:00`;
             const dayEndISO = `${preselectedDate}T23:59:59-05:00`;
@@ -500,6 +499,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
             }
           }
 
+          setAlertState((prev) => ({ ...prev, isOpen: false }));
           onBook(pitch, preselectedTime, preselectedDate);
         },
       });
@@ -539,6 +539,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
   const [openDropdown, setOpenDropdown] = useState<'format' | null>(null);
   const [activeTimeCategory, setActiveTimeCategory] = useState<'manana' | 'tarde' | 'noche'>('noche');
   const formatDropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Cerrar el selector de formato automáticamente al tocar o hacer clic fuera
   useEffect(() => {
@@ -957,17 +958,137 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
       <div className="search-row relative">
         <div className="space-y-3.5 w-full">
           {/* ── BARRA DE BÚSQUEDA DESTACADA CON PLACEHOLDER DINÁMICO ── */}
-          <div className="relative flex items-center w-full group">
+          <div className="relative flex items-center w-full group scroll-mt-4">
             <div className="absolute left-3.5 text-muted-foreground group-focus-within:text-emerald-600 transition-colors pointer-events-none">
               <Search size={20} />
             </div>
             <input
+              ref={searchInputRef}
               type="text"
               value={query}
-              onChange={e => setQuery(e.target.value)}
+              onChange={e => {
+                setQuery(e.target.value);
+                if (e.target.value.trim().length > 0) {
+                  setTimeout(() => {
+                    searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }, 150);
+                }
+              }}
+              onFocus={() => {
+                // En móvil, hacer scroll para que el input quede en el tope y los resultados visibles sobre el teclado
+                setTimeout(() => {
+                  searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 300);
+              }}
               placeholder={placeholderText}
-              className="w-full pl-11 pr-4 py-3.5 bg-card border-2 border-border/80 group-hover:border-emerald-500/50 focus:border-emerald-600 rounded-2xl text-sm font-medium text-foreground placeholder:text-muted-foreground/80 outline-none shadow-sm focus:ring-4 focus:ring-emerald-500/15 transition-all"
+              className="w-full pl-11 pr-11 py-3.5 bg-card border-2 border-border/80 group-hover:border-emerald-500/50 focus:border-emerald-600 rounded-2xl text-sm font-medium text-foreground placeholder:text-muted-foreground/80 outline-none shadow-sm focus:ring-4 focus:ring-emerald-500/15 transition-all"
             />
+            {query.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                className="absolute right-3.5 p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                aria-label="Limpiar búsqueda"
+              >
+                <X size={16} />
+              </button>
+            )}
+
+            {/* Tarjetas de coincidencia instantánea ancladas directamente al buscador */}
+            {query.trim().length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-card/95 backdrop-blur-md border border-border rounded-2xl shadow-2xl p-3 sm:p-4 max-h-[50vh] sm:max-h-[380px] overflow-y-auto z-50 flex flex-col gap-2 overscroll-contain animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center justify-between pb-1 border-b border-border/50">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                    Complejos encontrados ({filteredComplexes.length})
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setQuery('')}
+                    className="text-[11px] text-muted-foreground hover:text-foreground font-semibold"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+                {filteredComplexes.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No se encontraron complejos coincidentes.</p>
+                ) : (
+                  filteredComplexes.map(comp => {
+                    const firstPitch = [...comp.pitches].sort((a, b) => {
+                      const da = (a as any).created_at || '';
+                      const db = (b as any).created_at || '';
+                      return da < db ? -1 : da > db ? 1 : 0;
+                    })[0] || comp.featuredPitch;
+                    return (
+                      <div
+                        key={comp.id}
+                        onClick={() => {
+                          setQuery('');
+                          onOpen(firstPitch);
+                        }}
+                        className="flex items-center gap-3 p-2.5 hover:bg-primary/5 rounded-xl cursor-pointer transition-all border border-transparent hover:border-primary/15"
+                      >
+                        <div className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden bg-muted relative">
+                          <img
+                            src={comp.image}
+                            alt={comp.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col gap-0.5 overflow-hidden">
+                          {/* Fila Superior: Ciudad y Conteo de Canchas */}
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 truncate">
+                              {comp.city || 'Pasto'}
+                            </span>
+
+                            <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                              {comp.pitchesCount} {comp.pitchesCount === 1 ? 'cancha' : 'canchas'}
+                            </span>
+                          </div>
+
+                          {/* Título del Complejo */}
+                          <h4 className="font-extrabold text-xs sm:text-sm text-foreground uppercase leading-tight">
+                            {comp.name}
+                          </h4>
+
+                          {/* Ubicación / Dirección */}
+                          {(comp.zone || cleanAddress(comp.address)) && (
+                            <p className="text-[10px] sm:text-[11px] text-muted-foreground truncate flex items-center gap-1 leading-none mt-0.5">
+                              <span className="truncate">{[comp.zone, cleanAddress(comp.address)].filter(Boolean).join(' · ')}</span>
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-1.5 shrink-0 w-24">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setQuery('');
+                              onOpen(firstPitch);
+                            }}
+                            className="w-full justify-center px-2.5 py-1.5 bg-secondary hover:bg-secondary/80 text-foreground text-xs font-bold rounded-lg transition-colors flex items-center gap-1 border border-border/70 cursor-pointer active:scale-95"
+                          >
+                            <span>Ver</span>
+                            <ChevronRight size={11} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setQuery('');
+                              handleBook(firstPitch);
+                            }}
+                            className="w-full justify-center px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer active:scale-95 shadow-xs"
+                          >
+                            <span>Reservar</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
 
           {/* ── FILTROS (PILLS) DINÁMICOS Y LLAMATIVOS ── */}
@@ -990,85 +1111,6 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
             })}
           </div>
         </div>
-
-
-        {/* Tarjetas de coincidencia instantánea debajo del buscador (Complejos) */}
-        {query.trim().length > 0 && (
-          <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-2xl shadow-xl p-4 max-h-[360px] overflow-y-auto z-50 flex flex-col gap-2 animate-in fade-in slide-in-from-top-2">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
-              Complejos encontrados ({filteredComplexes.length})
-            </p>
-            {filteredComplexes.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-3 text-center">No se encontraron complejos coincidentes.</p>
-            ) : (
-              filteredComplexes.map(comp => {
-                const firstPitch = [...comp.pitches].sort((a, b) => {
-                  const da = (a as any).created_at || '';
-                  const db = (b as any).created_at || '';
-                  return da < db ? -1 : da > db ? 1 : 0;
-                })[0] || comp.featuredPitch;
-                return (
-                  <div
-                    key={comp.id}
-                    onClick={() => onOpen(firstPitch)}
-                    className="flex items-center gap-3 p-2.5 hover:bg-primary/5 rounded-xl cursor-pointer transition-all border border-transparent hover:border-primary/15"
-                  >
-                    <div className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden bg-muted relative">
-                      <img
-                        src={comp.image}
-                        alt={comp.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0 flex flex-col gap-0.5 overflow-hidden">
-                      {/* Fila Superior: Ciudad y Conteo de Canchas */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 truncate">
-                          {comp.city || 'Pasto'}
-                        </span>
-
-                        <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                          {comp.pitchesCount} {comp.pitchesCount === 1 ? 'cancha' : 'canchas'}
-                        </span>
-                      </div>
-
-                      {/* Título del Complejo */}
-                      <h4 className="font-extrabold text-xs sm:text-sm text-foreground uppercase leading-tight">
-                        {comp.name}
-                      </h4>
-
-                      {/* Ubicación / Dirección */}
-                      {(comp.zone || cleanAddress(comp.address)) && (
-                        <p className="text-[10px] sm:text-[11px] text-muted-foreground truncate flex items-center gap-1 leading-none mt-0.5">
-                          {/* <span className="text-emerald-500 text-[10px] shrink-0">📍</span> */}
-                          <span className="truncate">{[comp.zone, cleanAddress(comp.address)].filter(Boolean).join(' · ')}</span>
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-1.5 shrink-0 w-24">
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); onOpen(firstPitch); }}
-                        className="w-full justify-center px-2.5 py-1.5 bg-secondary hover:bg-secondary/80 text-foreground text-xs font-bold rounded-lg transition-colors flex items-center gap-1 border border-border/70 cursor-pointer active:scale-95"
-                      >
-                        <span>Ver</span>
-                        <ChevronRight size={11} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleBook(firstPitch); }}
-                        className="w-full justify-center px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer active:scale-95 shadow-xs"
-                      >
-                        <span>Reservar</span>
-                        {/* <ChevronRight size={11} /> */}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
       </div>
 
       {/* Carrusel de complejos destacados (Un complejo por tarjeta) */}

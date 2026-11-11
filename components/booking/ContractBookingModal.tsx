@@ -34,6 +34,7 @@ interface ContractBookingModalProps {
   onSuccess: () => void;
   initialEntityName?: string;
   initialClientType?: 'standard' | 'entity' | 'school';
+  existingBookings?: any[];
 }
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
@@ -195,12 +196,25 @@ const STEPS: { key: Step; label: string; icon: React.ReactNode }[] = [
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
 
+export interface SavedEntityRecord {
+  id?: string;
+  name: string;
+  clientType: 'standard' | 'entity' | 'school';
+  contactName: string;
+  contactPhone: string;
+  customRate?: string | number;
+  billingScheme?: BillingScheme;
+  paymentMethod?: 'cuenta_cobrar' | 'transferencia' | 'efectivo' | 'credito';
+  pitchId?: string;
+}
+
 export function ContractBookingModal({
   pitches,
   onClose,
   onSuccess,
   initialEntityName,
   initialClientType,
+  existingBookings,
 }: ContractBookingModalProps) {
   const supabase = createClient();
 
@@ -217,6 +231,12 @@ export function ContractBookingModal({
   const [paymentMethod, setPaymentMethod] = useState<'cuenta_cobrar' | 'transferencia' | 'efectivo' | 'credito'>('transferencia');
   const [paymentChannel, setPaymentChannel] = useState<string>('transferencia_nequi');
   const [customerNote, setCustomerNote] = useState('');
+
+  // Autocompletado y guardado de entidades/escuelas/particulares
+  const [savedEntities, setSavedEntities] = useState<SavedEntityRecord[]>([]);
+  const [showEntitySuggestions, setShowEntitySuggestions] = useState(false);
+  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+  const [entitySavedNotice, setEntitySavedNotice] = useState<string | null>(null);
 
   // 2. Cancha
   const [selectedPitch, setSelectedPitch] = useState<Pitch | null>(pitches[0] || null);
@@ -246,6 +266,110 @@ export function ContractBookingModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Cargar entidades guardadas desde localStorage y desde historial de reservas existentes
+  useEffect(() => {
+    let stored: SavedEntityRecord[] = [];
+    try {
+      const raw = localStorage.getItem('canchas_saved_entities');
+      if (raw) stored = JSON.parse(raw);
+    } catch { /* noop */ }
+
+    const map = new Map<string, SavedEntityRecord>();
+    stored.forEach(e => {
+      if (e.name) map.set(e.name.trim().toLowerCase(), e);
+    });
+
+    if (Array.isArray(existingBookings) && existingBookings.length > 0) {
+      existingBookings.forEach((b: any) => {
+        const entName = (b.client_entity_name || '').trim();
+        const custName = (b.customer_name || '').trim();
+        const phone = (b.customer_phone || '').trim();
+        const cType: 'standard' | 'entity' | 'school' = b.client_type === 'school' ? 'school' : (b.client_type === 'entity' ? 'entity' : 'standard');
+
+        if (entName && !map.has(entName.toLowerCase())) {
+          map.set(entName.toLowerCase(), {
+            name: entName,
+            clientType: cType !== 'standard' ? cType : 'entity',
+            contactName: custName,
+            contactPhone: phone,
+            customRate: b.custom_rate || b.total_price,
+            billingScheme: b.billing_scheme,
+            paymentMethod: b.payment_method,
+            pitchId: b.pitch_id,
+          });
+        } else if (custName && (b.booking_type === 'contract' || b.contract_id || b.note?.includes('CID:'))) {
+          const cleanName = custName
+            .replace(/\[(Turno Fijo|Contrato|ENTIDAD|ESCUELA)[^\]]*\]/gi, '')
+            .replace(/CID:[a-zA-Z0-9_-]+/gi, '')
+            .trim();
+          if (cleanName && cleanName.length >= 2 && !map.has(cleanName.toLowerCase())) {
+            map.set(cleanName.toLowerCase(), {
+              name: cleanName,
+              clientType: cType,
+              contactName: cleanName,
+              contactPhone: phone,
+              customRate: b.custom_rate || b.total_price,
+              billingScheme: b.billing_scheme,
+              paymentMethod: b.payment_method,
+              pitchId: b.pitch_id,
+            });
+          }
+        }
+      });
+    }
+
+    setSavedEntities(Array.from(map.values()));
+  }, [existingBookings]);
+
+  // Guardar entidad manualmente
+  const handleSaveCurrentEntity = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    const primary = (clientType !== 'standard' ? clientEntityName : customerName).trim();
+    if (!primary) {
+      setError('Escribe el nombre antes de guardar.');
+      return;
+    }
+    const record: SavedEntityRecord = {
+      name: primary,
+      clientType,
+      contactName: customerName.trim(),
+      contactPhone: customerPhone.trim(),
+      customRate: effectiveRate,
+      billingScheme,
+      paymentMethod,
+      pitchId: selectedPitch?.id,
+    };
+    try {
+      const existing = savedEntities.filter(s => s.name.toLowerCase() !== primary.toLowerCase());
+      const next = [record, ...existing].slice(0, 100);
+      setSavedEntities(next);
+      localStorage.setItem('canchas_saved_entities', JSON.stringify(next));
+      setEntitySavedNotice(`¡${primary} guardado exitosamente para futuros contratos!`);
+      setTimeout(() => setEntitySavedNotice(null), 3000);
+    } catch { /* noop */ }
+  };
+
+  // Seleccionar entidad sugerida y autocompletar formulario
+  const handleSelectEntity = (item: SavedEntityRecord) => {
+    if (item.clientType && item.clientType !== clientType) {
+      setClientType(item.clientType);
+    }
+    if (item.clientType !== 'standard') {
+      setClientEntityName(item.name);
+    }
+    if (item.contactName) setCustomerName(item.contactName);
+    if (item.contactPhone) setCustomerPhone(item.contactPhone);
+    if (item.customRate) setCustomRate(String(item.customRate));
+    if (item.billingScheme) setBillingScheme(item.billingScheme);
+    if (item.paymentMethod) setPaymentMethod(item.paymentMethod);
+    if (item.pitchId) {
+      const matchPitch = pitches.find(p => p.id === item.pitchId);
+      if (matchPitch) setSelectedPitch(matchPitch);
+    }
+    setShowEntitySuggestions(false);
+    setShowCustomerSuggestions(false);
+  };
 
   const durationObj = DURATIONS.find(d => d.key === duration) || DURATIONS[1];
   const effectiveWeeks = duration === 'custom' ? Math.max(1, customWeeks || 1) : durationObj.weeks;
@@ -543,6 +667,27 @@ export function ContractBookingModal({
 
       const finishMsg = `✅ Turno fijo registrado exitosamente: ${totalCreated} partidos agendados para ${primaryName}.`;
 
+      // Auto-guardar entidad en localStorage para que en futuros contratos se autocomplete
+      try {
+        const entName = (clientType !== 'standard' ? clientEntityName : customerName).trim();
+        if (entName) {
+          const raw = localStorage.getItem('canchas_saved_entities');
+          const stored: any[] = raw ? JSON.parse(raw) : [];
+          const filtered = stored.filter(s => s.name.toLowerCase() !== entName.toLowerCase());
+          const newRec = {
+            name: entName,
+            clientType,
+            contactName: customerName.trim(),
+            contactPhone: customerPhone.trim(),
+            customRate: effectiveRate,
+            billingScheme,
+            paymentMethod,
+            pitchId: selectedPitch?.id,
+          };
+          localStorage.setItem('canchas_saved_entities', JSON.stringify([newRec, ...filtered].slice(0, 100)));
+        }
+      } catch { /* noop */ }
+
       setSuccessMsg(finishMsg);
       setTimeout(() => {
         onSuccess();
@@ -696,36 +841,176 @@ export function ContractBookingModal({
                 ))}
               </div>
 
-              {/* Nombre de la entidad / escuela */}
+              {/* Aviso cuando se guarda una entidad */}
+              {entitySavedNotice && (
+                <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold text-center animate-in fade-in">
+                  {entitySavedNotice}
+                </div>
+              )}
+
+              {/* Nombre de la entidad / escuela con Autocompletado */}
               {clientType !== 'standard' ? (
-                <div>
-                  <label className="text-[11px] font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
-                    <Building2 size={13} className="text-violet-500" />
-                    {clientType === 'entity' ? 'Nombre de la Entidad o Empresa *' : 'Nombre de la Escuela de Fútbol *'}
-                  </label>
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <Building2 size={13} className="text-violet-500" />
+                      {clientType === 'entity' ? 'Nombre de la Entidad o Empresa *' : 'Nombre de la Escuela de Fútbol *'}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleSaveCurrentEntity}
+                      className="text-[10px] font-bold text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-1 cursor-pointer"
+                      title="Guardar esta entidad para autocompletar en futuros contratos"
+                    >
+                      <Sparkles size={11} /> Guardar entidad
+                    </button>
+                  </div>
                   <input
                     type="text"
                     value={clientEntityName}
-                    onChange={e => setClientEntityName(e.target.value)}
-                    placeholder={clientType === 'entity' ? 'Ej: Club Deportivo Nariño' : 'Ej: Escuela Formativa Semilleros FC'}
+                    onChange={e => {
+                      setClientEntityName(e.target.value);
+                      setShowEntitySuggestions(true);
+                    }}
+                    onFocus={() => setShowEntitySuggestions(true)}
+                    placeholder={clientType === 'entity' ? 'Ej: Club Deportivo Nariño (escribe para autocompletar)' : 'Ej: Escuela Formativa Semilleros FC (escribe para autocompletar)'}
                     className="w-full border border-border bg-card rounded-xl px-3.5 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500"
                   />
+
+                  {/* Dropdown de Sugerencias de Entidades */}
+                  {showEntitySuggestions && (
+                    (() => {
+                      const q = clientEntityName.trim().toLowerCase();
+                      const list = q
+                        ? savedEntities.filter(e => e.name.toLowerCase().includes(q) || (e.contactName && e.contactName.toLowerCase().includes(q))).slice(0, 8)
+                        : savedEntities.filter(e => e.clientType !== 'standard').slice(0, 6);
+
+                      if (list.length === 0) return null;
+
+                      return (
+                        <div className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-card border border-border rounded-2xl shadow-xl overflow-hidden divide-y divide-border/60 animate-in fade-in slide-in-from-top-1 duration-150">
+                          <div className="p-2 bg-secondary/40 text-[10px] font-bold text-muted-foreground flex items-center justify-between">
+                            <span>✨ Entidades y Escuelas Registradas ({list.length})</span>
+                            <button
+                              type="button"
+                              onClick={() => setShowEntitySuggestions(false)}
+                              className="hover:text-foreground text-[10px] underline cursor-pointer"
+                            >
+                              Cerrar
+                            </button>
+                          </div>
+                          <div className="max-h-52 overflow-y-auto">
+                            {list.map((ent, i) => (
+                              <div
+                                key={i}
+                                onClick={() => handleSelectEntity(ent)}
+                                className="p-2.5 hover:bg-violet-500/10 cursor-pointer flex items-center justify-between gap-2 transition-colors text-xs"
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <strong className="font-extrabold text-foreground truncate">{ent.name}</strong>
+                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-violet-500/15 text-violet-700 dark:text-violet-300">
+                                      {ent.clientType === 'school' ? 'Escuela' : (ent.clientType === 'entity' ? 'Entidad' : 'Particular')}
+                                    </span>
+                                  </div>
+                                  <span className="text-[11px] text-muted-foreground block truncate">
+                                    Responsable: {ent.contactName || '—'} {ent.contactPhone ? `· 📞 ${ent.contactPhone}` : ''}
+                                  </span>
+                                </div>
+                                {ent.customRate ? (
+                                  <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 shrink-0">
+                                    ${Number(ent.customRate).toLocaleString('es-CO')}/h
+                                  </span>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()
+                  )}
                 </div>
               ) : null}
 
               {/* Persona de Contacto & Teléfono */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1.5">
-                    <User size={12} /> Responsable *
-                  </label>
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                      <User size={12} /> Responsable *
+                    </label>
+                    {clientType === 'standard' && (
+                      <button
+                        type="button"
+                        onClick={handleSaveCurrentEntity}
+                        className="text-[10px] font-bold text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-1 cursor-pointer"
+                        title="Guardar este particular para futuros contratos"
+                      >
+                        <Sparkles size={11} /> Guardar particular
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={customerName}
-                    onChange={e => setCustomerName(e.target.value)}
-                    placeholder="Nombre del encargado"
+                    onChange={e => {
+                      setCustomerName(e.target.value);
+                      if (clientType === 'standard') setShowCustomerSuggestions(true);
+                    }}
+                    onFocus={() => {
+                      if (clientType === 'standard') setShowCustomerSuggestions(true);
+                    }}
+                    placeholder="Nombre del encargado o particular"
                     className="w-full border border-border bg-card rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500"
                   />
+
+                  {/* Dropdown de Sugerencias para Particular */}
+                  {clientType === 'standard' && showCustomerSuggestions && (
+                    (() => {
+                      const q = customerName.trim().toLowerCase();
+                      const list = q
+                        ? savedEntities.filter(e => e.name.toLowerCase().includes(q) || (e.contactName && e.contactName.toLowerCase().includes(q))).slice(0, 8)
+                        : savedEntities.slice(0, 6);
+
+                      if (list.length === 0) return null;
+
+                      return (
+                        <div className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-card border border-border rounded-2xl shadow-xl overflow-hidden divide-y divide-border/60 animate-in fade-in slide-in-from-top-1 duration-150">
+                          <div className="p-2 bg-secondary/40 text-[10px] font-bold text-muted-foreground flex items-center justify-between">
+                            <span>✨ Clientes / Particulares Guardados ({list.length})</span>
+                            <button
+                              type="button"
+                              onClick={() => setShowCustomerSuggestions(false)}
+                              className="hover:text-foreground text-[10px] underline cursor-pointer"
+                            >
+                              Cerrar
+                            </button>
+                          </div>
+                          <div className="max-h-48 overflow-y-auto">
+                            {list.map((cust, i) => (
+                              <div
+                                key={i}
+                                onClick={() => handleSelectEntity(cust)}
+                                className="p-2.5 hover:bg-violet-500/10 cursor-pointer flex items-center justify-between gap-2 transition-colors text-xs"
+                              >
+                                <div className="min-w-0">
+                                  <strong className="font-extrabold text-foreground truncate block">{cust.name}</strong>
+                                  <span className="text-[11px] text-muted-foreground block truncate">
+                                    {cust.contactPhone ? `📞 ${cust.contactPhone}` : ''}
+                                  </span>
+                                </div>
+                                {cust.customRate ? (
+                                  <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 shrink-0">
+                                    ${Number(cust.customRate).toLocaleString('es-CO')}/h
+                                  </span>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()
+                  )}
                 </div>
 
                 <div>

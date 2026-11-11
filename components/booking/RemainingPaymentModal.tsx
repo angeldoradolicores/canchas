@@ -114,7 +114,11 @@ export function RemainingPaymentModal({
   // Historial de pagos de todas las reservas del grupo
   const paymentHistory = useMemo(() => {
     if (!targetBooking) return [];
-    const bookingsList: any[] = targetBooking.bookings || [targetBooking];
+    let bookingsList: any[] = targetBooking.bookings || [targetBooking];
+    if (contractInfo.isContract && contractInfo.isPlanBilling && Array.isArray(allBookings) && contractInfo.relatedBookingIds.length > 0) {
+      const contractBookings = allBookings.filter((b: any) => contractInfo.relatedBookingIds.includes(b.id));
+      if (contractBookings.length > 0) bookingsList = contractBookings;
+    }
     // Merge payment_history de todas las reservas del grupo, deduplicar por ID
     const allEntries: PaymentEntry[] = [];
     const seenIds = new Set<string>();
@@ -129,23 +133,31 @@ export function RemainingPaymentModal({
     }
     // Ordenar por fecha
     return allEntries.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
-  }, [targetBooking]);
+  }, [targetBooking, contractInfo, allBookings]);
 
   // Total ya pagado en abonos del historial
   const totalPaidFromHistory = useMemo(() => getTotalPaid(paymentHistory), [paymentHistory]);
 
   // Precio total (del grupo/tarjeta o contrato)
+  // Independiente de qué condiciones financieras elija, excepto pago por sesión,
+  // el precio a cobrar es el valor total del contrato (ej: 4 canchas x 70.000 = 280.000)
   const totalPrice = useMemo(() => {
-    if (Number(targetBooking?.total_price) > 0) {
-      return Number(targetBooking.total_price);
-    }
     if (contractInfo.isContract && contractInfo.isPlanBilling && contractInfo.cycleToCollect > 0) {
       return contractInfo.cycleToCollect;
+    }
+    if (Number(targetBooking?.total_price) > 0) {
+      return Number(targetBooking.total_price);
     }
     return Number(targetBooking?.total_price || 0);
   }, [contractInfo, targetBooking]);
 
-  const depositAmount = Number(targetBooking?.deposit_amount || 0);
+  const depositAmount = useMemo(() => {
+    if (contractInfo.isContract && contractInfo.isPlanBilling && Array.isArray(allBookings) && contractInfo.relatedBookingIds.length > 0) {
+      const contractBookings = allBookings.filter((b: any) => contractInfo.relatedBookingIds.includes(b.id));
+      return contractBookings.reduce((sum, b) => sum + Number(b.deposit_amount || 0), 0);
+    }
+    return Number(targetBooking?.deposit_amount || 0);
+  }, [contractInfo, allBookings, targetBooking]);
 
   // Saldo pendiente = total - anticipo - abonos ya realizados
   const remainingToCollect = useMemo(() => {
@@ -206,10 +218,10 @@ export function RemainingPaymentModal({
   const bookingsList = targetBooking.bookings || [targetBooking];
   const bookingIds: string[] = useMemo(() => {
     let ids: string[] = [];
-    if (Array.isArray(targetBooking.bookings) && targetBooking.bookings.length > 0) {
-      ids = targetBooking.bookings.map((b: any) => b.id);
-    } else if (contractInfo.isContract && contractInfo.isPlanBilling && contractInfo.relatedBookingIds.length > 0) {
+    if (contractInfo.isContract && contractInfo.isPlanBilling && contractInfo.relatedBookingIds.length > 0) {
       ids = contractInfo.relatedBookingIds;
+    } else if (Array.isArray(targetBooking.bookings) && targetBooking.bookings.length > 0) {
+      ids = targetBooking.bookings.map((b: any) => b.id);
     } else if (targetBooking.id) {
       ids = [targetBooking.id];
     }
@@ -437,25 +449,39 @@ export function RemainingPaymentModal({
         {/* Formulario con Scroll */}
         <form onSubmit={handleSubmit} className="p-4 sm:p-5 overflow-y-auto space-y-4 text-foreground">
 
-          {/* Banner de contrato */}
+          {/* Condiciones Financieras del Contrato / Turno Fijo */}
           {contractInfo.isContract && (
-            <div className="p-3 rounded-2xl bg-violet-500/10 border border-violet-500/20 text-xs flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Repeat size={15} className="text-violet-500 shrink-0" />
-                <div>
-                  <p className="font-extrabold text-violet-700 dark:text-violet-300">
-                    {contractInfo.billingSchemeLabel}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground font-semibold">
-                    {contractInfo.isPlanBilling
-                      ? `Modalidad de plan acumulado: ${contractInfo.cycleLabel}`
-                      : 'Cobro individual por cada partido / sesión'}
-                  </p>
+            <div className="p-3.5 rounded-2xl bg-violet-500/10 border border-violet-500/25 text-xs space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Repeat size={16} className="text-violet-600 dark:text-violet-400 shrink-0" />
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-violet-600 dark:text-violet-400 block leading-tight">
+                      Condición Financiera
+                    </span>
+                    <p className="font-extrabold text-sm text-foreground">
+                      {contractInfo.billingSchemeLabel}
+                    </p>
+                  </div>
+                </div>
+                <span className={`text-[10px] uppercase font-black px-2.5 py-1 rounded-full ${contractInfo.isPlanBilling ? 'bg-violet-600 text-white' : 'bg-secondary text-muted-foreground'}`}>
+                  {contractInfo.isPlanBilling ? 'Plan Contrato Completo' : 'Por Sesión'}
+                </span>
+              </div>
+
+              <div className="pt-2 border-t border-violet-500/20 grid grid-cols-2 gap-2 text-[11px]">
+                <div className="bg-card/80 dark:bg-card/40 p-2 rounded-xl border border-border/50">
+                  <span className="text-[10px] text-muted-foreground block font-bold">Tarifa por Partido:</span>
+                  <strong className="text-foreground font-black">{formatCOP(contractInfo.ratePerSession)}/partido</strong>
+                </div>
+                <div className="bg-card/80 dark:bg-card/40 p-2 rounded-xl border border-border/50">
+                  <span className="text-[10px] text-muted-foreground block font-bold">Total del Contrato:</span>
+                  <strong className="text-foreground font-black">
+                    {contractInfo.totalSessions} {contractInfo.totalSessions === 1 ? 'partido' : 'partidos'}
+                    {contractInfo.isPlanBilling ? ` · ${formatCOP(totalPrice)}` : ''}
+                  </strong>
                 </div>
               </div>
-              <span className="text-[10px] uppercase font-black px-2.5 py-1 rounded-full bg-violet-600 text-white">
-                {contractInfo.isPlanBilling ? 'Plan Completo' : 'Por Sesión'}
-              </span>
             </div>
           )}
 

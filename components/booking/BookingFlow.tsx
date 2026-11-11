@@ -780,16 +780,17 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
       message: messageNode,
       showCancel: true,
       confirmText: 'Bloquear y Continuar',
+      confirmLoadingText: 'Bloqueando horario...',
       cancelText: 'Cancelar',
       cancelButtonClassName: 'flex-1 h-12 rounded-xl font-bold flex items-center justify-center transition-all bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-500/10 dark:text-red-500 dark:hover:bg-red-500/20',
       onConfirm: async () => {
-        setAlertState(prev => ({ ...prev, isOpen: false }));
         setLoading(true);
         setError('');
         const success = await startLock(currentPitch, selectedDate, selectedTimes);
         setLoading(false);
 
         if (success) {
+          setAlertState(prev => ({ ...prev, isOpen: false }));
           setStep(2);
         } else {
           setAlertState({

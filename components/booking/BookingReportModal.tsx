@@ -35,6 +35,7 @@ interface BookingReportModalProps {
   pitches: any[];
   companyName?: string;
   initialTab?: ReportTab;
+  initialEntityTarget?: any;
 }
 
 type Period = 'today' | 'week' | 'fortnight' | 'month' | 'quarter' | 'year' | 'custom';
@@ -144,7 +145,7 @@ function getBookingIncome(b: any): number {
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
 
-export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [], companyName, initialTab = 'overview' }: BookingReportModalProps) {
+export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [], companyName, initialTab = 'overview', initialEntityTarget }: BookingReportModalProps) {
   const [period, setPeriod] = useState<Period>('month');
   const [activeTab, setActiveTab] = useState<ReportTab>(initialTab);
   const [customFrom, setCustomFrom] = useState('');
@@ -367,12 +368,19 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
     safeBookings.forEach(b => {
       const isEntity = b.client_type === 'entity';
       const isSchool = b.client_type === 'school';
-      const isContract = b.booking_type === 'contract' || (b.customer_name && (b.customer_name.includes('[Contrato') || b.customer_name.includes('[Turno Fijo') || b.customer_name.includes('[ENTIDAD') || b.customer_name.includes('[ESCUELA')));
+      const isContract =
+        b.booking_type === 'contract' ||
+        b.is_contract === true ||
+        Boolean(b.contract_id) ||
+        Boolean(b.billing_scheme) ||
+        (b.customer_name && (b.customer_name.includes('[Contrato') || b.customer_name.includes('[Turno Fijo') || b.customer_name.includes('[ENTIDAD') || b.customer_name.includes('[ESCUELA'))) ||
+        (b.note && (b.note.includes('[TURNO FIJO') || b.note.includes('CID:') || b.note.includes('ESQUEMA:')));
 
       if (!isEntity && !isSchool && !isContract) return;
 
       const entityName = (b.client_entity_name || b.customer_name || 'Sin nombre').trim();
       const type: 'entity' | 'school' | 'contract' = isEntity ? 'entity' : (isSchool ? 'school' : 'contract');
+      const contractCid = b.contract_id || (b.note?.match(/CID:([a-zA-Z0-9_-]+)/i)?.[1]) || null;
       const key = `${type}-${entityName.toLowerCase()}-${b.pitch_id || 'p'}`;
 
       if (!map[key]) {
@@ -380,6 +388,8 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
           id: key,
           name: entityName,
           type,
+          contractId: contractCid,
+          pitchId: b.pitch_id,
           pitchName: b.pitches?.name || 'Cancha',
           paymentMethod: b.payment_method || 'cuenta_cobrar',
           customRate: Number(b.custom_rate || b.total_price || b.pitches?.price_per_hour || 0),
@@ -488,6 +498,56 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
       avgRateAll,
     };
   }, [safeBookings, from, to]);
+
+  // Si se solicita abrir la trazabilidad de un contrato específico directamente
+  useEffect(() => {
+    if (isOpen && initialEntityTarget && entitiesReport.list.length > 0) {
+      const targetCid =
+        initialEntityTarget.contract_id ||
+        initialEntityTarget.contractId ||
+        (initialEntityTarget.note?.match(/CID:([a-zA-Z0-9_-]+)/i)?.[1]);
+
+      const rawTargetName = (
+        initialEntityTarget.client_entity_name ||
+        initialEntityTarget.entityName ||
+        initialEntityTarget.customer_name ||
+        initialEntityTarget.customerName ||
+        ''
+      ).trim();
+
+      const cleanTargetName = rawTargetName
+        .replace(/\[(Turno Fijo|Contrato|ENTIDAD|ESCUELA)[^\]]*\]/gi, '')
+        .replace(/CID:[a-zA-Z0-9_-]+/gi, '')
+        .trim().toLowerCase();
+
+      const targetPitchId = initialEntityTarget.pitch_id || initialEntityTarget.pitchId;
+
+      // Buscar coincidencia exacta por CID o por nombre de entidad/particular
+      const match = entitiesReport.list.find(ent => {
+        if (targetCid && ent.contractId && ent.contractId === targetCid) {
+          return true;
+        }
+        const cleanEntName = ent.name
+          .replace(/\[(Turno Fijo|Contrato|ENTIDAD|ESCUELA)[^\]]*\]/gi, '')
+          .replace(/CID:[a-zA-Z0-9_-]+/gi, '')
+          .trim().toLowerCase();
+        if (cleanTargetName && (cleanEntName === cleanTargetName || cleanEntName.includes(cleanTargetName) || cleanTargetName.includes(cleanEntName))) {
+          if (!targetPitchId || ent.pitchId === targetPitchId) {
+            return true;
+          }
+          return true;
+        }
+        return false;
+      });
+
+      if (match) {
+        setSelectedEntityTrace(match);
+        setActiveTab('entities');
+      }
+    } else if (!isOpen) {
+      setSelectedEntityTrace(null);
+    }
+  }, [isOpen, initialEntityTarget, entitiesReport.list]);
 
   // ── Exportación a PDF / Impresión Ejecutiva ──────────────────────────────────
   const handleDownloadPDF = useCallback(() => {

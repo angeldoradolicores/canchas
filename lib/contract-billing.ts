@@ -174,50 +174,50 @@ export function getContractBillingInfo(
   }
 
   const groupBookings: any[] = Array.isArray(booking.bookings) && booking.bookings.length > 0
-    ? booking.bookings
+    ? (relatedBookings.length > booking.bookings.length ? relatedBookings : booking.bookings)
     : (relatedBookings.length > 0 ? relatedBookings : (booking.id ? [booking] : []));
 
-  if (totalSessions <= 0) totalSessions = groupBookings.length || 1;
+  if (totalSessions <= 0) {
+    totalSessions = relatedBookings.length > 0 ? relatedBookings.length : (groupBookings.length || 1);
+  }
   if (planTotalPrice <= 0) {
-    planTotalPrice = groupBookings.reduce(
-      (sum: number, b: any) => sum + Number(b.custom_rate || b.total_price || ratePerSession),
-      0
-    );
+    if (relatedBookings.length > 0) {
+      planTotalPrice = relatedBookings.reduce(
+        (sum: number, b: any) => sum + Number(b.custom_rate || b.total_price || ratePerSession),
+        0
+      );
+    } else if (totalSessions > 0 && ratePerSession > 0) {
+      planTotalPrice = totalSessions * ratePerSession;
+    } else {
+      planTotalPrice = groupBookings.reduce(
+        (sum: number, b: any) => sum + Number(b.custom_rate || b.total_price || ratePerSession),
+        0
+      );
+    }
   }
 
   // 5. Determinar el ciclo de cobro y monto según el billing_scheme
-  // Cada plan se cobra por separado. Si la reserva ya viene agrupada (ej: una tarjeta del dashboard),
-  // se cobra exactamente el total de esa tarjeta/ciclo.
+  // Independiente de qué condiciones financieras elija, excepto si elige 'por_sesion',
+  // en cobrar saldo debe salir el total del contrato completo (ej: 4 canchas a 70.000 = 280.000).
   const isPlanBilling = scheme !== 'por_sesion';
   let cycleToCollect = 0;
   let cycleLabel = '';
-  let relatedBookingIds: string[] = groupBookings.map((b: any) => b.id).filter(Boolean);
+  let relatedBookingIds: string[] = (relatedBookings.length > 0 ? relatedBookings : groupBookings).map((b: any) => b.id).filter(Boolean);
 
   if (scheme === 'por_sesion') {
     cycleToCollect = ratePerSession > 0 ? ratePerSession : Number(booking.total_price || 0);
     cycleLabel = 'Sesión individual';
     relatedBookingIds = [booking.id || bFirst?.id].filter(Boolean);
-  } else if (scheme === 'total_anticipado') {
-    cycleToCollect = planTotalPrice > 0 ? planTotalPrice : (ratePerSession * totalSessions);
-    cycleLabel = `Plan Contrato Total (${groupBookings.length} partidos)`;
   } else {
-    // mes_anticipado, mes_vencido, quincenal_anticipado, quincenal_vencido
-    if (Number(booking.total_price) > 0) {
-      cycleToCollect = Number(booking.total_price);
-      cycleLabel = `Plan Contrato (${groupBookings.length} ${groupBookings.length === 1 ? 'partido' : 'partidos'})`;
-    } else if (groupBookings.length > 0) {
-      cycleToCollect = groupBookings.reduce(
-        (sum: number, b: any) => sum + Number(b.custom_rate || b.total_price || ratePerSession),
-        0
-      );
-      cycleLabel = `Plan Contrato (${groupBookings.length} partidos)`;
-    } else if (monthPlanPrice > 0) {
-      cycleToCollect = monthPlanPrice;
-      cycleLabel = 'Mensualidad';
-    } else {
-      cycleToCollect = planTotalPrice > 0 ? planTotalPrice : (ratePerSession * totalSessions);
-      cycleLabel = `Plan Contrato (${totalSessions} partidos)`;
-    }
+    // Para todas las demás condiciones financieras (mes_anticipado, mes_vencido, total_anticipado, quincenal_anticipado, quincenal_vencido):
+    // El monto total de cobro es el total del contrato completo.
+    const effectiveTotal = planTotalPrice > 0
+      ? planTotalPrice
+      : (totalSessions > 0 && ratePerSession > 0 ? (totalSessions * ratePerSession) : (groupBookings.length * ratePerSession));
+
+    cycleToCollect = effectiveTotal > 0 ? effectiveTotal : Number(booking.total_price || ratePerSession);
+    const countSessions = totalSessions > 0 ? totalSessions : (relatedBookings.length || groupBookings.length);
+    cycleLabel = `Contrato Total (${countSessions} ${countSessions === 1 ? 'partido' : 'partidos'})`;
   }
 
   return {

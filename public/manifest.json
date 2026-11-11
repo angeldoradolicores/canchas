@@ -5,7 +5,7 @@
   "start_url": "/",
   "id": "/",
   "display": "standalone",
-  "background_color": "#054D27",
+  "background_color": "#ffffff",
   "theme_color": "#007A3D",
   "orientation": "portrait",
   "icons": [
@@ -25,7 +25,13 @@
       "src": "/cancheros.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

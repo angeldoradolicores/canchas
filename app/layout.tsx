@@ -6,7 +6,7 @@ import { ThemeProvider } from '@/lib/theme-context'
 import { JsonLd } from '@/components/seo/JsonLd'
 import { NewRelicBrowserScript } from '@/components/monitoring/NewRelicBrowserScript'
 import { ServiceWorkerRegister } from '@/components/pwa/ServiceWorkerRegister'
-// import { AppSplashScreen } from '@/components/layout/AppSplashScreen'
+import { AppSplashScreen } from '@/components/layout/AppSplashScreen'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 import './globals.css'
@@ -152,7 +152,7 @@ export default function RootLayout({
       </head>
       <body className={`${inter.variable} antialiased`}>
         <JsonLd />
-        {/* <AppSplashScreen /> */}
+        <AppSplashScreen />
         <ThemeProvider>
           {children}
         </ThemeProvider>

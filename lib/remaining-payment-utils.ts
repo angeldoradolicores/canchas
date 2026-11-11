@@ -215,3 +215,16 @@ export function calculateRemainingBalance(totalPrice: number, depositAmount: num
   const remaining = Math.max(0, (totalPrice || 0) - (depositAmount || 0));
   return Math.max(0, remaining - paidRemaining);
 }
+
+// Exportación consolidada para compatibilidad completa con Turbopack HMR
+const remainingPaymentUtils = {
+  parsePaymentHistory,
+  getTotalPaid,
+  getBookingRemainingPayment,
+  getBookingOriginalProof,
+  calculateRemainingBalance,
+  formatPaymentMethod,
+  PAYMENT_METHODS,
+};
+
+export { remainingPaymentUtils };

@@ -11,8 +11,34 @@ import {
   getBookingOriginalProof,
   calculateRemainingBalance,
   formatPaymentMethod,
+  parsePaymentHistory as _parsePaymentHistory,
+  getTotalPaid as _getTotalPaid,
+  type PaymentEntry,
 } from '@/lib/remaining-payment-utils';
 import { getContractBillingInfo } from '@/lib/contract-billing';
+
+function parsePaymentHistory(booking: any): PaymentEntry[] {
+  if (typeof _parsePaymentHistory === 'function') {
+    return _parsePaymentHistory(booking);
+  }
+  const raw = booking?.payment_history;
+  if (Array.isArray(raw) && raw.length > 0) return raw as PaymentEntry[];
+  if (typeof raw === 'string' && raw.trim().length > 0) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed as PaymentEntry[];
+    } catch { /* noop */ }
+  }
+  return [];
+}
+
+function getTotalPaid(paymentHistory: PaymentEntry[] | null | undefined): number {
+  if (typeof _getTotalPaid === 'function') {
+    return _getTotalPaid(paymentHistory);
+  }
+  if (!Array.isArray(paymentHistory) || paymentHistory.length === 0) return 0;
+  return paymentHistory.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+}
 
 interface SlotDetailModalProps {
   data: {
@@ -34,7 +60,7 @@ interface SlotDetailModalProps {
   onGoToList?: (booking: any) => void;
   onCreateManual?: (pitch: any, dateStr: string, slot: string) => void;
   customerMatchesCount?: number;
-  onOpenContractTrace?: () => void;
+  onOpenContractTrace?: (booking?: any) => void;
 }
 
 export function SlotDetailModal({
@@ -216,6 +242,21 @@ export function SlotDetailModal({
 
   const remainingInfo = booking ? getBookingRemainingPayment(booking) : null;
   const remPaid = useMemo(() => {
+    if (contractInfo.isContract && contractInfo.isPlanBilling && Array.isArray(allBookings) && contractInfo.relatedBookingIds.length > 0) {
+      const contractBookings = allBookings.filter((b: any) => contractInfo.relatedBookingIds.includes(b.id));
+      const allHistEntries: any[] = [];
+      for (const cb of contractBookings) {
+        for (const h of parsePaymentHistory(cb)) {
+          if (!allHistEntries.some((e: any) => e.id === h.id)) {
+            allHistEntries.push(h);
+          }
+        }
+      }
+      if (allHistEntries.length > 0) {
+        return getTotalPaid(allHistEntries);
+      }
+      return Math.max(...contractBookings.map((cb: any) => Number(cb.remaining_amount_paid || 0)), 0);
+    }
     if (relatedList.length > 1) {
       return relatedList.reduce((sum, b) => {
         const info = getBookingRemainingPayment(b);
@@ -223,7 +264,7 @@ export function SlotDetailModal({
       }, 0);
     }
     return Number(remainingInfo?.amount || booking?.remaining_amount_paid || 0);
-  }, [relatedList, remainingInfo, booking]);
+  }, [relatedList, remainingInfo, booking, contractInfo, allBookings]);
 
   const balance = calculateRemainingBalance(tPrice, dAmount, remPaid);
   const isFullyPaid = isConfirmed && (balance <= 0 || remPaid > 0);
@@ -525,7 +566,7 @@ export function SlotDetailModal({
             {isCreditOrContract && onOpenContractTrace && (
               <button
                 type="button"
-                onClick={onOpenContractTrace}
+                onClick={() => onOpenContractTrace(booking || slotBooking)}
                 className="w-full py-2 px-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer active:scale-98"
               >
                 📋 Ver Hoja de Trazabilidad del Contrato
