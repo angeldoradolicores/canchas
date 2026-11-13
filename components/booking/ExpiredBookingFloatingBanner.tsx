@@ -5,6 +5,7 @@ import { Clock, ArrowRight, X, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { useActiveBooking, EXPIRED_GRACE_KEY, GRACE_PERIOD_SECONDS } from '@/lib/active-booking-context';
 import { useRouter, usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { fetchOccupancy } from '@/lib/occupancy';
 import { getLinkedPitchIds } from '@/lib/combined-pitch-utils';
 
 export interface ExpiredGraceSnapshot {
@@ -45,15 +46,12 @@ export function ExpiredBookingFloatingBanner() {
       const dayStart = `${snap.selectedDate}T00:00:00-05:00`;
       const dayEnd = `${snap.selectedDate}T23:59:59-05:00`;
 
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('start_time, status, expires_at')
-        .in('pitch_id', allPitchIds)
-        .gte('start_time', dayStart)
-        .lte('start_time', dayEnd)
-        .in('status', ['confirmed', 'pending', 'draft']);
+      const rows = await fetchOccupancy(supabase, allPitchIds, dayStart, dayEnd);
+      const data = (rows || []).filter((b: any) =>
+        ['confirmed', 'pending', 'draft'].includes(b.status),
+      );
 
-      if (error || !data) return false;
+      if (!data) return false;
 
       const nowIso = new Date().toISOString();
 

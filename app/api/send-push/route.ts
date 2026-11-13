@@ -4,8 +4,18 @@ import { cookies } from 'next/headers';
 
 export async function POST(request: NextRequest) {
   try {
+    // Endpoint SOLO para llamadas internas firmadas (servidor→servidor). Sin el secreto
+    // compartido, cualquiera podría enviar notificaciones push arbitrarias (phishing).
+    const secret = process.env.INTERNAL_API_SECRET;
+    if (!secret || request.headers.get('x-internal-secret') !== secret) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const body = await request.json();
-    const { userId, title, message, url } = body;
+    const { userId, title, message } = body;
+    // La URL de la notificación solo puede ser una ruta interna de la app (evita open-redirect)
+    const rawUrl = typeof body.url === 'string' ? body.url : '';
+    const url = rawUrl.startsWith('/') && !rawUrl.startsWith('//') ? rawUrl : '/dashboard/bookings';
 
     if (!userId) {
       return NextResponse.json({ error: 'userId requerido' }, { status: 400 });

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { X, CalendarDays, Clock3, Loader2, Check, Upload, ImageIcon, XCircle, Layers, User, Phone, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
+import { fetchOccupancy } from '@/lib/occupancy';
 import { useToday } from '@/lib/use-today';
 import { isCombinedPitch, getLinkedPitchIds } from '@/lib/combined-pitch-utils';
 import { isSlotPassed } from '@/lib/utils';
@@ -200,13 +201,12 @@ export function ManualBookingModal({
     ];
 
     const fetchTaken = async () => {
-      const { data } = await supabase
-        .from('bookings')
-        .select('start_time, status, expires_at, pitch_id')
-        .in('pitch_id', pitchIdList)
-        .gte('start_time', `${selectedDate}T00:00:00-05:00`)
-        .lte('start_time', `${selectedDate}T23:59:59-05:00`)
-        .neq('status', 'cancelled');
+      const data = await fetchOccupancy(
+        supabase,
+        pitchIdList,
+        `${selectedDate}T00:00:00-05:00`,
+        `${selectedDate}T23:59:59-05:00`,
+      );
 
       const taken = new Map<string, { status: string, expires_at: string | null }>();
       (data || []).forEach((b: any) => {

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/client';
+import { Anton, Bebas_Neue, Oswald, Poppins, Inter } from 'next/font/google';
 import {
   Download, Share2, Loader2, Sparkles, Clock, CalendarDays,
   CheckCircle2, XCircle, Palette, LayoutTemplate,
@@ -13,14 +14,23 @@ import {
 import Link from 'next/link';
 
 /* ══════════════════════════════════════════════════════════
+   TIPOGRAFÍAS DEPORTIVAS (cargadas una sola vez a nivel de módulo)
+══════════════════════════════════════════════════════════ */
+const fontAnton = Anton({ subsets: ['latin'], weight: '400', display: 'swap' });
+const fontBebas = Bebas_Neue({ subsets: ['latin'], weight: '400', display: 'swap' });
+const fontOswald = Oswald({ subsets: ['latin'], weight: ['500', '600', '700'], display: 'swap' });
+const fontPoppins = Poppins({ subsets: ['latin'], weight: ['500', '600', '700', '800', '900'], display: 'swap' });
+const fontInterPoster = Inter({ subsets: ['latin'], weight: ['500', '600', '700', '800', '900'], display: 'swap' });
+
+/* ══════════════════════════════════════════════════════════
    TIPOS
 ══════════════════════════════════════════════════════════ */
 type FormatId = 'story' | 'post' | 'square';
 // New types for extended poster customization
-type TemplateId = 'classic' | 'hero' | 'split' | 'neon' | 'minimal' | 'gradient' | 'overlay' | 'gallery';
-type FontStyle = 'inter' | 'roboto' | 'poppins' | 'lato' | 'playfair';
-type Pattern = 'none' | 'dots' | 'diagonal' | 'pitch';
-type CardStyle = 'round' | 'pill' | 'solid';
+type TemplateId = 'classic' | 'hero' | 'split' | 'neon' | 'minimal';
+type FontStyle = 'inter' | 'bebas' | 'anton' | 'oswald' | 'poppins';
+type Pattern = 'none' | 'dots' | 'diagonal' | 'pitch' | 'grass';
+type CardStyle = 'round' | 'pill' | 'solid' | 'ticket';
 type LogoStyle = 'badge' | 'tint' | 'original';
 type Align = 'left' | 'center' | 'right';
 type SectionId = 'header' | 'title' | 'hours' | 'message' | 'footer';
@@ -39,6 +49,7 @@ interface Cfg {
   pitchImageUrl?: string;
   showPitchImage: boolean;
   imageOverlay: number; // 0-1 opacity
+  showOccupiedHint: boolean;
 }
 
 
@@ -62,6 +73,27 @@ const PRESETS: { id: string; label: string; p: Pal }[] = [
   { id: 'violet', label: 'Violeta', p: { bg1: '#2e1065', bg2: '#6d28d9', accent: '#f0abfc', text: '#ffffff', angle: 135 } },
   { id: 'clean', label: 'Claro', p: { bg1: '#f8fafc', bg2: '#e2e8f0', accent: '#047857', text: '#0f172a', angle: 135 } },
 ];
+
+const FONT_HEAD: Record<FontStyle, string> = {
+  inter: fontInterPoster.style.fontFamily,
+  bebas: fontBebas.style.fontFamily,
+  anton: fontAnton.style.fontFamily,
+  oswald: fontOswald.style.fontFamily,
+  poppins: fontPoppins.style.fontFamily,
+};
+const FONT_BODY: Record<FontStyle, string> = {
+  inter: fontInterPoster.style.fontFamily,
+  bebas: fontPoppins.style.fontFamily,
+  anton: fontPoppins.style.fontFamily,
+  oswald: fontOswald.style.fontFamily,
+  poppins: fontPoppins.style.fontFamily,
+};
+const FONT_LABEL: Record<FontStyle, string> = {
+  inter: 'Inter', bebas: 'Bebas Neue', anton: 'Anton', oswald: 'Oswald', poppins: 'Poppins',
+};
+const TEMPLATE_LABEL: Record<TemplateId, string> = {
+  classic: 'Clásico', hero: 'Hero', split: 'Diagonal', neon: 'Neón', minimal: 'Minimalista',
+};
 
 const QUICK_ACCENT = [
   '#34d399', '#a3e635', '#facc15', '#fb923c', '#f87171', '#f472b6',
@@ -104,6 +136,7 @@ const DEFAULTS: Cfg = {
   fontStyle: 'inter',
   showPitchImage: false,
   imageOverlay: 0.4,
+  showOccupiedHint: false,
 };
 
 
@@ -148,28 +181,55 @@ function tintLogo(src: string, color: string): Promise<string> {
 ══════════════════════════════════════════════════════════ */
 interface PosterProps {
   innerRef?: React.Ref<HTMLDivElement>;
-  cfg: Cfg; hours: string[]; dayLabel: string; dateStr: string; logoSrc: string; pitchName?: string;
+  cfg: Cfg; hours: string[]; occupiedSample?: string[]; dayLabel: string; dateStr: string; logoSrc: string; pitchName?: string;
 }
 
-function Poster({ innerRef, cfg, hours, dayLabel, dateStr, logoSrc, pitchName }: PosterProps) {
+function Poster({ innerRef, cfg, hours, occupiedSample = [], dayLabel, dateStr, logoSrc, pitchName }: PosterProps) {
   const dims = FMT[cfg.format];
-  const { bg1, bg2, accent, text, angle } = cfg.pal;
+  const { bg1: rawBg1, bg2: rawBg2, accent, text, angle } = cfg.pal;
+  const tpl = cfg.templateId;
+  const isNeon = tpl === 'neon';
+  const isSplit = tpl === 'split';
+  const isHero = tpl === 'hero';
+  const isMinimal = tpl === 'minimal';
+  const isLoud = isHero || isSplit || isNeon;
+
+  // El modo Neón fuerza un fondo oscuro de "noche de estadio" para que los
+  // brillos se lean bien, incluso si la paleta elegida es clara.
+  const bg1 = isNeon && lum(rawBg1) > 0.5 ? '#07070a' : rawBg1;
+  const bg2 = isNeon && lum(rawBg2) > 0.5 ? '#121218' : rawBg2;
+
+  const fontHead = FONT_HEAD[cfg.fontStyle];
+  const fontBody = FONT_BODY[cfg.fontStyle];
+
   const sub = rgba(text, .75);
   const cardBg = rgba(text, .1);
   const cardBdr = rgba(accent, .45);
   const onAccent = onC(accent);
   const compact = cfg.format !== 'story';
-  const gap = compact ? 40 : 58;
+  const gap = isMinimal ? (compact ? 48 : 68) : (compact ? 40 : 58);
   const L = cfg.logoSize;
   const visible = cfg.order.filter(id => !cfg.hidden.includes(id));
 
-  const n = hours.length;
+  // Muestra real de 1-2 horas ya ocupadas (si el dueño activó el efecto de urgencia)
+  const showOcc = Boolean(cfg.showOccupiedHint) && occupiedSample.length > 0 && hours.length > 0;
+  const hourItems = [
+    ...hours.map(h => ({ h, occ: false })),
+    ...(showOcc ? occupiedSample.filter(h => !hours.includes(h)).map(h => ({ h, occ: true })) : []),
+  ];
+
+  const n = hourItems.length;
   const cols = n <= 4 ? 2 : n <= 9 ? 3 : 4;
-  const fsBig = (cols === 2 ? 58 : cols === 3 ? 46 : 36);
-  const radius = cfg.cardStyle === 'pill' ? 999 : cfg.cardStyle === 'solid' ? 16 : 30;
+  const fsBig = (isHero ? 1.12 : 1) * (cols === 2 ? 58 : cols === 3 ? 46 : 36);
+  const isTicket = cfg.cardStyle === 'ticket';
+  const radius = cfg.cardStyle === 'pill' ? 999 : cfg.cardStyle === 'solid' ? 16 : isTicket ? 14 : 30;
   const solid = cfg.cardStyle === 'solid';
-  const isLightBg = lum(bg1) > 0.45;
+  const hasPhoto = Boolean(cfg.showPitchImage && cfg.pitchImageUrl);
+  const isLightBg = !hasPhoto && lum(bg1) > 0.45;
   const hourColor = solid ? onAccent : isLightBg ? '#064e3b' : accent;
+  const titleCase: 'none' | 'uppercase' = (isHero || isNeon) ? 'uppercase' : 'none';
+  const neonGlow = isNeon ? `0 0 18px ${rgba(accent, .85)}, 0 0 46px ${rgba(accent, .45)}` : undefined;
+  const photoOverlay = Math.min(Math.max(cfg.imageOverlay ?? .45, 0), 1);
 
   /* — Logo con efecto medallón + glow grande — */
   const logoEl = logoSrc ? (
@@ -193,45 +253,59 @@ function Poster({ innerRef, cfg, hours, dayLabel, dateStr, logoSrc, pitchName }:
     )
   ) : null;
 
+  // Etiqueta superior: cinta diagonal de esquina en plantillas "con punch"
+  // (Hero / Diagonal), cápsula clásica en Clásico / Neón / Minimalista.
+  const tagText = cfg.tag || pitchName;
+  const ribbonEl = (tagText && (isHero || isSplit)) ? (
+    <div style={{
+      position: 'absolute', top: 46, left: -64, transform: 'rotate(-40deg)', zIndex: 5,
+      background: accent, color: onAccent, fontWeight: 900, fontSize: 24,
+      letterSpacing: '2px', textTransform: 'uppercase', padding: '11px 80px',
+      boxShadow: '0 10px 24px rgba(0,0,0,.35)', fontFamily: fontHead,
+    }}>
+      {tagText}
+    </div>
+  ) : null;
+
   const secs: Partial<Record<SectionId, React.ReactNode>> = {
     header: (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 32 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
-            fontSize: cfg.nameSize, fontWeight: 900, letterSpacing: '-1px',
+            fontFamily: fontHead, fontSize: cfg.nameSize, fontWeight: 900, letterSpacing: '-1px',
             textTransform: 'uppercase', color: text, lineHeight: 1.02, wordBreak: 'break-word',
-            textShadow: '0 4px 20px rgba(0,0,0,.3)'
+            textShadow: isNeon ? neonGlow : '0 4px 20px rgba(0,0,0,.3)'
           }}>
             {cfg.name || 'Mi Complejo'}
           </div>
-          <div style={{ width: 160, height: 8, borderRadius: 999, background: accent, marginTop: 18 }} />
-          {cfg.address && <div style={{ fontSize: 26, color: sub, marginTop: 14, fontWeight: 500 }}>📍 {cfg.address}</div>}
+          <div style={{ width: 160, height: 8, borderRadius: 999, background: accent, marginTop: 18, boxShadow: isNeon ? `0 0 16px ${rgba(accent, .8)}` : undefined }} />
+          {cfg.address && <div style={{ fontFamily: fontBody, fontSize: 26, color: sub, marginTop: 14, fontWeight: 500 }}>📍 {cfg.address}</div>}
         </div>
         {logoEl}
       </div>
     ),
 
     title: (
-      <div style={{ textAlign: cfg.align }}>
-        {cfg.tag ? (
+      <div style={{ textAlign: cfg.align, position: 'relative' }}>
+        {tagText && !(isHero || isSplit) ? (
           <div style={{
             display: 'inline-block', border: `3px solid ${accent}`, color: accent,
-            borderRadius: 999, padding: '8px 28px', fontSize: 26, fontWeight: 800, marginBottom: 16
+            borderRadius: 999, padding: '8px 28px', fontSize: 26, fontWeight: 800, marginBottom: 16,
+            fontFamily: fontBody, textTransform: 'uppercase', letterSpacing: '1px',
+            boxShadow: isNeon ? `0 0 18px ${rgba(accent, .5)}` : undefined,
           }}>
-            {cfg.tag}
-          </div>
-        ) : pitchName ? (
-          <div style={{
-            display: 'inline-block', border: `3px solid ${accent}`, color: accent,
-            borderRadius: 999, padding: '8px 28px', fontSize: 26, fontWeight: 800, marginBottom: 16
-          }}>
-            {pitchName}
+            {tagText}
           </div>
         ) : null}
-        <div style={{ fontSize: compact ? 56 : 68, fontWeight: 900, lineHeight: 1.05, color: text }}>{cfg.title}</div>
+        <div style={{
+          fontFamily: fontHead, fontSize: (compact ? 56 : 68) * (isHero ? 1.15 : 1), fontWeight: 900,
+          lineHeight: 1.04, color: text, textTransform: titleCase, letterSpacing: cfg.fontStyle === 'bebas' || cfg.fontStyle === 'anton' ? '1px' : undefined,
+          textShadow: isNeon ? neonGlow : undefined,
+        }}>{cfg.title}</div>
         <div style={{
           display: 'inline-block', marginTop: 18, background: accent, color: onAccent,
-          borderRadius: 999, padding: '14px 36px', fontSize: 32, fontWeight: 800, textTransform: 'capitalize'
+          borderRadius: 999, padding: '14px 36px', fontSize: 32, fontWeight: 800, textTransform: 'capitalize',
+          fontFamily: fontBody, boxShadow: isNeon ? `0 0 20px ${rgba(accent, .6)}` : undefined,
         }}>
           {dayLabel} · {dateStr}
         </div>
@@ -240,29 +314,47 @@ function Poster({ innerRef, cfg, hours, dayLabel, dateStr, logoSrc, pitchName }:
 
     hours: (
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        {hours.length > 0 ? (
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols},1fr)`, gap: 22 }}>
-            {hours.map(h => {
+        {hourItems.length > 0 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols},1fr)`, gap: isTicket ? 30 : 22 }}>
+            {hourItems.map(({ h, occ }) => {
               const [t, ap] = h.split(' ');
+              const notchFill = hasPhoto ? rgba('#000000', Math.max(photoOverlay, .5)) : bg1;
               return (
                 <div key={h} style={{
-                  background: solid ? accent : cardBg, border: solid ? 'none' : `2px solid ${isLightBg ? 'rgba(5, 150, 105, 0.45)' : cardBdr}`,
+                  position: 'relative',
+                  background: occ ? rgba('#000000', .28) : (solid ? accent : cardBg),
+                  border: solid && !occ ? 'none' : isTicket ? `2.5px dashed ${occ ? rgba(text, .3) : isLightBg ? 'rgba(5, 150, 105, 0.5)' : cardBdr}` : `2px solid ${occ ? rgba(text, .25) : isLightBg ? 'rgba(5, 150, 105, 0.45)' : cardBdr}`,
                   borderRadius: radius, padding: `${compact ? 24 : 30}px 14px`,
-                  textAlign: 'center', color: hourColor,
+                  textAlign: 'center', color: occ ? rgba(text, .55) : hourColor, overflow: 'visible',
+                  boxShadow: isNeon && !solid && !occ ? `0 0 0 1px ${rgba(accent, .6)}, 0 0 22px ${rgba(accent, .45)}` : undefined,
                 }}>
-                  <div style={{ fontSize: fsBig, fontWeight: 900, lineHeight: 1 }}>
+                  {isTicket && (
+                    <>
+                      <div style={{ position: 'absolute', left: -13, top: '50%', transform: 'translateY(-50%)', width: 26, height: 26, borderRadius: '50%', background: notchFill }} />
+                      <div style={{ position: 'absolute', right: -13, top: '50%', transform: 'translateY(-50%)', width: 26, height: 26, borderRadius: '50%', background: notchFill }} />
+                    </>
+                  )}
+                  <div style={{ fontFamily: fontHead, fontSize: fsBig, fontWeight: 900, lineHeight: 1, textShadow: isNeon && !occ ? neonGlow : undefined }}>
                     {t}<span style={{ fontSize: fsBig * .5, fontWeight: 800, marginLeft: 6 }}>{ap}</span>
                   </div>
                   <div style={{
-                    fontSize: 19, marginTop: 8, fontWeight: 700,
-                    color: solid ? rgba(onAccent, .85) : isLightBg ? '#047857' : sub
-                  }}>● Disponible</div>
+                    fontFamily: fontBody, fontSize: 19, marginTop: 10, fontWeight: 700,
+                    color: occ ? rgba(text, .5) : solid ? rgba(onAccent, .85) : isLightBg ? '#047857' : sub,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  }}>{occ ? '🚫 Ocupada' : '⚽ Disponible'}</div>
+                  {occ && (
+                    <div aria-hidden style={{
+                      position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: fsBig * 1.7, fontWeight: 900, color: rgba('#ffffff', .85), fontFamily: fontHead,
+                      textShadow: '0 3px 10px rgba(0,0,0,.5)', transform: 'rotate(-14deg)', pointerEvents: 'none',
+                    }}>✕</div>
+                  )}
                 </div>
               );
             })}
           </div>
         ) : (
-          <div style={{ textAlign: 'center', opacity: .35, fontSize: 36 }}>
+          <div style={{ textAlign: 'center', opacity: .35, fontSize: 36, fontFamily: fontBody }}>
             <div style={{ fontSize: 90, marginBottom: 16 }}>⏰</div>
             Selecciona las horas disponibles
           </div>
@@ -274,17 +366,18 @@ function Poster({ innerRef, cfg, hours, dayLabel, dateStr, logoSrc, pitchName }:
       <div style={{
         background: cardBg, border: `2px solid ${cardBdr}`, borderRadius: 30,
         padding: '36px 44px', textAlign: 'center', fontSize: 34, fontWeight: 700,
-        fontStyle: 'italic', color: text
+        fontStyle: 'italic', color: text, fontFamily: fontBody,
       }}>"{cfg.message}"</div>
     ) : undefined,
 
     footer: (
       <div style={{
         borderTop: `2px solid ${cardBdr}`, paddingTop: 48,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 24
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 24,
+        fontFamily: fontBody,
       }}>
         <div>
-          <div style={{ fontSize: 32, fontWeight: 900, color: accent }}>📲 {cfg.cta}</div>
+          <div style={{ fontSize: 32, fontWeight: 900, color: accent, textShadow: isNeon ? neonGlow : undefined }}>📲 {cfg.cta}</div>
           <div style={{ fontSize: 22, color: sub, marginTop: 8 }}>
             {cfg.phone ? `📞 ${cfg.phone}` : 'Disponibilidad limitada'}
           </div>
@@ -292,7 +385,8 @@ function Poster({ innerRef, cfg, hours, dayLabel, dateStr, logoSrc, pitchName }:
         {cfg.website && (
           <div style={{
             background: accent, color: onAccent, fontWeight: 900, fontSize: 24,
-            borderRadius: 999, padding: '18px 34px', whiteSpace: 'nowrap'
+            borderRadius: 999, padding: '18px 34px', whiteSpace: 'nowrap',
+            boxShadow: isNeon ? `0 0 18px ${rgba(accent, .55)}` : undefined,
           }}>
             {cfg.website}
           </div>
@@ -311,14 +405,28 @@ function Poster({ innerRef, cfg, hours, dayLabel, dateStr, logoSrc, pitchName }:
       position: 'absolute', inset: 0, pointerEvents: 'none',
       backgroundImage: `repeating-linear-gradient(45deg,${rgba(text, .06)} 0 3px,transparent 3px 34px)`
     }} />
+  ) : cfg.pattern === 'grass' ? (
+    <div style={{
+      position: 'absolute', inset: 0, pointerEvents: 'none',
+      background: `repeating-linear-gradient(100deg, ${rgba('#000000', .09)} 0 72px, transparent 72px 144px)`
+    }} />
   ) : cfg.pattern === 'pitch' ? (
     <svg width={dims.w} height={dims.h} viewBox={`0 0 ${dims.w} ${dims.h}`}
       style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-      <rect x="50" y="50" width={dims.w - 100} height={dims.h - 100} rx="28"
-        fill="none" stroke={rgba(text, .1)} strokeWidth="7" />
-      <line x1="50" y1={dims.h / 2} x2={dims.w - 50} y2={dims.h / 2} stroke={rgba(text, .1)} strokeWidth="7" />
-      <circle cx={dims.w / 2} cy={dims.h / 2} r="180" fill="none" stroke={rgba(text, .1)} strokeWidth="7" />
-      <circle cx={dims.w / 2} cy={dims.h / 2} r="14" fill={rgba(text, .1)} />
+      <g stroke={rgba(text, .12)} strokeWidth="6" fill="none">
+        <rect x="46" y="46" width={dims.w - 92} height={dims.h - 92} rx="20" />
+        <line x1="46" y1={dims.h / 2} x2={dims.w - 46} y2={dims.h / 2} />
+        <circle cx={dims.w / 2} cy={dims.h / 2} r="160" />
+        <rect x={dims.w / 2 - 230} y="46" width="460" height="150" />
+        <rect x={dims.w / 2 - 110} y="46" width="220" height="60" />
+        <rect x={dims.w / 2 - 230} y={dims.h - 196} width="460" height="150" />
+        <rect x={dims.w / 2 - 110} y={dims.h - 106} width="220" height="60" />
+        <path d="M 46 86 A 40 40 0 0 0 86 46" />
+        <path d={`M ${dims.w - 86} 46 A 40 40 0 0 0 ${dims.w - 46} 86`} />
+        <path d={`M 46 ${dims.h - 86} A 40 40 0 0 1 86 ${dims.h - 46}`} />
+        <path d={`M ${dims.w - 46} ${dims.h - 86} A 40 40 0 0 1 ${dims.w - 86} ${dims.h - 86 + 40}`} />
+      </g>
+      <circle cx={dims.w / 2} cy={dims.h / 2} r="6" fill={rgba(text, .18)} />
     </svg>
   ) : null;
 
@@ -326,18 +434,37 @@ function Poster({ innerRef, cfg, hours, dayLabel, dateStr, logoSrc, pitchName }:
     <div ref={innerRef} style={{
       width: dims.w, height: dims.h, position: 'relative', overflow: 'hidden',
       boxSizing: 'border-box', padding: compact ? Math.min(cfg.padding, 55) : cfg.padding,
-      background: `linear-gradient(${angle}deg,${bg1} 0%,${bg2} 100%)`,
-      fontFamily: "'Inter','Segoe UI',Arial,sans-serif", color: text,
+      background: hasPhoto ? bg2 : (isSplit ? bg2 : `linear-gradient(${angle}deg,${bg1} 0%,${bg2} 100%)`),
+      fontFamily: fontBody, color: text,
       display: 'flex', flexDirection: 'column',
     }}>
-      {patEl}
+      {hasPhoto && (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={cfg.pitchImageUrl} alt="" style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+          }} />
+          <div style={{
+            position: 'absolute', inset: 0, pointerEvents: 'none',
+            background: `linear-gradient(${angle}deg, ${rgba(bg1, Math.min(photoOverlay + .15, .92))} 0%, ${rgba(bg2, Math.max(photoOverlay, .5))} 60%, ${rgba(bg2, Math.max(photoOverlay + .2, .75))} 100%)`,
+          }} />
+        </>
+      )}
+      {isSplit && !hasPhoto && (
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none', background: bg1,
+          clipPath: 'polygon(0 0, 100% 0, 100% 28%, 0 54%)',
+        }} />
+      )}
+      {!isMinimal && patEl}
+      {ribbonEl}
       <div style={{
         position: 'absolute', top: -180, right: -180, width: 640, height: 640, borderRadius: '50%',
-        background: `radial-gradient(circle,${rgba(accent, .22)} 0%,transparent 70%)`, pointerEvents: 'none'
+        background: `radial-gradient(circle,${rgba(accent, isMinimal ? .12 : isLoud ? .3 : .22)} 0%,transparent 70%)`, pointerEvents: 'none'
       }} />
       <div style={{
         position: 'absolute', bottom: 80, left: -120, width: 480, height: 480, borderRadius: '50%',
-        background: `radial-gradient(circle,${rgba(accent, .13)} 0%,transparent 70%)`, pointerEvents: 'none'
+        background: `radial-gradient(circle,${rgba(accent, isMinimal ? .07 : isLoud ? .2 : .13)} 0%,transparent 70%)`, pointerEvents: 'none'
       }} />
       <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap }}>
         {visible.map((id, i) => {
@@ -364,6 +491,9 @@ export default function CreateStatusPage() {
 
   const [company, setCompany] = useState<any>(null);
   const [pitches, setPitches] = useState<{ id: string; name: string }[]>([]);
+  // Fotos reales de MIS canchas (únicamente de mi propia empresa — get_pitches ya está
+  // bloqueado server-side al dueño autenticado), para usarlas como fondo del póster.
+  const [pitchPhotos, setPitchPhotos] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingH, setLoadingH] = useState(false);
   const [busy, setBusy] = useState<null | 'dl' | 'share'>(null);
@@ -441,7 +571,16 @@ export default function CreateStatusPage() {
         const resJson = await res.json();
 
         let currentCompany = resJson?.company || null;
-        let pitchList = (resJson?.data || []).map((p: any) => ({ id: p.id, name: p.name }));
+        const rawPitches: any[] = resJson?.data || [];
+        let pitchList = rawPitches.map((p: any) => ({ id: p.id, name: p.name }));
+
+        // Extraer únicamente las fotos reales de MIS canchas (media_urls / image_url)
+        const photos: string[] = [];
+        rawPitches.forEach((p: any) => {
+          if (Array.isArray(p.media_urls)) photos.push(...p.media_urls.filter((u: any) => typeof u === 'string' && u));
+          else if (p.image_url) photos.push(p.image_url);
+        });
+        if (photos.length > 0) setPitchPhotos([...new Set(photos)].slice(0, 24));
 
         // Si no encontró compañía, asegurar que exista
         if (!currentCompany) {
@@ -576,6 +715,9 @@ export default function CreateStatusPage() {
   const dayLabel = forTomorrow ? 'Mañana' : 'Hoy';
   const dateStr = fmtDate(tgtYmd);
   const sortedH = useMemo(() => sortH(hours), [hours]);
+  // Muestra real (no inventada) de 1-2 horas YA ocupadas, para el efecto de
+  // urgencia "mira, se están llenando" que pediste en las referencias.
+  const occupiedSample = useMemo(() => sortH([...bookedSet]).slice(0, 2), [bookedSet]);
   const fileName = `poster-${(cfg.name || 'cancha').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${tgtYmd}.png`;
   const selPitchName = useMemo(() => {
     if (selPitch === 'all') return pitches.length > 0 ? 'Todas las Canchas' : '';
@@ -801,11 +943,13 @@ export default function CreateStatusPage() {
       ['header', 'title', 'hours', 'footer'],            // Minimalista sin mensaje adicional
     ];
     const ALIGNS: Align[] = ['center', 'left', 'right'];
-    const CARD_STYLES: CardStyle[] = ['round', 'pill', 'solid'];
-    const PATTERNS: Pattern[] = ['pitch', 'diagonal', 'dots', 'none'];
+    const CARD_STYLES: CardStyle[] = ['round', 'pill', 'solid', 'ticket'];
+    const PATTERNS: Pattern[] = ['pitch', 'grass', 'diagonal', 'dots', 'none'];
     const LOGO_STYLES: LogoStyle[] = ['badge', 'tint', 'original'];
     const NAME_SIZES = [56, 64, 72];
     const PADDINGS = [55, 65, 75];
+    const TEMPLATES: TemplateId[] = ['classic', 'hero', 'split', 'neon', 'minimal'];
+    const FONTS: FontStyle[] = ['inter', 'bebas', 'anton', 'oswald', 'poppins'];
 
     // Paleta de colores armoniosa (preset oficial o combinación HSL)
     const h = Math.floor(Math.random() * 360);
@@ -827,6 +971,13 @@ export default function CreateStatusPage() {
     const nextLogoStyle = LOGO_STYLES[Math.floor(Math.random() * LOGO_STYLES.length)];
     const nextNameSize = NAME_SIZES[Math.floor(Math.random() * NAME_SIZES.length)];
     const nextPadding = PADDINGS[Math.floor(Math.random() * PADDINGS.length)];
+    const nextTemplate = TEMPLATES[Math.floor(Math.random() * TEMPLATES.length)];
+    const nextFont = FONTS[Math.floor(Math.random() * FONTS.length)];
+
+    // Si tengo fotos reales de mis canchas, a veces las uso de fondo (variedad real)
+    const usePhoto = pitchPhotos.length > 0 && Math.random() < 0.5;
+    const nextPhoto = usePhoto ? pitchPhotos[Math.floor(Math.random() * pitchPhotos.length)] : undefined;
+    const nextOverlay = 0.35 + Math.random() * 0.35;
 
     setCfg(prev => ({
       ...prev,
@@ -838,6 +989,11 @@ export default function CreateStatusPage() {
       nameSize: nextNameSize,
       padding: nextPadding,
       pal: randomPal,
+      templateId: nextTemplate,
+      fontStyle: nextFont,
+      showPitchImage: usePhoto,
+      pitchImageUrl: nextPhoto || prev.pitchImageUrl,
+      imageOverlay: usePhoto ? nextOverlay : prev.imageOverlay,
     }));
   };
 
@@ -853,7 +1009,7 @@ export default function CreateStatusPage() {
   /* Póster oculto para exportar a 1080px */
   const HiddenPoster = (
     <div style={{ position: 'fixed', left: '-9999px', top: 0, width: dims.w, height: dims.h, pointerEvents: 'none' }}>
-      <Poster innerRef={exportRef} cfg={cfg} hours={sortedH} dayLabel={dayLabel} dateStr={dateStr} logoSrc={logoSrc} pitchName={selPitchName} />
+      <Poster innerRef={exportRef} cfg={cfg} hours={sortedH} occupiedSample={occupiedSample} dayLabel={dayLabel} dateStr={dateStr} logoSrc={logoSrc} pitchName={selPitchName} />
     </div>
   );
 
@@ -1082,11 +1238,99 @@ export default function CreateStatusPage() {
           <Plus size={12} /> Añadir
         </button>
       </div>
+
+      {occupiedSample.length > 0 && (
+        <button onClick={() => set('showOccupiedHint', !cfg.showOccupiedHint)}
+          className={`w-full py-2.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${cfg.showOccupiedHint
+            ? 'bg-rose-600 text-white border-rose-500'
+            : 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
+            }`}>
+          🚫 Mostrar {occupiedSample.length} hora{occupiedSample.length > 1 ? 's' : ''} ya ocupada{occupiedSample.length > 1 ? 's' : ''} (urgencia)
+        </button>
+      )}
     </div>
   );
 
   const ColorsSection = (
     <div className="space-y-4">
+      <div className="space-y-2">
+        <label className="text-xs font-bold text-foreground dark:text-zinc-300 flex items-center gap-1.5">
+          <LayoutTemplate size={14} className="text-emerald-500" /> Plantilla
+        </label>
+        <div className="grid grid-cols-3 gap-2">
+          {(Object.keys(TEMPLATE_LABEL) as TemplateId[]).map(t => (
+            <button key={t} onClick={() => set('templateId', t)}
+              className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${cfg.templateId === t
+                ? 'bg-emerald-600 text-white border-emerald-500'
+                : 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
+                }`}>
+              {TEMPLATE_LABEL[t]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-xs font-bold text-foreground dark:text-zinc-300 flex items-center gap-1.5">
+          <Crop size={14} className="text-emerald-500" /> Foto de fondo (tus canchas)
+        </label>
+        {pitchPhotos.length > 0 ? (
+          <>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              <button onClick={() => set('showPitchImage', false)}
+                className={`shrink-0 h-16 w-16 rounded-xl border-2 flex items-center justify-center text-[10px] font-bold text-center px-1 ${!cfg.showPitchImage
+                  ? 'border-emerald-400 ring-1 ring-emerald-400 bg-secondary text-foreground'
+                  : 'border-transparent bg-secondary/60 text-muted-foreground'
+                  }`}>
+                Sin foto
+              </button>
+              {pitchPhotos.map(url => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <button key={url} onClick={() => setCfg(p => ({ ...p, showPitchImage: true, pitchImageUrl: url }))}
+                  className={`shrink-0 h-16 w-16 rounded-xl border-2 overflow-hidden ${cfg.showPitchImage && cfg.pitchImageUrl === url
+                    ? 'border-emerald-400 ring-1 ring-emerald-400'
+                    : 'border-transparent opacity-80 hover:opacity-100'
+                    }`}>
+                  <img src={url} alt="" className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+            {cfg.showPitchImage && (
+              <label className="block space-y-1 pt-1">
+                <div className="flex justify-between text-xs font-semibold text-foreground dark:text-zinc-300">
+                  <span>Oscurecer foto</span><span>{Math.round(cfg.imageOverlay * 100)}%</span>
+                </div>
+                <input type="range" min={0.15} max={0.85} step={0.05} value={cfg.imageOverlay}
+                  onChange={e => set('imageOverlay', Number(e.target.value))}
+                  className="w-full accent-emerald-500" />
+              </label>
+            )}
+          </>
+        ) : (
+          <p className="text-[11px] text-muted-foreground bg-secondary/40 rounded-lg px-3 py-2">
+            Sube fotos a tus canchas (desde "Mis Canchas") para poder usarlas de fondo aquí.
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-xs font-bold text-foreground dark:text-zinc-300 flex items-center gap-1.5">
+          <Type size={14} className="text-emerald-500" /> Tipografía
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          {(Object.keys(FONT_LABEL) as FontStyle[]).map(f => (
+            <button key={f} onClick={() => set('fontStyle', f)}
+              style={{ fontFamily: FONT_HEAD[f] }}
+              className={`py-2.5 px-3 rounded-xl text-sm font-bold border transition-all ${cfg.fontStyle === f
+                ? 'bg-emerald-600 text-white border-emerald-500'
+                : 'bg-secondary/70 hover:bg-secondary text-foreground border-border dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
+                }`}>
+              {FONT_LABEL[f]}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="space-y-2">
         <label className="text-xs font-bold text-foreground dark:text-zinc-300 flex items-center gap-1.5">
           <Palette size={14} className="text-emerald-500" /> Paletas Destacadas
@@ -1128,6 +1372,7 @@ export default function CreateStatusPage() {
         <div className="grid grid-cols-2 gap-2">
           {[
             { v: 'pitch' as const, label: 'Cancha' },
+            { v: 'grass' as const, label: 'Césped' },
             { v: 'dots' as const, label: 'Puntos' },
             { v: 'diagonal' as const, label: 'Líneas' },
             { v: 'none' as const, label: 'Liso' },
@@ -1243,11 +1488,12 @@ export default function CreateStatusPage() {
 
       <div className="space-y-2">
         <label className="text-xs font-bold text-foreground dark:text-zinc-300">Estilo de Tarjetas de Horas</label>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {[
             { v: 'round' as const, label: 'Redondas' },
             { v: 'pill' as const, label: 'Cápsulas' },
             { v: 'solid' as const, label: 'Rellenas' },
+            { v: 'ticket' as const, label: '🎫 Boleta' },
           ].map(o => (
             <button key={o.v} onClick={() => set('cardStyle', o.v)}
               className={`py-2 rounded-xl text-xs font-bold border transition-all ${cfg.cardStyle === o.v
@@ -1338,7 +1584,7 @@ export default function CreateStatusPage() {
               transformOrigin: 'top left',
               pointerEvents: 'none',
             }}>
-              <Poster cfg={cfg} hours={sortedH} dayLabel={dayLabel} dateStr={dateStr} logoSrc={logoSrc} pitchName={selPitchName} />
+              <Poster cfg={cfg} hours={sortedH} occupiedSample={occupiedSample} dayLabel={dayLabel} dateStr={dateStr} logoSrc={logoSrc} pitchName={selPitchName} />
             </div>
           </div>
         </div>
@@ -1687,7 +1933,7 @@ export default function CreateStatusPage() {
                       pointerEvents: 'none',
                     }}
                   >
-                    <Poster cfg={cfg} hours={sortedH} dayLabel={dayLabel} dateStr={dateStr} logoSrc={logoSrc} pitchName={selPitchName} />
+                    <Poster cfg={cfg} hours={sortedH} occupiedSample={occupiedSample} dayLabel={dayLabel} dateStr={dateStr} logoSrc={logoSrc} pitchName={selPitchName} />
                   </div>
                 </div>
               </div>

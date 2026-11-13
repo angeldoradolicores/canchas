@@ -1,5 +1,31 @@
 import { createClient } from '@supabase/supabase-js';
 import { resolvePitchLocation, buildGoogleMapsUrl } from './pitch-location';
+import { getPresignedR2Url } from './storage/r2';
+
+/**
+ * Convierte el valor guardado en bookings.payment_proof_url en una URL que la
+ * Evolution API pueda descargar desde fuera (servidor externo, sin sesión):
+ *  - `/api/receipts/<key>`  → se firma el objeto R2 con expiración corta (1 h).
+ *  - URL http(s) absoluta    → se usa tal cual (comprobantes públicos o legados).
+ * Se descarta el sufijo `###remaining:` que algunas filas antiguas tienen embebido.
+ */
+async function resolveProofForWhatsApp(rawProof: string | null | undefined): Promise<string | null> {
+  if (!rawProof || typeof rawProof !== 'string') return null;
+  const proof = rawProof.split('###remaining:')[0].trim();
+  if (!proof) return null;
+  const marker = '/api/receipts/';
+  const idx = proof.indexOf(marker);
+  if (idx >= 0) {
+    const key = proof.slice(idx + marker.length);
+    try {
+      return await getPresignedR2Url(key, 3600);
+    } catch {
+      return null;
+    }
+  }
+  if (/^https?:\/\//i.test(proof)) return proof;
+  return null;
+}
 
 
 const supabase = createClient(
@@ -13,6 +39,26 @@ const evoApiKey = process.env.EVOLUTION_API_KEY || process.env.EVOLUTION_GLOBAL_
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://cancheros.site').replace(/\/$/, '');
 const OWNER_DEFAULT_PHONE = '573006577286';
+
+// Variantes de respuesta "humana" al bot central cuando se aprueba un comprobante.
+// Evita que la conversación con 3006577286 se vea unidireccional (el central manda
+// comprobantes a todos los complejos y si nunca recibe respuesta, el hilo parece
+// envío masivo no solicitado ante los sistemas antispam de WhatsApp).
+const CENTRAL_CONFIRMATION_REPLIES = [
+  'Confirmado ✅',
+  'Listo, ya quedó confirmado 👍',
+  'Pago verificado, gracias',
+  'Recibido, confirmado por aquí',
+  'Ok, ya está pagado y confirmado',
+  'Perfecto, confirmado',
+  'Listo, pago recibido ✅',
+  'Confirmado, gracias por avisar',
+  'Todo en orden, confirmado',
+];
+
+function pickRandomCentralReply(): string {
+  return CENTRAL_CONFIRMATION_REPLIES[Math.floor(Math.random() * CENTRAL_CONFIRMATION_REPLIES.length)];
+}
 
 // Instancia central oficial conectada al número 3006577286
 export const CENTRAL_WHATSAPP_INSTANCE = process.env.CENTRAL_WHATSAPP_INSTANCE || 'Cancheros';
@@ -316,12 +362,13 @@ export async function notifyBookingSubmitted(bookingId: string) {
       sendTasks.push(
         (async () => {
           let sent = false;
-          if (payment_proof_url) {
+          const proofForSend = await resolveProofForWhatsApp(payment_proof_url);
+          if (proofForSend) {
             // Envía la foto del comprobante directamente con todos los datos en el pie de foto
             sent = await sendEvolutionWhatsAppMedia(
               ownerSenderInstance,
               phone,
-              payment_proof_url,
+              proofForSend,
               ownerMsg
             );
           }
@@ -442,6 +489,13 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
         `⏰ *${siblingBookings.length > 1 ? 'HORARIOS RESERVADOS:' : 'HORARIO:'}* ${horasStr}\n` +
         `📍 *VER EN MAPS:* <${mapsUrl}>\n\n`;
       await sendEvolutionWhatsAppText(instanceName, b.customer_phone, ticketMsg);
+
+      // Responder al bot central (3006577286) desde la instancia PROPIA del complejo,
+      // simulando una respuesta humana natural al comprobante que ese número envió.
+      // No bloquea ni afecta la respuesta al dueño/cliente si falla.
+      void sendEvolutionWhatsAppText(instanceName, OWNER_DEFAULT_PHONE, pickRandomCentralReply()).catch(err =>
+        console.error('[notifyBookingStatusChange] Error respondiendo al bot central:', err)
+      );
     } else {
       // ── RESERVA DECLINADA / CANCELADA ──
       const cancelMsg =

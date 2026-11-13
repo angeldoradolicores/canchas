@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
+import { fetchOccupancy } from '@/lib/occupancy';
 import { getLinkedPitchIds } from '@/lib/combined-pitch-utils';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -504,15 +505,14 @@ export function ContractBookingModal({
         const minDate = targetDates[0];
         const maxDate = targetDates[targetDates.length - 1];
 
-        const { data, error: fetchErr } = await supabase
-          .from('bookings')
-          .select('start_time, status, expires_at, pitch_id')
-          .in('pitch_id', pitchIds)
-          .gte('start_time', `${minDate}T00:00:00-05:00`)
-          .lte('start_time', `${maxDate}T23:59:59-05:00`)
-          .neq('status', 'cancelled');
+        const data = await fetchOccupancy(
+          supabase,
+          pitchIds,
+          `${minDate}T00:00:00-05:00`,
+          `${maxDate}T23:59:59-05:00`,
+        );
 
-        if (fetchErr || !data) return;
+        if (!data) return;
 
         const counts: Record<string, number> = {};
         const dateSlotSet = new Set<string>();

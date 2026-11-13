@@ -20,6 +20,13 @@ export async function GET(
       return new NextResponse('Invalid path', { status: 400 });
     }
 
+    // ── Solo contenido PÚBLICO. Los comprobantes de pago (comprobantes/*, receipts/*)
+    //    son privados y jamás deben servirse por esta ruta sin autenticación. ──
+    const PUBLIC_PREFIXES = ['pitchs/', 'pitch-images/', 'schools/', 'school-images/', 'tournaments/', 'avatars/'];
+    if (!PUBLIC_PREFIXES.some((p) => key.startsWith(p))) {
+      return new NextResponse('Not found', { status: 404 });
+    }
+
     const client = getR2Client();
     const bucket = process.env.R2_BUCKET_NAME || '';
 

@@ -3,11 +3,26 @@ import { createClient, User } from '@supabase/supabase-js';
 
 function getAdminSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    '';
-  return createClient(url, key);
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  // Fail-closed: en el servidor NUNCA caemos a la anon key. Si falta la service role,
+  // preferimos romper (500) antes que operar con menos privilegios de los esperados
+  // y abrir rutas de autorización inseguras.
+  if (!url || !key) {
+    throw new Error('[auth-guard] Falta SUPABASE_SERVICE_ROLE_KEY o NEXT_PUBLIC_SUPABASE_URL');
+  }
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+/**
+ * Rol de plataforma (superadmin/admin). SOLO se confía en `app_metadata`, que
+ * únicamente puede escribir el service role; `user_metadata` es editable por el
+ * propio usuario (supabase.auth.updateUser) y por eso NO se usa para autorizar.
+ */
+export function isPlatformAdmin(user: User | null | undefined): boolean {
+  const role = (user?.app_metadata as Record<string, unknown> | undefined)?.role;
+  return role === 'superadmin' || role === 'admin';
 }
 
 /**

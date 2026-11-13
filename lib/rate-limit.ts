@@ -27,16 +27,26 @@ function purgeExpiredRecords(now: number, maxAgeMs: number = 300 * 1000) {
  * Obtiene la IP del cliente a partir de los headers de la solicitud
  */
 export function getClientIp(req: NextRequest): string {
-  const forwardedFor = req.headers.get('x-forwarded-for');
-  if (forwardedFor) {
-    const ips = forwardedFor.split(',');
-    return ips[0].trim();
-  }
-  const realIp = req.headers.get('x-real-ip');
-  if (realIp) return realIp.trim();
+  // IMPORTANTE: el cliente puede falsificar X-Forwarded-For. Solo se debe confiar en
+  // la IP que añade NUESTRO proxy de borde. `cf-connecting-ip` lo pone Cloudflare y no
+  // es reescribible por el cliente cuando se está detrás de CF. Para X-Forwarded-For
+  // tomamos la IP situada a `TRUSTED_PROXY_HOPS` saltos del final (la que insertó
+  // nuestro proxy), no la primera (que el atacante controla).
   const cfIp = req.headers.get('cf-connecting-ip');
   if (cfIp) return cfIp.trim();
-  return '127.0.0.1';
+
+  const realIp = req.headers.get('x-real-ip');
+  if (realIp) return realIp.trim();
+
+  const forwardedFor = req.headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    const hops = Math.max(1, Number(process.env.TRUSTED_PROXY_HOPS || 1));
+    const ips = forwardedFor.split(',').map((s) => s.trim()).filter(Boolean);
+    if (ips.length > 0) {
+      return ips[Math.max(0, ips.length - hops)] || 'unknown';
+    }
+  }
+  return 'unknown';
 }
 
 export interface RateLimitOptions {
@@ -77,6 +87,14 @@ export function checkRateLimit(
 
   let record = rateLimitStore.get(key);
   if (!record) {
+    // Cota dura del almacén para evitar agotamiento de memoria por claves distintas.
+    if (rateLimitStore.size > 50_000) {
+      purgeExpiredRecords(now, windowMs);
+      if (rateLimitStore.size > 50_000) {
+        // Bajo presión extrema, denegar en vez de crecer sin límite.
+        return { success: false, limit: options.limit, remaining: 0, resetTime: 1, retryAfter: 1 };
+      }
+    }
     record = { timestamps: [] };
     rateLimitStore.set(key, record);
   }

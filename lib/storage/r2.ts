@@ -64,17 +64,11 @@ export async function uploadToR2({ buffer, key, contentType, isPrivate = false }
   );
 
   if (isPrivate) {
-    // Para comprobantes privados: generar URL firmada segura con expiración de 7 días (604800 segundos)
-    // Esto garantiza máxima privacidad sin enlaces públicos eternos, y tiempo suficiente para que el dueño y bot de WhatsApp lo verifiquen
-    const presignedUrl = await getSignedUrl(
-      client,
-      new GetObjectCommand({
-        Bucket: bucketName,
-        Key: cleanKey,
-      }),
-      { expiresIn: 604800 }
-    );
-    return { url: presignedUrl, key: cleanKey };
+    // Para comprobantes privados NO guardamos una URL firmada (caducaba a los 7 días
+    // y dejaba el historial con enlaces muertos). Guardamos una ruta estable de la app
+    // que exige sesión del dueño y firma el objeto bajo demanda con expiración corta.
+    // Ver app/api/receipts/[...path]/route.ts
+    return { url: `/api/receipts/${cleanKey}`, key: cleanKey };
   }
 
   // Para archivos públicos (canchas, escuelas, torneos)

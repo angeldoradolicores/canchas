@@ -16,6 +16,7 @@ import { Calendar, Clock } from 'lucide-react';
 import { ComplexCard, ComplexData } from '@/components/ui/ComplexCard';
 import { groupPitchesByComplex, cleanAddress } from '@/lib/complex-utils';
 import { isSlotPassed } from '@/lib/utils';
+import { fetchOccupancy } from '@/lib/occupancy';
 
 
 const DEFAULT_TIME_SLOTS = [
@@ -449,13 +450,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
             // Unión completa de IDs a verificar
             const pitchIdsToCheck = Array.from(new Set([pitch.id, ...directLinkedIds, ...parentIds]));
 
-            const { data: conflicts } = await supabase
-              .from('bookings')
-              .select('start_time, status, expires_at, pitch_id')
-              .in('pitch_id', pitchIdsToCheck)
-              .gte('start_time', dayStartISO)
-              .lte('start_time', dayEndISO)
-              .neq('status', 'cancelled');
+            const conflicts = await fetchOccupancy(supabase, pitchIdsToCheck, dayStartISO, dayEndISO);
 
             const now = new Date();
             const isTaken = (conflicts || []).some((b: any) => {
@@ -717,12 +712,13 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
     const dayStartISO = `${selectedDate}T00:00:00-05:00`;
     const dayEndISO = `${selectedDate}T23:59:59-05:00`;
 
-    const { data: bookings } = await supabase
-      .from('bookings')
-      .select('pitch_id, start_time, status, expires_at')
-      .gte('start_time', dayStartISO)
-      .lte('start_time', dayEndISO)
-      .neq('status', 'cancelled');
+    // Ocupación de todas las canchas visibles (sin PII), en lotes de 50 vía RPC.
+    const bookings = await fetchOccupancy(
+      supabase,
+      pitches.map((p) => p.id),
+      dayStartISO,
+      dayEndISO,
+    );
 
     const now = new Date();
 

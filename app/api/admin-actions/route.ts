@@ -162,10 +162,12 @@ export async function POST(req: NextRequest) {
 
     // ── 4. ACCIÓN: GET_PITCHES ──
     if (action === 'get_pitches') {
-      const targetOwnerId = ownerId || (typeof payload?.owner_id === 'string' ? payload.owner_id : null);
-      if (!targetOwnerId) {
+      // Solo se listan las canchas del dueño autenticado. Nunca se confía en un
+      // owner_id del body (permitía enumerar las canchas de cualquier complejo).
+      if (!ownerId) {
         return NextResponse.json({ success: true, data: [] });
       }
+      const targetOwnerId = ownerId;
 
       const { data: companies } = await supabase
         .from('companies')
@@ -699,7 +701,8 @@ export async function POST(req: NextRequest) {
           }
 
           if (insertErr) {
-            if (insertErr.code === '23505') {
+            // 23505 (único) o 23P01 (exclusión anti-solape de la BD): la hora ya está tomada.
+            if (insertErr.code === '23505' || insertErr.code === '23P01' || insertErr.message?.includes('SLOT_TAKEN')) {
               if (isContract) {
                 skippedConflicts.push({ slot: item.start_time, reason: 'Hora ya ocupada' });
                 continue;
@@ -1089,6 +1092,9 @@ export async function POST(req: NextRequest) {
                 }
               }
               skippedConflicts.push({ slot: item.start_time, reason: 'Hora ya ocupada en base de datos' });
+            } else if (insertErr.code === '23P01' || insertErr.message?.includes('SLOT_TAKEN')) {
+              // Garantía anti-solape de la BD (incluye canchas combinadas/hijas).
+              skippedConflicts.push({ slot: item.start_time, reason: 'Hora ya ocupada (solape con otra cancha vinculada)' });
             } else {
               skippedConflicts.push({ slot: item.start_time, reason: insertErr.message });
             }

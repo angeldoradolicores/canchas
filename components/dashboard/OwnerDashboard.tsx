@@ -157,6 +157,32 @@ function getBookingDeposit(b: any): number {
   return 0;
 }
 
+// Abonos/saldos cobrados en el local (pagos parciales registrados después del anticipo).
+function getBookingAbonos(b: any): number {
+  if (!b) return 0;
+  const rem = getBookingRemainingPayment(b);
+  return Number(rem?.amount || b.remaining_amount_paid || 0);
+}
+
+// Monto REALMENTE cobrado de una reserva.
+// Regla: una reserva del panel del dueño (manual / turno fijo) marcada como pagada
+// (payment_status 'verified') y que NO sea a crédito ni cuenta por cobrar, se considera
+// COBRADA en su totalidad (se pagó por adelantado en el local). El resto se cobra por
+// anticipo + abonos, con tope en el valor total.
+function getBookingCollected(b: any): number {
+  if (!b) return 0;
+  const total = getBookingIncome(b);
+  if (b.is_loyalty_free) return 0;
+  const method = b.payment_method;
+  const paidInFull =
+    b.source === 'owner_panel' &&
+    b.payment_status === 'verified' &&
+    method !== 'credito' &&
+    method !== 'cuenta_cobrar';
+  if (paidInFull) return total;
+  return Math.min(getBookingDeposit(b) + getBookingAbonos(b), total);
+}
+
 function MiniBarChart({
   data,
   selectedIsoDate,
@@ -433,12 +459,12 @@ export function OwnerDashboard() {
   const pending = filteredBookings.filter(b => b.status === 'pending');
   const cancelled = filteredBookings.filter(b => b.status === 'cancelled' || b.status === 'rejected');
   const totalIncome = confirmed.reduce((s, b) => s + getBookingIncome(b), 0);
-  const totalDeposits = confirmed.reduce((s, b) => s + getBookingDeposit(b), 0);
-  const totalRemainingPaid = confirmed.reduce((s, b) => {
-    const rem = getBookingRemainingPayment(b);
-    return s + Number(rem?.amount || b.remaining_amount_paid || 0);
-  }, 0);
-  const totalCollected = totalDeposits + totalRemainingPaid;
+  // Cobrado total = suma de lo realmente cobrado por reserva (incluye pagos adelantados
+  // del panel del dueño como cobrados completos). El desglose se mantiene coherente:
+  // "cobrado directo/anticipos" + "abonos de saldo" = totalCollected.
+  const totalCollected = confirmed.reduce((s, b) => s + getBookingCollected(b), 0);
+  const totalRemainingPaid = confirmed.reduce((s, b) => s + getBookingAbonos(b), 0);
+  const totalDeposits = Math.max(0, totalCollected - totalRemainingPaid);
   const pendingCollection = Math.max(0, totalIncome - totalCollected);
   const avgIncome = confirmed.length > 0 ? Math.round(totalIncome / confirmed.length) : 0;
   const confirmRate = filteredBookings.length > 0 ? Math.round((confirmed.length / filteredBookings.length) * 100) : 0;
@@ -745,7 +771,7 @@ export function OwnerDashboard() {
             icon={<DollarSign size={18} className="text-primary shrink-0" />}
             title="Total Facturado"
             value={fmt(totalIncome)}
-            sub={`Abonos: ${fmt(totalDeposits)} · Saldo: ${fmt(totalRemainingPaid)}`}
+            sub={`Directo/anticipos: ${fmt(totalDeposits)} · Saldos: ${fmt(totalRemainingPaid)}`}
             accent="bg-primary"
             onClick={() => router.push('/dashboard/bookings')}
           />
@@ -827,7 +853,7 @@ export function OwnerDashboard() {
           <div>
             <span className="text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-300 tracking-wider block">Dinero en Caja (Recaudado)</span>
             <span className="text-lg font-black text-emerald-700 dark:text-emerald-400">{fmt(totalCollected)}</span>
-            <span className="text-[10px] text-muted-foreground block mt-0.5">Abonos: {fmt(totalDeposits)} · Saldos: {fmt(totalRemainingPaid)}</span>
+            <span className="text-[10px] text-muted-foreground block mt-0.5">Directo/anticipos: {fmt(totalDeposits)} · Saldos: {fmt(totalRemainingPaid)}</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold shrink-0">
             <CheckCircle2 size={20} />

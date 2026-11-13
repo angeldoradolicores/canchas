@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowRight, Clock3, Heart, MapPin, ShieldCheck, CalendarDays, Calendar, CheckCircle, Loader2, Grid, X, ChevronLeft, ChevronRight, Trophy, CheckCircle2, Phone, Users, Building2, Layers, LandPlot, Check, Copy, Warehouse, Sun } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
+import { fetchOccupancy } from '@/lib/occupancy';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { useToday } from '@/lib/use-today';
@@ -252,15 +253,9 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
     // Unión completa: cancha actual + sus hijas (si es combinada) + sus padres (si es hija)
     const pitchIds = Array.from(new Set([currentPitch.id, ...directLinkedIds, ...parentIds]));
 
-    const { data, error } = await supabase
-      .from('bookings')
-      .select('start_time, status, expires_at, pitch_id')
-      .in('pitch_id', pitchIds)
-      .gte('start_time', dayStart)
-      .lte('start_time', dayEnd)
-      .neq('status', 'cancelled');
+    const data = await fetchOccupancy(supabase, pitchIds, dayStart, dayEnd);
 
-    if (!error && data) {
+    if (data) {
       const taken = new Map<string, { status: string, expires_at: string | null }>();
       data.forEach((b: any) => {
         // Ignorar drafts expirados

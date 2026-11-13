@@ -10,13 +10,17 @@ import { getFriendlyErrorMessage } from '@/lib/error-handler';
 
 interface AuthFormProps {
   mode: 'login' | 'register';
-  forcedRole?: 'player' | 'owner' | 'superadmin';
+  // Solo se permite auto-registrarse como jugador o dueño. El rol de plataforma
+  // (admin/superadmin) jamás se asigna desde el cliente.
+  forcedRole?: 'player' | 'owner';
   title: string;
   subtitle: string;
   redirectPath?: string;
 }
 
 export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirectPath = '/' }: AuthFormProps) {
+  // Clamp defensivo: cualquier valor distinto de 'owner' se trata como 'player'.
+  const safeRole: 'player' | 'owner' = forcedRole === 'owner' ? 'owner' : 'player';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -65,17 +69,8 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
         if (error.message?.toLowerCase().includes('email not confirmed')) {
           setError('Tu correo electrónico no ha sido confirmado aún. Por favor revisa tu bandeja de entrada o spam.');
         } else {
-          try {
-            const checkRes = await fetch('/api/auth/verify-login-error', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email }),
-            });
-            const checkData = await checkRes.json();
-            setError(checkData.message || 'Correo o contraseña incorrectos.');
-          } catch {
-            setError('Correo o contraseña incorrectos.');
-          }
+          // Mensaje genérico para no revelar si el correo existe (anti-enumeración de usuarios)
+          setError('Correo o contraseña incorrectos.');
         }
       } else {
         // Intentar leer rol directamente del JWT (sin round-trip a DB)
@@ -130,7 +125,7 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
         email,
         password,
         options: {
-          data: { full_name: fullName, role: forcedRole, phone: cleanPhone },
+          data: { full_name: fullName, role: safeRole, phone: cleanPhone },
           emailRedirectTo,
         },
       });
@@ -143,7 +138,7 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
               id: data.user.id,
               phone: cleanPhone,
               full_name: fullName,
-              role: forcedRole
+              role: safeRole
             }, { onConflict: 'id' });
             if (forcedRole === 'owner') {
               await supabase.from('companies').update({ owner_phone: cleanPhone }).eq('owner_id', data.user.id);
@@ -300,7 +295,7 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
       <div className="space-y-4">
         <GoogleAuthButton
           mode={mode}
-          role={forcedRole === 'superadmin' ? 'player' : forcedRole}
+          role={safeRole}
           fullName={fullName}
           redirectPath={redirectPath}
           onError={(err) => setError(err)}

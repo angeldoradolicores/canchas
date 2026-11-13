@@ -35,16 +35,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Acción inválida' }, { status: 400 });
     }
 
-    // 2. Find the company owned by this user
-    const { data: company } = await supabase
+    // 2. Find ALL companies owned by this user (un dueño puede tener varias sedes;
+    //    con .maybeSingle() fallaba si tenía más de una).
+    const { data: companies } = await supabase
       .from('companies')
       .select('id')
-      .eq('owner_id', user.id)
-      .maybeSingle();
+      .eq('owner_id', user.id);
 
-    if (!company) {
+    if (!companies || companies.length === 0) {
       return NextResponse.json({ error: 'No tienes una empresa registrada' }, { status: 403 });
     }
+    const companyIds = new Set(companies.map((c: any) => c.id));
 
     // 3. Validate ALL requested booking IDs belong to this owner's company pitches
     //    and are in 'pending' state (prevent double-approve / approve-cancelled)
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
 
     // All bookings must belong to this owner's company
     const unauthorized = bookings.filter(
-      (b: any) => b.pitches?.company_id !== company.id
+      (b: any) => !companyIds.has(b.pitches?.company_id)
     );
     if (unauthorized.length > 0) {
       return NextResponse.json({ error: 'Acceso denegado a una o más reservas' }, { status: 403 });

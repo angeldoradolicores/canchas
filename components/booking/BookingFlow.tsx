@@ -6,6 +6,7 @@ import { ArrowLeft, Check, Upload, CheckCircle2, Loader2, Image as ImageIcon, Ca
 import { Pitch } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/client';
+import { fetchOccupancy } from '@/lib/occupancy';
 import { useToday } from '@/lib/use-today';
 import { CustomMonthCalendar } from '../explore/CustomMonthCalendar';
 import { useActiveBooking } from '@/lib/active-booking-context';
@@ -488,13 +489,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
       // Unión: cancha actual + hijas + padres combinados
       const pitchIds = Array.from(new Set([currentPitch.id, ...directLinkedIds, ...parentIds]));
 
-      const { data } = await supabase
-        .from('bookings')
-        .select('start_time, status, expires_at, pitch_id')
-        .in('pitch_id', pitchIds)
-        .gte('start_time', dayStart)
-        .lte('start_time', dayEnd)
-        .neq('status', 'cancelled');
+      const data = await fetchOccupancy(supabase, pitchIds, dayStart, dayEnd);
 
       const taken = new Map<string, { status: string, expires_at: string | null }>();
       (data || []).forEach((b: any) => {

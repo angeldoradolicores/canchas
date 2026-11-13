@@ -20,11 +20,9 @@ export async function GET(req: NextRequest) {
 
   try {
     const authedUser = await getAuthenticatedUser(req);
-    const { searchParams } = new URL(req.url);
-    const requestedUserId = searchParams.get('user_id');
-
-    // Usar el usuario autenticado si existe, o el solicitado si no hay sesión
-    const userId = authedUser?.id || requestedUserId;
+    // Solo se devuelven los favoritos del usuario autenticado. Nunca se confía en
+    // un ?user_id= del query (permitía leer los favoritos de cualquier persona).
+    const userId = authedUser?.id || null;
     if (!userId) {
       return NextResponse.json({ favorites: [] });
     }
@@ -77,9 +75,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Falta pitch_id' }, { status: 400 });
     }
 
-    // Resolver usuario auténtico desde la sesión
+    // Resolver usuario auténtico desde la sesión. Nunca se usa body.user_id:
+    // permitía añadir/quitar favoritos en la cuenta de otra persona (IDOR).
     const authedUser = await getAuthenticatedUser(req);
-    const effectiveUserId = authedUser?.id || (typeof body.user_id === 'string' ? body.user_id : null);
+    const effectiveUserId = authedUser?.id || null;
 
     if (!effectiveUserId) {
       return NextResponse.json({

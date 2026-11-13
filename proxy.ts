@@ -64,6 +64,24 @@ export async function proxy(request: NextRequest) {
         loginUrl.searchParams.set('next', pathname);
         return NextResponse.redirect(loginUrl);
       }
+
+      // Defensa en profundidad: además de exigir sesión, verificar el ROL en el Edge.
+      // El rol de plataforma viene de app_metadata (no falsificable); el de dueño se
+      // confirma contra profiles. Así un jugador autenticado no recibe el shell del panel.
+      const appRole = (user.app_metadata as Record<string, unknown> | undefined)?.role;
+      let allowed = appRole === 'owner' || appRole === 'admin' || appRole === 'superadmin';
+      if (!allowed) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+        const role = profile?.role;
+        allowed = role === 'owner' || role === 'admin' || role === 'superadmin';
+      }
+      if (!allowed) {
+        return NextResponse.redirect(new URL('/', request.url));
+      }
     }
   } catch {
     // Si falla la conexión o no hay credenciales válidas en /dashboard, redirigir al login

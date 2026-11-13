@@ -54,14 +54,16 @@ export default function PublicProfilePage() {
       setProfile(profData);
 
       if (profData) {
-        const [{ count: bookingsCount }, { count: challengesCount }, { count: reviewsCount }] = await Promise.all([
-          supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('user_id', id as string).eq('status', 'confirmed'),
+        // Las reservas de otros usuarios no son legibles por RLS: se cuenta vía RPC
+        // segura (solo devuelve el número, sin datos personales).
+        const [{ data: bookingsCount }, { count: challengesCount }, { count: reviewsCount }] = await Promise.all([
+          supabase.rpc('get_player_confirmed_count', { p_user_id: id as string }),
           supabase.from('challenges').select('*', { count: 'exact', head: true }).eq('creator_id', id as string),
           supabase.from('pitch_reviews').select('*', { count: 'exact', head: true }).eq('user_id', id as string),
         ]);
 
         setStats({
-          bookings: bookingsCount || 0,
+          bookings: Number(bookingsCount) || 0,
           challenges: challengesCount || 0,
           reviews: reviewsCount || 0,
         });

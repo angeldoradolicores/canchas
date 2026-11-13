@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getAuthenticatedUser, verifyPitchOwnership } from '@/lib/auth-guard';
+import { getAuthenticatedUser, verifyPitchOwnership, isPlatformAdmin } from '@/lib/auth-guard';
 import { safeServerErrorResponse } from '@/lib/error-handler';
 
 function getServiceSupabase() {
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
 
     // 2. Verificar permisos sobre las canchas correspondientes
     const pitchIds = Array.from(new Set(bookingsData.map((b: any) => b.pitch_id).filter(Boolean)));
-    const isSuperAdmin = user.user_metadata?.role === 'admin' || user.user_metadata?.role === 'superadmin';
+    const isSuperAdmin = isPlatformAdmin(user);
 
     if (!isSuperAdmin) {
       for (const pId of pitchIds) {

@@ -1,37 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
+import { getAuthenticatedUser } from '@/lib/auth-guard';
 
 export async function POST(request: NextRequest) {
   try {
-    const { subscription, userId } = await request.json();
-    if (!subscription || !userId) {
-      return NextResponse.json({ error: 'Faltan datos' }, { status: 400 });
+    // Autenticación obligatoria: la suscripción se asocia SIEMPRE al usuario del token,
+    // nunca a un userId arbitrario del body (evita secuestrar las notificaciones de otro).
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
+    const { subscription } = await request.json().catch(() => ({}));
+    if (
+      !subscription ||
+      typeof subscription !== 'object' ||
+      typeof subscription.endpoint !== 'string' ||
+      !/^https:\/\//.test(subscription.endpoint)
+    ) {
+      return NextResponse.json({ error: 'Suscripción inválida' }, { status: 400 });
+    }
+
+    const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
+      { auth: { persistSession: false, autoRefreshToken: false } },
     );
 
-    // Guardar suscripción en tabla push_subscriptions
     const { error } = await supabase
       .from('push_subscriptions')
-      .upsert({
-        user_id: userId,
-        subscription: JSON.stringify(subscription),
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' });
+      .upsert(
+        {
+          user_id: user.id,
+          subscription: JSON.stringify(subscription),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' },
+      );
 
     if (error) {
       console.error('[push-subscribe] DB error:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: 'No se pudo guardar la suscripción' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Error al registrar la suscripción' }, { status: 500 });
   }
 }

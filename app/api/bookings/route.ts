@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
-import { getAuthenticatedUser } from '@/lib/auth-guard';
+import { getAuthenticatedUser, isPlatformAdmin } from '@/lib/auth-guard';
 import {
   BookingCancelDraftSchema,
   BookingLockSchema,
@@ -214,7 +214,7 @@ export async function POST(req: NextRequest) {
         const pitchOwnerId = (pitchOwnerCheck as any)?.companies?.owner_id;
         if (pitchOwnerId && pitchOwnerId === verifiedUserId) {
           isOwnerOfThisPitch = true;
-        } else if (authedUser?.user_metadata?.role === 'superadmin') {
+        } else if (isPlatformAdmin(authedUser)) {
           isOwnerOfThisPitch = true;
         }
       }
@@ -366,6 +366,13 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (insErr) {
+          // Garantía anti-solape de la BD (constraint de exclusión / trigger): hora ya tomada.
+          if (insErr.code === '23P01' || insErr.message?.includes('SLOT_TAKEN')) {
+            return NextResponse.json(
+              { error: 'Esta hora ya ha sido reservada.' },
+              { status: 409 }
+            );
+          }
           // INSERT falló — lo más probable es una race condition (23505 unique constraint)
           if (insErr.code === '23505' || insErr.message?.includes('unique')) {
             // Re-fetch atómico: ver quién ganó la carrera
@@ -496,7 +503,7 @@ export async function POST(req: NextRequest) {
         const pitchOwnerId = (pitchOwnerCheck as any)?.companies?.owner_id;
         if (pitchOwnerId && pitchOwnerId === verifiedUserId) {
           isOwnerOfThisPitch = true;
-        } else if (authedUser?.user_metadata?.role === 'superadmin') {
+        } else if (isPlatformAdmin(authedUser)) {
           isOwnerOfThisPitch = true;
         }
       }
@@ -722,6 +729,12 @@ export async function POST(req: NextRequest) {
               _supportsFinancialCols = true;
             }
 
+            if (updateErr?.code === '23P01' || updateErr?.message?.includes('SLOT_TAKEN')) {
+              return NextResponse.json(
+                { error: `La hora ${slot} ya ha sido reservada.` },
+                { status: 409 }
+              );
+            }
             if (updateErr || !updated) {
               console.error(`Error actualizando booking id ${existing.id}:`, updateErr);
               return NextResponse.json(
@@ -769,6 +782,12 @@ export async function POST(req: NextRequest) {
               _supportsFinancialCols = true;
             }
 
+            if (insertErr?.code === '23P01' || insertErr?.message?.includes('SLOT_TAKEN')) {
+              return NextResponse.json(
+                { error: `La hora ${slot} ya ha sido reservada.` },
+                { status: 409 }
+              );
+            }
             if (insertErr || !inserted) {
               console.error(`Error insertando booking para slot ${slot}:`, insertErr);
               return NextResponse.json(
@@ -810,7 +829,10 @@ export async function POST(req: NextRequest) {
             const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
             fetch(`${appBaseUrl}/api/send-push`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                'x-internal-secret': process.env.INTERNAL_API_SECRET || '',
+              },
               body: JSON.stringify({
                 userId: targetOwnerId,
                 title: '⚽ Cancheros: Reserva por aprobar',
@@ -822,11 +844,12 @@ export async function POST(req: NextRequest) {
         } catch { /* no crítico */ }
 
         // Invalidar caché de disponibilidad para este pitch+fecha
-        // para que la próxima consulta refleje las horas ya tomadas
+        // para que la próxima consulta refleje las horas ya tomadas.
+        // (Antes se usaba firstBooking.selected_date, que no existe en la fila,
+        //  por lo que la invalidación nunca ocurría y el slot seguía "libre" 20s.)
         try {
-          const firstBooking = updatedBookings[0];
-          if (firstBooking?.pitch_id && firstBooking?.selected_date) {
-            cache.invalidatePrefix(`availability:${firstBooking.pitch_id}:${firstBooking.selected_date}`);
+          if (validPitchId && selected_date) {
+            cache.invalidatePrefix(`availability:${validPitchId}:${selected_date}`);
           }
         } catch { /* no crítico */ }
       }
