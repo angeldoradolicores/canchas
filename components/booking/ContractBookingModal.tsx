@@ -596,14 +596,13 @@ export function ContractBookingModal({
 
       const daysText = DAYS_OF_WEEK.filter(d => selectedDays.includes(d.key)).map(d => d.label).join(', ');
       const slotsText = selectedSlots.map(fmt12).join(', ');
-      const entityLabel = clientType === 'entity'
-        ? `[ENTIDAD: ${clientEntityName.trim() || customerName.trim()}] `
-        : clientType === 'school'
-          ? `[ESCUELA: ${clientEntityName.trim() || customerName.trim()}] `
-          : '';
 
+      // El nombre que se guarda y se muestra en todas partes (aprobar, pendientes,
+      // por cobrar, reportes) debe quedar LIMPIO, sin corchetes ni metadatos — toda
+      // esa información (entidad, CID, esquema de cobro, días/horas) ya queda
+      // guardada por separado en client_entity_name y en el "note" del contrato.
       const displayName = customerName.trim() ? customerName.trim() : primaryName;
-      const contractCustomerName = `${entityLabel}${displayName} [Turno Fijo: ${daysText} ${slotsText}]`;
+      const contractCustomerName = displayName;
 
       const schemeObj = BILLING_SCHEMES.find(b => b.key === billingScheme);
       const billingSchemeLabel = schemeObj ? schemeObj.label : 'Mensualidad';
@@ -1086,35 +1085,7 @@ export function ContractBookingModal({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <div>
-                    <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1.5">
-                      <Phone size={12} /> Teléfono / WhatsApp
-                    </label>
-                    <input
-                      type="tel"
-                      value={customerPhone}
-                      onChange={e => {
-                        // .replace() nos asegura que el resultado final sigue siendo un string
-                        const numeroSolo: string = e.target.value.replace(/\D/g, "");
-
-                        if (numeroSolo.length <= 10) {
-                          setCustomerPhone(numeroSolo); // Ahora TS no se quejará
-                        }
-                      }}
-                      placeholder="3001234567"
-                      className="w-full border border-border bg-card rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500"
-                    />
-
-                    {customerPhone.length === 10 && (
-                      <p className="text-[11px] text-emerald-600 font-medium mt-1">
-                        ✓ Los 10 dígitos están completos
-                      </p>
-                    )}
-                  </div>
-
-
-
+                <div className="pt-1">
                   <div>
                     <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
                       Medio o Canal de Recepción

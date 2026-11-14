@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { createClient as createAdminClient, type EmailOtpType } from '@supabase/supabase-js';
@@ -52,18 +52,24 @@ export async function GET(request: Request) {
   );
 
   let authSuccess = false;
+  // Capturamos el usuario directamente de la MISMA llamada que ya autentica,
+  // para no hacer una llamada extra a getUser() después (round-trip de menos
+  // en cada login, no solo en el primero).
+  let authedUser: any = null;
 
   if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
       authSuccess = true;
+      authedUser = data?.user || data?.session?.user || null;
     } else {
       console.error('exchangeCodeForSession error:', error.message);
     }
   } else if (token_hash && type) {
-    const { error } = await supabase.auth.verifyOtp({ type, token_hash });
+    const { data, error } = await supabase.auth.verifyOtp({ type, token_hash });
     if (!error) {
       authSuccess = true;
+      authedUser = data?.user || data?.session?.user || null;
     } else {
       console.error('verifyOtp error:', error.message);
     }
@@ -72,6 +78,7 @@ export async function GET(request: Request) {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
       authSuccess = true;
+      authedUser = session.user || null;
     }
   }
 
@@ -97,8 +104,13 @@ export async function GET(request: Request) {
     return response;
   }
 
-  // Obtener usuario autenticado
-  const { data: { user } } = await supabase.auth.getUser();
+  // Usar el usuario ya obtenido en el paso de autenticación. Solo si por alguna
+  // razón no vino incluido (defensivo), se hace la llamada extra a getUser().
+  let user = authedUser;
+  if (!user) {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  }
   if (!user) {
     return NextResponse.redirect(`${origin}/login?error=user_not_found`);
   }
@@ -114,17 +126,17 @@ export async function GET(request: Request) {
 
   try {
     if (isOwner) {
-      // 1. Asegurar o actualizar perfil como 'owner'
-      const { data: existingProfile } = await adminSupabase
-        .from('profiles')
-        .select('id, full_name, role, phone')
-        .eq('id', user.id)
-        .maybeSingle();
+      // OPTIMIZACIÓN DE VELOCIDAD: estas dos lecturas son independientes entre
+      // sí, así que se hacen en paralelo en vez de una tras otra.
+      const [{ data: existingProfile }, { data: existingComp }] = await Promise.all([
+        adminSupabase.from('profiles').select('id, full_name, role, phone').eq('id', user.id).maybeSingle(),
+        adminSupabase.from('companies').select('id, owner_phone').eq('owner_id', user.id).limit(1),
+      ]);
 
       const finalName = existingProfile?.full_name || companyName || user.email?.split('@')[0] || 'Dueño';
-
       const phoneFromMeta = user.user_metadata?.phone || null;
 
+      // 1. Asegurar o actualizar perfil como 'owner'
       if (!existingProfile) {
         await adminSupabase.from('profiles').insert({
           id: user.id,
@@ -133,20 +145,21 @@ export async function GET(request: Request) {
           phone: phoneFromMeta,
         });
       } else {
-        await adminSupabase.from('profiles').update({
-          role: 'owner',
-          ...(finalName ? { full_name: finalName } : {}),
-          ...(phoneFromMeta && !existingProfile.phone ? { phone: phoneFromMeta } : {}),
-        }).eq('id', user.id);
+        // Solo escribir si algo realmente va a cambiar — evita un UPDATE de más
+        // en CADA login de un dueño que ya está perfectamente sincronizado.
+        const needsPhone = Boolean(phoneFromMeta && !existingProfile.phone);
+        const needsRole = existingProfile.role !== 'owner';
+        const needsName = Boolean(finalName && finalName !== existingProfile.full_name);
+        if (needsPhone || needsRole || needsName) {
+          await adminSupabase.from('profiles').update({
+            role: 'owner',
+            ...(needsName ? { full_name: finalName } : {}),
+            ...(needsPhone ? { phone: phoneFromMeta } : {}),
+          }).eq('id', user.id);
+        }
       }
 
       // 2. Asegurar empresa / complejo deportivo en 'companies'
-      const { data: existingComp } = await adminSupabase
-        .from('companies')
-        .select('id, owner_phone')
-        .eq('owner_id', user.id)
-        .limit(1);
-
       if (!existingComp || existingComp.length === 0) {
         await adminSupabase.from('companies').insert({
           owner_id: user.id,
@@ -162,18 +175,21 @@ export async function GET(request: Request) {
         }).eq('id', existingComp[0].id);
       }
 
-      // 3. Sincronizar metadata en auth.users si es necesario
+      // 3. Sincronizar metadata en auth.users si es necesario — no bloquea la
+      // redirección, nada en esta petición depende de que termine antes.
       if (user.user_metadata?.role !== 'owner') {
-        try {
-          await adminSupabase.auth.admin.updateUserById(user.id, {
-            user_metadata: {
-              ...user.user_metadata,
-              role: 'owner',
-            },
-          });
-        } catch (mErr) {
-          console.warn('No se pudo actualizar metadata en auth:', mErr);
-        }
+        after(async () => {
+          try {
+            await adminSupabase.auth.admin.updateUserById(user.id, {
+              user_metadata: {
+                ...user.user_metadata,
+                role: 'owner',
+              },
+            });
+          } catch (mErr) {
+            console.warn('No se pudo actualizar metadata en auth:', mErr);
+          }
+        });
       }
     } else {
       // Asegurar perfil básico de jugador si no existe

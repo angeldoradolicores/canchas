@@ -336,6 +336,8 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
       id: string;
       name: string;
       type: 'entity' | 'school' | 'contract';
+      contractId: string | null;
+      pitchId: string;
       pitchName: string;
       paymentMethod: string;
       customRate: number;

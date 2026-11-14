@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
 import { getAuthenticatedUser, isPlatformAdmin } from '@/lib/auth-guard';
@@ -202,15 +202,25 @@ export async function POST(req: NextRequest) {
       const { pitch_id, selected_date, selected_times } = parseResult.data;
       const effectiveUserId = verifiedUserId || parseResult.data.user_id || null;
 
+      // OPTIMIZACIÓN DE VELOCIDAD: estas 3 consultas son independientes entre sí
+      // (ninguna necesita el resultado de otra) pero antes se esperaban una tras
+      // otra. Disparándolas en paralelo, el tiempo total pasa de la suma de las 3
+      // al máximo de las 3 — sin cambiar ninguna validación ni su orden.
+      const [pitchOwnerResult, draftCountResult, conflictingPitchIds] = await Promise.all([
+        verifiedUserId
+          ? supabase.from('pitches').select('id, company_id, companies!inner(owner_id)').eq('id', pitch_id).maybeSingle()
+          : Promise.resolve({ data: null }),
+        effectiveUserId
+          ? supabase.from('bookings').select('id', { count: 'exact', head: true })
+            .eq('user_id', effectiveUserId).eq('status', 'draft').gt('expires_at', new Date().toISOString())
+          : Promise.resolve({ count: null }),
+        fetchConflictingPitchIds(supabase, pitch_id),
+      ]);
+
       // Determinar si el usuario es dueño específicamente de ESTA cancha (no de otras)
       let isOwnerOfThisPitch = false;
       if (verifiedUserId) {
-        const { data: pitchOwnerCheck } = await supabase
-          .from('pitches')
-          .select('id, company_id, companies!inner(owner_id)')
-          .eq('id', pitch_id)
-          .maybeSingle();
-
+        const pitchOwnerCheck = (pitchOwnerResult as any)?.data;
         const pitchOwnerId = (pitchOwnerCheck as any)?.companies?.owner_id;
         if (pitchOwnerId && pitchOwnerId === verifiedUserId) {
           isOwnerOfThisPitch = true;
@@ -229,13 +239,7 @@ export async function POST(req: NextRequest) {
 
       // Seguridad: verificar si el usuario ya tiene el límite de horas en proceso activas
       if (effectiveUserId) {
-        const { count: draftCount } = await supabase
-          .from('bookings')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', effectiveUserId)
-          .eq('status', 'draft')
-          .gt('expires_at', new Date().toISOString());
-
+        const draftCount = (draftCountResult as any)?.count;
         if (draftCount && (draftCount + selected_times.length > 4)) {
           return NextResponse.json(
             { error: 'Superas el límite de 4 horas en proceso simultáneas. Por favor finaliza tu reserva actual antes de apartar más horas.' },
@@ -258,7 +262,6 @@ export async function POST(req: NextRequest) {
         };
       });
 
-      const conflictingPitchIds = await fetchConflictingPitchIds(supabase, pitch_id);
       const now = new Date();
       const lockedBookingIds: string[] = [];
 
@@ -801,57 +804,64 @@ export async function POST(req: NextRequest) {
       }
 
       if (updatedBookings.length > 0) {
-        try {
-          await notifyBookingSubmitted(updatedBookings[0].id);
-        } catch (err) {
-          console.error('[WhatsApp Notification error]:', err);
-        }
-
-        // Notificar por Web Push al dueño de la cancha
-        try {
-          const { data: pitchOwner } = await supabase
-            .from('pitches')
-            .select('user_id, name, company_id')
-            .eq('id', validPitchId)
-            .single();
-
-          let targetOwnerId = pitchOwner?.user_id;
-          if (!targetOwnerId && pitchOwner?.company_id) {
-            const { data: comp } = await supabase
-              .from('companies')
-              .select('owner_id')
-              .eq('id', pitchOwner.company_id)
-              .single();
-            targetOwnerId = comp?.owner_id;
-          }
-
-          if (targetOwnerId) {
-            const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-            fetch(`${appBaseUrl}/api/send-push`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'x-internal-secret': process.env.INTERNAL_API_SECRET || '',
-              },
-              body: JSON.stringify({
-                userId: targetOwnerId,
-                title: '⚽ Cancheros: Reserva por aprobar',
-                message: `Nueva reserva en ${pitchOwner?.name || 'tu cancha'} de ${customer_name.trim()}. Comprobante subido.`,
-                url: '/dashboard/bookings',
-              }),
-            }).catch(() => {});
-          }
-        } catch { /* no crítico */ }
-
-        // Invalidar caché de disponibilidad para este pitch+fecha
-        // para que la próxima consulta refleje las horas ya tomadas.
-        // (Antes se usaba firstBooking.selected_date, que no existe en la fila,
-        //  por lo que la invalidación nunca ocurría y el slot seguía "libre" 20s.)
+        // Invalidar caché de disponibilidad para este pitch+fecha ANTES de responder
+        // (es una operación en memoria, instantánea) para que la próxima consulta
+        // refleje de inmediato las horas ya tomadas.
         try {
           if (validPitchId && selected_date) {
             cache.invalidatePrefix(`availability:${validPitchId}:${selected_date}`);
           }
         } catch { /* no crítico */ }
+
+        // El resto (WhatsApp al cliente + push al dueño) se hace DESPUÉS de responder,
+        // con after() de Next.js: el cliente ve su reserva confirmada de inmediato sin
+        // esperar a Evolution API / R2 / Web Push, pero el trabajo igual se garantiza
+        // completo — a diferencia de un simple "no-await", que en el entorno serverless
+        // de Vercel puede cortarse apenas se envía la respuesta.
+        const firstBookingId = updatedBookings[0].id;
+        after(async () => {
+          try {
+            await notifyBookingSubmitted(firstBookingId);
+          } catch (err) {
+            console.error('[WhatsApp Notification error]:', err);
+          }
+
+          // Notificar por Web Push al dueño de la cancha
+          try {
+            const { data: pitchOwner } = await supabase
+              .from('pitches')
+              .select('user_id, name, company_id')
+              .eq('id', validPitchId)
+              .single();
+
+            let targetOwnerId = pitchOwner?.user_id;
+            if (!targetOwnerId && pitchOwner?.company_id) {
+              const { data: comp } = await supabase
+                .from('companies')
+                .select('owner_id')
+                .eq('id', pitchOwner.company_id)
+                .single();
+              targetOwnerId = comp?.owner_id;
+            }
+
+            if (targetOwnerId) {
+              const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+              await fetch(`${appBaseUrl}/api/send-push`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-internal-secret': process.env.INTERNAL_API_SECRET || '',
+                },
+                body: JSON.stringify({
+                  userId: targetOwnerId,
+                  title: '⚽ Cancheros: Reserva por aprobar',
+                  message: `Nueva reserva en ${pitchOwner?.name || 'tu cancha'} de ${customer_name.trim()}. Comprobante subido.`,
+                  url: '/dashboard/bookings',
+                }),
+              }).catch(() => {});
+            }
+          } catch { /* no crítico */ }
+        });
       }
 
       return NextResponse.json({ success: true, data: updatedBookings });

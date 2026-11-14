@@ -150,7 +150,7 @@ export default function WhatsAppConnectionPage() {
       } catch (e) {
         console.error('Error comprobando conexión...', e);
       }
-    }, 3500);
+    }, 2500);
 
     return () => clearInterval(interval);
   }, [status, company, inputPhone]);
@@ -177,7 +177,7 @@ export default function WhatsAppConnectionPage() {
       } catch (e) {
         // Ignorar fallos de red esporádicos
       }
-    }, 5000);
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [status, company?.id]);

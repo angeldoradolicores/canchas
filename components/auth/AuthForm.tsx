@@ -62,6 +62,12 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
     e.preventDefault();
     setError('');
     setLoading(true);
+    // No apagamos el spinner después de un login/registro exitoso: si lo hacemos
+    // justo al llamar router.push, el botón vuelve a verse "normal" durante el
+    // instante en que la página de destino todavía está cargando — se siente como
+    // que la app se congeló y luego "de repente" abre. Dejamos el spinner activo
+    // hasta que el componente se desmonte con la navegación.
+    let navigatingAway = false;
 
     if (mode === 'login') {
       const { error, data } = await supabase.auth.signInWithPassword({ email, password });
@@ -73,6 +79,7 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
           setError('Correo o contraseña incorrectos.');
         }
       } else {
+        navigatingAway = true;
         // Intentar leer rol directamente del JWT (sin round-trip a DB)
         const quickRole = data.user.user_metadata?.role as string | undefined;
         if (quickRole === 'superadmin' || quickRole === 'owner' || quickRole === 'player') {
@@ -146,6 +153,7 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
           } catch { }
         }
         if (data.session) {
+          navigatingAway = true;
           if (forcedRole === 'owner') router.push('/dashboard');
           else router.push(redirectPath);
         } else {
@@ -153,7 +161,7 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
         }
       }
     }
-    setLoading(false);
+    if (!navigatingAway) setLoading(false);
   };
 
   const handleResendConfirmation = async () => {

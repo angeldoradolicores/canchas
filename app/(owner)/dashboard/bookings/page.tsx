@@ -118,6 +118,19 @@ function getTotalPaid(paymentHistory: PaymentEntry[] | null | undefined): number
   return paymentHistory.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 }
 
+// Limpia nombres de clientes guardados antes de la corrección (venían con
+// metadatos tipo "[ENTIDAD: X] [ENTIDAD: X] Nombre [Turno Fijo: ...]" guardados
+// directamente en el nombre). El reemplazo es global para quitar repeticiones.
+function cleanCustomerName(raw: string | null | undefined): string {
+  if (!raw) return '';
+  return raw
+    .replace(/\[(ENTIDAD|ESCUELA)\s*:[^\]]*\]/gi, '')
+    .replace(/\[(Turno Fijo|Contrato)[^\]]*\]/gi, '')
+    .replace(/CID:[a-zA-Z0-9_-]+/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function isContractOrCreditBooking(b: any): boolean {
   if (!b) return false;
   if (b.payment_method === 'cuenta_cobrar' || b.payment_method === 'credito') return true;
@@ -1368,6 +1381,7 @@ export default function BookingsPage() {
           pitch_names: [b.pitches?.name || 'Cancha'],
           status: b.status,
           customer_name: b.customer_name,
+          client_entity_name: b.client_entity_name,
           customer_phone: b.customer_phone,
           pitches: b.pitches,
           start_time: b.start_time,
@@ -2019,10 +2033,25 @@ export default function BookingsPage() {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-secondary/20 p-3 rounded-xl border border-border/40 pl-3">
                       {/* Cliente */}
                       <div className="col-span-2 sm:col-span-1">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">Cliente</p>
-                        <p className="font-extrabold text-sm text-foreground capitalize leading-snug break-words">
-                          {group.customer_name || 'Anónimo'}
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">
+                          {group.client_entity_name ? 'Entidad / Escuela' : 'Cliente'}
                         </p>
+                        {(() => {
+                          const cleanName = cleanCustomerName(group.customer_name);
+                          const entityName = group.client_entity_name;
+                          return (
+                            <>
+                              <p className="font-extrabold text-sm text-foreground capitalize leading-snug break-words">
+                                {entityName || cleanName || 'Anónimo'}
+                              </p>
+                              {entityName && cleanName && cleanName.toLowerCase() !== entityName.toLowerCase() && (
+                                <p className="text-[11px] text-muted-foreground font-semibold">
+                                  Resp: {cleanName}
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
                         {/* Contador de Partidos del Cliente */}
                         {(() => {
                           const custKey = (group.customer_phone || group.customer_name || '').trim().toLowerCase();
@@ -2087,27 +2116,22 @@ export default function BookingsPage() {
                       <div>
                         {isContractBooking ? (
                           <>
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">Vigencia Turno Fijo</p>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">Horario Fijo</p>
                             <p className="font-extrabold text-xs sm:text-sm text-foreground leading-snug">
-                              {startDateStr} <span className="text-muted-foreground font-normal">al</span> {endDateStr}
+                              {distinctDays.join(', ')} · {distinctSlotTimes.join(' / ')}
                             </p>
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-violet-600 dark:text-violet-400 mt-1">
-                              📅 {distinctDays.join(', ')} ({group.bookings.length} {group.bookings.length === 1 ? 'partido' : 'partidos'})
+                              📅 {startDateStr} al {endDateStr} ({group.bookings.length} {group.bookings.length === 1 ? 'partido' : 'partidos'})
                             </span>
                           </>
                         ) : (
                           <>
+                            {/* La fecha/hora en que se reservó ya se muestra arriba como
+                                "Solicitada: ..." — no se repite aquí para no duplicar el dato. */}
                             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">Partido</p>
                             <p className="font-bold text-xs sm:text-sm text-foreground capitalize leading-snug">
                               {startTime.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
                             </p>
-                            {group.created_at && (
-                              <div className="mt-1 pt-1 border-t border-border/40">
-                                <span className="text-[10px] text-muted-foreground block leading-tight">
-                                  Reservó: <strong className="text-foreground font-semibold">{new Date(group.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}, {new Date(group.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })}</strong>
-                                </span>
-                              </div>
-                            )}
                           </>
                         )}
                       </div>
@@ -2147,24 +2171,9 @@ export default function BookingsPage() {
                       </div>
                     </div>
 
-                    {/* Desglose de horas / Horario fijo */}
-                    {isContractBooking ? (
-                      <div className="flex flex-wrap items-center gap-2 pl-1.5 py-1">
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                          Hora Fija:
-                        </span>
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 font-extrabold text-xs border border-emerald-300/60 dark:border-emerald-700/60 shadow-2xs">
-                          <Clock size={13} className="text-emerald-600 dark:text-emerald-400" />
-                          <span>{distinctDays.join(', ')} · {distinctSlotTimes.join(' / ')}</span>
-                        </span>
-                        <span className="text-[11px] font-semibold text-muted-foreground">
-                          · Cancha: <strong className="text-foreground">{group.pitch_names?.join(' + ') || group.pitches?.name || 'Cancha'}</strong>
-                        </span>
-                        <span className="text-[11px] font-medium text-muted-foreground">
-                          · {startDateStr} al {endDateStr} ({group.bookings.length} {group.bookings.length === 1 ? 'partido' : 'partidos'})
-                        </span>
-                      </div>
-                    ) : group.bookings?.length > 0 ? (
+                    {/* Desglose de horas (solo para reservas sueltas; el turno fijo ya muestra
+                        su horario completo arriba, sin repetir cancha/fecha otra vez aquí) */}
+                    {isContractBooking ? null : group.bookings?.length > 0 ? (
                       <div className="flex flex-wrap items-center gap-1.5 pl-1.5">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mr-0.5">
                           Turnos:
