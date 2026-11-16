@@ -68,6 +68,11 @@ export async function POST(req: NextRequest) {
     // Se extrae el usuario autenticado de forma segura. El payload.owner_id se descarta
     // para evitar que usuarios no autorizados manipulen recursos ajenos (IDOR).
     const authedUser = await getAuthenticatedUser(req);
+    if (!authedUser) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    const { data: approvedProfile } = await supabase.from('profiles').select('role').eq('id', authedUser.id).single();
+    if (approvedProfile?.role !== 'owner' && authedUser.app_metadata?.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Tu solicitud de dueño debe ser aprobada.' }, { status: 403 });
+    }
     let ownerId: string | null = authedUser?.id || null;
 
     // Si getAuthenticatedUser no lo detectó por cookies, verificar cabecera Authorization directamente
@@ -486,12 +491,17 @@ export async function POST(req: NextRequest) {
       // Campos adicionales opcionales (no requieren validación estricta)
       const note = typeof payload?.note === 'string' ? payload.note.slice(0, 2000) : undefined;
       const isContract = !!payload?.is_contract;
-      const isLoyaltyFree = !!payload?.is_loyalty_free;
       const clientType = ['standard', 'entity', 'school'].includes(payload?.client_type) ? payload.client_type : 'standard';
       const clientEntityName = typeof payload?.client_entity_name === 'string' ? payload.client_entity_name.slice(0, 200) : undefined;
       const paymentMethod = ['efectivo', 'transferencia', 'credito', 'cuenta_cobrar'].includes(payload?.payment_method) ? payload.payment_method : 'efectivo';
+      for (const key of ['custom_rate','total_price','deposit_amount']) {
+        if (payload?.[key] !== undefined && (!Number.isSafeInteger(payload[key]) || payload[key] < 0 || payload[key] > 99999999))
+          return NextResponse.json({error:'Tarifa y abono deben ser números enteros entre 0 y 99.999.999'}, {status:400});
+      }
+      const {data: pricingPitch}=await supabase.from('pitches').select('price_per_hour,custom_pricing').eq('id',pitch_id).single();
+      if(!pricingPitch) return NextResponse.json({error:'Cancha no encontrada'}, {status:404});
       const customRate = typeof payload?.custom_rate === 'number' && payload.custom_rate >= 0 ? payload.custom_rate : undefined;
-      const effectivePrice = isLoyaltyFree ? 0 : (customRate !== undefined ? customRate : (typeof payload?.total_price === 'number' ? payload.total_price : undefined));
+      const effectivePrice = customRate !== undefined ? customRate : (typeof payload?.total_price === 'number' ? payload.total_price : undefined);
       const depositAmount = typeof payload?.deposit_amount === 'number' && payload.deposit_amount >= 0 ? payload.deposit_amount : undefined;
 
       // Calcular abono y total por slot si hay múltiples horas seleccionadas
@@ -550,7 +560,7 @@ export async function POST(req: NextRequest) {
             status: 'confirmed',
             payment_status: 'verified',
             source: 'owner_panel',
-            ...(effectivePrice !== undefined ? { total_price: effectivePrice } : {}),
+            total_price: effectivePrice ?? pricingPitch.custom_pricing?.[slot] ?? pricingPitch.price_per_hour,
             ...(depositPerSlot !== undefined ? { deposit_amount: depositPerSlot } : {}),
             ...(note ? { note } : {}),
             ...(isContract ? { booking_type: 'contract' } : {}),
@@ -558,7 +568,6 @@ export async function POST(req: NextRequest) {
             ...(clientEntityName ? { client_entity_name: clientEntityName } : {}),
             ...(paymentMethod !== 'efectivo' ? { payment_method: paymentMethod } : {}),
             ...(customRate !== undefined ? { custom_rate: customRate } : {}),
-            ...(isLoyaltyFree ? { is_loyalty_free: true } : {}),
           },
           start_time: startIso,
           end_time: endIso,
@@ -640,7 +649,6 @@ export async function POST(req: NextRequest) {
             ...(clientEntityName ? { client_entity_name: clientEntityName } : {}),
             ...(paymentMethod !== 'efectivo' ? { payment_method: paymentMethod } : {}),
             ...(customRate !== undefined ? { custom_rate: customRate } : {}),
-            ...(isLoyaltyFree ? { is_loyalty_free: true } : {}),
           };
 
           const updatePayloadBase: any = {

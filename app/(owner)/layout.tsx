@@ -33,8 +33,7 @@ function OwnerAuthGuard({ children }: { children: React.ReactNode }) {
         profile &&
         profile.role !== 'owner' &&
         (profile.role as string) !== 'admin' &&
-        profile.role !== 'superadmin' &&
-        user.user_metadata?.role !== 'owner'
+        profile.role !== 'superadmin'
       ) {
         // Si es jugador, denegar acceso al panel de dueño y enviar a inicio
         router.replace('/');
@@ -73,8 +72,7 @@ function OwnerAuthGuard({ children }: { children: React.ReactNode }) {
     profile &&
     profile.role !== 'owner' &&
     (profile.role as string) !== 'admin' &&
-    profile.role !== 'superadmin' &&
-    user.user_metadata?.role !== 'owner'
+    profile.role !== 'superadmin'
   ) {
     return (
       <div className="min-h-screen bg-[#f5f7f5] dark:bg-background flex flex-col items-center justify-center p-4">
@@ -109,6 +107,7 @@ function OwnerLayoutInner({ children }: { children: React.ReactNode }) {
     ['Resumen', LayoutDashboard, '/dashboard'],
     ['Mis Canchas', Map, '/dashboard/pitches'],
     ['Reservas', CalendarDays, '/dashboard/bookings'],
+    ['Promociones y regalos', CalendarDays, '/dashboard/promotions'],
     ['Conectar WhatsApp', Smartphone, '/dashboard/whatsapp'],
     ['Crear Publicación', ImagePlay, '/dashboard/status'],
   ] as const;

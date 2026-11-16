@@ -507,15 +507,6 @@ export function SlotDetailModal({
                     <p className="text-[10px] text-muted-foreground">Historial acumulado de este cliente</p>
                   </div>
                 </div>
-                {customerMatchesCount >= 20 ? (
-                  <span className="px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-black">
-                    🎁 VIP 20+ (Cortesía Domingo)
-                  </span>
-                ) : (
-                  <span className="text-[10px] text-muted-foreground font-semibold">
-                    {20 - customerMatchesCount} para cortesía VIP
-                  </span>
-                )}
               </div>
             )}
 
@@ -566,7 +557,7 @@ export function SlotDetailModal({
             {isCreditOrContract && onOpenContractTrace && (
               <button
                 type="button"
-                onClick={() => onOpenContractTrace(booking || slotBooking)}
+                onClick={() => booking && onOpenContractTrace(booking)}
                 className="w-full py-2 px-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer active:scale-98"
               >
                 📋 Ver Hoja de Trazabilidad del Contrato

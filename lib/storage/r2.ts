@@ -54,7 +54,7 @@ export async function uploadToR2({ buffer, key, contentType, isPrivate = false }
 
   await client.send(
     new PutObjectCommand({
-      Bucket: bucketName,
+      Bucket: isPrivate ? privateBucket() : bucketName,
       Key: cleanKey,
       Body: buffer,
       ContentType: contentType,
@@ -68,7 +68,7 @@ export async function uploadToR2({ buffer, key, contentType, isPrivate = false }
     // y dejaba el historial con enlaces muertos). Guardamos una ruta estable de la app
     // que exige sesión del dueño y firma el objeto bajo demanda con expiración corta.
     // Ver app/api/receipts/[...path]/route.ts
-    return { url: `/api/receipts/${cleanKey}`, key: cleanKey };
+    return { url: `/api/receipts/r2-private/${cleanKey}`, key: cleanKey };
   }
 
   // Para archivos públicos (canchas, escuelas, torneos)
@@ -85,11 +85,12 @@ export async function getPresignedR2Url(key: string, expiresInSeconds = 900): Pr
     throw new Error('Cloudflare R2 no configurado.');
   }
 
-  const cleanKey = key.replace(/^\/+/, '');
+  const privateObject = key.startsWith('r2-private/');
+  const cleanKey = (privateObject ? key.slice(11) : key).replace(/^\/+/, '');
   return getSignedUrl(
     client,
     new GetObjectCommand({
-      Bucket: bucketName,
+      Bucket: privateObject ? privateBucket() : bucketName,
       Key: cleanKey,
     }),
     { expiresIn: expiresInSeconds }
@@ -116,4 +117,10 @@ export async function deleteFromR2(key: string): Promise<boolean> {
     console.warn('[R2 Delete error]', err);
     return false;
   }
+}
+
+function privateBucket() {
+ const name = process.env.R2_PRIVATE_BUCKET_NAME;
+ if (!name || name === bucketName) throw new Error('Configura un bucket privado separado para comprobantes');
+ return name;
 }

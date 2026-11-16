@@ -132,6 +132,8 @@ export async function verifyCompanyOwnership(
   if (!userId || !companyId) return false;
   const supabase = getAdminSupabase();
 
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
+  if (profile?.role !== 'owner') return false;
   const { data, error } = await supabase
     .from('companies')
     .select('id')

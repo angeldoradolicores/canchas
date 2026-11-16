@@ -1,3 +1,4 @@
+import { sanitizeReceipt } from '@/lib/receipt-security';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
@@ -25,29 +26,46 @@ export async function POST(req: NextRequest) {
     const user = await getAuthenticatedUser(req);
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
-    const uploadType = (formData.get('type') as string) || 'pitch'; // 'pitch' | 'school' | 'tournament' | 'receipt' | 'avatar'
+    const requestedType = (formData.get('type') as string) || 'pitch';
+    const allowedTypes = new Set(['pitch', 'school', 'tournament', 'receipt', 'avatar']);
+    if (!allowedTypes.has(requestedType)) {
+      return NextResponse.json({ error: 'Tipo de archivo no permitido' }, { status: 400 });
+    }
+    const uploadType = requestedType as 'pitch' | 'school' | 'tournament' | 'receipt' | 'avatar';
 
-    if (!file) {
+    // Los comprobantes contienen información financiera y nunca deben poder
+    // subirse de forma anónima.
+    if (uploadType === 'receipt' && !user) {
+      return NextResponse.json({ error: 'Debes iniciar sesión para subir un comprobante' }, { status: 401 });
+    }
+
+    if (!(file instanceof File)) {
       return NextResponse.json({ error: 'No se recibió ningún archivo' }, { status: 400 });
     }
 
     // ── Leer buffer primero para validar con magic bytes reales ──
+    if (file.size > (uploadType === 'receipt' || uploadType === 'avatar' ? 5 : 50) * 1024 * 1024) {
+      return NextResponse.json({error:'Archivo demasiado grande'}, {status:413});
+    }
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    let buffer: Buffer = Buffer.from(arrayBuffer);
 
     // ── Validación de seguridad: magic bytes + tamaño (no confiamos en file.type) ──
     const isReceiptOrAvatar = uploadType === 'receipt' || uploadType === 'avatar';
     const validation = validateImageUpload(buffer, {
       allowVideo: !isReceiptOrAvatar, // comprobantes y avatares: solo imágenes
       maxBytes: isReceiptOrAvatar ? 5 * 1024 * 1024 : 50 * 1024 * 1024, // 5MB imágenes, 50MB videos
-      rejectGif: uploadType === 'avatar', // sin GIF para avatares
+      rejectGif: isReceiptOrAvatar, // sin GIF para avatares
     });
 
     if (!validation.ok) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    const { contentType, ext, isVideo } = validation;
+    let { contentType, ext, isVideo } = validation;
+    if (uploadType === 'receipt') {
+      buffer = await sanitizeReceipt(buffer); contentType = 'image/jpeg'; ext = 'jpeg';
+    }
     const folder = uploadType === 'receipt' ? 'comprobantes' : `${uploadType}s`;
     const userPrefix = user?.id || 'public';
     const timestamp = Date.now();
@@ -90,6 +108,10 @@ export async function POST(req: NextRequest) {
       ? 'avatars'
       : 'pitch-images';
 
+    if (isPrivate) {
+      const {data: bucket,error: bucketError}=await supabase.storage.getBucket(targetBucket);
+      if(bucketError || !bucket || bucket.public) throw new Error('El bucket de comprobantes debe ser privado');
+    }
     const { error: supaErr } = await supabase.storage.from(targetBucket).upload(filePath, buffer, {
       contentType,
       upsert: true,
@@ -99,11 +121,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(safeServerErrorResponse(supaErr, 'Error al subir el archivo.'), { status: 500 });
     }
 
-    const { data: publicData } = supabase.storage.from(targetBucket).getPublicUrl(filePath);
+    // El bucket de comprobantes debe permanecer privado. Se devuelve una ruta
+    // estable de la aplicación; /api/receipts la autoriza y firma por poco tiempo.
+    const publicUrl = isPrivate
+      ? `/api/receipts/supabase/${filePath}`
+      : supabase.storage.from(targetBucket).getPublicUrl(filePath).data.publicUrl;
 
     return NextResponse.json({
       success: true,
-      url: publicData.publicUrl,
+      url: publicUrl,
       key: filePath,
       storage: 'supabase',
       isPrivate,

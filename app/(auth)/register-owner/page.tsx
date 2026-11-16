@@ -11,8 +11,8 @@ export default function RegisterOwnerPage() {
         mode="register"
         forcedRole="owner"
         title="Registra tu Complejo"
-        subtitle="Crea tu cuenta de Dueño para empezar a recibir reservas y gestionar tus canchas."
-        redirectPath="/dashboard"
+        subtitle="Crea tu cuenta y solicita la administración del complejo. Revisaremos tus datos antes de habilitarla."
+        redirectPath="/owner-request"
       />
 
       <div className="mt-6 pt-5 border-t border-emerald-800/10 text-center space-y-3">

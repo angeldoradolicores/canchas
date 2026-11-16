@@ -1121,7 +1121,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
           {tournaments.length > 0 && (
             <div className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border shadow-sm shadow-black/[0.03] md:shadow-sm mt-6 w-full max-w-full min-w-0">
               <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-5 flex items-center gap-2 text-foreground">
-                <Trophy size={20} className="sm:w-[22px] sm:h-[22px] text-emerald-600 shrink-0" /> Campeonatos en esta cancha
+                <Trophy size={20} className="sm:w-[22px] sm:h-[22px] text-emerald-600 shrink-0" /> Campeonatos del complejo
               </h2>
               {/* Cambiado a grid de 2 columnas en pantallas medianas o superior, o se acomodan horizontalmente */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-3.5 w-full min-w-0">
@@ -1144,7 +1144,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                           {t.name}
                         </h4>
                         <p className="text-[11px] sm:text-xs font-medium text-muted-foreground mt-0.5 truncate">
-                          Inicia: {new Date(t.start_date + 'T12:00:00').toLocaleDateString('es-CO')}
+                          Inicia: {t.start_date ? new Date(t.start_date.slice(0,10) + 'T12:00:00').toLocaleDateString('es-CO') : 'Fecha por anunciar'}
                         </p>
                       </div>
 
@@ -1167,7 +1167,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
           {schools.length > 0 && (
             <div className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border shadow-sm shadow-black/[0.03] md:shadow-sm mt-6 w-full max-w-full min-w-0">
               <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-5 flex items-center gap-2 text-foreground">
-                <Users size={20} className="sm:w-[22px] sm:h-[22px] text-primary shrink-0" /> Escuelas de formación
+                <Users size={20} className="sm:w-[22px] sm:h-[22px] text-primary shrink-0" /> Escuelas del complejo
               </h2>
 
               {/* Distribución en grilla horizontal de 2 columnas */}

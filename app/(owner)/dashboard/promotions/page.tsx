@@ -1,0 +1,20 @@
+'use client';
+import {useEffect,useState} from 'react';
+import {dayNames} from '@/components/booking/ComplexPromotions';
+export default function PromotionsPage(){
+ const [companies,setCompanies]=useState<any[]>([]);const [items,setItems]=useState<any[]>([]);
+ const [message,setMessage]=useState('');const [busy,setBusy]=useState(false);
+ async function refresh(){const r=await fetch('/api/promotions');const j=await r.json();if(!r.ok){setMessage(j.error);return;}setCompanies(j.companies||[]);setItems(j.promotions||[]);}
+ useEffect(()=>{void refresh().catch(()=>setMessage('Error de conexión'));},[]);
+ async function send(body:any){setBusy(true);try{const r=await fetch('/api/promotions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();setMessage(r.ok?'Cambios guardados':j.error);await refresh();}catch{setMessage('Error de conexión');}finally{setBusy(false);}}
+ return <main className="max-w-4xl mx-auto p-4 sm:p-8 space-y-6"><header><h1 className="text-2xl font-black">Promociones del complejo</h1><p className="text-muted-foreground mt-2">Premia a tus jugadores con horas gratis en cualquiera de tus canchas.</p></header>
+ <form className="rounded-3xl border bg-card p-5 grid gap-4 sm:grid-cols-2" onSubmit={e=>{e.preventDefault();const f=new FormData(e.currentTarget);void send({company_id:f.get('company_id'),title:f.get('title'),required_bookings:Number(f.get('required_bookings')),gift_hours:Number(f.get('gift_hours')),redeem_days:Number(f.get('redeem_days')),weekdays:f.getAll('weekdays').map(Number),ends_at:new Date(String(f.get('ends_at'))+'T23:59:59-05:00').toISOString()});}}>
+ <label className="space-y-1">Complejo<select required name="company_id" className="block w-full rounded-xl border p-3 bg-background">{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+ <label>Título<input required minLength={3} maxLength={120} name="title" placeholder="¡Tu fidelidad tiene premio!" className="block w-full rounded-xl border p-3 bg-background"/></label>
+ {[['required_bookings','Reservas aprobadas necesarias',10,1000],['gift_hours','Horas gratis por regalo',1,24],['redeem_days','Días para redimir y jugar',30,365]].map(([name,label,value,max])=><label key={name}>{label}<input name={String(name)} type="number" min={1} max={Number(max)} step={1} required defaultValue={value} className="block w-full rounded-xl border p-3 bg-background"/></label>)}
+ <label>Acumular hasta<input name="ends_at" type="date" required className="block w-full rounded-xl border p-3 bg-background"/></label>
+ <fieldset className="sm:col-span-2"><legend className="font-bold mb-2">Días disponibles para jugar el regalo</legend><div className="flex flex-wrap gap-3">{dayNames.map((d,i)=><label className="rounded-xl border p-2 flex gap-2" key={d}><input type="checkbox" name="weekdays" value={i} defaultChecked/>{d}</label>)}</div></fieldset>
+ <p className="text-xs text-muted-foreground sm:col-span-2">Cuenta cada reserva de una hora aprobada y con pago verificado, creada desde el inicio de la promoción. Incluye invitados por celular y reservas manuales o turnos fijos con nombre y celular. Nunca se relacionan personas por nombre; las reservas manuales sin nombre o sin celular no suman a nadie. Los regalos no acumulan. Las condiciones publicadas no se editan; puedes finalizar la acumulación, conservando los regalos ya ganados.</p>
+ <button disabled={busy||!companies.length} className="btn-primary sm:col-span-2">Publicar promoción</button></form>
+ <p role="status">{message}</p><section className="grid gap-4 sm:grid-cols-2">{items.filter(p=>companies.some(c=>c.id===p.company_id)).map(p=><article key={p.id} className="rounded-2xl border p-5"><h2 className="font-bold">{p.title}</h2><p>{p.required_bookings} reservas → {p.gift_hours} horas gratis</p><button disabled={busy} onClick={()=>send({action:'stop',id:p.id})} className="mt-3 underline">Finalizar acumulación</button></article>)}</section></main>;
+}

@@ -1,4 +1,4 @@
-import { NextResponse, after } from 'next/server';
+import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { createClient as createAdminClient, type EmailOtpType } from '@supabase/supabase-js';
@@ -75,7 +75,8 @@ export async function GET(request: Request) {
     }
   } else {
     // Si no vino code ni token_hash, verificar si ya hay una sesión activa en cookies
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user: verified } } = await supabase.auth.getUser();
+    const session = verified ? { user: verified } : null;
     if (session) {
       authSuccess = true;
       authedUser = session.user || null;
@@ -115,107 +116,9 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/login?error=user_not_found`);
   }
 
-  // Determinar rol solicitado (de query params, cookies o user_metadata)
-  const targetRole = roleParam || pendingRoleCookie || user.user_metadata?.role || 'player';
-  const isOwner = targetRole === 'owner';
-  const companyName = companyNameParam || pendingCompanyCookie || user.user_metadata?.full_name || 'Mi Complejo Deportivo';
-
-  // Usar cliente de servicio para garantizar actualización sin bloqueos de RLS
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  const adminSupabase = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey);
-
-  try {
-    if (isOwner) {
-      // OPTIMIZACIÓN DE VELOCIDAD: estas dos lecturas son independientes entre
-      // sí, así que se hacen en paralelo en vez de una tras otra.
-      const [{ data: existingProfile }, { data: existingComp }] = await Promise.all([
-        adminSupabase.from('profiles').select('id, full_name, role, phone').eq('id', user.id).maybeSingle(),
-        adminSupabase.from('companies').select('id, owner_phone').eq('owner_id', user.id).limit(1),
-      ]);
-
-      const finalName = existingProfile?.full_name || companyName || user.email?.split('@')[0] || 'Dueño';
-      const phoneFromMeta = user.user_metadata?.phone || null;
-
-      // 1. Asegurar o actualizar perfil como 'owner'
-      if (!existingProfile) {
-        await adminSupabase.from('profiles').insert({
-          id: user.id,
-          full_name: finalName,
-          role: 'owner',
-          phone: phoneFromMeta,
-        });
-      } else {
-        // Solo escribir si algo realmente va a cambiar — evita un UPDATE de más
-        // en CADA login de un dueño que ya está perfectamente sincronizado.
-        const needsPhone = Boolean(phoneFromMeta && !existingProfile.phone);
-        const needsRole = existingProfile.role !== 'owner';
-        const needsName = Boolean(finalName && finalName !== existingProfile.full_name);
-        if (needsPhone || needsRole || needsName) {
-          await adminSupabase.from('profiles').update({
-            role: 'owner',
-            ...(needsName ? { full_name: finalName } : {}),
-            ...(needsPhone ? { phone: phoneFromMeta } : {}),
-          }).eq('id', user.id);
-        }
-      }
-
-      // 2. Asegurar empresa / complejo deportivo en 'companies'
-      if (!existingComp || existingComp.length === 0) {
-        await adminSupabase.from('companies').insert({
-          owner_id: user.id,
-          name: companyName.trim() || 'Mi Complejo Deportivo',
-          address: 'Pasto, Nariño',
-          zone: 'Norte',
-          owner_phone: phoneFromMeta,
-          whatsapp_status: 'disconnected',
-        });
-      } else if (phoneFromMeta && !existingComp[0].owner_phone) {
-        await adminSupabase.from('companies').update({
-          owner_phone: phoneFromMeta,
-        }).eq('id', existingComp[0].id);
-      }
-
-      // 3. Sincronizar metadata en auth.users si es necesario — no bloquea la
-      // redirección, nada en esta petición depende de que termine antes.
-      if (user.user_metadata?.role !== 'owner') {
-        after(async () => {
-          try {
-            await adminSupabase.auth.admin.updateUserById(user.id, {
-              user_metadata: {
-                ...user.user_metadata,
-                role: 'owner',
-              },
-            });
-          } catch (mErr) {
-            console.warn('No se pudo actualizar metadata en auth:', mErr);
-          }
-        });
-      }
-    } else {
-      // Asegurar perfil básico de jugador si no existe
-      const { data: existingProfile } = await adminSupabase
-        .from('profiles')
-        .select('id')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (!existingProfile) {
-        await adminSupabase.from('profiles').insert({
-          id: user.id,
-          full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Jugador',
-          role: 'player',
-        });
-      }
-    }
-  } catch (dbErr) {
-    console.error('Error sincronizando perfil en callback:', dbErr);
-  }
-
-  // Redirección final
-  const destination = isOwner
-    ? '/dashboard'
-    : (next && next.startsWith('/') && next !== '/dashboard' ? next : (pendingNextCookie || '/'));
-
+  // La intención de registro nunca concede privilegios.
+  const requestedOwner = roleParam === 'owner' || pendingRoleCookie === 'owner';
+  const destination = requestedOwner ? '/owner-request' : '/';
   const response = NextResponse.redirect(`${origin}${destination}`);
 
   // Inyectar todas las cookies de sesión en la respuesta saliente

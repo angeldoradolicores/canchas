@@ -125,7 +125,7 @@ export function GoogleAuthButton({
           throw new Error('No se recibió la credencial de Google.');
         }
 
-        const targetPath = role === 'owner' ? '/dashboard' : redirectPath;
+        const targetPath = role === 'owner' ? '/owner-request' : redirectPath;
 
         // Guardar preferencias en cookies y localStorage para el callback
         document.cookie = `sb_pending_role=${role}; path=/; max-age=600; SameSite=Lax`;

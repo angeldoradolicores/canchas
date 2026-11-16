@@ -5,14 +5,13 @@ import {
   ArrowRight, CalendarDays, DollarSign, Grid2X2,
   TrendingUp, Clock, CheckCircle2, AlertCircle, Trophy, XCircle,
   BarChart3, Wallet, Star, Activity, Zap, ChevronRight, Users, Bell, X,
-  TrendingDown, Target, CalendarClock, Hash, FileText, Layers, Gift, Sparkles
+  TrendingDown, Target, CalendarClock, Hash, FileText, Layers, Sparkles
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { BookingReportModal } from '@/components/booking/BookingReportModal';
-import { ManualBookingModal } from '@/components/booking/ManualBookingModal';
 import { playPendingAlertSound, triggerSystemNotification } from '@/lib/push-notifications';
 import { getBookingRemainingPayment } from '@/lib/remaining-payment-utils';
 
@@ -336,7 +335,6 @@ export function OwnerDashboard() {
   const [selectedDay, setSelectedDay] = useState<{ isoDate: string; fullDate: string } | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
   const [newPendingToast, setNewPendingToast] = useState<string | null>(null);
-  const [loyaltyGiftClient, setLoyaltyGiftClient] = useState<{ name: string; phone: string } | null>(null);
 
   const fetchStats = useCallback(async () => {
     setLoading(true);
@@ -589,32 +587,6 @@ export function OwnerDashboard() {
 
   const cancelRate = filteredBookings.length > 0 ? Math.round((cancelled.length / filteredBookings.length) * 100) : 0;
 
-  // Clientes con 20 o más canchas confirmadas (Alerta de Fidelización)
-  const loyaltyClients = useMemo(() => {
-    const map: Record<string, { name: string; phone: string; confirmedCount: number; lastDate: string }> = {};
-
-    allBookings.filter(b => b.status === 'confirmed').forEach(b => {
-      const key = (b.customer_phone || b.customer_name || '').trim().toLowerCase();
-      if (!key) return;
-      if (!map[key]) {
-        map[key] = {
-          name: b.customer_name || 'Cliente frecuente',
-          phone: b.customer_phone || '',
-          confirmedCount: 0,
-          lastDate: b.start_time,
-        };
-      }
-      map[key].confirmedCount++;
-      if (b.start_time && (!map[key].lastDate || new Date(b.start_time) > new Date(map[key].lastDate))) {
-        map[key].lastDate = b.start_time;
-      }
-    });
-
-    return Object.values(map)
-      .filter(c => c.confirmedCount >= 20)
-      .sort((a, b) => b.confirmedCount - a.confirmedCount);
-  }, [allBookings]);
-
   // Ingresos proyectados: extrapolar el mes actual basado en los días transcurridos
   const projectedMonthIncome = useMemo(() => {
     if (filter !== 'mes' && filter !== 'semana') return null;
@@ -670,52 +642,6 @@ export function OwnerDashboard() {
           </button>
         </div>
       </div>
-
-      {/* ── ALERTA DE FIDELIZACIÓN (BENEFICIO POR 20 CANCHAS COMPLETADAS) ── */}
-      {loyaltyClients.length > 0 && (
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent border border-amber-500/35 p-4 sm:p-5 shadow-xs animate-in fade-in">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md">
-                <Gift size={20} className="animate-pulse" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-sm font-extrabold text-foreground">
-                    ¡Beneficio de Fidelización por 20 Canchas!
-                  </h3>
-                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500 text-white uppercase tracking-wider">
-                    {loyaltyClients.length} {loyaltyClients.length === 1 ? 'Cliente' : 'Clientes'}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-                  Los clientes que alcanzan 20 partidos califican para recibir <strong>1 cancha de cortesía ($0)</strong> en día domingo a discreción del administrador.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2 border-t border-amber-500/20">
-            {loyaltyClients.slice(0, 6).map((cl, i) => (
-              <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-card border border-amber-500/30 shadow-2xs">
-                <div className="min-w-0 pr-2">
-                  <p className="font-bold text-xs truncate capitalize text-foreground">{cl.name}</p>
-                  <p className="text-[10px] text-amber-700 dark:text-amber-400 font-extrabold">
-                    ⚽ {cl.confirmedCount} canchas jugadas
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setLoyaltyGiftClient({ name: cl.name, phone: cl.phone })}
-                  className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-[11px] font-black rounded-xl transition-all shadow-xs flex items-center gap-1 shrink-0 cursor-pointer"
-                >
-                  <Gift size={12} /> Regalar Domingo
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Filtros de fecha (Scroll Horizontal adaptable para móviles) */}
       <div className="flex flex-col gap-2">
@@ -1252,20 +1178,6 @@ export function OwnerDashboard() {
         companyName={stats?.company?.name || profile?.full_name}
       />
 
-      {/* Modal para agendar Cancha de Cortesía de Domingo ($0) por Fidelización */}
-      {loyaltyGiftClient && (
-        <ManualBookingModal
-          pitches={pitches}
-          initialIsLoyaltyFree={true}
-          initialCustomerName={loyaltyGiftClient.name}
-          initialCustomerPhone={loyaltyGiftClient.phone}
-          onClose={() => setLoyaltyGiftClient(null)}
-          onSuccess={() => {
-            setLoyaltyGiftClient(null);
-            fetchStats();
-          }}
-        />
-      )}
     </section>
   );
 }

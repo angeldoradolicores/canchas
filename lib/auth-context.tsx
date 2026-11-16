@@ -117,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const fallbackProfile = {
           id: authUser.id,
           full_name: pendingCompany || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || (shouldBeOwner ? 'Dueño' : 'Jugador'),
-          role: shouldBeOwner ? 'owner' : (authUser.user_metadata?.role || 'player'),
+          role: 'player',
         };
 
         const { data: created } = await supabase
@@ -127,12 +127,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .single();
 
         finalProfile = created || fallbackProfile as any;
-      } else if (shouldBeOwner && finalProfile.role !== 'owner') {
-        // Auto-heal: el perfil existía como player pero el usuario se registró como dueño
-        const updateData: any = { role: 'owner' };
-        if (pendingCompany) updateData.full_name = pendingCompany;
-        await supabase.from('profiles').update(updateData).eq('id', authUser.id);
-        finalProfile = { ...finalProfile, role: 'owner', ...(pendingCompany ? { full_name: pendingCompany } : {}) };
       }
 
       if (pendingRole && typeof window !== 'undefined') {
@@ -196,7 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const fallbackProfile = {
       id: user.id,
       full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Jugador',
-      role: user.user_metadata?.role || 'player',
+      role: 'player',
     };
 
     const { data: created } = await supabase

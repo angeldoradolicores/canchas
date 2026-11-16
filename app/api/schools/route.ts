@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
-import { getAuthenticatedUser } from '@/lib/auth-guard';
+import { getAuthenticatedUser, verifyPitchOwnership } from '@/lib/auth-guard';
 import { SchoolCreateSchema, SchoolUpdateSchema } from '@/lib/validations/api-schemas';
 import { safeServerErrorResponse } from '@/lib/error-handler';
 
@@ -86,7 +86,11 @@ export async function GET(req: NextRequest) {
       .from('schools')
       .select('*, pitches(id, name, image_url, city, companies(name, zone))');
 
-    if (pitch_id) query = query.eq('pitch_id', pitch_id);
+    if (pitch_id) {
+ const {data: pitch}=await supabase.from('pitches').select('company_id').eq('id',pitch_id).maybeSingle();
+ const {data: siblings}=pitch?.company_id ? await supabase.from('pitches').select('id').eq('company_id',pitch.company_id) : {data:null};
+ query=query.in('pitch_id',siblings?.map(p=>p.id) || [pitch_id]);
+ }
 
     const { data, error } = await query.order('created_at', { ascending: false });
     if (error) return NextResponse.json(safeServerErrorResponse(error, 'Error al obtener las escuelas.'), { status: 500 });
@@ -127,6 +131,9 @@ export async function POST(req: NextRequest) {
     }
 
     const validData = validation.data;
+    if (validData.pitch_id && !await verifyPitchOwnership(user.id,validData.pitch_id)) {
+      return NextResponse.json({error:'Solo el dueño aprobado puede publicar en este complejo'}, {status:403});
+    }
     const service = getServiceSupabase();
 
     let created_by_owner = false;
@@ -235,6 +242,9 @@ async function handleUpdate(req: NextRequest) {
     }
 
     const { id, ...updates } = validation.data;
+    if (updates.pitch_id && !await verifyPitchOwnership(user.id,updates.pitch_id)) {
+      return NextResponse.json({error:'No puedes asociar una escuela a un complejo ajeno'}, {status:403});
+    }
 
     // Verificar propiedad o rol superadmin
     const { data: school, error: findErr } = await service.from('schools').select('user_id, description').eq('id', id).single();
@@ -244,7 +254,7 @@ async function handleUpdate(req: NextRequest) {
 
     const { data: profile } = await service.from('profiles').select('role').eq('id', user.id).single();
 
-    if (school.user_id && school.user_id !== user.id && profile?.role !== 'superadmin') {
+    if (school.user_id !== user.id && user.app_metadata?.role !== 'superadmin') {
       return NextResponse.json({ error: 'No tienes permiso para editar esta escuela' }, { status: 403 });
     }
 
@@ -351,7 +361,7 @@ export async function DELETE(req: NextRequest) {
     const { data: school } = await service.from('schools').select('user_id').eq('id', id).single();
     const { data: profile } = await service.from('profiles').select('role').eq('id', user.id).single();
 
-    if (school?.user_id && school.user_id !== user.id && profile?.role !== 'superadmin') {
+    if (!school || (school.user_id !== user.id && user.app_metadata?.role !== 'superadmin')) {
       return NextResponse.json({ error: 'No tienes permiso para eliminar esta escuela' }, { status: 403 });
     }
 

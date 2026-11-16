@@ -2063,7 +2063,6 @@ export default function BookingsPage() {
                                 : 'bg-primary/10 text-primary border border-primary/20'
                                 }`}>
                                 ⚽ {matches} {matches === 1 ? 'cancha' : 'canchas'}
-                                {matches >= 20 && ' · 🎁 VIP'}
                               </span>
                             </div>
                           ) : null;
@@ -2667,7 +2666,6 @@ export default function BookingsPage() {
                                               : 'bg-primary/10 text-primary border border-primary/20'
                                               }`}>
                                               ⚽ {confirmedMatches} {confirmedMatches === 1 ? 'partido' : 'partidos'}
-                                              {confirmedMatches >= 20 && ' · 🎁 VIP'}
                                             </span>
                                           )}
                                         </div>

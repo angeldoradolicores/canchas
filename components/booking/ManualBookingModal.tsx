@@ -111,7 +111,6 @@ export function ManualBookingModal({
   initialCustomerPhone,
   initialCustomRate,
   initialNote,
-  initialIsLoyaltyFree,
 }: {
   pitches: Pitch[];
   onClose: () => void;
@@ -123,25 +122,14 @@ export function ManualBookingModal({
   initialCustomerPhone?: string;
   initialCustomRate?: string;
   initialNote?: string;
-  initialIsLoyaltyFree?: boolean;
 }) {
   const today = useToday();
   const [selectedPitch, setSelectedPitch] = useState<Pitch | null>(
     (initialPitchId && pitches.find(p => p.id === initialPitchId)) || pitches[0] || null
   );
 
-  // Si es cortesía por fidelización (20 canchas), sugerir el próximo domingo
-  const getNextSundayStr = () => {
-    const d = new Date();
-    const day = d.getDay();
-    const diff = (7 - day) % 7 || 7;
-    d.setDate(d.getDate() + diff);
-    return d.toISOString().split('T')[0];
-  };
-
   const [selectedDate, setSelectedDate] = useState(() => {
     if (initialDate) return initialDate;
-    if (initialIsLoyaltyFree) return getNextSundayStr();
     return '';
   });
   const [selectedTimes, setSelectedTimes] = useState<string[]>(initialTime ? [initialTime] : []);
@@ -149,12 +137,10 @@ export function ManualBookingModal({
   const [activeCategory, setActiveCategory] = useState<'manana' | 'tarde' | 'noche'>('noche');
   const [customerName, setCustomerName] = useState(initialCustomerName || '');
   const [customerPhone, setCustomerPhone] = useState(initialCustomerPhone || '');
-  const [customerNote, setCustomerNote] = useState(
-    initialNote || (initialIsLoyaltyFree ? '🎁 Cancha de cortesía por 20 partidos jugados (Fidelización Domingo sin costo)' : '')
-  );
-  const [customRate, setCustomRate] = useState(initialIsLoyaltyFree ? '0' : (initialCustomRate || ''));
+  const [customerNote, setCustomerNote] = useState(initialNote || '');
+  const [rateEdited, setRateEdited] = useState(Boolean(initialCustomRate));
+  const [customRate, setCustomRate] = useState(initialCustomRate || '');
   const [depositAmount, setDepositAmount] = useState('');
-  const [isLoyaltyFree, setIsLoyaltyFree] = useState(!!initialIsLoyaltyFree);
   const [file, setFile] = useState<File | null>(null);
   const [imgPreview, setImgPreview] = useState<string | null>(null);
 
@@ -272,11 +258,9 @@ export function ManualBookingModal({
         ...(depositAmount && !isNaN(Number(depositAmount)) && Number(depositAmount) >= 0
           ? { deposit_amount: Number(depositAmount) }
           : {}),
-        ...(isLoyaltyFree
-          ? { is_loyalty_free: true, custom_rate: 0, total_price: 0 }
-          : (customRate && !isNaN(Number(customRate)) && Number(customRate) >= 0
-              ? { custom_rate: Number(customRate), total_price: Number(customRate) }
-              : {})),
+        ...(rateEdited && customRate && !isNaN(Number(customRate)) && Number(customRate) >= 0
+          ? { custom_rate: Number(customRate), total_price: Number(customRate) }
+          : {}),
       };
 
       const { data: sessData } = await supabase.auth.getSession();
@@ -307,7 +291,8 @@ export function ManualBookingModal({
           });
           const uploadJson = await uploadRes.json();
           if (uploadJson.success && uploadJson.url) {
-            await supabase.from('bookings').update({ payment_proof_url: uploadJson.url, payment_status: 'submitted' }).in('id', data.booking_ids);
+            // La reserva manual ya la creó el dueño como pagada: solo se adjunta el soporte.
+            await supabase.from('bookings').update({ payment_proof_url: uploadJson.url }).in('id', data.booking_ids);
           }
         } catch (uploadErr) {
           console.error('[ManualBooking payment proof upload error]', uploadErr);
@@ -341,7 +326,12 @@ export function ManualBookingModal({
   const currentCatSlots = TIME_CATEGORIES.find(c => c.key === activeCategory)?.slots || [];
   const customPricing = (selectedPitch as any)?.custom_pricing || {};
   const pricePerHour = selectedPitch?.price_per_hour || 80000;
-  const totalPrice = selectedTimes.reduce((total, time) => total + (customPricing[time] || pricePerHour), 0);
+  useEffect(() => {
+    if (rateEdited) return;
+    const slot = [...selectedTimes].sort()[0];
+    setCustomRate(String(slot ? (customPricing[slot] ?? pricePerHour) : pricePerHour));
+  }, [selectedPitch, selectedTimes, rateEdited]);
+  const totalPrice = selectedTimes.reduce((total, time) => total + (rateEdited ? Number(customRate || 0) : (customPricing[time] ?? pricePerHour)), 0);
 
   const allowedSlots = useMemo(() => {
     const ts = (selectedPitch as any)?.custom_pricing?.time_slots;
@@ -373,19 +363,6 @@ export function ManualBookingModal({
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
-
-          {/* Banner de Fidelización (Regalo por 20 canchas jugadas) */}
-          {isLoyaltyFree && (
-            <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-amber-500/15 border-2 border-amber-500/40 text-amber-900 dark:text-amber-200">
-              <span className="text-2xl shrink-0">🎁</span>
-              <div>
-                <p className="text-xs font-black uppercase tracking-wide">Cortesía de Fidelización (20 Canchas)</p>
-                <p className="text-[11px] leading-snug mt-0.5">
-                  Este cliente ha completado 20 partidos. Se le otorga este turno <strong>gratis ($0)</strong> un domingo a discreción del administrador.
-                </p>
-              </div>
-            </div>
-          )}
 
           {/* ── Selector de Cancha ── */}
           <div>
@@ -647,11 +624,6 @@ export function ManualBookingModal({
               <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
                 Finanzas: Tarifa & Abono
               </label>
-              {isLoyaltyFree && (
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 uppercase">
-                  🎁 Cortesía Domingo ($0)
-                </span>
-              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -662,16 +634,17 @@ export function ManualBookingModal({
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-bold">$</span>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     value={customRate}
-                    onChange={e => setCustomRate(e.target.value)}
+                    onChange={e => { setRateEdited(true); setCustomRate(e.target.value.replace(/\D/g, '').slice(0, 8)); }}
                     placeholder={pricePerHour ? String(pricePerHour) : '80000'}
-                    disabled={isLoyaltyFree}
                     className="w-full pl-7 pr-3 py-2 bg-card border border-border rounded-xl outline-none focus:border-primary text-xs font-bold"
                   />
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-0.5">
-                  {customRate ? `Personalizado: ${Number(customRate).toLocaleString('es-CO')}/h` : `Estándar: ${pricePerHour.toLocaleString('es-CO')}/h`}
+                  {rateEdited ? `Personalizado: ${Number(customRate).toLocaleString('es-CO')}/h` : 'Tarifa del horario seleccionado. Si hay varias horas, cada una conserva su tarifa.'}
+                  {rateEdited && <button type="button" className="ml-2 underline" onClick={()=>setRateEdited(false)}>Restablecer tarifa</button>}
                 </p>
               </div>
 
@@ -682,11 +655,11 @@ export function ManualBookingModal({
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-bold">$</span>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     value={depositAmount}
-                    onChange={e => setDepositAmount(e.target.value)}
+                    onChange={e => setDepositAmount(e.target.value.replace(/\D/g, '').slice(0, 8))}
                     placeholder="0"
-                    disabled={isLoyaltyFree}
                     className="w-full pl-7 pr-3 py-2 bg-card border border-border rounded-xl outline-none focus:border-primary text-xs font-bold text-primary"
                   />
                 </div>
@@ -729,7 +702,7 @@ export function ManualBookingModal({
                     <Upload size={18} className="text-muted-foreground" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-foreground">Subir imagen o PDF</p>
+                    <p className="text-sm font-semibold text-foreground">Subir imagen del comprobante</p>
                     <p className="text-[11px] text-muted-foreground">Si el cliente ya pagó antes de llegar</p>
                   </div>
                 </div>

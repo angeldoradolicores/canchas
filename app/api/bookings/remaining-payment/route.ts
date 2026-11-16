@@ -10,6 +10,14 @@ function getServiceSupabase() {
   );
 }
 
+function isSafeReceiptReference(value: unknown): value is string {
+  if (value === null || value === undefined || value === '') return true;
+  if (typeof value !== 'string' || value.length > 600) return false;
+  // Los comprobantes nuevos deben pasar por /api/upload y por la ruta privada
+  // de lectura. No aceptamos URLs externas controladas por el cliente.
+  return /^\/api\/receipts\/[A-Za-z0-9/_.-]+$/.test(value);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const user = await getAuthenticatedUser(req);
@@ -57,7 +65,7 @@ export async function POST(req: NextRequest) {
     // 1. Obtener reservas con columnas básicas seguras (nunca falla por columnas extendidas faltantes)
     const { data: bookingsData, error: fetchErr } = await supabase
       .from('bookings')
-      .select('id, payment_proof_url, pitch_id')
+      .select('id, payment_proof_url, pitch_id, remaining_payment_proof_url, payment_history')
       .in('id', ids);
 
     if (fetchErr) {
@@ -83,6 +91,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Referencias nuevas solo del espacio del usuario; las antiguas únicamente
+    // pueden conservarse si ya pertenecían a estas reservas autorizadas.
+    const existingProof = bookingsData.some((b:any) =>
+      b.remaining_payment_proof_url === proof_url ||
+      (Array.isArray(b.payment_history) && b.payment_history.some((e:any)=>e.proofUrl===proof_url)));
+    const ownsNewProof = typeof proof_url === 'string' &&
+      new RegExp('^/api/receipts/(?:supabase/|r2-private/)?comprobantes/' + user.id + '/[A-Za-z0-9_-]+\\.jpeg$').test(proof_url);
+    if (proof_url && !existingProof && (!isSafeReceiptReference(proof_url) || !ownsNewProof)) {
+      return NextResponse.json({error:'El comprobante debe subirse desde esta cuenta'}, {status:400});
+    }
     const timestamp = new Date().toISOString();
     const paymentId = `pay_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 

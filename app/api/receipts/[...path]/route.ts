@@ -47,12 +47,13 @@ export async function GET(
   const supabase = getServiceSupabase();
 
   // Buscar las reservas que referencian este comprobante (por clave o por la ruta estable).
+  const isSupabaseObject = key.startsWith('supabase/');
+  const storageKey = isSupabaseObject ? key.slice('supabase/'.length) : key;
+  if (!storageKey || storageKey.startsWith('/') || storageKey.includes('//')) {
+    return NextResponse.json({ error: 'Clave inválida' }, { status: 400 });
+  }
   const stablePath = `/api/receipts/${key}`;
-  const { data: rows, error } = await supabase
-    .from('bookings')
-    .select('id, user_id, pitch_id, payment_proof_url')
-    .or(`payment_proof_url.ilike.%${key}%,payment_proof_url.eq.${stablePath}`)
-    .limit(50);
+  const { data: rows, error } = await supabase.rpc('receipt_bookings', {p_path:stablePath});
 
   if (error) {
     return NextResponse.json({ error: 'Error al verificar el comprobante' }, { status: 500 });
@@ -74,7 +75,16 @@ export async function GET(
   }
 
   try {
-    const signed = await getPresignedR2Url(key, 3600); // 1 hora
+    let signed: string;
+    if (isSupabaseObject) {
+      const { data, error: signError } = await supabase.storage
+        .from('payment-proofs')
+        .createSignedUrl(storageKey, 3600);
+      if (signError || !data?.signedUrl) throw signError || new Error('No se pudo firmar el comprobante');
+      signed = data.signedUrl;
+    } else {
+      signed = await getPresignedR2Url(storageKey, 3600); // 1 hora
+    }
     return NextResponse.redirect(signed, {
       status: 302,
       headers: { 'Cache-Control': 'private, no-store' },

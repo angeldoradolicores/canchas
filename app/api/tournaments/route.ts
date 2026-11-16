@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
-import { getAuthenticatedUser } from '@/lib/auth-guard';
+import { getAuthenticatedUser, verifyPitchOwnership } from '@/lib/auth-guard';
 import { safeServerErrorResponse } from '@/lib/error-handler';
 
 function getSupabase() {
@@ -44,7 +44,11 @@ export async function GET(req: NextRequest) {
       .order('start_date', { ascending: true });
 
     if (pitchId) {
-      query = query.eq('pitch_id', pitchId);
+      if (pitchId) {
+ const {data: pitch}=await supabase.from('pitches').select('company_id').eq('id',pitchId).maybeSingle();
+ const {data: siblings}=pitch?.company_id ? await supabase.from('pitches').select('id').eq('company_id',pitch.company_id) : {data:null};
+ query=query.in('pitch_id',siblings?.map(p=>p.id) || [pitchId]);
+ }
     }
 
     const { data, error } = await query;
@@ -92,6 +96,9 @@ export async function POST(req: NextRequest) {
     }
 
     // ── CREAR TORNEO ──
+    if (payload?.pitch_id && !await verifyPitchOwnership(userId, payload.pitch_id)) {
+      return NextResponse.json({error:'Solo el dueño aprobado puede publicar en este complejo'}, {status:403});
+    }
     if (action === 'create_tournament') {
       if (!payload?.name || typeof payload.name !== 'string' || payload.name.trim().length < 3) {
         return NextResponse.json({ error: 'El nombre del torneo debe tener al menos 3 caracteres' }, { status: 400 });

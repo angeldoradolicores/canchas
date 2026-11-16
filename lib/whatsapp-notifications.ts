@@ -18,7 +18,11 @@ async function resolveProofForWhatsApp(rawProof: string | null | undefined): Pro
   if (idx >= 0) {
     const key = proof.slice(idx + marker.length);
     try {
-      return await getPresignedR2Url(key, 3600);
+      if (key.startsWith('supabase/')) {
+        const { data, error } = await supabase.storage.from('payment-proofs').createSignedUrl(key.slice(9), 900);
+        return error ? null : data?.signedUrl || null;
+      }
+      return await getPresignedR2Url(key, 900);
     } catch {
       return null;
     }

@@ -1,3 +1,6 @@
+import { cookies } from 'next/headers';
+import { randomUUID } from 'node:crypto';
+import { sanitizeReceipt } from '@/lib/receipt-security';
 import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
@@ -107,6 +110,12 @@ export async function GET(req: NextRequest) {
       const validIds = rawIds.filter(id => uuidRegex.test(id)).slice(0, 25);
       if (validIds.length === 0) return NextResponse.json({ success: true, data: [] });
       query = query.in('id', validIds);
+      if (verifiedUserId) query = query.eq('user_id', verifiedUserId);
+      else {
+        const token = req.cookies.get('booking_guest')?.value;
+        if (!token || !/^[0-9a-f-]{36}$/.test(token)) return NextResponse.json({ data: [] });
+        query = query.is('user_id', null).eq('lock_token', token);
+      }
     } else if (verifiedUserId) {
       query = query.eq('user_id', verifiedUserId);
     } else {
@@ -118,7 +127,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(safeServerErrorResponse(error, 'Error al obtener las reservas.'), { status: 500 });
     }
 
-    return NextResponse.json({ success: true, data: data || [] });
+    return NextResponse.json({ success: true, data: (data || []).map(({ lock_token, ...row }: any) => row) });
   } catch (err: any) {
     return NextResponse.json(safeServerErrorResponse(err, 'Error de servidor al obtener las reservas.'), { status: 500 });
   }
@@ -147,6 +156,12 @@ export async function POST(req: NextRequest) {
     const supabase = getAdminSupabase();
     const authedUser = await getAuthenticatedUser(req);
     const verifiedUserId = authedUser?.id || null;
+    const jar = await cookies();
+    let guestToken = jar.get('booking_guest')?.value;
+    if (!guestToken || !/^[0-9a-f-]{36}$/.test(guestToken)) {
+      guestToken = randomUUID();
+      jar.set('booking_guest', guestToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 2592000 });
+    }
 
     // ── 2. ACCIÓN: CANCEL_DRAFT ──
     if (action === 'cancel_draft') {
@@ -175,9 +190,10 @@ export async function POST(req: NextRequest) {
 
       // Si el usuario está autenticado, asegurar que no pueda cancelar borradores de otros
       if (verifiedUserId) {
-        query = query.or(`user_id.eq.${verifiedUserId},user_id.is.null`);
+        query = query.eq('user_id', verifiedUserId);
       }
 
+      if (!verifiedUserId) query = query.is('user_id', null).eq('lock_token', guestToken);
       const { error } = await query;
       if (error) {
         return NextResponse.json(safeServerErrorResponse(error, 'Error al cancelar la reserva temporal.'), { status: 500 });
@@ -200,7 +216,7 @@ export async function POST(req: NextRequest) {
       }
 
       const { pitch_id, selected_date, selected_times } = parseResult.data;
-      const effectiveUserId = verifiedUserId || parseResult.data.user_id || null;
+      const effectiveUserId = verifiedUserId;
 
       // OPTIMIZACIÓN DE VELOCIDAD: estas 3 consultas son independientes entre sí
       // (ninguna necesita el resultado de otra) pero antes se esperaban una tras
@@ -259,6 +275,7 @@ export async function POST(req: NextRequest) {
           end_time: endIso,
           status: 'draft',
           expires_at: expiresAt,
+                  lock_token: guestToken,
         };
       });
 
@@ -310,9 +327,12 @@ export async function POST(req: NextRequest) {
                   payment_proof_url: null,
                   source: null,
                   expires_at: expiresAt,
+                  lock_token: guestToken,
                   end_time: item.end_time,
                 })
                 .eq('id', existing.id)
+                .eq('status', existing.status)
+                .or(`expires_at.is.null,expires_at.lte.${now.toISOString()}`)
                 .select()
                 .single();
 
@@ -320,7 +340,7 @@ export async function POST(req: NextRequest) {
                 lockedBookingIds.push(updated.id);
                 continue;
               } else {
-                await supabase.from('bookings').delete().eq('id', existing.id);
+                return NextResponse.json({error:'Horario modificado por otra solicitud'}, {status:409});
               }
             } else {
               // Bloqueo activo — CUALQUIER persona (incluso el mismo usuario en otro dispositivo)
@@ -346,9 +366,12 @@ export async function POST(req: NextRequest) {
                 payment_proof_url: null,
                 source: null,
                 expires_at: expiresAt,
+                  lock_token: guestToken,
                 end_time: item.end_time,
               })
               .eq('id', existing.id)
+                .eq('status', existing.status)
+                .or(`expires_at.is.null,expires_at.lte.${now.toISOString()}`)
               .select()
               .single();
 
@@ -356,7 +379,7 @@ export async function POST(req: NextRequest) {
               lockedBookingIds.push(updated.id);
               continue;
             } else {
-              await supabase.from('bookings').delete().eq('id', existing.id);
+              return NextResponse.json({error:'Horario modificado por otra solicitud'}, {status:409});
             }
           }
         }
@@ -432,9 +455,12 @@ export async function POST(req: NextRequest) {
                   payment_proof_url: null,
                   source: null,
                   expires_at: expiresAt,
+                  lock_token: guestToken,
                   end_time: item.end_time,
                 })
                 .eq('id', conflictRow.id)
+                .eq('status', 'draft')
+                .or(`expires_at.is.null,expires_at.lte.${now.toISOString()}`)
                 .select()
                 .maybeSingle();
 
@@ -460,6 +486,7 @@ export async function POST(req: NextRequest) {
           selected_date,
           selected_times,
           expires_at: expiresAt,
+                  lock_token: guestToken,
           booking_ids: lockedBookingIds,
         }
       });
@@ -491,7 +518,7 @@ export async function POST(req: NextRequest) {
         deposit_amount,
       } = parseResult.data;
 
-      const effectiveUserId = verifiedUserId || parseResult.data.user_id || null;
+      const effectiveUserId = verifiedUserId;
       let validPitchId = pitch_id;
 
       // Determinar si el usuario es dueño específicamente de ESTA cancha (no de otras)
@@ -521,8 +548,18 @@ export async function POST(req: NextRequest) {
 
 
       let paymentProofUrl: string | null = null;
+      if (!booking_ids?.length || booking_ids.length > 4) return NextResponse.json({error:'Falta el bloqueo de la reserva'}, {status:400});
+      let locksQuery = supabase.from('bookings').select('id,start_time').in('id',booking_ids)
+        .eq('pitch_id',pitch_id).eq('status','draft').gt('expires_at',new Date().toISOString());
+      locksQuery = verifiedUserId ? locksQuery.eq('user_id',verifiedUserId) : locksQuery.is('user_id',null).eq('lock_token',guestToken);
+      const {data: locks,error: lockError}=await locksQuery;
+      const requestedStarts = new Set(selected_times.map(t=>new Date(computeSlotIsoTimes(selected_date,t).startIso).getTime()));
+      if(lockError || locks?.length!==booking_ids.length || locks.some(r=>!requestedStarts.has(new Date(r.start_time).getTime())))
+        return NextResponse.json({error:'El bloqueo no te pertenece o expiró'}, {status:409});
 
-      // Subida segura del comprobante con validación de magic bytes reales
+      // Subida segura del comprobante con validación de magic bytes reales.
+      // Si el usuario adjunta un archivo y no se puede guardar, se rechaza la
+      // reserva: nunca se debe crear una reserva "pagada" sin comprobante.
       if (file_base64) {
         try {
           const match = file_base64.match(/^data:(image\/[a-zA-Z0-9+.\-]+);base64,(.+)$/);
@@ -545,7 +582,9 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: validation.error }, { status: 400 });
           }
 
-          const { contentType, ext } = validation;
+          buffer = await sanitizeReceipt(buffer);
+          const contentType = 'image/jpeg';
+          const ext = 'jpeg';
           const filePath = `receipts/${effectiveUserId || 'guest'}_${Date.now()}.${ext}`;
 
           if (isR2Configured()) {
@@ -563,13 +602,14 @@ export async function POST(req: NextRequest) {
           }
 
           if (!paymentProofUrl) {
+            const {data: bucket,error: bucketError}=await supabase.storage.getBucket('payment-proofs');
+            if(bucketError || !bucket || bucket.public) throw new Error('El bucket de comprobantes debe ser privado');
             const { error: uploadErr } = await supabase.storage
               .from('payment-proofs')
               .upload(filePath, buffer, { contentType, upsert: true });
 
             if (!uploadErr) {
-              const { data: publicUrlData } = supabase.storage.from('payment-proofs').getPublicUrl(filePath);
-              paymentProofUrl = publicUrlData?.publicUrl || null;
+              paymentProofUrl = `/api/receipts/supabase/${filePath}`;
             } else {
               console.error('[payment-proof upload error]', uploadErr);
             }
@@ -577,294 +617,56 @@ export async function POST(req: NextRequest) {
         } catch (err) {
           console.error('[payment-proof processing error]', err);
         }
-      }
 
-      const sortedTimes = [...selected_times].sort();
-      const newExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-      const hasBookingIds = Array.isArray(booking_ids) && booking_ids.length > 0;
-
-      // Calcular abono por slot (dividido equitativamente entre las horas seleccionadas)
-      const safeTotal = typeof total_price === 'number' && total_price > 0 ? total_price : null;
-      const safeDeposit = typeof deposit_amount === 'number' && deposit_amount > 0 ? deposit_amount : null;
-
-      // Abono por slot = depósito total / número de horas seleccionadas
-      // Esto permite que cada fila de booking en la DB tenga su porción real del abono
-      const depositPerSlot = (safeDeposit && sortedTimes.length > 0)
-        ? Math.round(safeDeposit / sortedTimes.length)
-        : null;
-      const totalPerSlot = (safeTotal && sortedTimes.length > 0)
-        ? Math.round(safeTotal / sortedTimes.length)
-        : null;
-
-      const baseUpdatePayload: any = {
-        customer_name: customer_name.trim(),
-        customer_phone: customer_phone || '',
-        status: 'pending',
-        payment_status: 'submitted',
-        payment_proof_url: paymentProofUrl,
-        expires_at: newExpiresAt,
-      };
-      if (effectiveUserId) baseUpdatePayload.user_id = effectiveUserId;
-
-      // Payload extendido con los campos financieros (con fallback si las columnas no existen en DB)
-      const extendedUpdatePayload: any = {
-        ...baseUpdatePayload,
-        ...(totalPerSlot !== null ? { total_price: totalPerSlot } : {}),
-        ...(depositPerSlot !== null ? { deposit_amount: depositPerSlot } : {}),
-      };
-
-      // Variable para trackear si la DB soporta deposit_amount/total_price
-      let _supportsFinancialCols: boolean | null = null;
-      const updatedBookings: any[] = [];
-
-      // ── Estrategia 1: Actualizar directamente por IDs del lock ──────────────
-      if (hasBookingIds) {
-        // Intentar primero con columnas financieras
-        const { data: bulkData, error: bulkError } = await supabase
-          .from('bookings')
-          .update(extendedUpdatePayload)
-          .in('id', booking_ids!)
-          .select();
-
-        if (!bulkError) {
-          _supportsFinancialCols = true;
-          if (bulkData && bulkData.length > 0) updatedBookings.push(...bulkData);
-        } else if (
-          bulkError.code === 'PGRST204' ||
-          bulkError.code === '42703' ||
-          bulkError.message?.includes('column') ||
-          bulkError.message?.includes('schema cache')
-        ) {
-          // Columnas financieras no existen → fallback al payload base
-          _supportsFinancialCols = false;
-          const { data: fallbackData, error: fallbackErr } = await supabase
-            .from('bookings')
-            .update(baseUpdatePayload)
-            .in('id', booking_ids!)
-            .select();
-          if (!fallbackErr && fallbackData && fallbackData.length > 0) {
-            updatedBookings.push(...fallbackData);
-          } else if (fallbackErr) {
-            console.error('[create_booking] Error en update por IDs (fallback):', fallbackErr);
-          }
-        } else {
-          console.error('[create_booking] Error en update por IDs:', bulkError);
+        if (!paymentProofUrl) {
+          return NextResponse.json(
+            { error: 'No se pudo guardar el comprobante. Intenta nuevamente con una imagen JPG, PNG o WebP de máximo 5 MB.' },
+            { status: 502 }
+          );
         }
       }
 
-      // ── Estrategia 2: Slots no cubiertos por IDs ────────────────────────────
-      if (updatedBookings.length < sortedTimes.length) {
-        const alreadyUpdatedSlots = new Set(
-          updatedBookings.map((b: any) => {
-            try {
-              const d = new Date(b.start_time);
-              const localH = (d.getUTCHours() - 5 + 24) % 24;
-              return `${String(localH).padStart(2, '0')}:00`;
-            } catch { return ''; }
-          })
-        );
-
-        const remainingSlots = sortedTimes.filter(s => !alreadyUpdatedSlots.has(s));
-        const conflictingPitchIds = await fetchConflictingPitchIds(supabase, validPitchId);
-
-        for (const slot of remainingSlots) {
-          const { startIso: startTimeIso, endIso: endTimeIso } = computeSlotIsoTimes(selected_date, slot);
-
-          // Verificar conflictos
-          const { data: conflictRows } = await supabase
-            .from('bookings')
-            .select('id, pitch_id, user_id, status, expires_at')
-            .in('pitch_id', conflictingPitchIds)
-            .eq('start_time', startTimeIso);
-
-          const linkedConflict = (conflictRows || []).find((b: any) => {
-            if (b.pitch_id === validPitchId) return false;
-            return b.status === 'confirmed' || b.status === 'pending';
-          });
-
-          if (linkedConflict) {
-            return NextResponse.json(
-              { error: `La hora ${slot} no está disponible: cancha combinada o individual vinculada ya reservada.` },
-              { status: 400 }
-            );
-          }
-
-          const existing = (conflictRows || []).find((b: any) => b.pitch_id === validPitchId) || null;
-          // Elegir payload según soporte detectado
-          const chosenPayload = _supportsFinancialCols === false ? baseUpdatePayload : extendedUpdatePayload;
-
-          if (existing) {
-            if (existing.status === 'confirmed' || existing.status === 'pending') {
-              const isSameAuthedUser = Boolean(effectiveUserId && existing.user_id && existing.user_id === effectiveUserId);
-              const isSameBookingDraft = Boolean(hasBookingIds && booking_ids?.includes(existing.id));
-              if (!isSameAuthedUser && !isSameBookingDraft) {
-                return NextResponse.json(
-                  { error: `La hora ${slot} ya ha sido reservada o está en proceso por otro usuario.` },
-                  { status: 400 }
-                );
-              }
-            }
-
-            let { data: updated, error: updateErr } = await supabase
-              .from('bookings')
-              .update(chosenPayload)
-              .eq('id', existing.id)
-              .select()
-              .single();
-
-            // Fallback automático si columnas financieras aún no existen
-            if (updateErr && (
-              updateErr.code === 'PGRST204' ||
-              updateErr.code === '42703' ||
-              updateErr.message?.includes('column') ||
-              updateErr.message?.includes('schema cache')
-            )) {
-              _supportsFinancialCols = false;
-              const retry = await supabase
-                .from('bookings')
-                .update(baseUpdatePayload)
-                .eq('id', existing.id)
-                .select()
-                .single();
-              updated = retry.data;
-              updateErr = retry.error;
-            } else if (!updateErr) {
-              _supportsFinancialCols = true;
-            }
-
-            if (updateErr?.code === '23P01' || updateErr?.message?.includes('SLOT_TAKEN')) {
-              return NextResponse.json(
-                { error: `La hora ${slot} ya ha sido reservada.` },
-                { status: 409 }
-              );
-            }
-            if (updateErr || !updated) {
-              console.error(`Error actualizando booking id ${existing.id}:`, updateErr);
-              return NextResponse.json(
-                { error: `Error al procesar la reserva para la hora ${slot}` },
-                { status: 500 }
-              );
-            }
-            updatedBookings.push(updated);
-          } else {
-            // Insertar nuevo registro
-            const newBookingBase = {
-              pitch_id: validPitchId,
-              start_time: startTimeIso,
-              end_time: endTimeIso,
-              ...baseUpdatePayload,
-            };
-            const newBookingExtended = {
-              pitch_id: validPitchId,
-              start_time: startTimeIso,
-              end_time: endTimeIso,
-              ...extendedUpdatePayload,
-            };
-
-            let { data: inserted, error: insertErr } = await supabase
-              .from('bookings')
-              .insert(_supportsFinancialCols === false ? newBookingBase : newBookingExtended)
-              .select()
-              .single();
-
-            if (insertErr && (
-              insertErr.code === 'PGRST204' ||
-              insertErr.code === '42703' ||
-              insertErr.message?.includes('column') ||
-              insertErr.message?.includes('schema cache')
-            )) {
-              _supportsFinancialCols = false;
-              const retry = await supabase
-                .from('bookings')
-                .insert(newBookingBase)
-                .select()
-                .single();
-              inserted = retry.data;
-              insertErr = retry.error;
-            } else if (!insertErr) {
-              _supportsFinancialCols = true;
-            }
-
-            if (insertErr?.code === '23P01' || insertErr?.message?.includes('SLOT_TAKEN')) {
-              return NextResponse.json(
-                { error: `La hora ${slot} ya ha sido reservada.` },
-                { status: 409 }
-              );
-            }
-            if (insertErr || !inserted) {
-              console.error(`Error insertando booking para slot ${slot}:`, insertErr);
-              return NextResponse.json(
-                { error: `Error al crear la reserva para la hora ${slot}` },
-                { status: 500 }
-              );
-            }
-            updatedBookings.push(inserted);
-          }
-        }
-      }
-
-      if (updatedBookings.length > 0) {
-        // Invalidar caché de disponibilidad para este pitch+fecha ANTES de responder
-        // (es una operación en memoria, instantánea) para que la próxima consulta
-        // refleje de inmediato las horas ya tomadas.
-        try {
-          if (validPitchId && selected_date) {
-            cache.invalidatePrefix(`availability:${validPitchId}:${selected_date}`);
-          }
-        } catch { /* no crítico */ }
-
-        // El resto (WhatsApp al cliente + push al dueño) se hace DESPUÉS de responder,
-        // con after() de Next.js: el cliente ve su reserva confirmada de inmediato sin
-        // esperar a Evolution API / R2 / Web Push, pero el trabajo igual se garantiza
-        // completo — a diferencia de un simple "no-await", que en el entorno serverless
-        // de Vercel puede cortarse apenas se envía la respuesta.
-        const firstBookingId = updatedBookings[0].id;
-        after(async () => {
-          try {
-            await notifyBookingSubmitted(firstBookingId);
-          } catch (err) {
-            console.error('[WhatsApp Notification error]:', err);
-          }
-
-          // Notificar por Web Push al dueño de la cancha
-          try {
-            const { data: pitchOwner } = await supabase
-              .from('pitches')
-              .select('user_id, name, company_id')
-              .eq('id', validPitchId)
-              .single();
-
-            let targetOwnerId = pitchOwner?.user_id;
-            if (!targetOwnerId && pitchOwner?.company_id) {
-              const { data: comp } = await supabase
-                .from('companies')
-                .select('owner_id')
-                .eq('id', pitchOwner.company_id)
-                .single();
-              targetOwnerId = comp?.owner_id;
-            }
-
-            if (targetOwnerId) {
-              const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-              await fetch(`${appBaseUrl}/api/send-push`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'x-internal-secret': process.env.INTERNAL_API_SECRET || '',
-                },
-                body: JSON.stringify({
-                  userId: targetOwnerId,
-                  title: '⚽ Cancheros: Reserva por aprobar',
-                  message: `Nueva reserva en ${pitchOwner?.name || 'tu cancha'} de ${customer_name.trim()}. Comprobante subido.`,
-                  url: '/dashboard/bookings',
-                }),
-              }).catch(() => {});
-            }
-          } catch { /* no crítico */ }
+      {
+        if (!paymentProofUrl || !booking_ids?.length) return NextResponse.json({error:'Selecciona de nuevo el horario y adjunta el comprobante'}, {status:400});
+        const { data, error } = await supabase.rpc('submit_booking_secure', {
+          p_ids: booking_ids, p_user: verifiedUserId, p_token: guestToken,
+          p_pitch: pitch_id, p_name: customer_name.trim(), p_phone: customer_phone || '',
+          p_proof: paymentProofUrl
         });
+        if (error) return NextResponse.json({error:'El bloqueo expiró o no te pertenece. Selecciona de nuevo el horario.'}, {status:409});
+        const submitted = (data || []) as any[];
+        // Liberar la caché de disponibilidad para que las horas tomadas se vean de inmediato.
+        try { cache.invalidatePrefix(`availability:${pitch_id}:${selected_date}`); } catch { /* no crítico */ }
+        if (submitted.length > 0) {
+          const firstBookingId = submitted[0].id;
+          after(async () => {
+            // Un solo WhatsApp por solicitud: el mensaje ya agrupa las horas que comparten comprobante.
+            try { await notifyBookingSubmitted(firstBookingId); } catch (err) { console.error('[WhatsApp Notification error]:', err); }
+            // Aviso push al dueño de la cancha.
+            try {
+              const { data: pitchOwner } = await supabase.from('pitches').select('name, company_id').eq('id', pitch_id).single();
+              const { data: comp } = pitchOwner?.company_id
+                ? await supabase.from('companies').select('owner_id').eq('id', pitchOwner.company_id).single()
+                : { data: null };
+              if (comp?.owner_id && process.env.INTERNAL_API_SECRET) {
+                const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+                await fetch(`${appBaseUrl}/api/send-push`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'x-internal-secret': process.env.INTERNAL_API_SECRET },
+                  body: JSON.stringify({
+                    userId: comp.owner_id,
+                    title: '⚽ Cancheros: Reserva por aprobar',
+                    message: `Nueva reserva en ${pitchOwner?.name || 'tu cancha'} de ${customer_name.trim().slice(0, 80)}. Comprobante subido.`,
+                    url: '/dashboard/bookings',
+                  }),
+                }).catch(() => {});
+              }
+            } catch { /* no crítico */ }
+          });
+        }
+        return NextResponse.json({success:true,data:submitted.map(({lock_token,...row}:any)=>row)});
       }
 
-      return NextResponse.json({ success: true, data: updatedBookings });
 
     }
 

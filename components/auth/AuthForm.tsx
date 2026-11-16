@@ -81,16 +81,17 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
       } else {
         navigatingAway = true;
         // Intentar leer rol directamente del JWT (sin round-trip a DB)
-        const quickRole = data.user.user_metadata?.role as string | undefined;
+        const { data: trustedProfile } = await supabase.from('profiles').select('role').eq('id', data.user.id).maybeSingle();
+        const quickRole = data.user.app_metadata?.role === 'superadmin' ? 'superadmin' : trustedProfile?.role;
         if (quickRole === 'superadmin' || quickRole === 'owner' || quickRole === 'player') {
-          if (quickRole === 'superadmin') router.push('/admin');
+          if (quickRole === 'superadmin') router.push('/owner-request');
           else if (quickRole === 'owner') router.push('/dashboard');
           else router.push(redirectPath);
         } else {
           // Fallback: consultar tabla profiles solo si el JWT no tiene rol
           const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).maybeSingle();
           const role = profile?.role || quickRole;
-          if (role === 'superadmin') router.push('/admin');
+          if (role === 'superadmin') router.push('/owner-request');
           else if (role === 'owner') router.push('/dashboard');
           else router.push(redirectPath);
         }
@@ -132,7 +133,7 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
         email,
         password,
         options: {
-          data: { full_name: fullName, role: safeRole, phone: cleanPhone },
+          data: { full_name: fullName, role: 'player', phone: cleanPhone },
           emailRedirectTo,
         },
       });
@@ -145,7 +146,7 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
               id: data.user.id,
               phone: cleanPhone,
               full_name: fullName,
-              role: safeRole
+              role: 'player'
             }, { onConflict: 'id' });
             if (forcedRole === 'owner') {
               await supabase.from('companies').update({ owner_phone: cleanPhone }).eq('owner_id', data.user.id);
@@ -154,7 +155,7 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
         }
         if (data.session) {
           navigatingAway = true;
-          if (forcedRole === 'owner') router.push('/dashboard');
+          if (forcedRole === 'owner') router.push('/owner-request');
           else router.push(redirectPath);
         } else {
           setSuccess(true);

@@ -1,5 +1,7 @@
 'use client';
 
+import { RewardPicker } from './RewardPicker';
+import { BookingPromotionsTab } from './ComplexPromotions';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Check, Upload, CheckCircle2, Loader2, Image as ImageIcon, CalendarDays, Clock3, XCircle, Copy, CheckCheck, X, LandPlot, Lock, Percent, Layers, Zap, Phone, User, ShieldCheck, FileText, Sparkles, CreditCard, Receipt, FileUp, Trash2, ArrowRight } from 'lucide-react';
@@ -207,6 +209,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
 
   const [takenSlots, setTakenSlots] = useState<Map<string, { status: string, expires_at: string | null }>>(new Map());
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [rewardId, setRewardId] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
 
@@ -812,7 +815,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
       return;
     }
     if (selectedTimes.length === 0) { setError('Por favor selecciona al menos una hora'); return; }
-    if (!file) { setError('Por favor sube el comprobante de pago'); return; }
+    if (!file && !rewardId) { setError('Por favor sube el comprobante de pago'); return; }
 
     setLoading(true);
     setError('');
@@ -820,12 +823,12 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     setAlertState(prev => ({ ...prev, isOpen: false }));
 
     try {
-      const fileBase64 = await compressImageIfNeeded(file);
+      const fileBase64 = file && !rewardId ? await compressImageIfNeeded(file) : null;
 
-      const res = await fetch('/api/bookings', {
+      const res = await fetch(rewardId ? '/api/promotions' : '/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(rewardId ? {action:'redeem',reward_id:rewardId,booking_ids:activeBooking?.bookingIds || []} : {
           action: 'create_booking',
           payload: {
             pitch_id: currentPitch.id,
@@ -835,7 +838,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
             customer_phone: finalPhone,
             selected_date: selectedDate,
             selected_times: selectedTimes,
-            file_name: file.name,
+            file_name: file?.name,
             file_base64: fileBase64,
             total_price: totalPrice,
             deposit_amount: abonoPrice,
@@ -895,15 +898,15 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         </div>
 
         <p className="eyebrow accent-label text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">
-          RESERVA SOLICITADA
+          {rewardId ? 'RESERVA CONFIRMADA' : 'RESERVA SOLICITADA'}
         </p>
 
         <h1 className="text-2xl sm:text-3xl font-black text-foreground mb-2">
-          ¡Comprobante enviado!
+          {rewardId ? '¡Horas gratis reservadas!' : '¡Comprobante enviado!'}
         </h1>
 
         <p className="text-xs sm:text-sm text-muted-foreground mb-6 max-w-sm leading-relaxed">
-          Tu solicitud para <strong className="text-foreground uppercase">{currentPitch.name}</strong> ha sido enviada. El dueño validará tu abono y te confirmará pronto.
+          {rewardId ? 'Tu regalo se aplicó y la reserva quedó confirmada sin pago.' : <>Tu solicitud para <strong className="text-foreground uppercase">{currentPitch.name}</strong> ha sido enviada. El dueño validará tu abono y te confirmará pronto.</>}
         </p>
 
         {/* Tarjeta de Confirmación Limpia y Estilizada para Móvil */}
@@ -956,7 +959,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
             {/* Badge de Estado "Pendiente" en la esquina superior derecha */}
             <div className="shrink-0 pt-0.5">
               <span className="text-[10px] sm:text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap">
-                Pendiente
+                {rewardId ? 'Confirmada' : 'Pendiente'}
               </span>
             </div>
           </div>
@@ -1521,8 +1524,10 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                 </div>
                 <div className="space-y-4 w-full">
 
+                  <BookingPromotionsTab companyId={currentPitch.company_id || ''} isLoggedIn={!!user} />
+                  {user && <RewardPicker companyId={currentPitch.company_id || ''} value={rewardId} onChange={setRewardId}/>}
                   {/* ── PASO DE PAGO Y COMPROBANTE UNIFICADO ── */}
-                  <div className="bg-card border border-border/80 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
+                  <div className={rewardId ? "hidden" : "bg-card border border-border/80 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4"}>
 
                     {/* Cabecera */}
                     <div className="flex items-center justify-between pb-3 border-b border-border/60">
@@ -1732,7 +1737,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                       </>
                     ) : (
                       <>
-                        <span>¡Confirmar Reserva Ahora!</span>
+                        <span>{rewardId ? 'Canjear regalo y confirmar' : '¡Confirmar Reserva Ahora!'}</span>
                         <ArrowRight size={18} />
                       </>
                     )}
@@ -1796,14 +1801,14 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
             <div className="summary-line flex justify-between items-center pt-2 border-t border-dashed border-border">
               <span className="text-muted-foreground font-medium">Total</span>
               <strong className="text-sm font-bold text-foreground">
-                ${totalPrice > 0 ? totalPrice.toLocaleString('es-CO') : '-'}
+                ${rewardId ? '0 · regalo' : totalPrice > 0 ? totalPrice.toLocaleString('es-CO') : '-'}
               </strong>
             </div>
 
             <div className="mt-3 p-3 bg-emerald-500/10 border border-emerald-600/20 rounded-xl flex justify-between items-center">
               <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">Abono requerido</span>
               <strong className="text-base font-extrabold text-emerald-700 dark:text-emerald-400">
-                ${totalPrice > 0 ? abonoPrice.toLocaleString('es-CO') : '-'}
+                ${rewardId ? '0' : totalPrice > 0 ? abonoPrice.toLocaleString('es-CO') : '-'}
               </strong>
             </div>
             {customPricing?.booking_type === 'fixed' ? (
