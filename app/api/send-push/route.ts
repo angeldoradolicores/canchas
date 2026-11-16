@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import webpush from 'web-push';
+
+export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,18 +39,6 @@ export async function POST(request: NextRequest) {
 
     if (error || !subs || subs.length === 0) {
       return NextResponse.json({ sent: 0, reason: 'Sin suscripciones push activas para este usuario' });
-    }
-
-    // Intentar importar web-push si está disponible en el entorno
-    let webpush: any = null;
-    try {
-      webpush = require('web-push');
-    } catch {
-      // web-push no está instalado todavía, retornar graceful response
-      return NextResponse.json({
-        sent: 0,
-        warning: 'Módulo web-push no instalado en node_modules. El sistema usa Web Audio y Realtime en vivo.',
-      });
     }
 
     const vapidPublic = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;

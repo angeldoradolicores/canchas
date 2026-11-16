@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { X, LayoutDashboard, CalendarDays, Map, ShieldCheck, LogOut, Smartphone, Loader2, ShieldAlert, ImagePlay } from 'lucide-react';
 import { Logo } from '@/components/layout/Logo';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
+import { OwnerBookingAlerts } from '@/components/dashboard/OwnerBookingAlerts';
+import { OwnerApprovedCelebration } from '@/components/auth/OwnerApprovedCelebration';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { PushNotificationManager } from '@/components/PushNotificationManager';
@@ -13,6 +15,8 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
     <AuthProvider>
       <OwnerAuthGuard>
         <OwnerLayoutInner>{children}</OwnerLayoutInner>
+        <OwnerBookingAlerts />
+        <OwnerApprovedCelebration />
       </OwnerAuthGuard>
     </AuthProvider>
   );

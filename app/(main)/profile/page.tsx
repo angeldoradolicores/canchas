@@ -7,7 +7,7 @@ import { Loader2, Save, LogOut, User, Shield, HelpCircle, ChevronDown, ChevronUp
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-export function CustomSelect({ value, onChange, options }: {
+function CustomSelect({ value, onChange, options }: {
   value: string;
   onChange: (val: string) => void;
   options: { value: string; label: string; icon?: string }[];

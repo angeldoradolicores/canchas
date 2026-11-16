@@ -1,5 +1,6 @@
 'use client';
 
+import { PitchPromotions } from './ComplexPromotions';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowRight, Clock3, Heart, MapPin, ShieldCheck, CalendarDays, Calendar, CheckCircle, Loader2, Grid, X, ChevronLeft, ChevronRight, Trophy, CheckCircle2, Phone, Users, Building2, Layers, LandPlot, Check, Copy, Warehouse, Sun } from 'lucide-react';
 import { Pitch } from '@/lib/types';
@@ -1118,6 +1119,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
             )}
           </div>
 
+          {complexId && <PitchPromotions companyId={complexId} />}
           {tournaments.length > 0 && (
             <div className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border shadow-sm shadow-black/[0.03] md:shadow-sm mt-6 w-full max-w-full min-w-0">
               <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-5 flex items-center gap-2 text-foreground">

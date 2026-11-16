@@ -17,6 +17,9 @@ import { ActiveBookingProvider } from '@/lib/active-booking-context';
 import { ReservationsNotificationProvider, useReservationsNotifications } from '@/lib/reservations-notification-context';
 import { FloatingBookingTimer } from '@/components/booking/FloatingBookingTimer';
 import { ExpiredBookingFloatingBanner } from '@/components/booking/ExpiredBookingFloatingBanner';
+import { RewardCelebration } from '@/components/booking/RewardCelebration';
+import { OwnerApprovedCelebration } from '@/components/auth/OwnerApprovedCelebration';
+import { OwnerBookingAlerts } from '@/components/dashboard/OwnerBookingAlerts';
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -87,6 +90,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
             {/* Aviso flotante de gracia de 4 minutos cuando expira la reserva para permitir terminar de subir el comprobante */}
             <ExpiredBookingFloatingBanner />
+            <RewardCelebration />
+            <OwnerApprovedCelebration />
+            <OwnerBookingAlerts />
 
             {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
 

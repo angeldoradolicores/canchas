@@ -25,6 +25,10 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  // Solo registro de dueño: datos de la solicitud (se piden una sola vez).
+  const [ownerName, setOwnerName] = useState('');
+  const [ownerAddress, setOwnerAddress] = useState('');
+  const [ownerEvidence, setOwnerEvidence] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -86,6 +90,7 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
         if (quickRole === 'superadmin' || quickRole === 'owner' || quickRole === 'player') {
           if (quickRole === 'superadmin') router.push('/owner-request');
           else if (quickRole === 'owner') router.push('/dashboard');
+          else if (data.user.user_metadata?.owner_request) router.push('/owner-request');
           else router.push(redirectPath);
         } else {
           // Fallback: consultar tabla profiles solo si el JWT no tiene rol
@@ -129,11 +134,32 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
         return;
       }
 
+      const isOwnerSignup = forcedRole === 'owner';
+      if (isOwnerSignup && (ownerName.trim().length < 2 || ownerAddress.trim().length < 5 || ownerEvidence.trim().length < 10)) {
+        setError('Completa tu nombre, la dirección del complejo y una referencia de al menos 10 caracteres.');
+        setLoading(false);
+        return;
+      }
+      // La solicitud viaja con la cuenta: el servidor la registra en cuanto haya sesión
+      // (aunque primero deba confirmar el correo). NO concede ningún permiso por sí sola.
+      const ownerRequest = isOwnerSignup ? {
+        full_name: ownerName.trim().slice(0, 100),
+        company_name: fullName.trim().slice(0, 150),
+        phone: '57' + cleanPhone,
+        address: ownerAddress.trim().slice(0, 300),
+        evidence: ownerEvidence.trim().slice(0, 2000),
+      } : null;
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { full_name: fullName, role: 'player', phone: cleanPhone },
+          data: {
+            full_name: isOwnerSignup ? ownerName.trim() : fullName,
+            role: 'player',
+            phone: cleanPhone,
+            ...(ownerRequest ? { owner_request: ownerRequest } : {}),
+          },
           emailRedirectTo,
         },
       });
@@ -145,17 +171,20 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
             await supabase.from('profiles').upsert({
               id: data.user.id,
               phone: cleanPhone,
-              full_name: fullName,
+              full_name: isOwnerSignup ? ownerName.trim() : fullName,
               role: 'player'
             }, { onConflict: 'id' });
-            if (forcedRole === 'owner') {
-              await supabase.from('companies').update({ owner_phone: cleanPhone }).eq('owner_id', data.user.id);
-            }
           } catch { }
         }
         if (data.session) {
           navigatingAway = true;
-          if (forcedRole === 'owner') router.push('/owner-request');
+          if (forcedRole === 'owner') {
+            // Con sesión inmediata la solicitud se envía de una vez.
+            if (ownerRequest) {
+              await fetch('/api/owner-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ownerRequest) }).catch(() => {});
+            }
+            router.push('/owner-request');
+          }
           else router.push(redirectPath);
         } else {
           setSuccess(true);
@@ -346,6 +375,31 @@ export function AuthForm({ mode, forcedRole = 'player', title, subtitle, redirec
               </p>
             )}
           </div>
+        )}
+
+        {mode === 'register' && forcedRole === 'owner' && (
+          <>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <User size={14} className="text-emerald-500" /><span>Tu nombre completo (responsable)</span>
+              </label>
+              <input type="text" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} required maxLength={100}
+                autoComplete="name" placeholder="Ej: Julio Pérez" className="w-full px-4 py-3 bg-secondary/30 border border-border focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-2xl text-sm outline-none transition-all placeholder:text-muted-foreground/50" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Dirección del complejo</label>
+              <input type="text" value={ownerAddress} onChange={(e) => setOwnerAddress(e.target.value)} required maxLength={300}
+                placeholder="Ej: Calle 18 # 25-30, Pasto" className="w-full px-4 py-3 bg-secondary/30 border border-border focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-2xl text-sm outline-none transition-all placeholder:text-muted-foreground/50" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">¿Cómo comprobamos que el complejo es tuyo?</label>
+              <textarea value={ownerEvidence} onChange={(e) => setOwnerEvidence(e.target.value)} required minLength={10} maxLength={2000} rows={3}
+                placeholder="Ej: Instagram @complejo, Google Maps, y tu rol (dueño, administrador…)" className="w-full px-4 py-3 bg-secondary/30 border border-border focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-2xl text-sm outline-none transition-all placeholder:text-muted-foreground/50 resize-none" />
+              <p className="text-[11px] text-muted-foreground leading-tight">
+                Revisaremos tus datos antes de habilitar tu panel. Mientras tanto podrás usar la app como jugador.
+              </p>
+            </div>
+          </>
         )}
 
         {mode === 'register' && (

@@ -9,3 +9,18 @@ export async function sanitizeReceipt(buffer: Buffer): Promise<Buffer> {
  if (clean.length > 5 * 1024 * 1024) throw new Error('Imagen demasiado grande');
  return clean;
 }
+
+/**
+ * Imagen pública de promoción: solo JPG/PNG/WebP estáticos, re-codificada a WebP.
+ * Re-codificar elimina metadatos (EXIF/GPS) y cualquier contenido no visual.
+ */
+export async function sanitizePromotionImage(buffer: Buffer): Promise<Buffer> {
+ if (!buffer.length || buffer.length > 5 * 1024 * 1024) throw new Error('Imagen demasiado grande o vacía');
+ const image = sharp(buffer, {limitInputPixels: 20000000, failOn: 'warning'});
+ const meta = await image.metadata();
+ if (!['jpeg','png','webp'].includes(meta.format || '') || (meta.pages || 1) !== 1)
+   throw new Error('Solo JPG, PNG o WebP estáticos');
+ const clean = await image.rotate().resize({width:1600,height:1600,fit:'inside',withoutEnlargement:true}).webp({quality:82}).toBuffer();
+ if (clean.length > 3 * 1024 * 1024) throw new Error('Imagen demasiado grande');
+ return clean;
+}

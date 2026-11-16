@@ -828,7 +828,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
       const res = await fetch(rewardId ? '/api/promotions' : '/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(rewardId ? {action:'redeem',reward_id:rewardId,booking_ids:activeBooking?.bookingIds || []} : {
+        body: JSON.stringify(rewardId ? {action:'redeem',reward_id:rewardId,booking_ids:activeBooking?.bookingIds || [],customer_name:finalName,customer_phone:finalPhone || undefined} : {
           action: 'create_booking',
           payload: {
             pitch_id: currentPitch.id,
@@ -1525,7 +1525,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                 <div className="space-y-4 w-full">
 
                   <BookingPromotionsTab companyId={currentPitch.company_id || ''} isLoggedIn={!!user} />
-                  {user && <RewardPicker companyId={currentPitch.company_id || ''} value={rewardId} onChange={setRewardId}/>}
+                  {user && <RewardPicker companyId={currentPitch.company_id || ''} value={rewardId} onChange={setRewardId} selectedDate={selectedDate} selectedTimes={selectedTimes}/>}
                   {/* ── PASO DE PAGO Y COMPROBANTE UNIFICADO ── */}
                   <div className={rewardId ? "hidden" : "bg-card border border-border/80 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4"}>
 

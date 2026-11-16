@@ -120,3 +120,8 @@ export function triggerSystemNotification(title: string, body: string, url: stri
     } catch {}
   }
 }
+
+/** Desbloquea el audio en el primer toque/clic (los navegadores lo exigen antes de sonar). */
+export function unlockAlertAudio() {
+  try { getAudioCtx(); } catch { /* sin audio */ }
+}

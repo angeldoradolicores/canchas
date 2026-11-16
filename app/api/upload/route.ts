@@ -1,4 +1,4 @@
-import { sanitizeReceipt } from '@/lib/receipt-security';
+import { sanitizeReceipt, sanitizePromotionImage } from '@/lib/receipt-security';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
@@ -27,11 +27,20 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const requestedType = (formData.get('type') as string) || 'pitch';
-    const allowedTypes = new Set(['pitch', 'school', 'tournament', 'receipt', 'avatar']);
+    const allowedTypes = new Set(['pitch', 'school', 'tournament', 'receipt', 'avatar', 'promotion']);
     if (!allowedTypes.has(requestedType)) {
       return NextResponse.json({ error: 'Tipo de archivo no permitido' }, { status: 400 });
     }
-    const uploadType = requestedType as 'pitch' | 'school' | 'tournament' | 'receipt' | 'avatar';
+    const uploadType = requestedType as 'pitch' | 'school' | 'tournament' | 'receipt' | 'avatar' | 'promotion';
+
+    // Imágenes de promociones: solo dueños aprobados (rol leído de la BD, no del cliente).
+    if (uploadType === 'promotion') {
+      if (!user) return NextResponse.json({ error: 'Inicia sesión' }, { status: 401 });
+      const { data: ownerProfile } = await getServiceSupabase().from('profiles').select('role').eq('id', user.id).maybeSingle();
+      if (ownerProfile?.role !== 'owner') {
+        return NextResponse.json({ error: 'Solo los dueños aprobados pueden subir imágenes de promociones' }, { status: 403 });
+      }
+    }
 
     // Los comprobantes contienen información financiera y nunca deben poder
     // subirse de forma anónima.
@@ -44,14 +53,14 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Leer buffer primero para validar con magic bytes reales ──
-    if (file.size > (uploadType === 'receipt' || uploadType === 'avatar' ? 5 : 50) * 1024 * 1024) {
+    if (file.size > (uploadType === 'receipt' || uploadType === 'avatar' || uploadType === 'promotion' ? 5 : 50) * 1024 * 1024) {
       return NextResponse.json({error:'Archivo demasiado grande'}, {status:413});
     }
     const arrayBuffer = await file.arrayBuffer();
     let buffer: Buffer = Buffer.from(arrayBuffer);
 
     // ── Validación de seguridad: magic bytes + tamaño (no confiamos en file.type) ──
-    const isReceiptOrAvatar = uploadType === 'receipt' || uploadType === 'avatar';
+    const isReceiptOrAvatar = uploadType === 'receipt' || uploadType === 'avatar' || uploadType === 'promotion';
     const validation = validateImageUpload(buffer, {
       allowVideo: !isReceiptOrAvatar, // comprobantes y avatares: solo imágenes
       maxBytes: isReceiptOrAvatar ? 5 * 1024 * 1024 : 50 * 1024 * 1024, // 5MB imágenes, 50MB videos
@@ -65,6 +74,13 @@ export async function POST(req: NextRequest) {
     let { contentType, ext, isVideo } = validation;
     if (uploadType === 'receipt') {
       buffer = await sanitizeReceipt(buffer); contentType = 'image/jpeg'; ext = 'jpeg';
+    }
+    if (uploadType === 'promotion') {
+      try {
+        buffer = await sanitizePromotionImage(buffer); contentType = 'image/webp'; ext = 'webp';
+      } catch {
+        return NextResponse.json({ error: 'Solo se permiten imágenes JPG, PNG o WebP de máximo 5 MB' }, { status: 400 });
+      }
     }
     const folder = uploadType === 'receipt' ? 'comprobantes' : `${uploadType}s`;
     const userPrefix = user?.id || 'public';
