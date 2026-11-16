@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { ChevronDown, Gift } from 'lucide-react';
+import { ChevronDown, Gift, MapPin, ZoomIn } from 'lucide-react';
+import { ImageLightbox } from '@/components/ui/ImageLightbox';
 
 export const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -15,7 +16,16 @@ export type Promotion = {
   ends_at: string;
   period?: 'week' | 'month' | 'campaign';
   image_url?: string | null;
+  redeem_pitch_ids?: string[] | null;
+  redeem_pitches?: { id: string; name: string }[] | null;
 };
+
+/** "cualquier cancha del complejo" o "Cancha 1 y Cancha 3" */
+export function describePitches(p: Pick<Promotion, 'redeem_pitches'>) {
+  const names = (p.redeem_pitches || []).map(x => x.name);
+  if (!names.length) return 'cualquier cancha del complejo';
+  return names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`;
+}
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -56,27 +66,38 @@ export function describePromotion(p: Promotion) {
 
 export function PromotionCard({ p, compact = false }: { p: Promotion; compact?: boolean }) {
   const d = describePromotion(p);
+  const [zoom, setZoom] = useState(false);
   return (
-    <article className="rounded-2xl bg-card border border-border overflow-hidden min-w-0">
+    <article className="rounded-2xl bg-card border border-border overflow-hidden min-w-0 flex flex-col h-full">
       {p.image_url && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={p.image_url}
-          alt={p.title}
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          className={`w-full object-cover bg-secondary ${compact ? 'max-h-40' : 'max-h-64'}`}
-        />
+        <button
+          type="button"
+          onClick={() => setZoom(true)}
+          className={`group relative block w-full bg-secondary cursor-zoom-in ${compact ? 'aspect-[21/9]' : 'aspect-[16/9]'}`}
+          aria-label={`Ver imagen de ${p.title}`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={p.image_url} alt={p.title} loading="lazy" decoding="async" referrerPolicy="no-referrer"
+            className="absolute inset-0 w-full h-full object-cover" />
+          <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/60 text-white text-[11px] font-semibold px-2.5 py-1 opacity-90 group-hover:opacity-100">
+            <ZoomIn size={13} /> Ver imagen
+          </span>
+        </button>
       )}
-      <div className="p-3.5 sm:p-4 space-y-1.5">
+      <div className="p-3.5 sm:p-4 space-y-1.5 flex-1">
         <h3 className="font-bold break-words text-foreground">{p.title}</h3>
         <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">{d.headline}.</p>
         <p className="text-xs text-muted-foreground">{d.usage}</p>
+        <p className="text-xs text-foreground flex items-start gap-1">
+          <MapPin size={13} className="text-emerald-600 shrink-0 mt-0.5" />
+          <span>Se usa en: <strong>{describePitches(p)}</strong></span>
+        </p>
         <p className="text-[11px] text-muted-foreground">
           Promoción vigente hasta el {new Date(p.ends_at).toLocaleDateString('es-CO', { timeZone: 'America/Bogota', day: 'numeric', month: 'long' })}.
           Cuentan las reservas pagadas y aprobadas en cualquier cancha del complejo.
         </p>
       </div>
+      {zoom && p.image_url && <ImageLightbox src={p.image_url} alt={p.title} onClose={() => setZoom(false)} />}
     </article>
   );
 }
@@ -101,11 +122,11 @@ export function PitchPromotions({ companyId }: { companyId: string }) {
   const items = useCompanyPromotions(companyId);
   if (!items.length) return null;
   return (
-    <section className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-emerald-500/30 shadow-sm mt-6 w-full max-w-full min-w-0">
+    <section className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-emerald-500/30 shadow-sm w-full max-w-full min-w-0">
       <h2 className="text-lg sm:text-xl font-bold mb-4 flex items-center gap-2 text-foreground">
         <Gift size={20} className="text-emerald-600 shrink-0" /> Promociones del complejo
       </h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full min-w-0">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full min-w-0">
         {items.map(p => <PromotionCard key={p.id} p={p} />)}
       </div>
     </section>

@@ -1,4 +1,4 @@
-import { sanitizeReceipt, sanitizePromotionImage } from '@/lib/receipt-security';
+import { sanitizeReceipt, sanitizePromotionImage, optimizePublicImage } from '@/lib/receipt-security';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
@@ -81,6 +81,11 @@ export async function POST(req: NextRequest) {
       } catch {
         return NextResponse.json({ error: 'Solo se permiten imágenes JPG, PNG o WebP de máximo 5 MB' }, { status: 400 });
       }
+    }
+    // Fotos públicas: comprimir a WebP para que carguen rápido (los videos y GIF se dejan igual).
+    if (!isVideo && uploadType !== 'receipt' && uploadType !== 'promotion') {
+      const optimized = await optimizePublicImage(buffer, uploadType === 'avatar' ? 512 : 1600);
+      if (optimized) { buffer = optimized; contentType = 'image/webp'; ext = 'webp'; }
     }
     const folder = uploadType === 'receipt' ? 'comprobantes' : `${uploadType}s`;
     const userPrefix = user?.id || 'public';

@@ -79,7 +79,11 @@ export async function uploadToR2({ buffer, key, contentType, isPrivate = false }
 /**
  * Genera una URL firmada temporal para acceder a archivos privados (ej: comprobantes de pago)
  */
-export async function getPresignedR2Url(key: string, expiresInSeconds = 900): Promise<string> {
+export async function getPresignedR2Url(
+  key: string,
+  expiresInSeconds = 900,
+  opts: { signingDate?: Date; cacheControl?: string } = {},
+): Promise<string> {
   const client = getR2Client();
   if (!client) {
     throw new Error('Cloudflare R2 no configurado.');
@@ -92,8 +96,9 @@ export async function getPresignedR2Url(key: string, expiresInSeconds = 900): Pr
     new GetObjectCommand({
       Bucket: privateObject ? privateBucket() : bucketName,
       Key: cleanKey,
+      ...(opts.cacheControl ? { ResponseCacheControl: opts.cacheControl } : {}),
     }),
-    { expiresIn: expiresInSeconds }
+    { expiresIn: expiresInSeconds, ...(opts.signingDate ? { signingDate: opts.signingDate } : {}) }
   );
 }
 

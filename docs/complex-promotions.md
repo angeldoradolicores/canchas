@@ -92,3 +92,10 @@ La antigua "cortesía por 20 canchas" del panel se eliminó: únicamente cuentan
 promociones que crea el dueño.
 
 Migración: migrations/2026-11-20_promociones_sin_sms.sql (después de la del 19).
+
+## Varias promociones y canchas de canje (2026-11-23)
+
+- Un complejo puede tener hasta **10 promociones activas** a la vez (límite en el trigger `guard_complex_promotion`, con bloqueo por complejo).
+- `complex_promotions.redeem_pitch_ids`: canchas donde se puede **usar** el regalo. `NULL` = cualquier cancha del complejo. Las reservas siguen contando en todas las canchas.
+- La BD valida que cada cancha pertenezca al complejo y no deja cambiarlas después de publicar. El canje en otra cancha falla con `PROMO_PITCH`.
+- Pruebas: `tests/promotion-multi.sql`.

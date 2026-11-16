@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getAuthenticatedUser, verifyPitchOwnership, isPlatformAdmin } from '@/lib/auth-guard';
+import { getAuthenticatedUser, isPlatformAdmin } from '@/lib/auth-guard';
 import { getPresignedR2Url } from '@/lib/storage/r2';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
 
@@ -63,11 +63,16 @@ export async function GET(
   }
 
   // Autorización: admin de plataforma, o dueño de la cancha, o el propio cliente de la reserva.
-  let allowed = isPlatformAdmin(user);
+  // (Una sola consulta para todas las canchas en vez de 3 consultas por reserva.)
+  let allowed = isPlatformAdmin(user) || rows.some((r: any) => r.user_id && r.user_id === user.id);
   if (!allowed) {
-    for (const r of rows) {
-      if (r.user_id && r.user_id === user.id) { allowed = true; break; }
-      if (r.pitch_id && (await verifyPitchOwnership(user.id, r.pitch_id))) { allowed = true; break; }
+    const pitchIds = [...new Set(rows.map((r: any) => r.pitch_id).filter(Boolean))] as string[];
+    if (pitchIds.length) {
+      const [{ data: profile }, { data: owned }] = await Promise.all([
+        supabase.from('profiles').select('role').eq('id', user.id).maybeSingle(),
+        supabase.from('pitches').select('id, companies!inner(owner_id)').in('id', pitchIds).eq('companies.owner_id', user.id).limit(1),
+      ]);
+      allowed = profile?.role === 'owner' && (owned || []).length > 0;
     }
   }
   if (!allowed) {
@@ -83,11 +88,18 @@ export async function GET(
       if (signError || !data?.signedUrl) throw signError || new Error('No se pudo firmar el comprobante');
       signed = data.signedUrl;
     } else {
-      signed = await getPresignedR2Url(storageKey, 3600); // 1 hora
+      // Firma "estable" por bloques de 30 min: la misma URL se repite y el navegador
+      // reutiliza la imagen ya descargada en vez de bajarla cada vez que se abre.
+      const windowMs = 30 * 60 * 1000;
+      signed = await getPresignedR2Url(storageKey, 3600, {
+        signingDate: new Date(Math.floor(Date.now() / windowMs) * windowMs),
+        cacheControl: 'private, max-age=1800',
+      });
     }
     return NextResponse.redirect(signed, {
       status: 302,
-      headers: { 'Cache-Control': 'private, no-store' },
+      // Privado (solo este navegador) y corto: nunca lo guarda un CDN ni un proxy.
+      headers: { 'Cache-Control': 'private, max-age=900' },
     });
   } catch {
     return NextResponse.json({ error: 'No se pudo generar el acceso al comprobante' }, { status: 502 });

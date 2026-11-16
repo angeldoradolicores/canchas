@@ -6,7 +6,7 @@ import { boundedJson } from '@/lib/bounded-json';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
 
 const uuid = z.string().uuid();
-const PROMO_COLUMNS = 'id,company_id,title,required_bookings,gift_hours,redeem_days,weekdays,starts_at,ends_at,active,period,image_url';
+const PROMO_COLUMNS = 'id,company_id,title,required_bookings,gift_hours,redeem_days,weekdays,starts_at,ends_at,active,period,image_url,redeem_pitch_ids';
 
 const campaign = z.object({
   company_id: uuid,
@@ -19,6 +19,8 @@ const campaign = z.object({
   weekdays: z.array(z.number().int().min(0).max(6)).min(1).max(7),
   ends_at: z.string().datetime(),
   image_url: z.string().max(600).nullable().optional(),
+  // null = el regalo se puede usar en cualquier cancha del complejo.
+  redeem_pitch_ids: z.array(uuid).min(1).max(50).nullable().optional(),
 }).strict();
 
 // Mensajes claros para cada motivo de rechazo del canje (los genera la BD).
@@ -33,6 +35,7 @@ const REDEEM_ERRORS: Record<string, string> = {
   PROMO_SLOT_LENGTH: 'El regalo solo aplica a turnos de una hora.',
   PROMO_WEEKDAY: 'El complejo solo permite usar este regalo en los días indicados en la promoción.',
   PROMO_OTHER_COMPLEX: 'Este regalo solo se puede usar en las canchas del complejo que lo otorgó.',
+  PROMO_PITCH: 'Este regalo solo se puede usar en las canchas que indicó el complejo. Elige una de ellas.',
   PROMO_BOOKING_LIST: 'Selecciona de nuevo el horario e inténtalo otra vez.',
 };
 
@@ -63,19 +66,33 @@ export async function GET(req: NextRequest) {
 
     let query = service.from('complex_promotions').select(PROMO_COLUMNS).eq('active', true).gt('ends_at', new Date().toISOString());
     if (company) query = query.eq('company_id', company);
-    const { data: promotions, error } = await query.limit(100);
+    const { data: promoRows, error } = await query.order('starts_at', { ascending: false }).limit(100);
     if (error) throw error;
+    // Nombres de las canchas donde se puede usar cada regalo (para mostrarlos al jugador).
+    const pitchIds = [...new Set((promoRows || []).flatMap((p: any) => p.redeem_pitch_ids || []))];
+    const { data: pitchRows } = pitchIds.length
+      ? await service.from('pitches').select('id,name').in('id', pitchIds)
+      : { data: [] as { id: string; name: string }[] };
+    const pitchName = new Map((pitchRows || []).map((p: any) => [p.id, p.name]));
+    const promotions = (promoRows || []).map((p: any) => ({
+      ...p,
+      redeem_pitches: p.redeem_pitch_ids ? p.redeem_pitch_ids.map((id: string) => ({ id, name: pitchName.get(id) || 'Cancha' })) : null,
+    }));
 
     const { data: rewards, error: rewardError } = user
       ? await service.from('promotion_rewards')
-        .select('id,promotion_id,hours,remaining,expires_at,earned_at,celebrated_at,period_start, complex_promotions(title,company_id,weekdays,period,image_url,companies(name))')
+        .select('id,promotion_id,hours,remaining,expires_at,earned_at,celebrated_at,period_start, complex_promotions(title,company_id,weekdays,period,image_url,redeem_pitch_ids,companies(name))')
         .eq('user_id', user.id).gt('remaining', 0).gt('expires_at', new Date().toISOString())
         .order('earned_at', { ascending: false }).limit(100)
       : { data: [], error: null };
     if (rewardError) throw rewardError;
 
     const { data: companies } = user ? await service.from('companies').select('id,name').eq('owner_id', user.id) : { data: [] };
-    return NextResponse.json({ promotions, rewards, companies }, { headers: { 'Cache-Control': 'private, no-store' } });
+    const companyIds = (companies || []).map((c: any) => c.id);
+    const { data: ownPitches } = companyIds.length
+      ? await service.from('pitches').select('id,name,company_id').in('company_id', companyIds).order('name')
+      : { data: [] };
+    return NextResponse.json({ promotions, rewards, companies, pitches: ownPitches || [] },{ headers: { 'Cache-Control': 'private, no-store' } });
   } catch {
     return NextResponse.json({ error: 'No se pudieron consultar las promociones' }, { status: 500 });
   }
@@ -147,6 +164,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'La imagen debe subirse desde este formulario' }, { status: 400 });
     if (!await verifyCompanyOwnership(user.id, promo.company_id))
       return NextResponse.json({ error: 'Solo el dueño aprobado puede crear promociones' }, { status: 403 });
+    const redeemPitchIds = promo.redeem_pitch_ids?.length ? [...new Set(promo.redeem_pitch_ids)] : null;
+    if (redeemPitchIds) {
+      const { data: own } = await service.from('pitches').select('id').eq('company_id', promo.company_id).in('id', redeemPitchIds);
+      if ((own || []).length !== redeemPitchIds.length)
+        return NextResponse.json({ error: 'Elige solo canchas de este complejo' }, { status: 400 });
+    }
 
     const { error: expiryError } = await service.from('complex_promotions').update({ active: false })
       .eq('company_id', promo.company_id).eq('active', true).lte('ends_at', new Date().toISOString());
@@ -155,9 +178,15 @@ export async function POST(req: NextRequest) {
       ...promo,
       weekdays: [...new Set(promo.weekdays)].sort(),
       image_url: promo.image_url || null,
+      redeem_pitch_ids: redeemPitchIds,
       created_by: user.id,
     });
-    if (error) return NextResponse.json({ error: 'No se pudo crear. Finaliza la promoción activa antes de publicar otra.' }, { status: 409 });
+    if (error) {
+      const tooMany = error.message?.includes('Too many active promotions');
+      return NextResponse.json({
+        error: tooMany ? 'Puedes tener máximo 10 promociones activas. Finaliza alguna para publicar otra.' : 'No se pudo crear la promoción. Inténtalo de nuevo.',
+      }, { status: 409 });
+    }
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: 'No se pudo procesar la promoción' }, { status: 400 });

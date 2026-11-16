@@ -255,7 +255,7 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
         >
           {/* BANNER / FOTO DESTACADA */}
           <div className="relative aspect-[16/10] sm:aspect-[4/3] w-full bg-secondary overflow-hidden shrink-0">
-            <img
+            <img loading="lazy" decoding="async"
               src={mainImage}
               alt={pitch.name}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
@@ -535,7 +535,7 @@ export function PitchCard({ pitch, editUrl, isAdmin = true, onOpen, onBook }: Pi
               {/* Carrusel / Visor Multimedia */}
               {allMedia.length > 0 && (
                 <div className="relative rounded-2xl overflow-hidden bg-black aspect-[16/9] border border-border shadow-inner shrink-0 group">
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={allMedia[activeMediaIndex]}
                     alt={`Imagen ${activeMediaIndex + 1} de la cancha`}
                     className="w-full h-full object-cover transition-all duration-300"

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useToday } from '@/lib/use-today';
 import { ManualBookingModal } from '@/components/booking/ManualBookingModal';
+import { ScrollableTable } from '@/components/ui/ScrollableTable';
 import { BookingReportModal } from '@/components/booking/BookingReportModal';
 import { ContractBookingModal } from '@/components/booking/ContractBookingModal';
 import { CustomMonthCalendar } from '@/components/explore/CustomMonthCalendar';
@@ -2582,7 +2583,7 @@ export default function BookingsPage() {
                           </div>
                         ) : (
                           /* Tabla de reservas de ESTA cancha */
-                          <div className="overflow-x-auto">
+                          <ScrollableTable minWidth={860} className="p-2 sm:p-0">
                             <table className="w-full text-xs">
                               <thead>
                                 <tr className="bg-secondary/30 border-b border-border text-left text-muted-foreground text-[10px] font-black uppercase tracking-wider">
@@ -2815,7 +2816,7 @@ export default function BookingsPage() {
                                 })}
                               </tbody>
                             </table>
-                          </div>
+                          </ScrollableTable>
                         )}
                       </div>
                     );
@@ -3236,13 +3237,7 @@ export default function BookingsPage() {
                 </button>
               </div>
             </div>
-            <div className="w-full flex items-center justify-center max-h-[75vh] overflow-auto rounded-2xl bg-black/50 p-2">
-              <img
-                src={proofModalData.url}
-                alt={proofModalData.title || 'Comprobante'}
-                className="max-w-full max-h-[70vh] object-contain rounded-xl shadow-lg"
-              />
-            </div>
+            <ProofImage key={proofModalData.url} url={proofModalData.url} title={proofModalData.title || 'Comprobante'} />
           </div>
         </div>
       )}
@@ -4147,6 +4142,36 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, allBookings, 
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Comprobante con indicador de carga y mensaje claro si no se puede abrir. */
+function ProofImage({ url, title }: { url: string; title: string }) {
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  return (
+    <div className="relative w-full min-h-[220px] flex items-center justify-center max-h-[75vh] overflow-auto rounded-2xl bg-black/50 p-2">
+      {state === 'loading' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/80 text-xs font-semibold">
+          <Loader2 size={26} className="animate-spin" />
+          Cargando comprobante…
+        </div>
+      )}
+      {state === 'error' && (
+        <div className="text-center text-white/80 text-sm p-6">
+          No se pudo abrir el comprobante. Revisa tu conexión e inténtalo de nuevo.
+        </div>
+      )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt={title}
+        decoding="async"
+        fetchPriority="high"
+        onLoad={() => setState('ready')}
+        onError={() => setState('error')}
+        className={`max-w-full max-h-[70vh] object-contain rounded-xl shadow-lg transition-opacity duration-200 ${state === 'ready' ? 'opacity-100' : 'opacity-0'}`}
+      />
     </div>
   );
 }

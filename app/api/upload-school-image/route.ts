@@ -1,3 +1,4 @@
+import { optimizePublicImage } from '@/lib/receipt-security';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
 
     // ── Leer buffer primero para validar con magic bytes reales ──
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    let buffer: Buffer = Buffer.from(arrayBuffer);
 
     // ── Validación de seguridad: solo imágenes JPG, PNG, WebP — NO confiamos en file.type ──
     const validation = validateImageUpload(buffer, {
@@ -47,7 +48,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    const { contentType, ext } = validation;
+    let { contentType, ext } = validation;
+    const optimized = await optimizePublicImage(buffer);
+    if (optimized) { buffer = optimized; contentType = 'image/webp'; ext = 'webp'; }
     const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
 
     // ── Si Cloudflare R2 está configurado, usar R2 ──

@@ -32,6 +32,8 @@ function defaultEndDate() {
 
 export default function PromotionsPage() {
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
+  const [pitches, setPitches] = useState<{ id: string; name: string; company_id: string }[]>([]);
+  const [pitchIds, setPitchIds] = useState<string[]>([]); // vacío = todas las canchas
   const [items, setItems] = useState<Promotion[]>([]);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -54,6 +56,7 @@ export default function PromotionsPage() {
     const j = await r.json();
     if (!r.ok) { setMessage(j.error); return; }
     setCompanies(j.companies || []);
+    setPitches(j.pitches || []);
     setCompanyId(prev => prev || j.companies?.[0]?.id || '');
     setItems(j.promotions || []);
   }
@@ -100,9 +103,12 @@ export default function PromotionsPage() {
     id: 'preview', title: title || 'Tu promoción', period, required_bookings: Math.max(1, Number(required) || 1),
     gift_hours: Math.max(1, Number(hours) || 1), redeem_days: redeemDays, weekdays: weekdays.length ? weekdays : [0],
     ends_at: new Date(endsAt + 'T23:59:59-05:00').toISOString(), image_url: imageUrl,
-  }), [title, period, required, hours, redeemDays, weekdays, endsAt, imageUrl]);
+    redeem_pitches: pitchIds.length ? pitches.filter(x => pitchIds.includes(x.id)) : null,
+  }), [title, period, required, hours, redeemDays, weekdays, endsAt, imageUrl, pitchIds, pitches]);
 
   const ownPromos = items.filter(p => companies.some(c => c.id === p.company_id));
+  const companyPitches = pitches.filter(p => p.company_id === companyId);
+  const activeCount = ownPromos.filter(p => p.company_id === companyId).length;
   const periodWord = period === 'week' ? 'semana' : 'mes';
 
   async function submit(e: React.FormEvent) {
@@ -112,8 +118,9 @@ export default function PromotionsPage() {
       company_id: companyId, title: title.trim(), period,
       required_bookings: Number(required), gift_hours: Number(hours), redeem_days: redeemDays,
       weekdays, ends_at: new Date(endsAt + 'T23:59:59-05:00').toISOString(), image_url: imageUrl,
+      redeem_pitch_ids: pitchIds.length ? pitchIds : null,
     });
-    if (ok) setImageUrl(null);
+    if (ok) { setImageUrl(null); setPitchIds([]); }
   }
 
   return (
@@ -125,8 +132,8 @@ export default function PromotionsPage() {
 
       {ownPromos.length > 0 && (
         <section className="space-y-3">
-          <h2 className="font-bold">Promoción activa</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <h2 className="font-bold">Promociones activas ({ownPromos.length})</h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {ownPromos.map(p => (
               <div key={p.id} className="space-y-2">
                 <PromotionCard p={p} />
@@ -135,7 +142,7 @@ export default function PromotionsPage() {
               </div>
             ))}
           </div>
-          <p className="text-xs text-muted-foreground">Solo puede haber una promoción activa por complejo. Finalízala para publicar otra.</p>
+          <p className="text-xs text-muted-foreground">Puedes tener hasta 10 promociones activas al mismo tiempo por complejo.</p>
         </section>
       )}
 
@@ -158,7 +165,7 @@ export default function PromotionsPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             {companies.length > 1 && (
               <label className="text-sm sm:col-span-2">Complejo
-                <select required value={companyId} onChange={e => setCompanyId(e.target.value)} className={inputCls}>
+                <select required value={companyId} onChange={e => { setCompanyId(e.target.value); setPitchIds([]); }} className={inputCls}>
                   {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </label>
@@ -200,8 +207,29 @@ export default function PromotionsPage() {
             </div>
           </fieldset>
 
+          <fieldset>
+            <legend className="font-bold mb-1 text-sm">3. Canchas donde se puede usar el regalo</legend>
+            <p className="text-xs text-muted-foreground mb-2">Las reservas cuentan en cualquier cancha; aquí eliges dónde se puede canjear la hora gratis.</p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" aria-pressed={!pitchIds.length} onClick={() => setPitchIds([])}
+                className={`px-3 py-2 rounded-xl border text-sm font-semibold cursor-pointer ${!pitchIds.length ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-border bg-background'}`}>
+                Todas las canchas
+              </button>
+              {companyPitches.map(pi => {
+                const on = pitchIds.includes(pi.id);
+                return (
+                  <button type="button" key={pi.id} aria-pressed={on}
+                    onClick={() => setPitchIds(list => on ? list.filter(x => x !== pi.id) : [...list, pi.id])}
+                    className={`px-3 py-2 rounded-xl border text-sm font-semibold cursor-pointer ${on ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-border bg-background'}`}>
+                    {pi.name}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
           <fieldset className="space-y-2">
-            <legend className="font-bold mb-2 text-sm">3. Hasta cuándo puede usarlo</legend>
+            <legend className="font-bold mb-2 text-sm">4. Hasta cuándo puede usarlo</legend>
             {period !== 'campaign' && (
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input type="radio" checked={untilPeriodEnd} onChange={() => setUntilPeriodEnd(true)} />
@@ -218,7 +246,7 @@ export default function PromotionsPage() {
           </fieldset>
 
           <fieldset>
-            <legend className="font-bold mb-2 text-sm">4. Imagen (opcional)</legend>
+            <legend className="font-bold mb-2 text-sm">5. Imagen (opcional)</legend>
             {imageUrl ? (
               <div className="flex items-center gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -239,8 +267,8 @@ export default function PromotionsPage() {
             Cuentan las reservas pagadas y aprobadas desde hoy en cualquiera de tus canchas, también las manuales y los turnos fijos con nombre y celular del cliente.
             Nunca se relacionan personas por nombre. Una vez publicada, las condiciones no se pueden editar; puedes finalizarla y los regalos ya ganados se conservan.
           </p>
-          <button disabled={busy || uploading || !companyId || ownPromos.some(p => p.company_id === companyId)} className="btn-primary w-full">
-            {busy ? 'Publicando…' : 'Publicar promoción'}
+          <button disabled={busy || uploading || !companyId || activeCount >= 10} className="btn-primary w-full">
+            {busy ? 'Publicando…' : activeCount >= 10 ? 'Máximo 10 promociones activas' : 'Publicar promoción'}
           </button>
           <p role="status" className="text-sm">{message}</p>
         </form>

@@ -235,7 +235,7 @@ function NewPitchForm() {
         const compIds = comps.map((c: any) => c.id);
         const { data: pList } = await supabase
           .from('pitches')
-          .select('*, companies(*)')
+          .select('*, companies(id, owner_id, name, address, zone, lat, lng, has_school, has_tournaments, owner_phone)')
           .in('company_id', compIds);
 
         const validPitches = (pList || []).filter((p: any) => !p.custom_pricing?.is_combined);
@@ -447,7 +447,7 @@ function NewPitchForm() {
       duplicateLoadedRef.current = true;
       const { data, error } = await supabase
         .from('pitches')
-        .select('*, companies(*)')
+        .select('*, companies(id, owner_id, name, address, zone, lat, lng, has_school, has_tournaments, owner_phone)')
         .eq('id', duplicateId)
         .maybeSingle();
 

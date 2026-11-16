@@ -23,7 +23,8 @@ import {
   ArrowUpRight,
   Sparkles,
   CalendarDays,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Search
 } from 'lucide-react';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -951,851 +952,682 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
     setTimeout(() => { win.focus(); win.print(); }, 400);
   }, [companyName]);
 
+  // ── Clientes: todos, con búsqueda (período seleccionado o todo el historial) ──
+  const [clientScope, setClientScope] = useState<'all' | 'period'>('all');
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientSort, setClientSort] = useState<'approved' | 'spent' | 'recent' | 'name'>('approved');
+  const [clientLimit, setClientLimit] = useState(30);
+  const [entitySearch, setEntitySearch] = useState('');
+  const [entityFilter, setEntityFilter] = useState<'all' | 'entity' | 'school' | 'contract'>('all');
+
+  const clients = useMemo(() => {
+    const source = clientScope === 'all' ? safeBookings.filter(b => b && b.status !== 'draft') : inRangeBookings;
+    const map = new Map<string, ClientRow>();
+    source.forEach(b => {
+      const phone = normalizePhone(b.customer_phone);
+      const name = cleanClientName(b.client_entity_name || b.customer_name);
+      const key = phone ? `p:${phone}` : b.user_id ? `u:${b.user_id}` : name ? `n:${name.toLowerCase()}` : '';
+      if (!key) return;
+      let row = map.get(key);
+      if (!row) {
+        row = { key, name: name || 'Cliente sin nombre', phone: phone ? String(b.customer_phone).trim() : '', approved: 0, pending: 0, cancelled: 0, spent: 0, last: null, pitches: {} };
+        map.set(key, row);
+      }
+      if (name && row.name === 'Cliente sin nombre') row.name = name;
+      if (b.status === 'confirmed') {
+        row.approved++;
+        row.spent += getBookingIncome(b);
+        const pitchName = b.pitches?.name || 'Cancha';
+        row.pitches[pitchName] = (row.pitches[pitchName] || 0) + 1;
+      } else if (b.status === 'pending') row.pending++;
+      else if (b.status === 'cancelled' || b.status === 'rejected') row.cancelled++;
+      if (b.start_time && (!row.last || b.start_time > row.last)) row.last = b.start_time;
+    });
+    return [...map.values()];
+  }, [clientScope, safeBookings, inRangeBookings]);
+
+  const filteredClients = useMemo(() => {
+    const q = clientSearch.trim().toLowerCase();
+    const qDigits = q.replace(/\D/g, '');
+    const list = clients.filter(c => !q
+      || c.name.toLowerCase().includes(q)
+      || (qDigits.length >= 3 && c.phone.replace(/\D/g, '').includes(qDigits)));
+    const sorted = [...list].sort((a, b) => {
+      if (clientSort === 'spent') return b.spent - a.spent;
+      if (clientSort === 'recent') return (b.last || '').localeCompare(a.last || '');
+      if (clientSort === 'name') return a.name.localeCompare(b.name, 'es');
+      return b.approved - a.approved || b.spent - a.spent;
+    });
+    return sorted;
+  }, [clients, clientSearch, clientSort]);
+
+  const clientTotals = useMemo(() => ({
+    count: filteredClients.length,
+    approved: filteredClients.reduce((s, c) => s + c.approved, 0),
+    spent: filteredClients.reduce((s, c) => s + c.spent, 0),
+  }), [filteredClients]);
+
+  const filteredEntities = useMemo(() => {
+    const q = entitySearch.trim().toLowerCase();
+    return entitiesReport.list.filter(e =>
+      (entityFilter === 'all' || e.type === entityFilter) &&
+      (!q || e.name.toLowerCase().includes(q) || e.pitchName.toLowerCase().includes(q)));
+  }, [entitiesReport.list, entitySearch, entityFilter]);
+
+  const hoursChrono = useMemo(() => [...byHour].sort((a, b) => a.hour - b.hour), [byHour]);
+
+  // Si la hoja de trazabilidad se abrió desde una reserva, al cerrarla se vuelve a la gestión de reservas.
+  const openedFromBooking = Boolean(initialEntityTarget);
+  const closeTrace = () => {
+    setSelectedEntityTrace(null);
+    if (openedFromBooking) onClose();
+  };
+
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-2 sm:p-5 bg-black/75 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-background border border-border rounded-3xl shadow-2xl w-full max-w-4xl max-h-[94vh] flex flex-col overflow-hidden">
+  const rangeLabel = `${from.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })} – ${to.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  const blocksTotal = timeBlocks.manana.count + timeBlocks.tarde.count + timeBlocks.noche.count;
 
-        {/* ── Header Ejecutivo ── */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-card shrink-0">
+  const TABS: { key: ReportTab; label: string; icon: React.ReactNode }[] = [
+    { key: 'overview', label: 'Resumen', icon: <TrendingUp size={15} /> },
+    { key: 'customers', label: 'Clientes', icon: <Users size={15} /> },
+    { key: 'entities', label: 'Turnos fijos y entidades', icon: <Building2 size={15} /> },
+    { key: 'pitches', label: 'Canchas', icon: <Layers size={15} /> },
+    { key: 'hours', label: 'Horarios', icon: <Clock size={15} /> },
+    { key: 'cancellations', label: 'Cancelaciones', icon: <XCircle size={15} /> },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[300] flex items-stretch sm:items-center justify-center sm:p-5 bg-black/70 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-background sm:border border-border sm:rounded-3xl shadow-2xl w-full max-w-5xl h-full sm:h-auto sm:max-h-[94vh] flex flex-col overflow-hidden">
+
+        {/* ── Encabezado ── */}
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3.5 border-b border-border bg-card shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="h-11 w-11 rounded-2xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 flex items-center justify-center p-2 shadow-sm shrink-0 font-black">
+            <div className="h-10 w-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
               <BarChart3 size={20} />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-lg font-black text-foreground truncate">
-                  Reporte Ejecutivo de Gestión
-                </h2>
-                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                  {companyName || 'Complejo Deportivo'}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground truncate">
-                Métricas financieras, ocupación y control de cancelaciones
-              </p>
+              <h2 className="text-base sm:text-lg font-black text-foreground truncate">Reportes</h2>
+              <p className="text-xs text-muted-foreground truncate">{companyName || 'Tu complejo'} · {rangeLabel}</p>
             </div>
           </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-
-            <button
-              onClick={onClose}
-              className="p-2 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-            >
-              <X size={18} />
-            </button>
-          </div>
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer" aria-label="Cerrar reportes">
+            <X size={20} />
+          </button>
         </div>
 
-        {/* ── Selector de Períodos Sobrio y Elegante (Sin verdes fosforescentes) ── */}
-        <div className="px-5 py-3 border-b border-border bg-secondary/20 shrink-0 space-y-2.5">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-              <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider mr-1">
-                Período:
-              </span>
-              {PERIOD_OPTIONS.map(p => {
-                const isActive = period === p.key;
-                return (
-                  <button
-                    key={p.key}
-                    onClick={() => setPeriod(p.key)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer border ${isActive
-                      ? 'bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100 shadow-xs'
-                      : 'bg-card border-border text-muted-foreground hover:bg-secondary hover:text-foreground'
-                      }`}
-                  >
-                    <span>{p.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Rango de fechas activo */}
-            <div className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
-              <Calendar size={13} className="text-foreground/70" />
-              <span>
-                {from.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })} – {to.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </span>
-            </div>
+        {/* ── Período ── */}
+        <div className="px-4 sm:px-6 py-3 border-b border-border bg-secondary/20 shrink-0 space-y-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            <CalendarDays size={15} className="text-muted-foreground shrink-0 mr-0.5" />
+            {PERIOD_OPTIONS.map(p => (
+              <button
+                key={p.key}
+                onClick={() => setPeriod(p.key)}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap cursor-pointer border transition-colors ${period === p.key
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-card border-border text-muted-foreground hover:text-foreground'}`}
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
-
-          {/* Rango Personalizado con tipografía sobria y elegante */}
           {period === 'custom' && (
-            <div className="flex flex-wrap items-center gap-3 p-3 bg-card border border-border rounded-2xl animate-in fade-in slide-in-from-top-1">
-              <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
-                <CalendarDays size={15} className="text-muted-foreground" />
-                <span>Rango específico:</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase">Desde</label>
-                <input
-                  type="date"
-                  value={customFrom}
-                  onChange={e => setCustomFrom(e.target.value)}
-                  className="border border-border bg-background rounded-xl px-2.5 py-1.5 text-xs text-foreground font-medium outline-none focus:border-foreground transition-colors"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase">Hasta</label>
-                <input
-                  type="date"
-                  value={customTo}
-                  onChange={e => setCustomTo(e.target.value)}
-                  className="border border-border bg-background rounded-xl px-2.5 py-1.5 text-xs text-foreground font-medium outline-none focus:border-foreground transition-colors"
-                />
-              </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <label className="flex items-center gap-1.5 font-semibold text-muted-foreground">Desde
+                <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="border border-border bg-background rounded-xl px-2.5 py-1.5 text-foreground" />
+              </label>
+              <label className="flex items-center gap-1.5 font-semibold text-muted-foreground">Hasta
+                <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="border border-border bg-background rounded-xl px-2.5 py-1.5 text-foreground" />
+              </label>
             </div>
           )}
         </div>
 
-        {/* ── Navegación de Pestañas del Reporte ── */}
-        <div className="px-5 border-b border-border bg-card flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0">
-          {[
-            { key: 'overview', label: 'Resumen Ejecutivo', icon: <TrendingUp size={14} /> },
-            { key: 'entities', label: 'Entidades & Escuelas', icon: <Building2 size={14} /> },
-            { key: 'pitches', label: 'Rendimiento Canchas', icon: <Layers size={14} /> },
-            { key: 'hours', label: 'Horas Pico', icon: <Clock size={14} /> },
-            { key: 'cancellations', label: 'Canceladas & Fuga', icon: <XCircle size={14} /> },
-            { key: 'customers', label: 'Top Clientes', icon: <Users size={14} /> },
-          ].map(tab => {
-            const isActive = activeTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key as ReportTab)}
-                className={`flex items-center gap-1.5 px-3 py-2.5 border-b-2 text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${isActive
-                  ? 'border-foreground text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
-              >
-                {tab.icon}
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+        {/* ── Pestañas ── */}
+        <div className="px-2 sm:px-4 border-b border-border bg-card flex items-center gap-0.5 overflow-x-auto no-scrollbar shrink-0">
+          {TABS.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-1.5 px-3 py-3 border-b-2 text-xs sm:text-sm font-bold whitespace-nowrap cursor-pointer transition-colors ${activeTab === tab.key
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            >
+              {tab.icon}{tab.label}
+            </button>
+          ))}
         </div>
 
-        {/* ── Contenido Principal Scrollable ── */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        {/* ── Contenido ── */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-background">
 
-          {/* ═══════════════ PESTAÑA: RESUMEN EJECUTIVO ═══════════════ */}
+          {/* ═══════ RESUMEN ═══════ */}
           {activeTab === 'overview' && (
-            <div className="space-y-6">
-              {/* Tarjetas KPI de Primer Nivel */}
+            <div className="space-y-5">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {/* Total Recaudado */}
-                <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 text-white rounded-2xl p-4 shadow-sm col-span-2 sm:col-span-1">
-                  <div className="flex items-center justify-between mb-1 opacity-80">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider">Recaudo Realizado</span>
-                    <DollarSign size={14} />
-                  </div>
-                  <p className="text-2xl font-black">{formatCOP(totalRevenue)}</p>
-                  <p className="text-[10px] opacity-70 mt-1 font-medium">
-                    {confirmedCount} partidos confirmados
-                  </p>
-                </div>
-
-                {/* Ticket Promedio */}
-                <div className="bg-card border border-border rounded-2xl p-4 shadow-2xs">
-                  <div className="flex items-center justify-between mb-1 text-muted-foreground">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider">Ticket Promedio</span>
-                    <Trophy size={14} className="text-amber-500" />
-                  </div>
-                  <p className="text-2xl font-black text-foreground">{formatCOP(averageTicket)}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1 font-medium">
-                    Por reserva confirmada
-                  </p>
-                </div>
-
-                {/* Tasa de Efectividad */}
-                <div className="bg-card border border-border rounded-2xl p-4 shadow-2xs">
-                  <div className="flex items-center justify-between mb-1 text-muted-foreground">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider">Efectividad</span>
-                    <CheckCircle2 size={14} className="text-emerald-500" />
-                  </div>
-                  <p className="text-2xl font-black text-foreground">{successRate}%</p>
-                  <p className="text-[10px] text-muted-foreground mt-1 font-medium">
-                    {confirmedCount} de {totalBookingsCount} totales
-                  </p>
-                </div>
-
-                {/* Canceladas & Pérdida */}
-                <div className="bg-card border border-border rounded-2xl p-4 shadow-2xs">
-                  <div className="flex items-center justify-between mb-1 text-muted-foreground">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider">Canceladas</span>
-                    <XCircle size={14} className="text-rose-500" />
-                  </div>
-                  <p className="text-2xl font-black text-rose-600 dark:text-rose-400">{cancelledCount}</p>
-                  <p className="text-[10px] text-rose-500 mt-1 font-semibold">
-                    -{formatCOP(lostRevenue)} no ingresado
-                  </p>
-                </div>
+                <Kpi tone="primary" label="Dinero de reservas aprobadas" value={formatCOP(totalRevenue)} hint={`${confirmedCount} ${confirmedCount === 1 ? 'reserva aprobada' : 'reservas aprobadas'}`} icon={<DollarSign size={16} />} />
+                <Kpi label="Reservas aprobadas" value={`${confirmedCount}`} hint={`${successRate}% de ${totalBookingsCount} solicitudes`} icon={<CheckCircle2 size={16} className="text-emerald-500" />} />
+                <Kpi tone="amber" label="Por aprobar" value={`${pendingCount}`} hint={`${formatCOP(pendingPotentialRevenue)} en espera`} icon={<AlertTriangle size={16} />} />
+                <Kpi tone="rose" label="Canceladas" value={`${cancelledCount}`} hint={`${formatCOP(lostRevenue)} que no ingresó`} icon={<XCircle size={16} />} />
               </div>
 
-              {/* Fila Secundaria de KPIs */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3 rounded-xl bg-secondary/40 border border-border">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Pendientes</span>
-                  <span className="text-base font-extrabold text-foreground">{pendingCount}</span>
-                  <span className="text-[10px] text-amber-600 dark:text-amber-400 block font-medium">
-                    {formatCOP(pendingPotentialRevenue)} por cobrar
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-secondary/40 border border-border">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Clientes Únicos</span>
-                  <span className="text-base font-extrabold text-foreground">{uniqueCustomersCount}</span>
-                  <span className="text-[10px] text-muted-foreground block font-medium">En el período</span>
-                </div>
-                <div className="p-3 rounded-xl bg-secondary/40 border border-border">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Horario Dorado</span>
-                  <span className="text-base font-extrabold text-foreground">{peakHour?.label || '—'}</span>
-                  <span className="text-[10px] text-muted-foreground block font-medium">
-                    {peakHour ? `${peakHour.count} partidos` : 'Sin datos'}
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-secondary/40 border border-border">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Cancha Estrella</span>
-                  <span className="text-base font-extrabold text-foreground truncate block">{topCourt?.name || '—'}</span>
-                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block font-medium">
-                    {topCourt ? formatCOP(topCourt.revenue) : '—'}
-                  </span>
-                </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <MiniStat label="Cancha que más vende" value={topCourt?.name || '—'} hint={topCourt ? formatCOP(topCourt.revenue) : 'Sin datos'} />
+                <MiniStat label="Hora más pedida" value={peakHour?.label || '—'} hint={peakHour ? `${peakHour.count} reservas` : 'Sin datos'} />
+                <MiniStat label="Clientes distintos" value={`${uniqueCustomersCount}`} hint="Con reservas aprobadas" />
+                <MiniStat label="Valor promedio" value={formatCOP(averageTicket)} hint="Por reserva aprobada" />
               </div>
 
-              {/* Franjas del día */}
-              <div className="bg-card border border-border rounded-2xl p-4 sm:p-5">
-                <h3 className="text-xs font-black uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
-                  <Clock size={14} className="text-foreground" /> Distribución por Turnos del Día
-                </h3>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="p-3 rounded-xl bg-secondary/30 border border-border/60 text-center">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase block">Mañana (6am - 12pm)</span>
-                    <span className="text-lg font-black text-foreground">{timeBlocks.manana.count}</span>
-                    <span className="text-[11px] font-bold text-muted-foreground block mt-0.5">{timeBlocks.manana.pct}</span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-secondary/30 border border-border/60 text-center">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase block">Tarde (12pm - 6pm)</span>
-                    <span className="text-lg font-black text-foreground">{timeBlocks.tarde.count}</span>
-                    <span className="text-[11px] font-bold text-muted-foreground block mt-0.5">{timeBlocks.tarde.pct}</span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-secondary/30 border border-border/60 text-center">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase block">Noche (6pm - 12am)</span>
-                    <span className="text-lg font-black text-foreground">{timeBlocks.noche.count}</span>
-                    <span className="text-[11px] font-bold text-muted-foreground block mt-0.5">{timeBlocks.noche.pct}</span>
-                  </div>
+              <Card title="¿A qué hora juegan más?" icon={<Clock size={15} />}>
+                <div className="flex h-3.5 w-full overflow-hidden rounded-full bg-secondary">
+                  {blocksTotal > 0 && (
+                    <>
+                      <div className="bg-amber-400" style={{ width: `${(timeBlocks.manana.count / blocksTotal) * 100}%` }} />
+                      <div className="bg-sky-500" style={{ width: `${(timeBlocks.tarde.count / blocksTotal) * 100}%` }} />
+                      <div className="bg-indigo-600" style={{ width: `${(timeBlocks.noche.count / blocksTotal) * 100}%` }} />
+                    </>
+                  )}
                 </div>
-              </div>
-
-              {/* Resumen por canchas (Top 3) */}
-              <div className="bg-card border border-border rounded-2xl p-4 sm:p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-xs font-black uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <Building2 size={14} className="text-foreground" /> Aporte Financiero por Cancha
-                  </h3>
-                  <button
-                    onClick={() => setActiveTab('pitches')}
-                    className="text-xs font-bold text-foreground hover:underline cursor-pointer flex items-center gap-1"
-                  >
-                    <span>Ver detalle completo</span>
-                    <ArrowUpRight size={12} />
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {byCourt.slice(0, 4).map((c, i) => (
-                    <div key={c.id} className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-extrabold text-foreground">{i + 1}. {c.name}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-black text-foreground">{formatCOP(c.revenue)}</span>
-                          <span className="text-muted-foreground font-semibold">({pct(c.revenue, totalRevenue)})</span>
-                        </div>
-                      </div>
-                      <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-500"
-                          style={{ width: `${Math.round((c.revenue / maxCourtRevenue) * 100)}%` }}
-                        />
-                      </div>
+                <div className="grid grid-cols-3 gap-2 mt-3 text-center">
+                  {[
+                    { label: 'Mañana', sub: '6 am – 12 m', d: timeBlocks.manana, dot: 'bg-amber-400' },
+                    { label: 'Tarde', sub: '12 m – 6 pm', d: timeBlocks.tarde, dot: 'bg-sky-500' },
+                    { label: 'Noche', sub: '6 pm – 12 am', d: timeBlocks.noche, dot: 'bg-indigo-600' },
+                  ].map(x => (
+                    <div key={x.label} className="rounded-xl bg-secondary/40 p-2.5">
+                      <p className="text-xs font-bold text-foreground flex items-center justify-center gap-1.5"><span className={`h-2 w-2 rounded-full ${x.dot}`} />{x.label}</p>
+                      <p className="text-lg font-black text-foreground">{x.d.count}</p>
+                      <p className="text-[10px] text-muted-foreground">{x.sub} · {x.d.pct}</p>
                     </div>
                   ))}
                 </div>
-              </div>
-            </div>
-          )}
+              </Card>
 
-          {/* ═══════════════ PESTAÑA: RENDIMIENTO CANCHAS ═══════════════ */}
-          {activeTab === 'pitches' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-black text-foreground">Análisis Financiero de Canchas</h3>
-                  <p className="text-xs text-muted-foreground">Recaudo, volumen de turnos y ticket por espacio deportivo</p>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto border border-border rounded-2xl bg-card">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-secondary/40 border-b border-border text-left">
-                      <th className="p-3 font-extrabold text-muted-foreground uppercase">Cancha</th>
-                      <th className="p-3 font-extrabold text-muted-foreground uppercase text-center">Partidos</th>
-                      <th className="p-3 font-extrabold text-muted-foreground uppercase text-right">Recaudo Total</th>
-                      <th className="p-3 font-extrabold text-muted-foreground uppercase text-right">% Cuota</th>
-                      <th className="p-3 font-extrabold text-muted-foreground uppercase text-right">Ticket Medio</th>
-                      <th className="p-3 font-extrabold text-muted-foreground uppercase text-right text-rose-500">Canceladas</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {byCourt.map((c, i) => {
-                      const avg = c.count > 0 ? Math.round(c.revenue / c.count) : 0;
-                      return (
-                        <tr key={c.id} className="hover:bg-secondary/20 transition-colors">
-                          <td className="p-3 font-bold text-foreground">
-                            <span className="inline-block w-5 text-muted-foreground font-medium">{i + 1}.</span>
-                            {c.name}
-                          </td>
-                          <td className="p-3 text-center font-semibold text-foreground">{c.count}</td>
-                          <td className="p-3 text-right font-black text-foreground">{formatCOP(c.revenue)}</td>
-                          <td className="p-3 text-right font-bold text-muted-foreground">{pct(c.revenue, totalRevenue)}</td>
-                          <td className="p-3 text-right font-semibold text-foreground/80">{formatCOP(avg)}</td>
-                          <td className="p-3 text-right font-semibold text-rose-500">{c.cancelledCount}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-secondary/50 font-black border-t-2 border-border">
-                      <td className="p-3">Totales</td>
-                      <td className="p-3 text-center">{confirmedCount}</td>
-                      <td className="p-3 text-right text-foreground">{formatCOP(totalRevenue)}</td>
-                      <td className="p-3 text-right">100%</td>
-                      <td className="p-3 text-right">{formatCOP(averageTicket)}</td>
-                      <td className="p-3 text-right text-rose-500">{cancelledCount}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* ═══════════════ PESTAÑA: HORAS PICO ═══════════════ */}
-          {activeTab === 'hours' && (
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-sm font-black text-foreground">Mapa de Demanda Horaria</h3>
-                <p className="text-xs text-muted-foreground">Identifica las franjas de mayor facturación para optimizar tus tarifas</p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {byHour.map((h, i) => {
-                  const pctVal = maxHourCount > 0 ? Math.round((h.count / maxHourCount) * 100) : 0;
-                  return (
-                    <div key={h.hour} className="bg-card border border-border rounded-xl p-3 flex items-center justify-between gap-3">
-                      <div className="w-16 shrink-0 font-extrabold text-xs text-foreground">
-                        {h.label}
-                      </div>
-                      <div className="flex-1">
-                        <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-300 ${i === 0 ? 'bg-amber-500' : 'bg-foreground'
-                              }`}
-                            style={{ width: `${pctVal}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0 w-24">
-                        <span className="text-xs font-black text-foreground block">{h.count} partidos</span>
-                        <span className="text-[10px] text-muted-foreground block">{formatCOP(h.revenue)}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ═══════════════ PESTAÑA: CANCELADAS & FUGA ═══════════════ */}
-          {activeTab === 'cancellations' && (
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-black text-foreground">Control de Cancelaciones y Rechazos</h3>
-                  <p className="text-xs text-muted-foreground">Monitorea los turnos que no se jugaron y el impacto económico no percibido</p>
-                </div>
-                <div className="px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-bold">
-                  {cancelledCount} canceladas · Impacto: {formatCOP(lostRevenue)}
-                </div>
-              </div>
-
-              {cancelledBookings.length === 0 ? (
-                <div className="text-center py-12 bg-card border border-border rounded-2xl p-6">
-                  <CheckCircle2 size={36} className="text-emerald-500 mx-auto mb-2 opacity-80" />
-                  <p className="text-sm font-bold text-foreground">¡Excelente! Sin cancelaciones en este período</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">El 100% de tus reservas programadas se han mantenido activas.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto border border-border rounded-2xl bg-card">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="bg-secondary/40 border-b border-border text-left">
-                        <th className="p-3 font-extrabold text-muted-foreground uppercase">Cliente</th>
-                        <th className="p-3 font-extrabold text-muted-foreground uppercase">Cancha</th>
-                        <th className="p-3 font-extrabold text-muted-foreground uppercase">Fecha / Hora</th>
-                        <th className="p-3 font-extrabold text-muted-foreground uppercase text-right">Valor Perdido</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/60">
-                      {cancelledBookings.map((b) => (
-                        <tr key={b.id} className="hover:bg-secondary/20 transition-colors">
-                          <td className="p-3">
-                            <span className="font-bold text-foreground block">{b.customer_name || 'Cliente'}</span>
-                            {b.customer_phone && <span className="text-[10px] text-muted-foreground">{b.customer_phone}</span>}
-                          </td>
-                          <td className="p-3 font-semibold text-foreground uppercase">{b.pitches?.name || '—'}</td>
-                          <td className="p-3 text-muted-foreground font-medium">
-                            {b.start_time ? new Date(b.start_time).toLocaleString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' }) : '—'}
-                          </td>
-                          <td className="p-3 text-right font-black text-rose-600 dark:text-rose-400">
-                            {formatCOP(getBookingIncome(b))}
-                          </td>
-                        </tr>
+              <div className="grid gap-5 lg:grid-cols-2">
+                <Card title="Ingresos por cancha" icon={<Layers size={15} />} action={<LinkBtn onClick={() => setActiveTab('pitches')}>Ver todo</LinkBtn>}>
+                  {byCourt.length === 0 ? <Empty text="Aún no tienes canchas con reservas." /> : (
+                    <div className="space-y-3">
+                      {byCourt.slice(0, 5).map(c => (
+                        <BarRow key={c.id} label={c.name} value={formatCOP(c.revenue)} sub={`${c.count} reservas`} pct={(c.revenue / maxCourtRevenue) * 100} />
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                    </div>
+                  )}
+                </Card>
+                <Card title="Mejores clientes" icon={<Users size={15} />} action={<LinkBtn onClick={() => setActiveTab('customers')}>Ver todos</LinkBtn>}>
+                  {topCustomers.length === 0 ? <Empty text="Sin reservas aprobadas en este período." /> : (
+                    <ol className="divide-y divide-border/60">
+                      {topCustomers.slice(0, 5).map((c, i) => (
+                        <li key={i} className="flex items-center justify-between gap-3 py-2">
+                          <span className="flex items-center gap-2.5 min-w-0">
+                            <span className="h-6 w-6 rounded-full bg-secondary text-[11px] font-black flex items-center justify-center shrink-0">{i + 1}</span>
+                            <span className="min-w-0">
+                              <span className="block text-sm font-bold text-foreground truncate capitalize">{cleanClientName(c.name).toLowerCase() || 'Cliente'}</span>
+                              <span className="block text-[11px] text-muted-foreground">{c.bookingsCount} reservas aprobadas</span>
+                            </span>
+                          </span>
+                          <span className="text-sm font-black text-foreground shrink-0">{formatCOP(c.totalSpent)}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </Card>
+              </div>
             </div>
           )}
 
-          {/* ═══════════════ PESTAÑA: ENTIDADES & ESCUELAS DE FÚTBOL ═══════════════ */}
-          {activeTab === 'entities' && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-sm font-black text-foreground flex items-center gap-2">
-                  <Building2 size={16} className="text-primary" />
-                  Reporte Ejecutivo: Entidades, Escuelas de Fútbol y Turnos Fijos
-                </h3>
+          {/* ═══════ CLIENTES ═══════ */}
+          {activeTab === 'customers' && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={clientSearch}
+                    onChange={e => { setClientSearch(e.target.value); setClientLimit(30); }}
+                    placeholder="Buscar cliente por nombre o celular"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-border bg-card text-sm outline-none focus:border-primary"
+                  />
+                </div>
+                <select value={clientSort} onChange={e => setClientSort(e.target.value as typeof clientSort)}
+                  className="px-3 py-2.5 rounded-xl border border-border bg-card text-sm font-semibold outline-none focus:border-primary cursor-pointer">
+                  <option value="approved">Más reservas aprobadas</option>
+                  <option value="spent">Más dinero</option>
+                  <option value="recent">Jugó más reciente</option>
+                  <option value="name">Nombre (A-Z)</option>
+                </select>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="inline-flex rounded-xl border border-border bg-card p-1 text-xs font-bold">
+                  {([['all', 'Todo el historial'], ['period', 'Solo este período']] as const).map(([k, l]) => (
+                    <button key={k} onClick={() => setClientScope(k)}
+                      className={`px-3 py-1.5 rounded-lg cursor-pointer ${clientScope === k ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  Control corporativo de contratos, tarifas acordadas, días jugados y cuentas por cobrar
+                  <strong className="text-foreground">{clientTotals.count}</strong> clientes · <strong className="text-foreground">{clientTotals.approved}</strong> reservas aprobadas · <strong className="text-foreground">{formatCOP(clientTotals.spent)}</strong>
                 </p>
               </div>
 
-              {/* KPIs de Entidades y Escuelas */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="bg-card border border-border rounded-2xl p-4 shadow-xs">
-                  <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block mb-1">
-                    Entidades & Escuelas
-                  </span>
-                  <div className="text-xl sm:text-2xl font-black text-foreground">
-                    {entitiesReport.totalEntities}
-                  </div>
-                  <span className="text-[10px] text-muted-foreground font-semibold mt-1 block">
-                    Registradas en el período
-                  </span>
-                </div>
-
-                <div className="bg-card border border-border rounded-2xl p-4 shadow-xs">
-                  <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block mb-1">
-                    Partidos Jugados
-                  </span>
-                  <div className="text-xl sm:text-2xl font-black text-foreground">
-                    {entitiesReport.totalMatchesAll}
-                  </div>
-                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1 block">
-                    Sesiones confirmadas
-                  </span>
-                </div>
-
-                <div className="bg-card border border-border rounded-2xl p-4 shadow-xs">
-                  <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block mb-1">
-                    Total Facturado
-                  </span>
-                  <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
-                    {formatCOP(entitiesReport.totalBilledAll)}
-                  </div>
-                  <span className="text-[10px] text-muted-foreground font-semibold mt-1 block">
-                    Promedio {formatCOP(entitiesReport.avgRateAll)}/partido
-                  </span>
-                </div>
-
-                <div className="bg-card border border-amber-500/30 bg-amber-500/5 rounded-2xl p-4 shadow-xs">
-                  <span className="text-[10px] font-extrabold text-amber-700 dark:text-amber-400 uppercase tracking-wider block mb-1">
-                    Cuentas por Cobrar (Crédito)
-                  </span>
-                  <div className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400">
-                    {formatCOP(entitiesReport.totalReceivableAll)}
-                  </div>
-                  <span className="text-[10px] text-amber-700/80 dark:text-amber-400/80 font-semibold mt-1 block">
-                    Pendientes de liquidación
-                  </span>
-                </div>
-              </div>
-
-              {/* Tabla Detallada */}
-              {entitiesReport.list.length === 0 ? (
-                <div className="text-center py-12 bg-card border border-border rounded-3xl space-y-2 p-6">
-                  <Building2 size={36} className="text-muted-foreground/30 mx-auto mb-1" />
-                  <p className="text-sm font-bold text-foreground">Sin registros de entidades o escuelas en este rango</p>
-                  <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                    Al agendar una reserva manual o turno fijo, selecciona el tipo <strong>Entidad</strong> o <strong>Escuela de Fútbol</strong> para que aparezca automáticamente en este reporte con sus días jugados y tarifas acordadas.
-                  </p>
-                </div>
+              {filteredClients.length === 0 ? (
+                <Empty text={clientSearch ? 'Ningún cliente coincide con la búsqueda.' : 'Aún no hay clientes en este rango.'} />
               ) : (
-                <div className="overflow-x-auto border border-border rounded-2xl bg-card shadow-xs">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="bg-secondary/40 border-b border-border text-left">
-                        <th className="p-3.5 font-extrabold text-muted-foreground uppercase">Entidad / Escuela</th>
-                        <th className="p-3.5 font-extrabold text-muted-foreground uppercase">Cancha</th>
-                        <th className="p-3.5 font-extrabold text-muted-foreground uppercase">Tarifa Acordada</th>
-                        <th className="p-3.5 font-extrabold text-muted-foreground uppercase">Forma de Pago</th>
-                        <th className="p-3.5 font-extrabold text-muted-foreground uppercase text-center">Partidos</th>
-                        <th className="p-3.5 font-extrabold text-muted-foreground uppercase text-right">Total Facturado</th>
-                        <th className="p-3.5 font-extrabold text-muted-foreground uppercase text-right">Por Cobrar</th>
-                        <th className="p-3.5 font-extrabold text-muted-foreground uppercase text-center">Trazabilidad</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/60">
-                      {entitiesReport.list.map((ent, idx) => {
-                        const isSchool = ent.type === 'school';
-                        const isEntity = ent.type === 'entity';
-                        return (
-                          <tr key={ent.id || idx} className="hover:bg-secondary/20 transition-colors">
-                            <td className="p-3.5">
-                              <div className="flex items-center gap-2">
-                                <span className="text-base shrink-0">{isEntity ? '' : isSchool ? '' : ''}</span>
-                                <div className="min-w-0">
-                                  <p className="font-extrabold text-foreground truncate uppercase">{ent.name}</p>
-                                  <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-secondary text-muted-foreground uppercase">
-                                    {isEntity ? 'Entidad' : isSchool ? 'Escuela' : 'Turno Fijo'}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Días jugados */}
-                              {ent.daysPlayed.length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-1 max-w-md">
-                                  {ent.daysPlayed.slice(0, 4).map((dp, i) => (
-                                    <span
-                                      key={i}
-                                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${dp.status === 'confirmed'
-                                        ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
-                                        : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
-                                        }`}
-                                    >
-                                      {dp.date} {dp.time}
-                                    </span>
-                                  ))}
-                                  {ent.daysPlayed.length > 4 && (
-                                    <span className="text-[9px] text-muted-foreground font-semibold py-0.5">
-                                      +{ent.daysPlayed.length - 4} más
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </td>
-
-                            <td className="p-3.5 font-bold uppercase text-foreground/90 whitespace-nowrap">
-                              {ent.pitchName}
-                            </td>
-
-                            <td className="p-3.5 font-extrabold text-foreground whitespace-nowrap">
-                              {formatCOP(ent.customRate)}/h
-                            </td>
-
-                            <td className="p-3.5 whitespace-nowrap">
-                              <span
-                                className={`inline-block text-[10px] font-extrabold px-2 py-0.5 rounded-lg border ${ent.paymentMethod === 'cuenta_cobrar'
-                                  ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
-                                  : ent.paymentMethod === 'credito'
-                                    ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30'
-                                    : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
-                                  }`}
-                              >
-                                {ent.paymentMethod === 'cuenta_cobrar'
-                                  ? 'Cuenta por Cobrar'
-                                  : ent.paymentMethod === 'credito'
-                                    ? 'Crédito'
-                                    : ent.paymentMethod === 'transferencia'
-                                      ? 'Transferencia'
-                                      : 'Efectivo'}
-                              </span>
-                            </td>
-
-                            <td className="p-3.5 text-center font-extrabold text-foreground">
-                              {ent.confirmedBookings}
-                              {ent.pendingBookings > 0 && (
-                                <span className="text-[9px] text-amber-600 dark:text-amber-400 block font-normal">
-                                  ({ent.pendingBookings} pend.)
-                                </span>
-                              )}
-                            </td>
-
-                            <td className="p-3.5 text-right font-black text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                              {formatCOP(ent.totalBilled)}
-                            </td>
-
-                            <td className="p-3.5 text-right font-black whitespace-nowrap">
-                              {ent.totalReceivable > 0 ? (
-                                <span className="text-amber-600 dark:text-amber-400">
-                                  {formatCOP(ent.totalReceivable)}
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground font-normal">$0</span>
-                              )}
-                            </td>
-
-                            <td className="p-3.5 text-center whitespace-nowrap">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedEntityTrace(ent)}
-                                className="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-black text-[11px] transition-all flex items-center gap-1.5 mx-auto cursor-pointer shadow-xs active:scale-95"
-                                title="Ver trazabilidad histórica completa por meses y años"
-                              >
-                                Historial
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ═══════════════ PESTAÑA: TOP CLIENTES ═══════════════ */}
-          {activeTab === 'customers' && (
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-sm font-black text-foreground">Clientes con Mayor Valor (Top VIP)</h3>
-                <p className="text-xs text-muted-foreground">Clientes que más aportan al negocio durante el período</p>
-              </div>
-
-              {topCustomers.length === 0 ? (
-                <div className="text-center py-10 bg-card border border-border rounded-2xl">
-                  <Users size={32} className="text-muted-foreground/30 mx-auto mb-2" />
-                  <p className="text-xs text-muted-foreground">No hay datos de clientes para este rango</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto border border-border rounded-2xl bg-card">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="bg-secondary/40 border-b border-border text-left">
-                        <th className="p-3 font-extrabold text-muted-foreground uppercase">Cliente</th>
-                        <th className="p-3 font-extrabold text-muted-foreground uppercase">Contacto</th>
-                        <th className="p-3 font-extrabold text-muted-foreground uppercase text-center">Partidos Jugados</th>
-                        <th className="p-3 font-extrabold text-muted-foreground uppercase text-right">Inversión Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/60">
-                      {topCustomers.map((cust, i) => (
-                        <tr key={i} className="hover:bg-secondary/20 transition-colors">
-                          <td className="p-3 font-bold text-foreground">
-                            <span className="inline-block w-5 text-muted-foreground font-medium">{i + 1}.</span>
-                            {cust.name.charAt(0).toUpperCase() + cust.name.slice(1).toLowerCase()}
-                          </td>
-
-                          <td className="p-3 text-muted-foreground font-medium">{cust.phone || '—'}</td>
-                          <td className="p-3 text-center font-bold text-foreground">{cust.bookingsCount}</td>
-                          <td className="p-3 text-right font-black text-foreground">{formatCOP(cust.totalSpent)}</td>
+                <>
+                  {/* Móvil: tarjetas */}
+                  <div className="grid gap-2.5 md:hidden">
+                    {filteredClients.slice(0, clientLimit).map(c => (
+                      <div key={c.key} className="rounded-2xl border border-border bg-card p-3.5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-bold text-foreground truncate capitalize">{c.name.toLowerCase()}</p>
+                            {c.phone && <p className="text-xs text-muted-foreground">{c.phone}</p>}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-xl font-black text-foreground leading-none">{c.approved}</p>
+                            <p className="text-[10px] font-semibold text-muted-foreground">aprobadas</p>
+                          </div>
+                        </div>
+                        <div className="mt-2.5 flex flex-wrap gap-1.5 text-[11px] font-semibold">
+                          <span className="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">{formatCOP(c.spent)}</span>
+                          {c.pending > 0 && <span className="px-2 py-0.5 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400">{c.pending} por aprobar</span>}
+                          {c.cancelled > 0 && <span className="px-2 py-0.5 rounded-lg bg-rose-500/10 text-rose-600">{c.cancelled} canceladas</span>}
+                          {c.last && <span className="px-2 py-0.5 rounded-lg bg-secondary text-muted-foreground">Última: {shortDate(c.last)}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* PC: tabla */}
+                  <div className="hidden md:block rounded-2xl border border-border bg-card overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-secondary/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                          <th className="p-3 font-bold">Cliente</th>
+                          <th className="p-3 font-bold text-center">Aprobadas</th>
+                          <th className="p-3 font-bold text-center">Por aprobar</th>
+                          <th className="p-3 font-bold text-center">Canceladas</th>
+                          <th className="p-3 font-bold text-right">Total pagado</th>
+                          <th className="p-3 font-bold">Cancha favorita</th>
+                          <th className="p-3 font-bold">Última reserva</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-border/60">
+                        {filteredClients.slice(0, clientLimit).map(c => {
+                          const fav = Object.entries(c.pitches).sort((a, b) => b[1] - a[1])[0]?.[0];
+                          return (
+                            <tr key={c.key} className="hover:bg-secondary/20">
+                              <td className="p-3">
+                                <p className="font-bold text-foreground capitalize">{c.name.toLowerCase()}</p>
+                                {c.phone && <p className="text-xs text-muted-foreground">{c.phone}</p>}
+                              </td>
+                              <td className="p-3 text-center text-base font-black text-foreground">{c.approved}</td>
+                              <td className="p-3 text-center text-amber-600 font-semibold">{c.pending || '—'}</td>
+                              <td className="p-3 text-center text-rose-500 font-semibold">{c.cancelled || '—'}</td>
+                              <td className="p-3 text-right font-black text-foreground">{formatCOP(c.spent)}</td>
+                              <td className="p-3 text-muted-foreground">{fav || '—'}</td>
+                              <td className="p-3 text-muted-foreground whitespace-nowrap">{c.last ? shortDate(c.last) : '—'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {filteredClients.length > clientLimit && (
+                    <button onClick={() => setClientLimit(n => n + 30)} className="w-full py-2.5 rounded-xl border border-border bg-card text-sm font-bold hover:bg-secondary cursor-pointer">
+                      Ver más clientes ({filteredClients.length - clientLimit} restantes)
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ═══════ TURNOS FIJOS, ENTIDADES Y ESCUELAS ═══════ */}
+          {activeTab === 'entities' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <Kpi label="Clientes con convenio" value={`${entitiesReport.totalEntities}`} hint="Turnos fijos, entidades y escuelas" icon={<Building2 size={16} />} />
+                <Kpi label="Partidos aprobados" value={`${entitiesReport.totalMatchesAll}`} hint="En el período" icon={<CheckCircle2 size={16} className="text-emerald-500" />} />
+                <Kpi tone="primary" label="Facturado" value={formatCOP(entitiesReport.totalBilledAll)} hint={`Promedio ${formatCOP(entitiesReport.avgRateAll)} por partido`} icon={<DollarSign size={16} />} />
+                <Kpi tone="amber" label="Por cobrar" value={formatCOP(entitiesReport.totalReceivableAll)} hint="Crédito / cuenta por cobrar" icon={<AlertTriangle size={16} />} />
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input value={entitySearch} onChange={e => setEntitySearch(e.target.value)} placeholder="Buscar por nombre o cancha"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-border bg-card text-sm outline-none focus:border-primary" />
+                </div>
+                <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+                  {([['all', 'Todos'], ['contract', 'Turnos fijos'], ['entity', 'Entidades'], ['school', 'Escuelas']] as const).map(([k, l]) => (
+                    <button key={k} onClick={() => setEntityFilter(k)}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap border cursor-pointer ${entityFilter === k ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border text-muted-foreground'}`}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {filteredEntities.length === 0 ? (
+                <Empty text={entitiesReport.list.length === 0
+                  ? 'Aún no hay turnos fijos, entidades ni escuelas. Al crear una reserva manual o un turno fijo elige el tipo de cliente y aparecerá aquí.'
+                  : 'Ningún resultado con ese filtro.'} />
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {filteredEntities.map(ent => (
+                    <div key={ent.id} className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-black text-foreground uppercase truncate">{cleanClientName(ent.name) || ent.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{ent.pitchName} · {formatCOP(ent.customRate)}/h · {paymentLabel(ent.paymentMethod)}</p>
+                        </div>
+                        <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg shrink-0 ${ent.type === 'entity' ? 'bg-blue-500/10 text-blue-600' : ent.type === 'school' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-violet-500/10 text-violet-600'}`}>
+                          {ent.type === 'entity' ? 'Entidad' : ent.type === 'school' ? 'Escuela' : 'Turno fijo'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-xl bg-secondary/40 p-2">
+                          <p className="text-lg font-black text-foreground leading-tight">{ent.confirmedBookings}</p>
+                          <p className="text-[10px] text-muted-foreground">Partidos{ent.pendingBookings > 0 ? ` (+${ent.pendingBookings} pend.)` : ''}</p>
+                        </div>
+                        <div className="rounded-xl bg-secondary/40 p-2">
+                          <p className="text-sm font-black text-emerald-600 dark:text-emerald-400 leading-tight mt-1">{formatCOP(ent.totalBilled)}</p>
+                          <p className="text-[10px] text-muted-foreground">Facturado</p>
+                        </div>
+                        <div className="rounded-xl bg-secondary/40 p-2">
+                          <p className={`text-sm font-black leading-tight mt-1 ${ent.totalReceivable > 0 ? 'text-amber-600' : 'text-muted-foreground'}`}>{formatCOP(ent.totalReceivable)}</p>
+                          <p className="text-[10px] text-muted-foreground">Por cobrar</p>
+                        </div>
+                      </div>
+                      <button type="button" onClick={() => setSelectedEntityTrace(ent)}
+                        className="w-full py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5">
+                        <CalendarDays size={14} /> Ver historial completo
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           )}
 
+          {/* ═══════ CANCHAS ═══════ */}
+          {activeTab === 'pitches' && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">Cuánto deja cada cancha en el período y cuántas reservas se cancelaron.</p>
+              {byCourt.length === 0 ? <Empty text="Sin datos en este período." /> : byCourt.map((c, i) => {
+                const avg = c.count > 0 ? Math.round(c.revenue / c.count) : 0;
+                return (
+                  <div key={c.id} className="rounded-2xl border border-border bg-card p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-bold text-foreground min-w-0 truncate"><span className="text-muted-foreground mr-1.5">{i + 1}.</span>{c.name}</p>
+                      <p className="font-black text-foreground shrink-0">{formatCOP(c.revenue)}</p>
+                    </div>
+                    <div className="mt-2 h-2.5 w-full rounded-full bg-secondary overflow-hidden">
+                      <div className="h-full rounded-full bg-primary" style={{ width: `${Math.round((c.revenue / maxCourtRevenue) * 100)}%` }} />
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      <span><strong className="text-foreground">{c.count}</strong> reservas aprobadas</span>
+                      <span>Promedio <strong className="text-foreground">{formatCOP(avg)}</strong></span>
+                      <span>{pct(c.revenue, totalRevenue)} del total</span>
+                      {c.cancelledCount > 0 && <span className="text-rose-500">{c.cancelledCount} canceladas</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ═══════ HORARIOS ═══════ */}
+          {activeTab === 'hours' && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">Reservas aprobadas por hora del día. La barra dorada es la hora más pedida: úsala para ajustar tus precios.</p>
+              <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
+                {hoursChrono.map(h => (
+                  <div key={h.hour} className="flex items-center gap-3">
+                    <span className="w-16 shrink-0 text-xs font-bold text-foreground">{h.label}</span>
+                    <div className="flex-1 h-3 rounded-full bg-secondary overflow-hidden">
+                      <div className={`h-full rounded-full ${peakHour && h.hour === peakHour.hour ? 'bg-amber-500' : 'bg-primary/70'}`} style={{ width: `${Math.round((h.count / maxHourCount) * 100)}%` }} />
+                    </div>
+                    <span className="w-20 shrink-0 text-right text-xs"><strong className="text-foreground">{h.count}</strong> <span className="text-muted-foreground">res.</span></span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ═══════ CANCELACIONES ═══════ */}
+          {activeTab === 'cancellations' && (
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-rose-500/30 bg-rose-500/5 p-4 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-foreground"><strong>{cancelledCount}</strong> reservas canceladas o rechazadas ({cancellationRate}%)</p>
+                <p className="text-sm font-black text-rose-600">{formatCOP(lostRevenue)} sin ingresar</p>
+              </div>
+              {cancelledBookings.length === 0 ? (
+                <Empty text="¡Muy bien! No hubo cancelaciones en este período." />
+              ) : (
+                <div className="grid gap-2">
+                  {cancelledBookings.map(b => (
+                    <div key={b.id} className="rounded-xl border border-border bg-card p-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-foreground truncate capitalize">{(cleanClientName(b.customer_name) || 'Cliente').toLowerCase()}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {b.pitches?.name || 'Cancha'} · {b.start_time ? new Date(b.start_time).toLocaleString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Bogota' }) : '—'}
+                        </p>
+                      </div>
+                      <span className="text-sm font-black text-rose-600 shrink-0">{formatCOP(getBookingIncome(b))}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* ── Footer ── */}
-        <div className="px-5 py-3 border-t border-border bg-card shrink-0 flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">
-            📊 <strong>{inRangeBookings.length}</strong> movimientos evaluados en el período
-          </p>
-          <button
-            onClick={handleDownloadPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs"
-          >
-            <Printer size={14} /> VER PDF
+        {/* ── Pie ── */}
+        <div className="px-4 sm:px-6 py-3 border-t border-border bg-card shrink-0 flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground"><strong className="text-foreground">{inRangeBookings.length}</strong> reservas en el período</p>
+          <button onClick={handleDownloadPDF}
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-xl cursor-pointer">
+            <Printer size={15} /> Descargar PDF
           </button>
         </div>
       </div>
 
-      {/* ═══════════════ MODAL DE TRAZABILIDAD MULTIANUAL (DETALLE POR CLIENTE) ═══════════════ */}
+      {/* ═══════ HOJA DE TRAZABILIDAD (historial completo de un cliente con convenio) ═══════ */}
       {selectedEntityTrace && (
-        <div className="fixed inset-0 z-[400] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
-          <div className="bg-background border border-border rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95">
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-card shrink-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="h-10 w-10 rounded-2xl bg-violet-600 text-white flex items-center justify-center shrink-0 shadow-xs font-black">
-                  <CalendarDays size={20} />
+        <div className="fixed inset-0 z-[400] flex items-stretch sm:items-center justify-center sm:p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={closeTrace}>
+          <div className="bg-background sm:border border-border sm:rounded-3xl shadow-2xl w-full max-w-3xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5 border-b border-border bg-card shrink-0">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base font-black text-foreground truncate uppercase">{cleanClientName(selectedEntityTrace.name) || selectedEntityTrace.name}</h3>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 uppercase">
+                    {selectedEntityTrace.type === 'entity' ? 'Entidad' : selectedEntityTrace.type === 'school' ? 'Escuela' : 'Turno fijo'}
+                  </span>
                 </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-black text-foreground truncate">
-                      {selectedEntityTrace.name}
-                    </h3>
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-500 border border-violet-500/20 uppercase">
-                      {selectedEntityTrace.type === 'entity' ? 'Entidad / Empresa' : (selectedEntityTrace.type === 'school' ? 'Escuela de Fútbol' : 'Turno Fijo')}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Cancha: <strong>{selectedEntityTrace.pitchName}</strong> · Trazabilidad histórica completa por meses y años
-                  </p>
-                </div>
+                <p className="text-xs text-muted-foreground truncate">{selectedEntityTrace.pitchName} · Hoja de trazabilidad</p>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => handlePrintSingleTraceability(selectedEntityTrace)}
-                  className="px-3 py-1.5 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-border"
-                  title="Imprimir Hoja Oficial de Trazabilidad y Estado de Cuenta"
-                >
-                  <Printer size={13} />
-                  <span className="hidden sm:inline">Descargar Historial</span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button type="button" onClick={() => handlePrintSingleTraceability(selectedEntityTrace)}
+                  className="px-3 py-2 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground text-xs font-bold flex items-center gap-1.5 cursor-pointer border border-border">
+                  <Printer size={14} /><span className="hidden sm:inline">Imprimir</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedEntityTrace(null)}
-                  className="p-1.5 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground transition-all cursor-pointer"
-                >
-                  <X size={18} />
+                <button type="button" onClick={closeTrace} className="p-2 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer" aria-label="Cerrar">
+                  <X size={20} />
                 </button>
               </div>
             </div>
 
-            {/* Resumen KPIs */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-4 border-b border-border bg-secondary/15 shrink-0">
-              <div className="p-3 bg-card border border-border rounded-2xl">
-                <p className="text-[10px] font-extrabold uppercase text-muted-foreground">Tarifa Acordada</p>
-                <p className="text-sm font-black text-foreground mt-0.5">{formatCOP(selectedEntityTrace.customRate)}/h</p>
-                <p className="text-[10px] text-muted-foreground truncate capitalize">{selectedEntityTrace.paymentMethod.replace('_', ' ')}</p>
-              </div>
-              <div className="p-3 bg-card border border-border rounded-2xl">
-                <p className="text-[10px] font-extrabold uppercase text-muted-foreground">Partidos Históricos</p>
-                <p className="text-sm font-black text-foreground mt-0.5">{selectedEntityTrace.allTimeHistory?.totalMatches || 0} turnos</p>
-                <p className="text-[10px] text-emerald-500 font-bold">Acumulado total</p>
-              </div>
-              <div className="p-3 bg-card border border-border rounded-2xl">
-                <p className="text-[10px] font-extrabold uppercase text-muted-foreground">Total Facturado</p>
-                <p className="text-sm font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{formatCOP(selectedEntityTrace.allTimeHistory?.totalBilled || 0)}</p>
-                <p className="text-[10px] text-muted-foreground">Partidos aprobados</p>
-              </div>
-              <div className="p-3 bg-card border border-border rounded-2xl">
-                <p className="text-[10px] font-extrabold uppercase text-muted-foreground">Cuenta por Cobrar</p>
-                <p className={`text-sm font-black mt-0.5 ${selectedEntityTrace.allTimeHistory?.totalReceivable > 0 ? 'text-amber-500' : 'text-foreground'}`}>
-                  {formatCOP(selectedEntityTrace.allTimeHistory?.totalReceivable || 0)}
-                </p>
-                <p className="text-[10px] text-muted-foreground">Saldo pendiente</p>
-              </div>
+              <MiniStat label="Tarifa acordada" value={`${formatCOP(selectedEntityTrace.customRate)}/h`} hint={paymentLabel(selectedEntityTrace.paymentMethod)} />
+              <MiniStat label="Partidos" value={`${selectedEntityTrace.allTimeHistory?.totalMatches || 0}`} hint="Todo el historial" />
+              <MiniStat label="Facturado" value={formatCOP(selectedEntityTrace.allTimeHistory?.totalBilled || 0)} hint="Partidos aprobados" />
+              <MiniStat label="Por cobrar" value={formatCOP(selectedEntityTrace.allTimeHistory?.totalReceivable || 0)} hint="Saldo pendiente" />
             </div>
 
-            {/* Listado agrupado por Año y Mes */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {Object.keys(selectedEntityTrace.allTimeHistory?.byYear || {}).length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Calendar size={32} className="mx-auto mb-2 opacity-30" />
-                  <p className="text-xs font-semibold">No se registran turnos históricos para esta entidad</p>
-                </div>
+                <Empty text="No hay partidos registrados para este cliente." />
               ) : (
                 Object.values(selectedEntityTrace.allTimeHistory.byYear)
                   .sort((a: any, b: any) => b.year - a.year)
                   .map((yearGroup: any) => (
-                    <div key={yearGroup.year} className="border border-border rounded-2xl overflow-hidden bg-card shadow-xs">
-                      {/* Cabecera Año */}
-                      <div className="px-4 py-2.5 bg-secondary/50 border-b border-border flex items-center justify-between">
-                        <span className="text-xs font-black text-foreground flex items-center gap-1.5">
-                          Año {yearGroup.year}
-                        </span>
-                        <div className="flex items-center gap-3 text-xs font-bold">
-                          <span className="text-muted-foreground">{yearGroup.matches} partidos</span>
-                          <span className="text-emerald-500">{formatCOP(yearGroup.total)}</span>
-                        </div>
+                    <div key={yearGroup.year} className="space-y-3">
+                      <div className="flex items-center justify-between text-sm font-black text-foreground">
+                        <span>{yearGroup.year}</span>
+                        <span className="text-xs font-bold text-muted-foreground">{yearGroup.matches} partidos · <span className="text-emerald-600">{formatCOP(yearGroup.total)}</span></span>
                       </div>
-
-                      {/* Meses del Año */}
-                      <div className="divide-y divide-border/60">
-                        {Object.values(yearGroup.months)
-                          .sort((a: any, b: any) => b.month - a.month)
-                          .map((monthGroup: any) => (
-                            <div key={monthGroup.month} className="p-3">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-bold text-violet-500 capitalize flex items-center gap-1">
-                                  • Mes de {monthGroup.monthName}
-                                </span>
-                                <span className="text-[11px] font-bold text-muted-foreground">
-                                  {monthGroup.matches} turnos · {formatCOP(monthGroup.total)}
-                                </span>
-                              </div>
-
-                              <div className="overflow-x-auto rounded-xl border border-border/60">
-                                <table className="w-full text-xs">
-                                  <thead>
-                                    <tr className="bg-secondary/20 text-muted-foreground text-[10px] uppercase font-black">
-                                      <th className="p-2 text-left">Fecha y Hora</th>
-                                      <th className="p-2 text-left">Cancha</th>
-                                      <th className="p-2 text-center">Estado</th>
-                                      <th className="p-2 text-right">Valor</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-border/40">
-                                    {monthGroup.items.map((it: any) => (
-                                      <tr key={it.id} className="hover:bg-secondary/15 transition-colors">
-                                        <td className="p-2 font-medium text-foreground">
-                                          <span className="uppercase text-[10px] text-muted-foreground font-black mr-1">{it.dayOfWeek}</span>
-                                          {it.date} — <span className="font-bold">{it.time}</span>
-                                        </td>
-                                        <td className="p-2 text-muted-foreground">{it.pitch}</td>
-                                        <td className="p-2 text-center">
-                                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${it.status === 'confirmed'
-                                            ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                                            : (it.status === 'pending'
-                                              ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                                              : 'bg-rose-500/10 text-rose-500 border border-rose-500/20')
-                                            }`}>
-                                            {it.status === 'confirmed' ? 'Aprobado' : (it.status === 'pending' ? 'Por Aprobar' : 'Cancelado')}
-                                          </span>
-                                        </td>
-                                        <td className="p-2 text-right font-black text-foreground">
-                                          {formatCOP(it.price)}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
+                      {Object.values(yearGroup.months)
+                        .sort((a: any, b: any) => b.month - a.month)
+                        .map((monthGroup: any) => (
+                          <div key={monthGroup.month} className="rounded-2xl border border-border bg-card overflow-hidden">
+                            <div className="px-3.5 py-2.5 bg-secondary/40 flex items-center justify-between">
+                              <span className="text-xs font-black text-foreground capitalize">{monthGroup.monthName}</span>
+                              <span className="text-[11px] font-bold text-muted-foreground">{monthGroup.matches} partidos · {formatCOP(monthGroup.total)}</span>
                             </div>
-                          ))}
-                      </div>
+                            <ul className="divide-y divide-border/50">
+                              {monthGroup.items.map((it: any) => (
+                                <li key={it.id} className="px-3.5 py-2.5 flex items-center justify-between gap-3 text-xs">
+                                  <span className="min-w-0">
+                                    <span className="block font-bold text-foreground capitalize">{it.dayOfWeek} {it.date} · {it.time}</span>
+                                    <span className="block text-muted-foreground truncate">{it.pitch}</span>
+                                  </span>
+                                  <span className="flex items-center gap-2 shrink-0">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${it.status === 'confirmed' ? 'bg-emerald-500/10 text-emerald-600' : it.status === 'pending' ? 'bg-amber-500/10 text-amber-600' : 'bg-rose-500/10 text-rose-500'}`}>
+                                      {it.status === 'confirmed' ? 'Aprobado' : it.status === 'pending' ? 'Por aprobar' : 'Cancelado'}
+                                    </span>
+                                    <span className="font-black text-foreground w-20 text-right">{formatCOP(it.price)}</span>
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
                     </div>
                   ))
               )}
             </div>
 
-            {/* Footer */}
-            <div className="px-5 py-3 border-t border-border bg-card shrink-0 flex items-center justify-between">
-              <span className="text-[11px] text-muted-foreground">
-                Complejo: <strong>{companyName || 'Canchas'}</strong>
-              </span>
-              <button
-                type="button"
-                onClick={() => setSelectedEntityTrace(null)}
-                className="px-4 py-1.5 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground font-bold text-xs transition-all cursor-pointer"
-              >
-                Cerrar Trazabilidad
+            <div className="px-4 sm:px-5 py-3 border-t border-border bg-card shrink-0 flex justify-end">
+              <button type="button" onClick={closeTrace}
+                className="px-4 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs cursor-pointer">
+                {openedFromBooking ? 'Volver a gestión de reservas' : 'Cerrar historial'}
               </button>
             </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Piezas visuales ──────────────────────────────────────────────────────────
+
+type ClientRow = {
+  key: string; name: string; phone: string;
+  approved: number; pending: number; cancelled: number; spent: number;
+  last: string | null; pitches: Record<string, number>;
+};
+
+/** Quita etiquetas internas como "[Turno Fijo]" o "CID:..." de los nombres. */
+function cleanClientName(name: unknown) {
+  return String(name || '')
+    .replace(/\[(Turno Fijo|Contrato|ENTIDAD|ESCUELA)[^\]]*\]/gi, '')
+    .replace(/CID:[a-zA-Z0-9_-]+/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Últimos 10 dígitos del celular (agrupa +57 300... y 300... como la misma persona). */
+function normalizePhone(phone: unknown) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  return digits.length >= 7 ? digits.slice(-10) : '';
+}
+
+function shortDate(iso: string) {
+  return new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'America/Bogota' });
+}
+
+function paymentLabel(method: string) {
+  return method === 'cuenta_cobrar' ? 'Cuenta por cobrar'
+    : method === 'credito' ? 'Crédito'
+    : method === 'transferencia' ? 'Transferencia'
+    : 'Efectivo';
+}
+
+function Kpi({ label, value, hint, icon, tone }: { label: string; value: string; hint: string; icon: React.ReactNode; tone?: 'primary' | 'amber' | 'rose' }) {
+  const toneCls = tone === 'primary' ? 'border-primary/30 bg-primary/5'
+    : tone === 'amber' ? 'border-amber-500/30 bg-amber-500/5'
+    : tone === 'rose' ? 'border-rose-500/30 bg-rose-500/5'
+    : 'border-border bg-card';
+  const valueCls = tone === 'amber' ? 'text-amber-600 dark:text-amber-400' : tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : 'text-foreground';
+  return (
+    <div className={`rounded-2xl border p-3.5 sm:p-4 min-w-0 ${toneCls}`}>
+      <div className="flex items-center justify-between gap-2 text-muted-foreground">
+        <span className="text-[11px] font-bold leading-tight">{label}</span>
+        <span className="shrink-0">{icon}</span>
+      </div>
+      <p className={`text-xl sm:text-2xl font-black mt-1 truncate ${valueCls}`}>{value}</p>
+      <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{hint}</p>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, hint }: { label: string; value: string; hint: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-3 min-w-0">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground truncate">{label}</p>
+      <p className="text-sm sm:text-base font-black text-foreground truncate mt-0.5">{value}</p>
+      <p className="text-[10px] text-muted-foreground truncate">{hint}</p>
+    </div>
+  );
+}
+
+function Card({ title, icon, action, children }: { title: string; icon: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-border bg-card p-4 sm:p-5 min-w-0">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <h3 className="text-sm font-black text-foreground flex items-center gap-2"><span className="text-primary">{icon}</span>{title}</h3>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function LinkBtn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button onClick={onClick} className="text-xs font-bold text-primary hover:underline cursor-pointer flex items-center gap-0.5">
+      {children}<ArrowUpRight size={13} />
+    </button>
+  );
+}
+
+function BarRow({ label, value, sub, pct: width }: { label: string; value: string; sub: string; pct: number }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <span className="font-bold text-foreground truncate">{label}</span>
+        <span className="font-black text-foreground shrink-0">{value}</span>
+      </div>
+      <div className="mt-1 h-2 w-full rounded-full bg-secondary overflow-hidden">
+        <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(2, Math.round(width))}%` }} />
+      </div>
+      <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>
+    </div>
+  );
+}
+
+function Empty({ text }: { text: string }) {
+  return (
+    <div className="text-center py-10 px-4 rounded-2xl border border-dashed border-border bg-card/50">
+      <Sparkles size={26} className="mx-auto mb-2 text-muted-foreground/40" />
+      <p className="text-sm text-muted-foreground max-w-md mx-auto">{text}</p>
     </div>
   );
 }

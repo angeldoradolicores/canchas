@@ -177,7 +177,7 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
         <div className="flex-1 flex flex-col">
           {/* Imagen Limpia */}
           <div className="relative aspect-[4/3] w-full bg-secondary overflow-hidden shrink-0">
-            <img
+            <img loading="lazy" decoding="async"
               src={complex.image}
               alt={complex.name}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
@@ -337,7 +337,7 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
               {/* Carrusel de Imágenes de la Cancha Activa */}
               {currentPitchMedia.length > 0 && (
                 <div className="relative rounded-2xl overflow-hidden bg-black aspect-[16/9] border border-border shadow-md">
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={currentPitchMedia[activeMediaIdx] || complex.image}
                     alt="Vista previa cancha"
                     className="w-full h-full object-cover"

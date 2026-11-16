@@ -1119,100 +1119,6 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
             )}
           </div>
 
-          {complexId && <PitchPromotions companyId={complexId} />}
-          {tournaments.length > 0 && (
-            <div className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border shadow-sm shadow-black/[0.03] md:shadow-sm mt-6 w-full max-w-full min-w-0">
-              <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-5 flex items-center gap-2 text-foreground">
-                <Trophy size={20} className="sm:w-[22px] sm:h-[22px] text-emerald-600 shrink-0" /> Campeonatos del complejo
-              </h2>
-              {/* Cambiado a grid de 2 columnas en pantallas medianas o superior, o se acomodan horizontalmente */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-3.5 w-full min-w-0">
-                {tournaments.map(t => (
-                  <Link href="/tournaments" key={t.id} className="block group w-full min-w-0">
-                    <div className="flex items-center gap-3 p-3.5 sm:p-4 bg-emerald-50/30 dark:bg-card/70 rounded-2xl sm:rounded-xl border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/60 dark:hover:bg-secondary/60 shadow-sm transition-all duration-200 w-full min-w-0">
-
-                      {/* Contenedor de Imagen o Icono */}
-                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shrink-0 shadow-sm group-hover:scale-105 transition-transform overflow-hidden">
-                        {t.media_urls?.[0] ? (
-                          <img src={t.media_urls[0]} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <Trophy size={22} className="shrink-0" />
-                        )}
-                      </div>
-
-                      {/* Información del Torneo */}
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-extrabold capitalize text-sm sm:text-base text-foreground truncate group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
-                          {t.name}
-                        </h4>
-                        <p className="text-[11px] sm:text-xs font-medium text-muted-foreground mt-0.5 truncate">
-                          Inicia: {t.start_date ? new Date(t.start_date.slice(0,10) + 'T12:00:00').toLocaleDateString('es-CO') : 'Fecha por anunciar'}
-                        </p>
-                      </div>
-
-                      {/* Premio Mayor Destacado */}
-                      {(t.prize || (t.prize_value && t.prize_value > 0)) && (
-                        <div className="flex flex-col items-end justify-center bg-emerald-100/50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/50 px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl shrink-0 text-right shadow-xs group-hover:bg-emerald-100 dark:group-hover:bg-emerald-950/60 transition-colors">
-                          <p className="text-[9px] sm:text-[10px] font-bold text-emerald-800/80 dark:text-emerald-300 uppercase tracking-wider">Premio</p>
-                          <p className="text-xs sm:text-sm font-black text-emerald-700 dark:text-emerald-400 tracking-tight mt-0.5 whitespace-nowrap">
-                            {t.prize_value && t.prize_value > 0 ? `$${Number(t.prize_value).toLocaleString('es-CO')}` : t.prize}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {schools.length > 0 && (
-            <div className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border shadow-sm shadow-black/[0.03] md:shadow-sm mt-6 w-full max-w-full min-w-0">
-              <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-5 flex items-center gap-2 text-foreground">
-                <Users size={20} className="sm:w-[22px] sm:h-[22px] text-primary shrink-0" /> Escuelas del complejo
-              </h2>
-
-              {/* Distribución en grilla horizontal de 2 columnas */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-3.5 w-full min-w-0">
-                {schools.map(s => (
-                  <Link href="/schools" key={s.id} className="block group w-full min-w-0">
-                    <div className="flex items-start gap-3 p-3.5 sm:p-4 bg-secondary/30 dark:bg-card/70 rounded-2xl sm:rounded-xl border border-border/60 hover:border-primary/50 hover:bg-secondary/60 dark:hover:bg-secondary shadow-sm transition-all duration-200 w-full min-w-0">
-
-                      {/* Logo de la escuela */}
-                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-card border border-border/80 flex items-center justify-center text-muted-foreground shrink-0 shadow-sm group-hover:scale-105 transition-transform overflow-hidden mt-0.5">
-                        {s.logo_url ? (
-                          <img src={s.logo_url} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <Users size={22} className="shrink-0" />
-                        )}
-                      </div>
-
-                      {/* Información central */}
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-extrabold capitalize text-sm sm:text-base text-foreground truncate group-hover:text-primary transition-colors">
-                          {s.name}
-                        </h4>
-
-                        <p className="text-[11px] sm:text-xs font-medium text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
-                          {s.description || s.categories || 'Formación deportiva'}
-                        </p>
-                      </div>
-
-                      {/* Insignia de Categorías a la derecha */}
-                      <div className="flex flex-col items-end justify-center bg-emerald-100/50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/50 px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl shrink-0 text-right shadow-xs group-hover:bg-emerald-100 dark:group-hover:bg-emerald-950/60 transition-colors">
-                        <p className="text-[9px] sm:text-[10px] font-bold text-emerald-800/80 dark:text-emerald-300 uppercase tracking-wider">Categorias</p>
-                        <p className="text-xs sm:text-sm font-black text-emerald-700 dark:text-emerald-400 tracking-tight mt-0.5 whitespace-nowrap">
-                          {s.categories || 'General'}
-                        </p>
-                      </div>
-
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-
         </div>
 
         {/* Módulo lateral de Disponibilidad y Reserva */}
@@ -1683,6 +1589,80 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
           </div>
         </aside>
       </div>
+
+      {/* Promociones, campeonatos y escuelas: ancho completo en PC, mismas tarjetas con imagen grande */}
+      {(complexId || tournaments.length > 0 || schools.length > 0) && (
+        <div className="mt-6 md:mt-10 space-y-6 w-full min-w-0">
+          {complexId && <PitchPromotions companyId={complexId} />}
+
+          {tournaments.length > 0 && (
+            <section className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border shadow-sm w-full max-w-full min-w-0">
+              <h2 className="text-lg sm:text-xl font-bold mb-4 flex items-center gap-2 text-foreground">
+                <Trophy size={20} className="text-emerald-600 shrink-0" /> Campeonatos del complejo
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full min-w-0">
+                {tournaments.map(t => (
+                  <Link href="/tournaments" key={t.id} className="group rounded-2xl bg-card border border-border overflow-hidden min-w-0 flex flex-col hover:border-emerald-500/50 transition-colors">
+                    <div className="relative aspect-[16/9] w-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white">
+                      {t.media_urls?.[0] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={t.media_urls[0]} alt={t.name} loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
+                      ) : (
+                        <Trophy size={40} className="opacity-90" />
+                      )}
+                    </div>
+                    <div className="p-3.5 sm:p-4 flex items-start justify-between gap-3 flex-1">
+                      <div className="min-w-0">
+                        <h3 className="font-bold capitalize text-foreground break-words group-hover:text-emerald-700 dark:group-hover:text-emerald-400">{t.name}</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Inicia: {t.start_date ? new Date(t.start_date.slice(0, 10) + 'T12:00:00').toLocaleDateString('es-CO') : 'Fecha por anunciar'}
+                        </p>
+                      </div>
+                      {(t.prize || (t.prize_value && t.prize_value > 0)) && (
+                        <div className="text-right shrink-0 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5">
+                          <p className="text-[10px] font-bold text-emerald-800/80 dark:text-emerald-300 uppercase">Premio</p>
+                          <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                            {t.prize_value && t.prize_value > 0 ? `$${Number(t.prize_value).toLocaleString('es-CO')}` : t.prize}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {schools.length > 0 && (
+            <section className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border shadow-sm w-full max-w-full min-w-0">
+              <h2 className="text-lg sm:text-xl font-bold mb-4 flex items-center gap-2 text-foreground">
+                <Users size={20} className="text-primary shrink-0" /> Escuelas del complejo
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full min-w-0">
+                {schools.map(s => (
+                  <Link href="/schools" key={s.id} className="group rounded-2xl bg-card border border-border overflow-hidden min-w-0 flex flex-col hover:border-primary/50 transition-colors">
+                    <div className="relative aspect-[16/9] w-full bg-secondary flex items-center justify-center text-muted-foreground">
+                      {s.logo_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={s.logo_url} alt={s.name} loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
+                      ) : (
+                        <Users size={40} />
+                      )}
+                    </div>
+                    <div className="p-3.5 sm:p-4 space-y-1.5 flex-1">
+                      <h3 className="font-bold capitalize text-foreground break-words group-hover:text-primary">{s.name}</h3>
+                      <p className="text-xs text-muted-foreground line-clamp-2">{s.description || 'Formación deportiva'}</p>
+                      <span className="inline-block text-[11px] font-bold rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 px-2 py-0.5">
+                        Categorías: {s.categories || 'General'}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
 
       {/* Sección de Reseñas (Final de la página) */}
       <div className="bg-card px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8 rounded-[28px] md:rounded-2xl border border-border shadow-sm shadow-black/[0.03] md:shadow-sm mt-6 mb-8">

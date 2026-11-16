@@ -144,7 +144,7 @@ function RetosTab({ showAlert, selectedCity, onSelectCity }: { showAlert: (type:
       .select(`
         *,
         profiles(full_name, skill_level, preferred_foot, phone),
-        pitches(*, companies(*))
+        pitches(*, companies(id, owner_id, name, address, zone, lat, lng, has_school, has_tournaments, owner_phone))
       `)
       .eq('status', 'open')
       .eq('players_needed', 0) // Retos de equipo vs equipo
@@ -650,7 +650,7 @@ function BuscarJugadorTab({ showAlert, selectedCity, onSelectCity }: { showAlert
       .select(`
         *,
         profiles(full_name, skill_level, preferred_foot, phone),
-        pitches(*, companies(*))
+        pitches(*, companies(id, owner_id, name, address, zone, lat, lng, has_school, has_tournaments, owner_phone))
       `)
       .eq('status', 'open')
       .gt('players_needed', 0)

@@ -268,7 +268,7 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
         if (data.company_id) {
           const { data: siblingPitches } = await supabase
             .from('pitches')
-            .select('*, companies(*)')
+            .select('*, companies(id, owner_id, name, address, zone, lat, lng, has_school, has_tournaments, owner_phone)')
             .eq('company_id', data.company_id)
             .neq('id', pitchId);
           setExistingPitches((siblingPitches || []).filter((p: any) => !p.custom_pricing?.is_combined));

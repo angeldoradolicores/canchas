@@ -98,44 +98,44 @@ export async function cacheProofImage(url: string): Promise<void> {
 }
 
 /**
- * Obtiene la URL local (Blob URL) de un comprobante almacenado en caché
- * Si no está en caché o hay red, devuelve la URL original
+ * URL para mostrar un comprobante. Ya no se usa una copia "opaca" del Cache Storage
+ * (con comprobantes privados podía mostrarse vacía): el navegador guarda la imagen
+ * firmada en su caché HTTP, así que abrirla de nuevo es inmediato.
  */
 export async function getCachedProofUrl(url: string): Promise<string> {
-  if (!url || typeof window === 'undefined' || !('caches' in window)) return url;
-  try {
-    const cleanUrl = url.split('###')[0].trim();
-    const cache = await caches.open(PROOFS_CACHE_NAME);
-    const match = await cache.match(cleanUrl);
-    if (match) {
-      const blob = await match.blob();
-      return URL.createObjectURL(blob);
-    }
-  } catch {
-    // Fallback a URL remota
-  }
-  return url;
+  return (url || '').split('###')[0].trim();
 }
 
 /**
- * Pre-almacena en segundo plano los comprobantes de las reservas recientes
- * (limita a las últimas 25 para no saturar memoria)
+ * Precarga en segundo plano los comprobantes que el dueño probablemente va a revisar
+ * (reservas pendientes primero, luego las más recientes). Así, al tocar "Ver comprobante"
+ * la imagen ya está descargada. Máximo 12 para no gastar datos.
  */
 export function precacheRecentProofs(bookings: any[]): void {
-  if (typeof window === 'undefined' || !('caches' in window) || !Array.isArray(bookings)) return;
+  if (typeof window === 'undefined' || !Array.isArray(bookings)) return;
+  const conn = (navigator as any).connection;
+  if (conn?.saveData) return; // respeta el "ahorro de datos" del celular
 
-  const proofUrls = bookings
-    .map(b => b?.payment_proof_url?.split('###')[0]?.trim())
-    .filter((u): u is string => Boolean(u && u.startsWith('http')))
-    .slice(0, 25);
+  const withProof = bookings.filter(b => b?.payment_proof_url && b.status !== 'cancelled' && b.status !== 'rejected');
+  const ordered = [
+    ...withProof.filter(b => b.status === 'pending'),
+    ...withProof.filter(b => b.status !== 'pending'),
+  ];
+  const urls = [...new Set(
+    ordered
+      .map(b => String(b.payment_proof_url).split('###')[0].trim())
+      .filter(u => u.startsWith('/api/receipts/') || u.startsWith('http')),
+  )].slice(0, 12);
 
-  // Ejecutar de forma no bloqueante con requestIdleCallback o setTimeout
   const task = () => {
-    proofUrls.forEach(url => {
-      cacheProofImage(url).catch(() => {});
+    urls.forEach((u, i) => {
+      setTimeout(() => {
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = u;
+      }, i * 250);
     });
   };
-
   if ('requestIdleCallback' in window) {
     (window as any).requestIdleCallback(task, { timeout: 3000 });
   } else {

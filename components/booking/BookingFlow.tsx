@@ -1525,7 +1525,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                 <div className="space-y-4 w-full">
 
                   <BookingPromotionsTab companyId={currentPitch.company_id || ''} isLoggedIn={!!user} />
-                  {user && <RewardPicker companyId={currentPitch.company_id || ''} value={rewardId} onChange={setRewardId} selectedDate={selectedDate} selectedTimes={selectedTimes}/>}
+                  {user && <RewardPicker companyId={currentPitch.company_id || ''} pitchId={currentPitch.id} value={rewardId} onChange={setRewardId} selectedDate={selectedDate} selectedTimes={selectedTimes}/>}
                   {/* ── PASO DE PAGO Y COMPROBANTE UNIFICADO ── */}
                   <div className={rewardId ? "hidden" : "bg-card border border-border/80 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4"}>
 

@@ -1024,7 +1024,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                         className="flex items-center gap-3 p-2.5 hover:bg-primary/5 rounded-xl cursor-pointer transition-all border border-transparent hover:border-primary/15"
                       >
                         <div className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden bg-muted relative">
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={comp.image}
                             alt={comp.name}
                             className="w-full h-full object-cover"
@@ -1533,7 +1533,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                       {/* Cabecera del Complejo */}
                       <div className="flex items-center gap-2.5 sm:gap-3 pb-3 border-b border-border/60 min-w-0">
                         <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl shrink-0 overflow-hidden bg-muted">
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={complex.image}
                             alt={complex.name}
                             className="w-full h-full object-cover"
@@ -1710,7 +1710,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                     <div className="flex items-start gap-3 flex-1 min-w-0">
                       <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl shrink-0 overflow-hidden bg-muted">
                         {((p as any).media_urls?.[0] || (p as any).image_url) ? (
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={(p as any).media_urls?.[0] || (p as any).image_url}
                             alt={p.name}
                             className="w-full h-full object-cover"

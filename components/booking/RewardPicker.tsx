@@ -7,7 +7,7 @@ type Reward = {
   id: string;
   remaining: number;
   expires_at: string;
-  complex_promotions: { title: string; company_id: string; weekdays: number[] } | null;
+  complex_promotions: { title: string; company_id: string; weekdays: number[]; redeem_pitch_ids?: string[] | null } | null;
 };
 
 /** Día de la semana (0=domingo) de una fecha YYYY-MM-DD, sin depender de la zona del navegador. */
@@ -17,9 +17,10 @@ function weekdayOf(date: string) {
 }
 
 /** Motivo por el que el regalo no aplica a la selección actual, o null si aplica. */
-function whyNot(r: Reward, date: string, times: string[]): string | null {
+function whyNot(r: Reward, date: string, times: string[], pitchId: string): string | null {
   const promo = r.complex_promotions;
   if (!promo) return 'Promoción no disponible';
+  if (promo.redeem_pitch_ids?.length && !promo.redeem_pitch_ids.includes(pitchId)) return 'Este regalo no se puede usar en esta cancha';
   if (!date || times.length === 0) return 'Selecciona fecha y hora';
   if (times.length > r.remaining) {
     return `Te quedan ${r.remaining} ${r.remaining === 1 ? 'hora' : 'horas'} de regalo y seleccionaste ${times.length}`;
@@ -33,9 +34,10 @@ function whyNot(r: Reward, date: string, times: string[]): string | null {
 }
 
 export function RewardPicker({
-  companyId, value, onChange, selectedDate, selectedTimes,
+  companyId, pitchId, value, onChange, selectedDate, selectedTimes,
 }: {
   companyId: string;
+  pitchId: string;
   value: string;
   onChange: (id: string) => void;
   selectedDate: string;
@@ -53,8 +55,8 @@ export function RewardPicker({
   }, [companyId]);
 
   const evaluated = useMemo(
-    () => items.map(r => ({ r, reason: whyNot(r, selectedDate, selectedTimes) })),
-    [items, selectedDate, selectedTimes],
+    () => items.map(r => ({ r, reason: whyNot(r, selectedDate, selectedTimes, pitchId) })),
+    [items, selectedDate, selectedTimes, pitchId],
   );
 
   // Si la selección cambia y el regalo elegido deja de aplicar, volver al pago normal.
