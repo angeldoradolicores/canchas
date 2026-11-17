@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase/client';
 import { BookingReportModal } from '@/components/booking/BookingReportModal';
 import { playPendingAlertSound, triggerSystemNotification } from '@/lib/push-notifications';
 import { getBookingRemainingPayment } from '@/lib/remaining-payment-utils';
+import { getCashEvents } from '@/lib/cash-events';
 
 type DateFilter = 'hoy' | 'ayer' | 'semana' | 'mes' | 'total';
 
@@ -460,10 +461,19 @@ export function OwnerDashboard() {
   // Cobrado total = suma de lo realmente cobrado por reserva (incluye pagos adelantados
   // del panel del dueño como cobrados completos). El desglose se mantiene coherente:
   // "cobrado directo/anticipos" + "abonos de saldo" = totalCollected.
-  const totalCollected = confirmed.reduce((s, b) => s + getBookingCollected(b), 0);
-  const totalRemainingPaid = confirmed.reduce((s, b) => s + getBookingAbonos(b), 0);
-  const totalDeposits = Math.max(0, totalCollected - totalRemainingPaid);
-  const pendingCollection = Math.max(0, totalIncome - totalCollected);
+  // Dinero en caja del periodo: pagos RECIBIDOS en el periodo (por fecha del pago), sin importar
+  // la fecha del partido. Un abono hecho hoy para un turno fijo del próximo mes suma hoy.
+  const cashEvents = useMemo(() => getCashEvents(allBookings), [allBookings]);
+  const periodCash = cashEvents.filter(ev => {
+    if (selectedDay) return getLocalDateString(new Date(ev.at)) === selectedDay.isoDate;
+    if (filter === 'total') return true;
+    return ev.at >= startOf(filter).getTime() && ev.at <= endOf(filter).getTime();
+  });
+  const totalRemainingPaid = periodCash.filter(ev => ev.kind === 'abono').reduce((s, ev) => s + ev.amount, 0);
+  const totalDeposits = periodCash.filter(ev => ev.kind === 'deposit').reduce((s, ev) => s + ev.amount, 0);
+  const totalCollected = totalDeposits + totalRemainingPaid;
+  // Por cobrar: saldo que aún deben las reservas del periodo.
+  const pendingCollection = Math.max(0, totalIncome - confirmed.reduce((s, b) => s + getBookingCollected(b), 0));
   const avgIncome = confirmed.length > 0 ? Math.round(totalIncome / confirmed.length) : 0;
   const confirmRate = filteredBookings.length > 0 ? Math.round((confirmed.length / filteredBookings.length) * 100) : 0;
 

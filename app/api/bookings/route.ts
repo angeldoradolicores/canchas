@@ -443,6 +443,13 @@ export async function POST(req: NextRequest) {
               { status: 409 }
             );
           }
+          // Regla de horas pasadas de la BD (migración 2026-11-30): mismo mensaje que la API.
+          if (insErr.message?.includes('PAST_SLOT') || insErr.message?.includes('Fraude detectado')) {
+            return NextResponse.json(
+              { error: `Esta hora ya empezó y pasó la tolerancia de ${BOOKING_GRACE_MINUTES} minutos para reservar en línea. Comunícate con el complejo.` },
+              { status: 400 }
+            );
+          }
           // INSERT falló — lo más probable es una race condition (23505 unique constraint)
           if (insErr.code === '23505' || insErr.message?.includes('unique')) {
             // Re-fetch atómico: ver quién ganó la carrera

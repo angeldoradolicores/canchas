@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { getCashEvents, sumCash } from '@/lib/cash-events';
 import {
   X,
   BarChart3,
@@ -187,19 +188,9 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
     return confirmedBookings.reduce((sum, b) => sum + getBookingIncome(b), 0);
   }, [confirmedBookings]);
 
-  const depositRevenue = useMemo(() => {
-    return confirmedBookings.reduce((sum, b) => {
-      let d = Number(b.deposit_amount || 0);
-      if (d === 0 && b.source !== 'owner_panel' && b.pitches && !b.is_loyalty_free) {
-        const customPricing = b.pitches.custom_pricing || {};
-        const isFixed = customPricing.booking_type === 'fixed';
-        const pct = customPricing.booking_percentage || b.pitches.booking_percentage || 50;
-        const tPrice = getBookingIncome(b);
-        d = isFixed ? Number(customPricing.booking_fixed || 0) : (tPrice * Number(pct)) / 100;
-      }
-      return sum + d;
-    }, 0);
-  }, [confirmedBookings]);
+  // Dinero recibido en el rango, por la FECHA DEL PAGO (anticipos y cada abono el día que se registró),
+  // sin importar la fecha del partido. Así un abono de turno fijo suma el día en que se hizo.
+  const depositRevenue = useMemo(() => sumCash(getCashEvents(safeBookings), from, to).total, [safeBookings, from, to]);
 
   const lostRevenue = useMemo(() => {
     return cancelledBookings.reduce((sum, b) => sum + getBookingIncome(b), 0);
@@ -673,7 +664,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
     <div class="kpi-card">
       <div class="lbl">Total Abonos Recaudados</div>
       <div class="val" style="color:#0f766e;">${formatCOP(depositRevenue)}</div>
-      <div class="sub">${pct(depositRevenue, totalRevenue)} recaudado en anticipo</div>
+      <div class="sub">Anticipos y abonos recibidos en el periodo</div>
     </div>
     <div class="kpi-card">
       <div class="lbl">Saldo Pendiente por Cobrar</div>

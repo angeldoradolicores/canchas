@@ -95,7 +95,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
   const complexId = currentPitch.company_id || (currentPitch as any)?.companies?.id || (currentPitch as any)?.company?.id;
   const isFavorite = complexId ? isFavoriteComplex(complexId) : checkFav(currentPitch.id);
   const [loadingFavorite, setLoadingFavorite] = useState(false);
-  const { startLock, lockLoading, lockError, activeBooking } = useActiveBooking();
+  const { startLock, lockLoading, getLockError, activeBooking } = useActiveBooking();
 
   const [showAllReviewsModal, setShowAllReviewsModal] = useState(false);
   const [reviews, setReviews] = useState<any[]>([]);
@@ -1535,7 +1535,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                         isOpen: true,
                         type: 'error',
                         title: 'Horario no disponible',
-                        message: lockError || 'Una de las horas seleccionadas está siendo reservada por otra persona en este momento. Por favor elige otro horario.',
+                        message: getLockError() || 'Una de las horas seleccionadas está siendo reservada por otra persona en este momento. Por favor elige otro horario.',
                       });
                     }
                   }

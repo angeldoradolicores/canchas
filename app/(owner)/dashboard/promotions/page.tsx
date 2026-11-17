@@ -49,7 +49,8 @@ function defaultEndDate() {
 export default function PromotionsPage() {
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
   const [pitches, setPitches] = useState<{ id: string; name: string; company_id: string }[]>([]);
-  const [pitchIds, setPitchIds] = useState<string[]>([]); // vacío = todas las canchas
+  const [pitchIds, setPitchIds] = useState<string[]>([]); // canchas donde CUENTAN las reservas (vacío = todas)
+  const [redeemIds, setRedeemIds] = useState<string[]>([]); // canchas donde se USA el regalo (vacío = todas)
   const [items, setItems] = useState<Promotion[]>([]);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -119,9 +120,9 @@ export default function PromotionsPage() {
     id: 'preview', title: title || 'Tu promoción', period, required_bookings: Math.max(1, Number(required) || 1),
     gift_hours: Math.max(1, Number(hours) || 1), redeem_days: redeemDays, weekdays: weekdays.length ? weekdays : [0],
     ends_at: new Date(endsAt + 'T23:59:59-05:00').toISOString(), image_url: imageUrl,
-    redeem_pitches: pitchIds.length ? pitches.filter(x => pitchIds.includes(x.id)) : null,
+    redeem_pitches: redeemIds.length ? pitches.filter(x => redeemIds.includes(x.id)) : null,
     count_pitches: pitchIds.length ? pitches.filter(x => pitchIds.includes(x.id)) : null,
-  }), [title, period, required, hours, redeemDays, weekdays, endsAt, imageUrl, pitchIds, pitches]);
+  }), [title, period, required, hours, redeemDays, weekdays, endsAt, imageUrl, pitchIds, redeemIds, pitches]);
 
   const ownPromos = items.filter(p => companies.some(c => c.id === p.company_id));
   const companyPitches = pitches.filter(p => p.company_id === companyId);
@@ -136,10 +137,10 @@ export default function PromotionsPage() {
       company_id: companyId, title: title.trim(), period,
       required_bookings: Number(required), gift_hours: Number(hours), redeem_days: redeemDays,
       weekdays, ends_at: new Date(endsAt + 'T23:59:59-05:00').toISOString(), image_url: imageUrl,
-      redeem_pitch_ids: pitchIds.length ? pitchIds : null,
+      redeem_pitch_ids: redeemIds.length ? redeemIds : null,
       count_pitch_ids: pitchIds.length ? pitchIds : null,
     });
-    if (ok) { setImageUrl(null); setPitchIds([]); }
+    if (ok) { setImageUrl(null); setPitchIds([]); setRedeemIds([]); }
   }
 
   return (
@@ -188,7 +189,7 @@ export default function PromotionsPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             {companies.length > 1 && (
               <label className="text-sm sm:col-span-2">Complejo
-                <select required value={companyId} onChange={e => { setCompanyId(e.target.value); setPitchIds([]); }} className={inputCls}>
+                <select required value={companyId} onChange={e => { setCompanyId(e.target.value); setPitchIds([]); setRedeemIds([]); }} className={inputCls}>
                   {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </label>
@@ -232,28 +233,18 @@ export default function PromotionsPage() {
             </div>
           </fieldset>
 
-          <fieldset>
-            <legend className="font-bold mb-1 text-sm">3. Cancha de la promoción</legend>
-            <p className="text-xs text-muted-foreground mb-2">
-              Si eliges una cancha, solo cuentan las reservas en esa cancha y la hora gratis se usa en esa misma cancha.
-              Ej.: reserva 2 veces en la Cancha 1 y gana 1 hora gratis en la Cancha 1.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" aria-pressed={!pitchIds.length} onClick={() => setPitchIds([])}
-                className={`px-3 py-2 rounded-xl border text-sm font-semibold cursor-pointer ${!pitchIds.length ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-border bg-background'}`}>
-                Todas las canchas
-              </button>
-              {companyPitches.map(pi => {
-                const on = pitchIds.includes(pi.id);
-                return (
-                  <button type="button" key={pi.id} aria-pressed={on}
-                    onClick={() => setPitchIds(list => on ? list.filter(x => x !== pi.id) : [...list, pi.id])}
-                    className={`px-3 py-2 rounded-xl border text-sm font-semibold cursor-pointer ${on ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-border bg-background'}`}>
-                    {pi.name}
-                  </button>
-                );
-              })}
-            </div>
+          <fieldset className="space-y-3">
+            <legend className="font-bold mb-1 text-sm">3. Canchas de la promoción</legend>
+            <PitchPicker
+              label="¿En qué cancha deben reservar para sumar?"
+              help="Solo cuentan las reservas en las canchas que elijas."
+              pitches={companyPitches} value={pitchIds} onChange={setPitchIds}
+            />
+            <PitchPicker
+              label="¿En qué cancha pueden usar la hora gratis?"
+              help="Puede ser otra cancha. Ej.: reserva 2 veces en la Cancha 1 y usa la hora gratis en la Cancha 2."
+              pitches={companyPitches} value={redeemIds} onChange={setRedeemIds}
+            />
           </fieldset>
 
           <fieldset className="space-y-2">
@@ -307,5 +298,38 @@ export default function PromotionsPage() {
         </aside>
       </div>
     </main>
+  );
+}
+
+/** Selector de canchas: "Todas las canchas" o una o varias canchas del complejo. */
+function PitchPicker({ label, help, pitches, value, onChange }: {
+  label: string;
+  help: string;
+  pitches: { id: string; name: string }[];
+  value: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const chip = (on: boolean) =>
+    `px-3 py-2 rounded-xl border text-sm font-semibold cursor-pointer ${on ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-border bg-background'}`;
+  return (
+    <div>
+      <p className="text-sm font-semibold">{label}</p>
+      <p className="text-xs text-muted-foreground mb-2">{help}</p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" aria-pressed={!value.length} onClick={() => onChange([])} className={chip(!value.length)}>
+          Todas las canchas
+        </button>
+        {pitches.map(pi => {
+          const on = value.includes(pi.id);
+          return (
+            <button type="button" key={pi.id} aria-pressed={on}
+              onClick={() => onChange(on ? value.filter(x => x !== pi.id) : [...value, pi.id])}
+              className={chip(on)}>
+              {pi.name}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

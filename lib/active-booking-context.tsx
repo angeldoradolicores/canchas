@@ -22,6 +22,8 @@ interface ActiveBookingContextType {
   lockLoading: boolean;
   lockError: string | null;
   startLock: (pitch: Pitch, date: string, times: string[]) => Promise<boolean>;
+  /** Motivo real del último intento fallido de startLock (se lee justo después de que devuelve false). */
+  getLockError: () => string | null;
   cancelActiveBooking: () => Promise<void>;
   setIsFloating: (floating: boolean) => void;
   setShowCancelModal: (show: boolean) => void;
@@ -36,6 +38,7 @@ const ActiveBookingContext = createContext<ActiveBookingContextType>({
   lockLoading: false,
   lockError: null,
   startLock: async () => false,
+  getLockError: () => null,
   cancelActiveBooking: async () => {},
   setIsFloating: () => {},
   setShowCancelModal: () => {},
@@ -56,6 +59,10 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [lockLoading, setLockLoading] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
+  // El estado lockError no está disponible en el mismo ciclo en que falla startLock
+  // (los componentes leían el valor viejo y mostraban siempre "otra persona la está reservando").
+  const lastLockErrorRef = useRef<string | null>(null);
+  const getLockError = useCallback(() => lastLockErrorRef.current, []);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
 
@@ -350,6 +357,7 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
       if (!pitch || !date || times.length === 0) return false;
       setLockLoading(true);
       setLockError(null);
+      lastLockErrorRef.current = null;
 
       try {
         // Invitados: CAPTCHA invisible (solo si está configurado).
@@ -373,6 +381,7 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
         if (!res.ok || !data.success) {
           const errMsg = data.error || 'Esta hora ya está siendo reservada por otra persona.';
           setLockError(errMsg);
+          lastLockErrorRef.current = errMsg;
           return false;
         }
 
@@ -397,6 +406,7 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
         return true;
       } catch (err: any) {
         setLockError(err.message || 'Error al bloquear la cancha');
+        lastLockErrorRef.current = err.message || 'Error al bloquear la cancha';
         return false;
       } finally {
         setLockLoading(false);
@@ -415,6 +425,7 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
         lockLoading,
         lockError,
         startLock,
+        getLockError,
         cancelActiveBooking,
         setIsFloating,
         setShowCancelModal,

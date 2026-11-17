@@ -248,7 +248,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
   };
 
   const [alertState, setAlertState] = useState<AlertModalState>({ isOpen: false, type: 'info', title: '', message: '' });
-  const { startLock, lockError, activeBooking } = useActiveBooking();
+  const { startLock, getLockError, activeBooking } = useActiveBooking();
   const handleSearchRef = useRef<(silent?: boolean) => void>(() => { });
   const horizontalScrollRef = useRef<HTMLDivElement>(null);
 
@@ -488,7 +488,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                 isOpen: true,
                 type: 'error',
                 title: 'Horario no disponible',
-                message: lockError || 'Una de las horas seleccionadas está siendo reservada por otra persona en este momento. Por favor elige otro horario.',
+                message: getLockError() || 'Una de las horas seleccionadas está siendo reservada por otra persona en este momento. Por favor elige otro horario.',
               });
               return;
             }
@@ -502,7 +502,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
     }
 
     onBook(pitch, preselectedTime, preselectedDate);
-  }, [user, onBook, supabase, startLock, lockError]);
+  }, [user, onBook, supabase, startLock, getLockError]);
 
   const showAlert = (type: 'success' | 'error' | 'warning' | 'info', title: string, message: string) => {
     setAlertState({ isOpen: true, type, title, message });

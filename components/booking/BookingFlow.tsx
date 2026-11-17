@@ -276,7 +276,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     cancelActiveBooking,
     clearActiveBooking,
     setIsFloating,
-    lockError,
+    getLockError,
   } = useActiveBooking();
   const router = useRouter();
 
@@ -874,7 +874,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
             isOpen: true,
             type: 'error',
             title: 'Horario no disponible',
-            message: lockError || 'Una de las horas seleccionadas está siendo reservada por otra persona en este momento. Por favor elige otro horario.',
+            message: getLockError() || 'Una de las horas seleccionadas está siendo reservada por otra persona en este momento. Por favor elige otro horario.',
           });
         }
       }
