@@ -374,6 +374,8 @@ export function Header({ onMenu, title, onLoginClick }: HeaderProps) {
                             window.location.href = '/reservations';
                           } else if (['challenge_join', 'player_offer', 'team_join'].includes(n.type)) {
                             window.location.href = '/community';
+                          } else if (n.type === 'security_alert') {
+                            window.location.href = '/jogoa';
                           }
                         }}
                         className={`p-2.5 rounded-xl border text-xs transition-all flex items-start justify-between gap-2 cursor-pointer hover:border-primary/40 ${n.is_read ? 'bg-card border-border/40 opacity-75' : 'bg-primary/10 border-primary/30 font-medium shadow-xs'

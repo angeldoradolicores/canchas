@@ -120,6 +120,7 @@ export default function PromotionsPage() {
     gift_hours: Math.max(1, Number(hours) || 1), redeem_days: redeemDays, weekdays: weekdays.length ? weekdays : [0],
     ends_at: new Date(endsAt + 'T23:59:59-05:00').toISOString(), image_url: imageUrl,
     redeem_pitches: pitchIds.length ? pitches.filter(x => pitchIds.includes(x.id)) : null,
+    count_pitches: pitchIds.length ? pitches.filter(x => pitchIds.includes(x.id)) : null,
   }), [title, period, required, hours, redeemDays, weekdays, endsAt, imageUrl, pitchIds, pitches]);
 
   const ownPromos = items.filter(p => companies.some(c => c.id === p.company_id));
@@ -136,6 +137,7 @@ export default function PromotionsPage() {
       required_bookings: Number(required), gift_hours: Number(hours), redeem_days: redeemDays,
       weekdays, ends_at: new Date(endsAt + 'T23:59:59-05:00').toISOString(), image_url: imageUrl,
       redeem_pitch_ids: pitchIds.length ? pitchIds : null,
+      count_pitch_ids: pitchIds.length ? pitchIds : null,
     });
     if (ok) { setImageUrl(null); setPitchIds([]); }
   }
@@ -231,8 +233,11 @@ export default function PromotionsPage() {
           </fieldset>
 
           <fieldset>
-            <legend className="font-bold mb-1 text-sm">3. Canchas donde se puede usar el regalo</legend>
-            <p className="text-xs text-muted-foreground mb-2">Las reservas cuentan en cualquier cancha; aquí eliges dónde se puede canjear la hora gratis.</p>
+            <legend className="font-bold mb-1 text-sm">3. Cancha de la promoción</legend>
+            <p className="text-xs text-muted-foreground mb-2">
+              Si eliges una cancha, solo cuentan las reservas en esa cancha y la hora gratis se usa en esa misma cancha.
+              Ej.: reserva 2 veces en la Cancha 1 y gana 1 hora gratis en la Cancha 1.
+            </p>
             <div className="flex flex-wrap gap-2">
               <button type="button" aria-pressed={!pitchIds.length} onClick={() => setPitchIds([])}
                 className={`px-3 py-2 rounded-xl border text-sm font-semibold cursor-pointer ${!pitchIds.length ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-border bg-background'}`}>
@@ -287,7 +292,7 @@ export default function PromotionsPage() {
           </fieldset>
 
           <p className="text-xs text-muted-foreground">
-            Cuentan las reservas pagadas y aprobadas desde hoy en cualquiera de tus canchas, también las manuales y los turnos fijos con nombre y celular del cliente.
+            Cuentan las reservas pagadas y aprobadas desde hoy en {pitchIds.length ? 'la(s) cancha(s) elegida(s)' : 'cualquiera de tus canchas'}, también las manuales y los turnos fijos con nombre y celular del cliente.
             Nunca se relacionan personas por nombre. Una vez publicada, las condiciones no se pueden editar; puedes finalizarla y los regalos ya ganados se conservan.
           </p>
           <button disabled={busy || uploading || !companyId || activeCount >= 10} className="btn-primary w-full">

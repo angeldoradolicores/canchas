@@ -109,8 +109,8 @@ export function Sidebar() {
             <div className="my-7 h-px bg-border" />
             <p className="eyebrow px-3">Administración</p>
             <Link
-              href="/admin"
-              className={`nav-item ${pathname.startsWith('/admin') ? 'active' : ''}`}
+              href="/jogoa"
+              className={`nav-item ${pathname.startsWith('/jogoa') ? 'active' : ''}`}
             >
               <ShieldCheck size={19} />
               <span>Super Admin</span>

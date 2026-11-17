@@ -228,6 +228,8 @@ export function ContractBookingModal({
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customRate, setCustomRate] = useState<string>('');
+  // Precio que el dueño le pone a cada hora del turno fijo (solo dígitos; se muestra con punto de miles).
+  const [slotPrices, setSlotPrices] = useState<Record<string, string>>({});
   const [billingScheme, setBillingScheme] = useState<BillingScheme>('mes_anticipado');
   const [paymentMethod, setPaymentMethod] = useState<'cuenta_cobrar' | 'transferencia' | 'efectivo' | 'credito'>('transferencia');
   const [paymentChannel, setPaymentChannel] = useState<string>('transferencia_nequi');
@@ -444,7 +446,22 @@ export function ContractBookingModal({
   }, [allSessions, contractDates]);
 
   const totalSessions = allSessions.length;
-  const totalPrice = totalSessions * effectiveRate;
+
+  /** Precio de una hora: el que escribió el dueño, o la tarifa base si dejó el campo vacío. */
+  const priceForSlot = useCallback((slot: string) => {
+    const raw = slotPrices[slot];
+    if (raw !== undefined && raw !== '' && !isNaN(Number(raw))) return Number(raw);
+    return effectiveRate;
+  }, [slotPrices, effectiveRate]);
+
+  const totalPrice = allSessions.reduce((sum, s) => sum + priceForSlot(s.baseSlot), 0);
+  const slotPriceValues = selectedSlots.map(priceForSlot);
+  const pricesVary = new Set(slotPriceValues).size > 1;
+  const avgRate = totalSessions > 0 ? Math.round(totalPrice / totalSessions) : (slotPriceValues[0] ?? effectiveRate);
+  const rateLabel = pricesVary
+    ? `${formatCOP(Math.min(...slotPriceValues))} – ${formatCOP(Math.max(...slotPriceValues))}`
+    : formatCOP(slotPriceValues[0] ?? effectiveRate);
+  const fmtThousands = (digits: string) => digits ? Number(digits).toLocaleString('es-CO') : '';
 
   // Sesiones con cruce de horario en la base de datos (ocupadas por reservas previas)
   const occupiedSessions = useMemo(() => {
@@ -611,10 +628,11 @@ export function ContractBookingModal({
       const contractId = `ct_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const sessionsPerWeek = Math.max(1, selectedDays.length * selectedSlots.length);
       const sessionsPerMonth = sessionsPerWeek * 4;
-      const monthPlanPrice = sessionsPerMonth * effectiveRate;
-      const contractTotalPrice = allSessions.length * effectiveRate;
+      const weekPrice = selectedDays.length * selectedSlots.reduce((sum, sl) => sum + priceForSlot(sl), 0);
+      const monthPlanPrice = Math.round(sessionsPerMonth > 0 ? weekPrice * 4 : 0);
+      const contractTotalPrice = totalPrice;
 
-      const contractTag = `[TURNO FIJO / CONTRATO · CID:${contractId} · ESQUEMA:${billingScheme} · PLAN_TOTAL:${contractTotalPrice} · MES_TOTAL:${monthPlanPrice} · TARIFA:${effectiveRate} · SESIONES:${allSessions.length} · ${clientType === 'entity' ? 'ENTIDAD: ' + (clientEntityName || customerName) : clientType === 'school' ? 'ESCUELA: ' + (clientEntityName || customerName) : 'PARTICULAR'} · Cobro: ${billingSchemeLabel} · Canal: ${paymentChannel} · Tarifa: ${formatCOP(effectiveRate)}/h · ${DAYS_OF_WEEK.filter(d => selectedDays.includes(d.key)).map(d => d.full).join(', ')} · ${slotsText}]`;
+      const contractTag = `[TURNO FIJO / CONTRATO · CID:${contractId} · ESQUEMA:${billingScheme} · PLAN_TOTAL:${contractTotalPrice} · MES_TOTAL:${monthPlanPrice} · TARIFA:${avgRate} · SESIONES:${allSessions.length} · ${clientType === 'entity' ? 'ENTIDAD: ' + (clientEntityName || customerName) : clientType === 'school' ? 'ESCUELA: ' + (clientEntityName || customerName) : 'PARTICULAR'} · Cobro: ${billingSchemeLabel} · Canal: ${paymentChannel} · Tarifa: ${pricesVary ? selectedSlots.map(sl => `${fmt12(sl)} ${formatCOP(priceForSlot(sl))}`).join(', ') : formatCOP(avgRate) + '/h'} · ${DAYS_OF_WEEK.filter(d => selectedDays.includes(d.key)).map(d => d.full).join(', ')} · ${slotsText}]`;
       const noteWithTag = `${contractTag}${customerNote ? ` · ${customerNote}` : ''}`;
 
       setSuccessMsg(`Guardando ${allSessions.length} reservas en un solo proceso...`);
@@ -631,7 +649,7 @@ export function ContractBookingModal({
             pitch_id: selectedPitch.id,
             dates: allDates,
             selected_times: selectedSlots,
-            sessions: allSessions.map(s => ({ date: s.date, slot: s.slot, time: s.slot })),
+            sessions: allSessions.map(s => ({ date: s.date, slot: s.slot, time: s.slot, price: priceForSlot(s.baseSlot) })),
             strict: true,
             customer_name: contractCustomerName.slice(0, 100),
             customer_phone: customerPhone,
@@ -640,8 +658,8 @@ export function ContractBookingModal({
             client_entity_name: clientEntityName.trim() || undefined,
             payment_method: paymentMethod,
             billing_scheme: billingScheme,
-            custom_rate: effectiveRate,
-            total_price: effectiveRate,
+            custom_rate: avgRate,
+            total_price: avgRate,
             contract_id: contractId,
             plan_total_price: contractTotalPrice,
             month_plan_price: monthPlanPrice,
@@ -678,7 +696,7 @@ export function ContractBookingModal({
             clientType,
             contactName: customerName.trim(),
             contactPhone: customerPhone.trim(),
-            customRate: effectiveRate,
+            customRate: avgRate,
             billingScheme,
             paymentMethod,
             pitchId: selectedPitch?.id,
@@ -696,7 +714,7 @@ export function ContractBookingModal({
     } finally {
       setLoading(false);
     }
-  }, [selectedPitch, selectedDays, selectedSlots, customerName, customerPhone, customerNote, allDates, allSessions, effectiveRate, clientType, clientEntityName, paymentMethod, paymentChannel, billingScheme, occupiedSessions, supabase, onSuccess]);
+  }, [selectedPitch, selectedDays, selectedSlots, customerName, customerPhone, customerNote, allDates, allSessions, effectiveRate, avgRate, totalPrice, priceForSlot, pricesVary, clientType, clientEntityName, paymentMethod, paymentChannel, billingScheme, occupiedSessions, supabase, onSuccess]);
 
   // ── Navegación entre pasos ──────────────────────────────────────────────────
 
@@ -736,13 +754,13 @@ export function ContractBookingModal({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0 bg-card">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-violet-500/15 text-violet-600 dark:text-violet-400 rounded-2xl shrink-0">
+            <div className="p-2 bg-green-500/15 text-green-600 dark:text-green-400 rounded-2xl shrink-0">
               <Repeat size={20} />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-black text-foreground">Turno Fijo & Mensualidades</h2>
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/30 uppercase">
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-green-500/15 text-green-700 dark:text-green-300 border border-green-500/30 uppercase">
                   Contratos
                 </span>
               </div>
@@ -767,14 +785,14 @@ export function ContractBookingModal({
                   type="button"
                   onClick={() => i <= stepIdx && setStep(s.key)}
                   className={`flex items-center gap-1.5 text-xs font-bold transition-colors py-1 px-2 rounded-xl whitespace-nowrap ${step === s.key
-                    ? 'text-violet-600 dark:text-violet-400 bg-violet-500/10'
+                    ? 'text-green-600 dark:text-green-400 bg-green-500/10'
                     : i < stepIdx
                       ? 'text-emerald-600 dark:text-emerald-400 cursor-pointer hover:bg-secondary'
                       : 'text-muted-foreground/50 cursor-not-allowed'
                     }`}
                 >
                   <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-extrabold shrink-0 border ${step === s.key
-                    ? 'bg-violet-600 border-violet-600 text-white'
+                    ? 'bg-green-600 border-green-600 text-white'
                     : i < stepIdx
                       ? 'bg-emerald-600 border-emerald-600 text-white'
                       : 'border-border bg-card text-muted-foreground'
@@ -829,8 +847,8 @@ export function ContractBookingModal({
                       if (opt.key === 'standard') setClientEntityName('');
                     }}
                     className={`flex flex-col items-center gap-1 p-3 rounded-2xl border-2 text-xs font-bold transition-all text-center cursor-pointer ${clientType === opt.key
-                      ? 'bg-violet-500/15 border-violet-500 text-violet-700 dark:text-violet-300 shadow-sm ring-1 ring-violet-500/30'
-                      : 'border-border bg-card text-muted-foreground hover:border-violet-400/40 hover:bg-secondary/40'
+                      ? 'bg-green-500/15 border-green-500 text-green-700 dark:text-green-300 shadow-sm ring-1 ring-green-500/30'
+                      : 'border-border bg-card text-muted-foreground hover:border-green-400/40 hover:bg-secondary/40'
                       }`}
                   >
                     <span className="text-2xl">{opt.icon}</span>
@@ -852,13 +870,13 @@ export function ContractBookingModal({
                 <div className="relative">
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-[11px] font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                      <Building2 size={13} className="text-violet-500" />
+                      <Building2 size={13} className="text-green-500" />
                       {clientType === 'entity' ? 'Nombre de la Entidad o Empresa *' : 'Nombre de la Escuela de Fútbol *'}
                     </label>
                     <button
                       type="button"
                       onClick={handleSaveCurrentEntity}
-                      className="text-[10px] font-bold text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-1 cursor-pointer"
+                      className="text-[10px] font-bold text-green-600 dark:text-green-400 hover:underline flex items-center gap-1 cursor-pointer"
                       title="Guardar esta entidad para autocompletar en futuros contratos"
                     >
                       <Sparkles size={11} /> Guardar entidad
@@ -873,7 +891,7 @@ export function ContractBookingModal({
                     }}
                     onFocus={() => setShowEntitySuggestions(true)}
                     placeholder={clientType === 'entity' ? 'Ej: Club Deportivo Nariño (escribe para autocompletar)' : 'Ej: Escuela Formativa Semilleros FC (escribe para autocompletar)'}
-                    className="w-full border border-border bg-card rounded-xl px-3.5 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500"
+                    className="w-full border border-border bg-card rounded-xl px-3.5 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500/40 focus:border-green-500"
                   />
 
                   {/* Dropdown de Sugerencias de Entidades */}
@@ -903,12 +921,12 @@ export function ContractBookingModal({
                               <div
                                 key={i}
                                 onClick={() => handleSelectEntity(ent)}
-                                className="p-2.5 hover:bg-violet-500/10 cursor-pointer flex items-center justify-between gap-2 transition-colors text-xs"
+                                className="p-2.5 hover:bg-green-500/10 cursor-pointer flex items-center justify-between gap-2 transition-colors text-xs"
                               >
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1.5">
                                     <strong className="font-extrabold text-foreground truncate">{ent.name}</strong>
-                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-violet-500/15 text-violet-700 dark:text-violet-300">
+                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-green-500/15 text-green-700 dark:text-green-300">
                                       {ent.clientType === 'school' ? 'Escuela' : (ent.clientType === 'entity' ? 'Entidad' : 'Particular')}
                                     </span>
                                   </div>
@@ -942,7 +960,7 @@ export function ContractBookingModal({
                       <button
                         type="button"
                         onClick={handleSaveCurrentEntity}
-                        className="text-[10px] font-bold text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-1 cursor-pointer"
+                        className="text-[10px] font-bold text-green-600 dark:text-green-400 hover:underline flex items-center gap-1 cursor-pointer"
                         title="Guardar este particular para futuros contratos"
                       >
                         <Sparkles size={11} /> Guardar particular
@@ -960,7 +978,7 @@ export function ContractBookingModal({
                       if (clientType === 'standard') setShowCustomerSuggestions(true);
                     }}
                     placeholder="Nombre del encargado o particular"
-                    className="w-full border border-border bg-card rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500"
+                    className="w-full border border-border bg-card rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500/40 focus:border-green-500"
                   />
 
                   {/* Dropdown de Sugerencias para Particular */}
@@ -990,7 +1008,7 @@ export function ContractBookingModal({
                               <div
                                 key={i}
                                 onClick={() => handleSelectEntity(cust)}
-                                className="p-2.5 hover:bg-violet-500/10 cursor-pointer flex items-center justify-between gap-2 transition-colors text-xs"
+                                className="p-2.5 hover:bg-green-500/10 cursor-pointer flex items-center justify-between gap-2 transition-colors text-xs"
                               >
                                 <div className="min-w-0">
                                   <strong className="font-extrabold text-foreground truncate block">{cust.name}</strong>
@@ -1028,7 +1046,7 @@ export function ContractBookingModal({
                       }
                     }}
                     placeholder="3001234567"
-                    className="w-full border border-border bg-card rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500"
+                    className="w-full border border-border bg-card rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500/40 focus:border-green-500"
                   />
 
                   {/* Mensaje indicador cuando llega a los 10 dígitos colobianos */}
@@ -1044,7 +1062,7 @@ export function ContractBookingModal({
               {/* Tarifa Acordada y Forma de Pago */}
               <div className="p-4 rounded-2xl bg-secondary/30 border border-border space-y-3.5">
                 <div className="flex items-center gap-1.5 text-xs font-black text-foreground">
-                  <DollarSign size={14} className="text-violet-500" />
+                  <DollarSign size={14} className="text-green-500" />
                   <span>Condiciones Financieras y Forma de Pago</span>
                 </div>
 
@@ -1065,13 +1083,13 @@ export function ContractBookingModal({
                             setPaymentMethod(b.defaultMethod);
                           }}
                           className={`p-2.5 rounded-xl text-left border-2 transition-all cursor-pointer ${isSel
-                            ? 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500 shadow-xs ring-1 ring-violet-500/30'
-                            : 'bg-card border-border text-muted-foreground hover:bg-secondary/40 hover:border-violet-400/40'
+                            ? 'bg-green-500/15 text-green-700 dark:text-green-300 border-green-500 shadow-xs ring-1 ring-green-500/30'
+                            : 'bg-card border-border text-muted-foreground hover:bg-secondary/40 hover:border-green-400/40'
                             }`}
                         >
                           <div className="flex items-center justify-between gap-1.5">
                             <span className="font-black text-xs text-foreground">{b.label}</span>
-                            <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-md ${isSel ? 'bg-violet-600 text-white' : 'bg-secondary text-muted-foreground'
+                            <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-md ${isSel ? 'bg-green-600 text-white' : 'bg-secondary text-muted-foreground'
                               }`}>
                               {b.badge}
                             </span>
@@ -1093,7 +1111,7 @@ export function ContractBookingModal({
                     <select
                       value={paymentChannel}
                       onChange={e => setPaymentChannel(e.target.value)}
-                      className="w-full border border-border bg-card rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      className="w-full border border-border bg-card rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-green-500"
                     >
                       <option value="transferencia_nequi">Transferencia Nequi / Daviplata</option>
                       <option value="bancolombia">Cuenta Bancolombia / Transferencia</option>
@@ -1114,7 +1132,7 @@ export function ContractBookingModal({
                   onChange={e => setCustomerNote(e.target.value)}
                   placeholder="Ej: Turno fijo martes y jueves, pagan los primeros 5 días de cada mes..."
                   rows={2}
-                  className="w-full border border-border bg-card rounded-xl px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500"
+                  className="w-full border border-border bg-card rounded-xl px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-green-500/40 focus:border-green-500"
                 />
               </div>
             </div>
@@ -1138,8 +1156,8 @@ export function ContractBookingModal({
                       type="button"
                       onClick={() => setSelectedPitch(p)}
                       className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer ${isSel
-                        ? 'border-violet-500 bg-violet-500/10 shadow-md ring-1 ring-violet-500/30'
-                        : 'border-border bg-card hover:border-violet-400/40 hover:bg-secondary/40'
+                        ? 'border-green-500 bg-green-500/10 shadow-md ring-1 ring-green-500/30'
+                        : 'border-border bg-card hover:border-green-400/40 hover:bg-secondary/40'
                         }`}
                     >
                       <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-secondary border border-border">
@@ -1166,14 +1184,14 @@ export function ContractBookingModal({
                             Base: {formatCOP(p.price_per_hour || 0)}/h
                           </span>
                           {customRate && Number(customRate) !== p.price_per_hour && (
-                            <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-violet-500/15 text-violet-700 dark:text-violet-300">
+                            <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-green-500/15 text-green-700 dark:text-green-300">
                               Pactado: {formatCOP(Number(customRate))}/h
                             </span>
                           )}
                         </div>
                       </div>
                       {isSel && (
-                        <div className="w-6 h-6 rounded-full bg-violet-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                        <div className="w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center shrink-0 shadow-sm">
                           <Check size={12} />
                         </div>
                       )}
@@ -1206,8 +1224,8 @@ export function ContractBookingModal({
                       type="button"
                       onClick={() => setDuration(d.key)}
                       className={`p-2.5 rounded-xl text-left border-2 transition-all cursor-pointer ${duration === d.key
-                        ? 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500 shadow-xs'
-                        : 'bg-card border-border text-muted-foreground hover:border-violet-400/40 hover:bg-secondary/40'
+                        ? 'bg-green-500/15 text-green-700 dark:text-green-300 border-green-500 shadow-xs'
+                        : 'bg-card border-border text-muted-foreground hover:border-green-400/40 hover:bg-secondary/40'
                         }`}
                     >
                       <span className="block font-black text-xs text-foreground">{d.label}</span>
@@ -1218,7 +1236,7 @@ export function ContractBookingModal({
 
                 {/* Opción personalizada */}
                 {duration === 'custom' && (
-                  <div className="mt-2.5 p-3 rounded-xl bg-violet-500/10 border border-violet-500/30 flex items-center gap-3">
+                  <div className="mt-2.5 p-3 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center gap-3">
                     <span className="text-xs font-bold text-foreground">Cantidad de semanas:</span>
                     <input
                       type="number"
@@ -1263,8 +1281,8 @@ export function ContractBookingModal({
                         type="button"
                         onClick={() => toggleDay(d.key)}
                         className={`py-2 rounded-xl text-xs font-black border-2 transition-all cursor-pointer text-center ${isSel
-                          ? 'bg-violet-600 text-white border-violet-600 shadow-sm'
-                          : 'bg-card border-border text-muted-foreground hover:border-violet-400/40'
+                          ? 'bg-green-600 text-white border-green-600 shadow-sm'
+                          : 'bg-card border-border text-muted-foreground hover:border-green-400/40'
                           }`}
                       >
                         {d.label}
@@ -1281,7 +1299,7 @@ export function ContractBookingModal({
                     Horario(s) del partido
                   </label>
                   {loadingOccupied ? (
-                    <span className="text-[10px] text-violet-400 flex items-center gap-1 font-semibold">
+                    <span className="text-[10px] text-green-400 flex items-center gap-1 font-semibold">
                       <Loader2 size={11} className="animate-spin" /> Verificando disponibilidad...
                     </span>
                   ) : (
@@ -1323,7 +1341,7 @@ export function ContractBookingModal({
                         className={`relative p-2.5 rounded-xl text-xs font-bold border-2 transition-all text-left flex flex-col justify-between gap-1.5 cursor-pointer ${isSel && hasConflict
                           ? 'bg-red-600 text-white border-red-500 shadow-md ring-2 ring-red-500/50'
                           : isSel
-                            ? 'bg-violet-600 text-white border-violet-600 shadow-md ring-2 ring-violet-500/30'
+                            ? 'bg-green-600 text-white border-green-600 shadow-md ring-2 ring-green-500/30'
                             : isFullyOccupied
                               ? 'bg-red-500/15 border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-500/25'
                               : isPartiallyOccupied
@@ -1375,6 +1393,41 @@ export function ContractBookingModal({
                   })}
                 </div>
               </div>
+
+              {/* Precio de cada hora del turno fijo */}
+              {selectedSlots.length > 0 && (
+                <div className="p-3.5 rounded-2xl bg-green-500/10 border border-green-500/30 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="flex items-center gap-1.5 text-xs font-black text-foreground">
+                      <DollarSign size={14} className="text-green-600" /> Precio de cada hora
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-semibold">
+                      Vacío = tarifa de la cancha ({formatCOP(effectiveRate)})
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {[...selectedSlots].sort().map(slot => (
+                      <label key={slot} className="flex items-center gap-2 rounded-xl bg-card border border-border px-3 py-2">
+                        <span className="text-xs font-black text-green-700 dark:text-green-300 w-16 shrink-0">{fmt12(slot)}</span>
+                        <span className="text-sm font-bold text-muted-foreground">$</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          placeholder={fmtThousands(String(effectiveRate))}
+                          value={fmtThousands(slotPrices[slot] ?? '')}
+                          onChange={e => {
+                            const digits = e.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 9);
+                            setSlotPrices(prev => ({ ...prev, [slot]: digits }));
+                          }}
+                          className="min-w-0 flex-1 bg-transparent text-sm font-black text-foreground outline-none placeholder:text-muted-foreground/60"
+                          aria-label={`Precio de la hora ${fmt12(slot)}`}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Banner de alerta prominente ante conflictos de cruce */}
               {occupiedSessions.length > 0 && (
@@ -1502,7 +1555,7 @@ export function ContractBookingModal({
                     className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-border bg-card hover:bg-secondary/40 text-xs font-bold text-foreground transition-all cursor-pointer"
                   >
                     <span className="flex items-center gap-2">
-                      <Calendar size={13} className="text-violet-500" />
+                      <Calendar size={13} className="text-green-500" />
                       <span>Ver todas las {allSessions.length} fechas programadas</span>
                     </span>
                     <span className="text-[11px] text-muted-foreground font-semibold">
@@ -1525,9 +1578,9 @@ export function ContractBookingModal({
                             <div>
                               <span className="text-[10px] text-muted-foreground mr-1.5">Sem. {s.weekNum}</span>
                               <span className="font-bold">{formatDateFriendly(s.date)}</span>
-                              <span className="ml-2 font-black text-violet-600 dark:text-violet-400">{fmt12(s.slot)}</span>
+                              <span className="ml-2 font-black text-green-600 dark:text-green-400">{fmt12(s.slot)}</span>
                               {s.isCustomized && (
-                                <span className="ml-1.5 text-[9px] px-1 py-0.2 rounded bg-violet-500/15 text-violet-600 font-extrabold">
+                                <span className="ml-1.5 text-[9px] px-1 py-0.2 rounded bg-green-500/15 text-green-600 font-extrabold">
                                   Ajustado
                                 </span>
                               )}
@@ -1546,8 +1599,8 @@ export function ContractBookingModal({
 
               {/* Resumen en vivo */}
               {allDates.length > 0 && (
-                <div className="bg-violet-500/10 border border-violet-500/30 rounded-2xl p-4 space-y-1.5">
-                  <div className="flex items-center justify-between flex-wrap gap-2 text-xs font-black text-violet-700 dark:text-violet-300">
+                <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-4 space-y-1.5">
+                  <div className="flex items-center justify-between flex-wrap gap-2 text-xs font-black text-green-700 dark:text-green-300">
                     <span>📋 Resumen de Calendario: {allSessions.length} partidos programados</span>
                     <span className="text-sm font-black text-foreground">{formatCOP(totalPrice)}</span>
                   </div>
@@ -1555,7 +1608,7 @@ export function ContractBookingModal({
                     📅 Desde el <strong>{allDates[0]}</strong> hasta el <strong>{allDates[allDates.length - 1]}</strong>
                   </p>
                   <p className="text-[11px] text-muted-foreground font-medium">
-                    Tarifa: <strong>{formatCOP(effectiveRate)} por partido/hora</strong> · Modalidad: <strong>{BILLING_SCHEMES.find(b => b.key === billingScheme)?.label}</strong>
+                    Tarifa: <strong>{rateLabel} por partido/hora</strong> · Modalidad: <strong>{BILLING_SCHEMES.find(b => b.key === billingScheme)?.label}</strong>
                   </p>
                 </div>
               )}
@@ -1571,9 +1624,9 @@ export function ContractBookingModal({
               </div>
 
               {/* Tarjeta Ejecutiva de Resumen */}
-              <div className="bg-gradient-to-br from-violet-500/15 via-violet-500/10 to-transparent border border-violet-500/30 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-xs">
+              <div className="bg-gradient-to-br from-green-500/15 via-green-500/10 to-transparent border border-green-500/30 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-xs">
                 {/* Entidad / Escuela Badge */}
-                <div className="flex items-center justify-between gap-2 border-b border-violet-500/20 pb-3">
+                <div className="flex items-center justify-between gap-2 border-b border-green-500/20 pb-3">
                   <div className="flex items-center gap-2.5">
                     <span className="text-2xl">{clientType === 'entity' ? '' : clientType === 'school' ? '' : ''}</span>
                     <div>
@@ -1586,7 +1639,7 @@ export function ContractBookingModal({
                       </p>
                     </div>
                   </div>
-                  <span className="text-[10px] font-black px-2.5 py-1 rounded-xl bg-violet-600 text-white uppercase">
+                  <span className="text-[10px] font-black px-2.5 py-1 rounded-xl bg-green-600 text-white uppercase">
                     {BILLING_SCHEMES.find(b => b.key === billingScheme)?.badge.toUpperCase() || 'TURNO FIJO'}
                   </span>
                 </div>
@@ -1619,22 +1672,22 @@ export function ContractBookingModal({
 
                   <div>
                     <span className="text-muted-foreground uppercase font-bold text-[10px] block">Total Partidos</span>
-                    <p className="font-extrabold text-violet-600 dark:text-violet-400 text-sm">
+                    <p className="font-extrabold text-green-600 dark:text-green-400 text-sm">
                       {totalSessions} partidos / horas
                     </p>
                     <p className="text-muted-foreground text-[11px]">
-                      {formatCOP(effectiveRate)} / partido
+                      {rateLabel} / partido
                     </p>
                   </div>
                 </div>
 
                 {/* Total financiero y Forma de Pago */}
-                <div className="pt-3 border-t border-violet-500/20 flex items-center justify-between">
+                <div className="pt-3 border-t border-green-500/20 flex items-center justify-between">
                   <div>
                     <span className="text-[10px] font-bold text-muted-foreground uppercase block">
                       Valor Total a Facturar
                     </span>
-                    <p className="text-xl font-black text-violet-600 dark:text-violet-400">
+                    <p className="text-xl font-black text-green-600 dark:text-green-400">
                       {formatCOP(totalPrice)}
                     </p>
                   </div>
@@ -1722,7 +1775,7 @@ export function ContractBookingModal({
                   if (next) setStep(next);
                 }}
                 disabled={!canGoNext[step]}
-                className="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-sm active:scale-95"
+                className="px-5 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-sm active:scale-95"
               >
                 Siguiente <ChevronRight size={14} />
               </button>

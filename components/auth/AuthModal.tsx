@@ -68,7 +68,7 @@ export function AuthModal({ isOpen = true, onClose, defaultMode = 'login', defau
         const quickRole = data.user.user_metadata?.role as string | undefined;
         onClose();
         if (quickRole === 'owner' || quickRole === 'superadmin') {
-          if (quickRole === 'superadmin') router.push('/admin');
+          if (quickRole === 'superadmin') router.push('/jogoa');
           else router.push('/dashboard');
         } else if (!quickRole || quickRole === 'player') {
           // Solo hacer DB query si el JWT no tiene rol de owner/admin
@@ -80,7 +80,7 @@ export function AuthModal({ isOpen = true, onClose, defaultMode = 'login', defau
               .maybeSingle();
             const userRole = profile?.role;
             if (userRole === 'owner') router.push('/dashboard');
-            else if (userRole === 'superadmin') router.push('/admin');
+            else if (userRole === 'superadmin') router.push('/jogoa');
           }
         }
       }

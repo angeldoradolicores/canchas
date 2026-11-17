@@ -380,7 +380,7 @@ export function SlotDetailModal({
               )}
 
               {isManual && (
-                <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-700 dark:text-purple-300 text-xs font-bold border border-purple-500/30">
+                <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-500/15 text-green-700 dark:text-green-300 text-xs font-bold border border-green-500/30">
                   <Wrench size={12} />
                   <span>Reserva Registrada Manualmente por el Propietario</span>
                 </div>
@@ -524,11 +524,11 @@ export function SlotDetailModal({
               </div>
 
               {isCreditOrContract ? (
-                <div className="p-2.5 rounded-xl bg-violet-500/10 border border-violet-500/20">
-                  <p className="text-[10px] uppercase font-bold text-violet-700 dark:text-violet-300 truncate">
+                <div className="p-2.5 rounded-xl bg-green-500/10 border border-green-500/20">
+                  <p className="text-[10px] uppercase font-bold text-green-700 dark:text-green-300 truncate">
                     {contractInfo.isContract ? contractInfo.billingSchemeLabel : 'Modalidad'}
                   </p>
-                  <p className="font-black text-[11px] text-violet-700 dark:text-violet-300 mt-1 truncate" title={contractInfo.billingSchemeLabel || 'Cuenta por Cobrar (Crédito)'}>
+                  <p className="font-black text-[11px] text-green-700 dark:text-green-300 mt-1 truncate" title={contractInfo.billingSchemeLabel || 'Cuenta por Cobrar (Crédito)'}>
                     {contractInfo.isContract ? (contractInfo.isPlanBilling ? contractInfo.cycleLabel : 'Por Sesión') : 'Por Cobrar'}
                   </p>
                 </div>
@@ -558,7 +558,7 @@ export function SlotDetailModal({
               <button
                 type="button"
                 onClick={() => booking && onOpenContractTrace(booking)}
-                className="w-full py-2 px-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer active:scale-98"
+                className="w-full py-2 px-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer active:scale-98"
               >
                 📋 Ver Hoja de Trazabilidad del Contrato
               </button>

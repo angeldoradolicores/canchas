@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse, getClientIp } from '@/lib/rate-limit';
 import { hashClientIp, quotaErrorMessage, verifyTurnstile, GUEST_MAX_HOURS } from '@/lib/booking-guard';
 import { getAuthenticatedUser, isPlatformAdmin } from '@/lib/auth-guard';
+import { quotaCodeOf, reportSecurityAlert } from '@/lib/security-alerts';
 import {
   BookingCancelDraftSchema,
   BookingLockSchema,
@@ -303,6 +304,10 @@ export async function POST(req: NextRequest) {
       const quotaFail = async (err: { message?: string } | null | undefined) => {
         const msg = quotaErrorMessage(err);
         if (!msg) return null;
+        const code = quotaCodeOf(err);
+        if (code) after(() => reportSecurityAlert(supabase, {
+          code, pitchId: pitch_id, userId: effectiveUserId, ipHash: clientIpHash, deviceToken: guestToken,
+        }));
         if (lockedBookingIds.length) {
           // Se marcan como vencidas (no se borran: pueden ser filas reutilizadas con historial).
           await supabase.from('bookings').update({ expires_at: new Date(Date.now() - 1000).toISOString() })
@@ -677,7 +682,14 @@ export async function POST(req: NextRequest) {
         });
         if (error) {
           const quotaMsg = quotaErrorMessage(error);
-          if (quotaMsg) return NextResponse.json({ error: quotaMsg, code: 'QUOTA' }, { status: 429 });
+          if (quotaMsg) {
+            const code = quotaCodeOf(error);
+            if (code) after(() => reportSecurityAlert(supabase, {
+              code, pitchId: pitch_id, phone: customer_phone, customerName: customer_name?.trim(),
+              userId: verifiedUserId, ipHash: hashClientIp(req), deviceToken: guestToken,
+            }));
+            return NextResponse.json({ error: quotaMsg, code: 'QUOTA' }, { status: 429 });
+          }
           return NextResponse.json({error:'El bloqueo expiró o no te pertenece. Selecciona de nuevo el horario.'}, {status:409});
         }
         const submitted = (data || []) as any[];

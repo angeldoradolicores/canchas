@@ -18,13 +18,24 @@ export type Promotion = {
   image_url?: string | null;
   redeem_pitch_ids?: string[] | null;
   redeem_pitches?: { id: string; name: string }[] | null;
+  /** Canchas donde cuentan las reservas. null = cualquier cancha del complejo. */
+  count_pitch_ids?: string[] | null;
+  count_pitches?: { id: string; name: string }[] | null;
 };
+
+const joinNames = (names: string[]) =>
+  names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`;
 
 /** "cualquier cancha del complejo" o "Cancha 1 y Cancha 3" */
 export function describePitches(p: Pick<Promotion, 'redeem_pitches'>) {
   const names = (p.redeem_pitches || []).map(x => x.name);
-  if (!names.length) return 'cualquier cancha del complejo';
-  return names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`;
+  return names.length ? joinNames(names) : 'cualquier cancha del complejo';
+}
+
+/** Canchas donde cuentan las reservas, o null si cuentan todas. */
+export function describeCountPitches(p: Pick<Promotion, 'count_pitches'>) {
+  const names = (p.count_pitches || []).map(x => x.name);
+  return names.length ? joinNames(names) : null;
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -39,7 +50,8 @@ export function describeDays(days: number[]) {
 
 /** Frase principal y forma de uso de la promoción, en lenguaje del jugador. */
 export function describePromotion(p: Promotion) {
-  const reservas = plural(p.required_bookings, 'reserva', 'reservas');
+  const countWhere = describeCountPitches(p);
+  const reservas = plural(p.required_bookings, 'reserva', 'reservas') + (countWhere ? ` en ${countWhere}` : '');
   const horas = plural(p.gift_hours, 'hora gratis', 'horas gratis');
   const days = describeDays(p.weekdays);
   if (p.period === 'day') {
@@ -75,7 +87,7 @@ export function describePromotion(p: Promotion) {
     };
   }
   return {
-    headline: `Por cada ${reservas} aprobadas gana ${horas}`,
+    headline: `Por cada ${plural(p.required_bookings, 'reserva', 'reservas')} aprobadas${countWhere ? ` en ${countWhere}` : ''} gana ${horas}`,
     usage: `Úsalas ${days} durante los ${plural(p.redeem_days || 30, 'día', 'días')} siguientes.`,
   };
 }
@@ -118,7 +130,7 @@ export function PromotionCard({ p, compact = false, wide = false }: { p: Promoti
         </p>
         <p className="text-[11px] text-muted-foreground">
           Promoción vigente hasta el {new Date(p.ends_at).toLocaleDateString('es-CO', { timeZone: 'America/Bogota', day: 'numeric', month: 'long' })}.
-          Cuentan las reservas pagadas y aprobadas en cualquier cancha del complejo.
+          Cuentan las reservas pagadas y aprobadas {describeCountPitches(p) ? <>solo en <strong>{describeCountPitches(p)}</strong></> : 'en cualquier cancha del complejo'}.
         </p>
       </div>
       {zoom && p.image_url && <ImageLightbox src={p.image_url} alt={p.title} onClose={() => setZoom(false)} />}
@@ -208,31 +220,28 @@ export function BookingPromotionsTab({ companyId, isLoggedIn }: { companyId: str
 /** Invitación visible a crear cuenta: se muestra siempre al invitado, sin tener que abrir la pestaña. */
 export function GuestSignupCallout({ standalone = false }: { standalone?: boolean }) {
   const perks = [
-    { icon: <Gift size={15} />, text: 'Acumula reservas y canjea tus horas gratis' },
-    { icon: <Swords size={15} />, text: 'Crea retos y encuentra rivales en la comunidad' },
-    { icon: <IdCard size={15} />, text: 'Tu tarjeta de jugador con tus partidos y estadísticas' },
-    { icon: <History size={15} />, text: 'Todas tus reservas y comprobantes en un solo lugar' },
+    { icon: <Gift size={14} />, text: 'Canjea horas gratis' },
+    { icon: <Swords size={14} />, text: 'Crea retos' },
+    { icon: <IdCard size={14} />, text: 'Tarjeta de jugador' },
+    { icon: <History size={14} />, text: 'Tus reservas' },
   ];
   return (
     <div className={`${standalone ? 'w-full min-w-0' : 'm-3.5 mt-0 sm:m-4 sm:mt-0'} rounded-2xl overflow-hidden border-2 border-emerald-600 bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-lg shadow-emerald-900/20`}>
-      <div className="p-4 space-y-3">
-        <div className="flex items-start gap-3">
-          <span className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-            <Sparkles size={20} />
+      <div className="p-3.5 space-y-2.5">
+        <div className="flex items-center gap-2.5">
+          <span className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+            <Sparkles size={18} />
           </span>
           <div className="min-w-0">
-            <p className="font-black text-base leading-tight">{standalone ? 'Crea tu cuenta gratis y juega más' : 'Regístrate gratis y no pierdas tu conteo'}</p>
-            <p className="text-xs text-white/85 mt-1 leading-snug">
-              Como invitado tu reserva suma con tu celular, pero solo con una cuenta puedes ver y canjear tus horas gratis.
-              Al crearla con ese mismo celular, el conteo anterior se une a tu cuenta.
-            </p>
+            <p className="font-black text-sm leading-tight">{standalone ? 'Crea tu cuenta gratis' : 'Regístrate y guarda tu conteo'}</p>
+            <p className="text-[11px] text-white/85 leading-snug">Usa el mismo celular y tus reservas se suman.</p>
           </div>
         </div>
-        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <ul className="grid grid-cols-2 gap-1.5">
           {perks.map(p => (
-            <li key={p.text} className="flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold">
+            <li key={p.text} className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1.5 text-[11px] font-semibold min-w-0">
               <span className="shrink-0 text-emerald-100">{p.icon}</span>
-              <span>{p.text}</span>
+              <span className="truncate">{p.text}</span>
             </li>
           ))}
         </ul>
@@ -240,11 +249,11 @@ export function GuestSignupCallout({ standalone = false }: { standalone?: boolea
           href="/register"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 w-full rounded-xl bg-white text-emerald-800 font-black text-sm py-3 hover:bg-emerald-50 transition-colors"
+          className="flex items-center justify-center gap-2 w-full rounded-xl bg-white text-emerald-800 font-black text-sm py-2.5 hover:bg-emerald-50 transition-colors"
         >
-          Crear mi cuenta gratis <ExternalLink size={14} />
+          Crear cuenta gratis <ExternalLink size={14} />
         </a>
-        <p className="text-[11px] text-center text-white/75">Se abre en otra pestaña: no pierdes la reserva que estás haciendo.</p>
+        <p className="text-[10px] text-center text-white/75">Se abre en otra pestaña, no pierdes tu reserva.</p>
       </div>
     </div>
   );

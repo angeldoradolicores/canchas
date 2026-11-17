@@ -858,7 +858,11 @@ export async function POST(req: NextRequest) {
             : (typeof s?.time === 'string' && /^\d{2}:\d{2}$/.test(s.time) ? s.time : null);
           if (date && slot) {
             const { startIso, endIso } = computeSlotIsoTimes(date, slot);
+            // Precio propio de esa hora (el dueño puede poner un valor distinto a cada hora del turno fijo).
+            const rawPrice = Number(s?.price);
+            const itemPrice = Number.isFinite(rawPrice) && rawPrice >= 0 && rawPrice <= 100_000_000 ? Math.round(rawPrice) : effectivePrice;
             inserts.push({
+              price: itemPrice,
               base: {
                 pitch_id,
                 user_id: ownerId,
@@ -870,7 +874,7 @@ export async function POST(req: NextRequest) {
                 payment_status: billingScheme === 'por_sesion' ? 'pending' : 'verified',
                 source: 'owner_panel',
                 booking_type: 'contract',
-                ...(effectivePrice !== undefined ? { total_price: effectivePrice, custom_rate: effectivePrice } : {}),
+                ...(itemPrice !== undefined ? { total_price: itemPrice, custom_rate: itemPrice } : {}),
                 ...(note ? { note } : {}),
                 payment_method: paymentMethod,
               },
@@ -885,7 +889,7 @@ export async function POST(req: NextRequest) {
                 payment_status: billingScheme === 'por_sesion' ? 'pending' : 'verified',
                 source: 'owner_panel',
                 booking_type: 'contract',
-                ...(effectivePrice !== undefined ? { total_price: effectivePrice, custom_rate: effectivePrice } : {}),
+                ...(itemPrice !== undefined ? { total_price: itemPrice, custom_rate: itemPrice } : {}),
                 ...(note ? { note } : {}),
                 ...(clientType !== 'standard' ? { client_type: clientType } : {}),
                 ...(clientEntityName ? { client_entity_name: clientEntityName } : {}),
@@ -1008,13 +1012,13 @@ export async function POST(req: NextRequest) {
           reviewed_at: new Date().toISOString(),
           reviewed_by: ownerId,
           booking_type: 'contract',
-          ...(effectivePrice !== undefined ? { total_price: effectivePrice } : {}),
+          ...((item.price ?? effectivePrice) !== undefined ? { total_price: item.price ?? effectivePrice } : {}),
           ...(note ? { note } : {}),
           ...(clientType !== 'standard' ? { client_type: clientType } : {}),
           ...(clientEntityName ? { client_entity_name: clientEntityName } : {}),
           payment_method: paymentMethod,
           billing_scheme: billingScheme,
-          ...(customRate !== undefined ? { custom_rate: customRate } : {}),
+          ...(item.price !== undefined ? { custom_rate: item.price } : customRate !== undefined ? { custom_rate: customRate } : {}),
         };
 
         const updatePayloadBase: any = {
@@ -1028,10 +1032,10 @@ export async function POST(req: NextRequest) {
           reviewed_at: new Date().toISOString(),
           reviewed_by: ownerId,
           booking_type: 'contract',
-          ...(effectivePrice !== undefined ? { total_price: effectivePrice } : {}),
+          ...((item.price ?? effectivePrice) !== undefined ? { total_price: item.price ?? effectivePrice } : {}),
           ...(note ? { note } : {}),
           payment_method: paymentMethod,
-          ...(customRate !== undefined ? { custom_rate: customRate } : {}),
+          ...(item.price !== undefined ? { custom_rate: item.price } : customRate !== undefined ? { custom_rate: customRate } : {}),
         };
 
         // Buscar registro existente (cualquier estado: cancelled, expirado, o del owner_panel) para reutilizar en lugar de insertar

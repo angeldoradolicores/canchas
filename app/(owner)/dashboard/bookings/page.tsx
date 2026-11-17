@@ -8,7 +8,7 @@ import {
   LayoutList, Calendar as CalendarIcon, Plus, X, Download, Clock,
   ChevronLeft, ChevronRight, Wrench, Search, AlertTriangle, Bell,
   Receipt, DollarSign, Sparkles, Camera, Phone, BarChart3, Repeat,
-  Table, LayoutGrid, Building2, MessageCircle, History, Gift, Ban, ShieldOff
+  Table, LayoutGrid, Building2, MessageCircle, History, Gift
 } from 'lucide-react';
 import { useToday } from '@/lib/use-today';
 import { ManualBookingModal } from '@/components/booking/ManualBookingModal';
@@ -255,81 +255,6 @@ export default function BookingsPage() {
   } | null>(null);
   const statusToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Celulares bloqueados (no pueden enviar reservas en línea al complejo) ──
-  const [blockedList, setBlockedList] = useState<{ company_id: string; company_name: string; phone: string; reason: string | null; created_at: string }[]>([]);
-  const [showBlockedList, setShowBlockedList] = useState(false);
-  const [blockTarget, setBlockTarget] = useState<any | null>(null);
-  const [blockReason, setBlockReason] = useState('');
-  const [blockRejectPending, setBlockRejectPending] = useState(true);
-  const [blockBusy, setBlockBusy] = useState(false);
-  const [blockError, setBlockError] = useState('');
-  const phoneKeyOf = (p?: string | null) => {
-    const d = (p || '').replace(/\D/g, '');
-    return d.length >= 7 ? d.slice(-10) : '';
-  };
-  const blockedPhoneSet = useMemo(() => new Set(blockedList.map(b => b.phone)), [blockedList]);
-
-  const authHeaders = async (): Promise<Record<string, string>> => {
-    const token = (await supabase.auth.getSession()).data.session?.access_token;
-    return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
-  };
-
-  const loadBlockedList = useCallback(async () => {
-    try {
-      const res = await fetch('/api/bookings/blocked-phones', { headers: await authHeaders() });
-      if (!res.ok) return;
-      const json = await res.json();
-      setBlockedList(Array.isArray(json.blocked) ? json.blocked : []);
-    } catch { /* no crítico */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  useEffect(() => { if (user?.id) void loadBlockedList(); }, [user?.id, loadBlockedList]);
-
-  // Reservas pendientes (de jugadores, no manuales) del mismo celular, para rechazarlas al bloquear.
-  const pendingOfPhone = (phone: string) => bookings.filter(b =>
-    b.status === 'pending' && b.source !== 'owner_panel' && phoneKeyOf(b.customer_phone) === phone);
-
-  const confirmBlockPhone = async () => {
-    if (!blockTarget) return;
-    setBlockBusy(true); setBlockError('');
-    try {
-      const res = await fetch('/api/bookings/blocked-phones', {
-        method: 'POST',
-        headers: await authHeaders(),
-        body: JSON.stringify({ booking_id: blockTarget.id, reason: blockReason.trim() || null }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) { setBlockError(json.error || 'No se pudo bloquear.'); return; }
-
-      const phone = json.phone as string;
-      const ids = blockRejectPending ? pendingOfPhone(phone).map(b => b.id) : [];
-      if (ids.length) {
-        setBookings(prev => prev.map(b => ids.includes(b.id)
-          ? { ...b, status: 'cancelled', payment_status: 'rejected', reviewed_at: new Date().toISOString() } : b));
-        await fetch('/api/bookings/batch-action', {
-          method: 'POST', headers: await authHeaders(), body: JSON.stringify({ ids, action: 'cancel' }),
-        }).catch(() => null);
-      }
-      await loadBlockedList();
-      setStatusToast({
-        id: Date.now(), color: 'rose', state: 'saved', targetTab: 'cancelled', targetLabel: 'Canceladas',
-        text: `Celular ${phone} bloqueado`,
-        customerName: ids.length ? `${ids.length} ${ids.length === 1 ? 'reserva pendiente rechazada' : 'reservas pendientes rechazadas'}` : undefined,
-      });
-      setBlockTarget(null); setBlockReason('');
-    } catch {
-      setBlockError('Sin conexión. Inténtalo de nuevo.');
-    } finally {
-      setBlockBusy(false);
-    }
-  };
-
-  const unblockPhone = async (companyId: string, phone: string) => {
-    const res = await fetch('/api/bookings/blocked-phones', {
-      method: 'DELETE', headers: await authHeaders(), body: JSON.stringify({ company_id: companyId, phone }),
-    }).catch(() => null);
-    if (res?.ok) setBlockedList(prev => prev.filter(b => !(b.company_id === companyId && b.phone === phone)));
-  };
 
   // Modal / Pestaña flotante para horarios interactivos
   const [selectedSlotDetail, setSelectedSlotDetail] = useState<{
@@ -1589,21 +1514,14 @@ export default function BookingsPage() {
               setReportInitialTab('entities');
               setShowReportModal(true);
             }}
-            className="flex items-center gap-2 px-3 py-2 border border-violet-500/30 bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 text-xs font-bold rounded-xl transition-all w-full sm:w-auto justify-center cursor-pointer shadow-xs"
+            className="flex items-center gap-2 px-3 py-2 border border-green-500/30 bg-green-500/10 hover:bg-green-500/20 text-green-600 dark:text-green-400 text-xs font-bold rounded-xl transition-all w-full sm:w-auto justify-center cursor-pointer shadow-xs"
             title="Ver reporte ejecutivo y trazabilidad histórica de contratos, convenios, escuelas y entidades"
           >
             <Building2 size={15} /> Contratos & Trazabilidad
           </button> */}
           <button
-            onClick={() => { setShowBlockedList(true); void loadBlockedList(); }}
-            className="flex items-center gap-2 px-3 py-2 border border-border bg-card hover:bg-secondary text-xs font-bold rounded-xl transition-all w-full sm:w-auto justify-center cursor-pointer shadow-xs"
-            title="Celulares que no pueden enviar reservas en línea a tu complejo"
-          >
-            <Ban size={15} className="text-rose-600" /> Bloqueados{blockedList.length ? ` (${blockedList.length})` : ''}
-          </button>
-          <button
             onClick={() => setShowContractModal(true)}
-            className="flex items-center gap-2 px-3 py-2 border border-violet-500/40 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl transition-all w-full sm:w-auto justify-center cursor-pointer shadow-xs"
+            className="flex items-center gap-2 px-3 py-2 border border-green-500/40 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-xl transition-all w-full sm:w-auto justify-center cursor-pointer shadow-xs"
           >
             Turno Fijo
           </button>
@@ -2135,7 +2053,7 @@ export default function BookingsPage() {
                         )}
 
                         {isManual && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 rounded-lg">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800 rounded-lg">
                             <Wrench size={10} /> Manual
                           </span>
                         )}
@@ -2150,7 +2068,7 @@ export default function BookingsPage() {
                           </span>
                         )}
                         {isContractBooking ? (
-                          <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800">
+                          <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-lg bg-green-50 text-green-700 border border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800">
                             {group.bookings.length} {group.bookings.length === 1 ? 'partido' : 'partidos'}
                           </span>
                         ) : (
@@ -2219,22 +2137,6 @@ export default function BookingsPage() {
                             >
                               WhatsApp
                             </a>
-                            {group.source !== 'owner_panel' && phoneKeyOf(group.customer_phone) && (
-                              blockedPhoneSet.has(phoneKeyOf(group.customer_phone)) ? (
-                                <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 px-1.5 py-0.5 bg-rose-50 dark:bg-rose-950/40 rounded border border-rose-200/60 dark:border-rose-800/40 inline-flex items-center gap-1" title="Este celular no puede enviar reservas en línea a tu complejo">
-                                  <Ban size={10} /> Bloqueado
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); setBlockError(''); setBlockRejectPending(true); setBlockTarget(group); }}
-                                  className="text-[10px] font-bold text-rose-600 dark:text-rose-400 hover:underline px-1.5 py-0.5 rounded border border-rose-200/60 dark:border-rose-800/40 inline-flex items-center gap-1 cursor-pointer"
-                                  title="Impedir que este celular haga más reservas en línea (por ejemplo, si aparta horas y no paga)"
-                                >
-                                  <Ban size={10} /> Bloquear
-                                </button>
-                              )
-                            )}
                           </div>
                         )}
                       </div>
@@ -2267,7 +2169,7 @@ export default function BookingsPage() {
                             <p className="font-extrabold text-xs sm:text-sm text-foreground leading-snug">
                               {distinctDays.join(', ')} · {distinctSlotTimes.join(' / ')}
                             </p>
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-violet-600 dark:text-violet-400 mt-1">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-600 dark:text-green-400 mt-1">
                               📅 {startDateStr} al {endDateStr} ({group.bookings.length} {group.bookings.length === 1 ? 'partido' : 'partidos'})
                             </span>
                           </>
@@ -2290,7 +2192,7 @@ export default function BookingsPage() {
                           ${tPrice.toLocaleString('es-CO')}
                         </p>
                         {group.is_credit_contract ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-violet-600 dark:text-violet-400 mt-0.5 px-1.5 py-0.5 rounded bg-violet-500/10 border border-violet-500/20">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-600 dark:text-green-400 mt-0.5 px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20">
                             📋 Cuenta por Cobrar
                           </span>
                         ) : dAmount > 0 ? (
@@ -2458,10 +2360,10 @@ export default function BookingsPage() {
                               setReportInitialTab('entities');
                               setShowReportModal(true);
                             }}
-                            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-violet-50 hover:bg-violet-100 text-violet-800 dark:bg-violet-950/40 dark:hover:bg-violet-900/50 dark:text-violet-300 border border-violet-300/60 dark:border-violet-700/60 rounded-xl shadow-2xs transition-all cursor-pointer"
+                            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-800 dark:bg-green-950/40 dark:hover:bg-green-900/50 dark:text-green-300 border border-green-300/60 dark:border-green-700/60 rounded-xl shadow-2xs transition-all cursor-pointer"
                             title="Ver hoja de trazabilidad histórica completa de este contrato"
                           >
-                            <Building2 size={13} className="text-violet-600 dark:text-violet-400" />
+                            <Building2 size={13} className="text-green-600 dark:text-green-400" />
                             <span>Hoja de Trazabilidad</span>
                           </button>
                         )}
@@ -2800,7 +2702,7 @@ export default function BookingsPage() {
                                         </div>
                                         <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                                           {isContract ? (
-                                            <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20">
+                                            <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
                                               {b.client_type === 'school' ? 'Escuela' : (b.client_type === 'entity' ? 'Entidad' : 'Turno Fijo')}
                                             </span>
                                           ) : (
@@ -2859,7 +2761,7 @@ export default function BookingsPage() {
                                       <td className="p-3 text-right whitespace-nowrap">
                                         {isContract || b.payment_method === 'cuenta_cobrar' ? (
                                           <div>
-                                            <span className="font-black text-violet-600 dark:text-violet-400">$0</span>
+                                            <span className="font-black text-green-600 dark:text-green-400">$0</span>
                                             <span className="block text-[9px] text-muted-foreground font-bold">Cuenta Cobrar</span>
                                           </div>
                                         ) : dAmount > 0 ? (
@@ -2883,7 +2785,7 @@ export default function BookingsPage() {
                                             ${tPrice.toLocaleString('es-CO')}
                                           </span>
                                           {isPlanContract && contractInfo && (
-                                            <span className="text-[9px] font-extrabold text-violet-600 dark:text-violet-400">
+                                            <span className="text-[9px] font-extrabold text-green-600 dark:text-green-400">
                                               {contractInfo.billingSchemeLabel}
                                             </span>
                                           )}
@@ -2950,7 +2852,7 @@ export default function BookingsPage() {
                                                 setReportInitialTab('entities');
                                                 setShowReportModal(true);
                                               }}
-                                              className="p-1 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 border border-violet-500/20 transition-colors cursor-pointer"
+                                              className="p-1 rounded-lg bg-green-500/10 hover:bg-green-500/20 text-green-600 dark:text-green-400 border border-green-500/20 transition-colors cursor-pointer"
                                               title="Ver Trazabilidad Completa del Contrato"
                                             >
                                               <Repeat size={12} />
@@ -3401,79 +3303,6 @@ export default function BookingsPage() {
       )}
 
       {/* Notificación Flotante Toast para Nuevas Reservas Entrantes en Tiempo Real */}
-      {blockTarget && (() => {
-        const phone = phoneKeyOf(blockTarget.customer_phone);
-        const pend = pendingOfPhone(phone);
-        return (
-          <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => !blockBusy && setBlockTarget(null)}>
-            <div className="w-full max-w-md rounded-3xl bg-card border border-border shadow-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-              <div className="flex items-start gap-3">
-                <span className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 flex items-center justify-center shrink-0"><Ban size={20} /></span>
-                <div className="min-w-0">
-                  <h3 className="font-black text-base">¿Bloquear el celular {blockTarget.customer_phone}?</h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {blockTarget.customer_name ? <><strong>{blockTarget.customer_name}</strong> ya </> : 'Ya '}no podrá enviar reservas en línea a este complejo con ese celular.
-                    Tú sí puedes seguir registrándole reservas manuales y turnos fijos. Puedes desbloquearlo cuando quieras.
-                  </p>
-                </div>
-              </div>
-              {pend.length > 0 && (
-                <label className="flex items-start gap-2 rounded-xl border border-border bg-secondary/40 p-3 text-sm cursor-pointer">
-                  <input type="checkbox" className="mt-0.5" checked={blockRejectPending} onChange={(e) => setBlockRejectPending(e.target.checked)} />
-                  <span>Rechazar también sus <strong>{pend.length}</strong> {pend.length === 1 ? 'reserva pendiente' : 'reservas pendientes'} para liberar esas horas.</span>
-                </label>
-              )}
-              <label className="block text-xs font-semibold">Motivo (opcional, solo lo ves tú)
-                <input value={blockReason} maxLength={200} onChange={(e) => setBlockReason(e.target.value)} placeholder="Ej.: aparta horas y no paga"
-                  className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-              </label>
-              {blockError && <p className="text-xs font-semibold text-red-600">{blockError}</p>}
-              <div className="flex gap-2">
-                <button type="button" disabled={blockBusy} onClick={() => setBlockTarget(null)} className="flex-1 rounded-xl border border-border py-2.5 text-sm font-bold hover:bg-secondary cursor-pointer">Cancelar</button>
-                <button type="button" disabled={blockBusy} onClick={() => void confirmBlockPhone()} className="flex-1 rounded-xl bg-rose-600 hover:bg-rose-700 text-white py-2.5 text-sm font-bold inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60">
-                  {blockBusy ? <Loader2 size={16} className="animate-spin" /> : <Ban size={16} />} Bloquear
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {showBlockedList && (
-        <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowBlockedList(false)}>
-          <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-3xl bg-card border border-border shadow-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="font-black text-base flex items-center gap-2"><Ban size={18} className="text-rose-600" /> Celulares bloqueados</h3>
-                <p className="text-xs text-muted-foreground mt-1">No pueden enviar reservas en línea a tu complejo. Para bloquear uno, usa el botón «Bloquear» junto al celular en una reserva.</p>
-              </div>
-              <button type="button" onClick={() => setShowBlockedList(false)} aria-label="Cerrar" className="p-1.5 rounded-lg hover:bg-secondary cursor-pointer"><X size={16} /></button>
-            </div>
-            {blockedList.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No tienes celulares bloqueados.</p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {blockedList.map(b => (
-                  <li key={b.company_id + b.phone} className="py-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-bold text-sm">{b.phone}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {b.company_name ? `${b.company_name} · ` : ''}desde {new Date(b.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'America/Bogota' })}
-                        {b.reason ? ` · ${b.reason}` : ''}
-                      </p>
-                    </div>
-                    <button type="button" onClick={() => void unblockPhone(b.company_id, b.phone)}
-                      className="shrink-0 inline-flex items-center gap-1 rounded-xl border border-border px-3 py-1.5 text-xs font-bold hover:bg-secondary cursor-pointer">
-                      <ShieldOff size={13} /> Desbloquear
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-      )}
-
       {statusToast && (
         <div className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[1200] w-[calc(100%-2rem)] max-w-md animate-in slide-in-from-bottom-4 fade-in duration-300" role="status" aria-live="polite">
           <div className={`rounded-2xl border shadow-2xl px-4 py-3 flex items-center gap-3 backdrop-blur-xl ${statusToast.state === 'error'
@@ -3995,7 +3824,7 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, allBooki
       {/* Leyenda */}
       <div className="flex flex-wrap items-center gap-2 mb-3 text-[9px] font-bold uppercase tracking-wide">
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-primary/10 border border-primary/40 inline-block" />Reservado</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-purple-50 border border-purple-300 dark:bg-purple-950/40 inline-block" />Manual</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-50 border border-green-300 dark:bg-green-950/40 inline-block" />Manual</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-50 border border-amber-300 dark:bg-amber-950/30 inline-block" />Pendiente</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-50 border border-orange-300 dark:bg-orange-950/30 inline-block" />En proceso</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-card border border-border/80 inline-block" />Libre</span>
@@ -4032,7 +3861,7 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, allBooki
           } else if (effectiveBooking) {
             if (effectiveBooking.status === 'draft') bgClass = 'bg-orange-50 border-orange-300 dark:bg-orange-950/30';
             else if (effectiveBooking.status === 'pending') bgClass = 'bg-amber-50 border-amber-300 dark:bg-amber-950/30';
-            else if (isManual) bgClass = 'bg-purple-50 border-purple-300 dark:bg-purple-950/30';
+            else if (isManual) bgClass = 'bg-green-50 border-green-300 dark:bg-green-950/30';
             else bgClass = 'bg-primary/10 border-primary/40';
           }
 
@@ -4108,7 +3937,7 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, allBooki
                   </div>
 
                   {isManual ? (
-                    <div className="flex items-center gap-0.5 text-purple-600 dark:text-purple-400 justify-center text-[9px]">
+                    <div className="flex items-center gap-0.5 text-green-600 dark:text-green-400 justify-center text-[9px]">
                       <Wrench size={8} /> Manual
                     </div>
                   ) : (
@@ -4308,7 +4137,7 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, allBookings, 
                       cellClass = 'bg-red-50/50 border-red-200/50 text-red-500/50 dark:bg-red-950/20';
                     } else if (slotBooking) {
                       cellClass = isManual
-                        ? 'bg-purple-100 dark:bg-purple-950/40 border-purple-300 text-purple-900 dark:text-purple-200'
+                        ? 'bg-green-100 dark:bg-green-950/40 border-green-300 text-green-900 dark:text-green-200'
                         : 'bg-primary/10 border-primary/40 text-foreground';
                     }
 

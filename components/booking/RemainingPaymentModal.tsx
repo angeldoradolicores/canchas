@@ -451,12 +451,12 @@ export function RemainingPaymentModal({
 
           {/* Condiciones Financieras del Contrato / Turno Fijo */}
           {contractInfo.isContract && (
-            <div className="p-3.5 rounded-2xl bg-violet-500/10 border border-violet-500/25 text-xs space-y-2.5">
+            <div className="p-3.5 rounded-2xl bg-green-500/10 border border-green-500/25 text-xs space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Repeat size={16} className="text-violet-600 dark:text-violet-400 shrink-0" />
+                  <Repeat size={16} className="text-green-600 dark:text-green-400 shrink-0" />
                   <div>
-                    <span className="text-[10px] font-black uppercase tracking-wider text-violet-600 dark:text-violet-400 block leading-tight">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-green-600 dark:text-green-400 block leading-tight">
                       Condición Financiera
                     </span>
                     <p className="font-extrabold text-sm text-foreground">
@@ -464,12 +464,12 @@ export function RemainingPaymentModal({
                     </p>
                   </div>
                 </div>
-                <span className={`text-[10px] uppercase font-black px-2.5 py-1 rounded-full ${contractInfo.isPlanBilling ? 'bg-violet-600 text-white' : 'bg-secondary text-muted-foreground'}`}>
+                <span className={`text-[10px] uppercase font-black px-2.5 py-1 rounded-full ${contractInfo.isPlanBilling ? 'bg-green-600 text-white' : 'bg-secondary text-muted-foreground'}`}>
                   {contractInfo.isPlanBilling ? 'Plan Contrato Completo' : 'Por Sesión'}
                 </span>
               </div>
 
-              <div className="pt-2 border-t border-violet-500/20 grid grid-cols-2 gap-2 text-[11px]">
+              <div className="pt-2 border-t border-green-500/20 grid grid-cols-2 gap-2 text-[11px]">
                 <div className="bg-card/80 dark:bg-card/40 p-2 rounded-xl border border-border/50">
                   <span className="text-[10px] text-muted-foreground block font-bold">Tarifa por Partido:</span>
                   <strong className="text-foreground font-black">{formatCOP(contractInfo.ratePerSession)}/partido</strong>

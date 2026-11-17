@@ -6,7 +6,7 @@ import { boundedJson } from '@/lib/bounded-json';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
 
 const uuid = z.string().uuid();
-const PROMO_COLUMNS = 'id,company_id,title,required_bookings,gift_hours,redeem_days,weekdays,starts_at,ends_at,active,period,image_url,redeem_pitch_ids';
+const PROMO_COLUMNS = 'id,company_id,title,required_bookings,gift_hours,redeem_days,weekdays,starts_at,ends_at,active,period,image_url,redeem_pitch_ids,count_pitch_ids';
 
 const campaign = z.object({
   company_id: uuid,
@@ -21,6 +21,8 @@ const campaign = z.object({
   image_url: z.string().max(600).nullable().optional(),
   // null = el regalo se puede usar en cualquier cancha del complejo.
   redeem_pitch_ids: z.array(uuid).min(1).max(50).nullable().optional(),
+  // null = cuentan las reservas de cualquier cancha; si no, SOLO las de estas canchas.
+  count_pitch_ids: z.array(uuid).min(1).max(50).nullable().optional(),
 }).strict();
 
 // Mensajes claros para cada motivo de rechazo del canje (los genera la BD).
@@ -64,12 +66,19 @@ export async function GET(req: NextRequest) {
     const company = req.nextUrl.searchParams.get('company_id');
     if (company && !uuid.safeParse(company).success) return NextResponse.json({ error: 'Complejo inválido' }, { status: 400 });
 
-    let query = service.from('complex_promotions').select(PROMO_COLUMNS).eq('active', true).gt('ends_at', new Date().toISOString());
-    if (company) query = query.eq('company_id', company);
-    const { data: promoRows, error } = await query.order('starts_at', { ascending: false }).limit(100);
+    const loadPromos = (columns: string) => {
+      let query = service.from('complex_promotions').select(columns).eq('active', true).gt('ends_at', new Date().toISOString());
+      if (company) query = query.eq('company_id', company);
+      return query.order('starts_at', { ascending: false }).limit(100);
+    };
+    let { data: promoRows, error } = await loadPromos(PROMO_COLUMNS);
+    // Si aún no se ejecutó la migración 2026-11-29 (count_pitch_ids), se cargan sin esa columna.
+    if (error && error.message?.includes('count_pitch_ids')) {
+      ({ data: promoRows, error } = await loadPromos(PROMO_COLUMNS.replace(',count_pitch_ids', '')));
+    }
     if (error) throw error;
     // Nombres de las canchas donde se puede usar cada regalo (para mostrarlos al jugador).
-    const pitchIds = [...new Set((promoRows || []).flatMap((p: any) => p.redeem_pitch_ids || []))];
+    const pitchIds = [...new Set((promoRows || []).flatMap((p: any) => [...(p.redeem_pitch_ids || []), ...(p.count_pitch_ids || [])]))];
     const { data: pitchRows } = pitchIds.length
       ? await service.from('pitches').select('id,name').in('id', pitchIds)
       : { data: [] as { id: string; name: string }[] };
@@ -77,6 +86,7 @@ export async function GET(req: NextRequest) {
     const promotions = (promoRows || []).map((p: any) => ({
       ...p,
       redeem_pitches: p.redeem_pitch_ids ? p.redeem_pitch_ids.map((id: string) => ({ id, name: pitchName.get(id) || 'Cancha' })) : null,
+      count_pitches: p.count_pitch_ids ? p.count_pitch_ids.map((id: string) => ({ id, name: pitchName.get(id) || 'Cancha' })) : null,
     }));
 
     const { data: rewards, error: rewardError } = user
@@ -165,9 +175,11 @@ export async function POST(req: NextRequest) {
     if (!await verifyCompanyOwnership(user.id, promo.company_id))
       return NextResponse.json({ error: 'Solo el dueño aprobado puede crear promociones' }, { status: 403 });
     const redeemPitchIds = promo.redeem_pitch_ids?.length ? [...new Set(promo.redeem_pitch_ids)] : null;
-    if (redeemPitchIds) {
-      const { data: own } = await service.from('pitches').select('id').eq('company_id', promo.company_id).in('id', redeemPitchIds);
-      if ((own || []).length !== redeemPitchIds.length)
+    const countPitchIds = promo.count_pitch_ids?.length ? [...new Set(promo.count_pitch_ids)] : null;
+    const allPitchIds = [...new Set([...(redeemPitchIds || []), ...(countPitchIds || [])])];
+    if (allPitchIds.length) {
+      const { data: own } = await service.from('pitches').select('id').eq('company_id', promo.company_id).in('id', allPitchIds);
+      if ((own || []).length !== allPitchIds.length)
         return NextResponse.json({ error: 'Elige solo canchas de este complejo' }, { status: 400 });
     }
 
@@ -179,14 +191,17 @@ export async function POST(req: NextRequest) {
       weekdays: [...new Set(promo.weekdays)].sort(),
       image_url: promo.image_url || null,
       redeem_pitch_ids: redeemPitchIds,
+      count_pitch_ids: countPitchIds,
       created_by: user.id,
     });
     if (error) {
       const tooMany = error.message?.includes('Too many active promotions');
       const periodPending = error.message?.includes('complex_promotions_period_check');
+      const pitchPending = error.message?.includes('count_pitch_ids');
       return NextResponse.json({
         error: tooMany ? 'Puedes tener máximo 10 promociones activas. Finaliza alguna para publicar otra.'
           : periodPending ? 'Esta forma de contar aún no está activa. Elige semana, mes o toda la promoción.'
+          : pitchPending ? 'Falta activar las promociones por cancha (migración 2026-11-29).'
           : 'No se pudo crear la promoción. Inténtalo de nuevo.',
       }, { status: 409 });
     }

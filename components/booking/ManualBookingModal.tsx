@@ -155,7 +155,9 @@ export function ManualBookingModal({
   const supabase = createClient();
 
   useEffect(() => {
-    if (today && !selectedDate) setSelectedDate(today);
+    // Solo desde hoy: si llega una fecha pasada (p. ej. desde el calendario), se pasa a hoy.
+    if (today && (!selectedDate || selectedDate < today)) setSelectedDate(today);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today]);
 
   // Auto-scroll date carousel to today when modal opens
@@ -306,13 +308,12 @@ export function ManualBookingModal({
     }
   };
 
-  // Días disponibles – para el panel del dueño incluimos también días pasados (hasta 30 días atrás)
+  // Días disponibles: desde hoy y los próximos 60 días (sin días pasados para no confundir al dueño)
   const nextDays = useMemo(() => {
     if (!today) return [];
     const days = [];
     const base = new Date(today + 'T12:00:00');
-    // 30 días hacia atrás + 30 días hacia futuro
-    for (let i = -30; i < 30; i++) {
+    for (let i = 0; i < 60; i++) {
       const d = new Date(base);
       d.setDate(base.getDate() + i);
       const dateStr = d.toISOString().split('T')[0];

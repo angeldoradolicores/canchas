@@ -1324,7 +1324,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
                           <p className="font-black text-foreground uppercase truncate">{cleanClientName(ent.name) || ent.name}</p>
                           <p className="text-xs text-muted-foreground truncate">{ent.pitchName} · {formatCOP(ent.customRate)}/h · {paymentLabel(ent.paymentMethod)}</p>
                         </div>
-                        <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg shrink-0 ${ent.type === 'entity' ? 'bg-blue-500/10 text-blue-600' : ent.type === 'school' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-violet-500/10 text-violet-600'}`}>
+                        <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg shrink-0 ${ent.type === 'entity' ? 'bg-blue-500/10 text-blue-600' : ent.type === 'school' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-green-500/10 text-green-600'}`}>
                           {ent.type === 'entity' ? 'Entidad' : ent.type === 'school' ? 'Escuela' : 'Turno fijo'}
                         </span>
                       </div>
@@ -1343,7 +1343,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
                         </div>
                       </div>
                       <button type="button" onClick={() => setSelectedEntityTrace(ent)}
-                        className="w-full py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5">
+                        className="w-full py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5">
                         <CalendarDays size={14} /> Ver historial completo
                       </button>
                     </div>
@@ -1446,7 +1446,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="text-base font-black text-foreground truncate uppercase">{cleanClientName(selectedEntityTrace.name) || selectedEntityTrace.name}</h3>
-                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 uppercase">
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 uppercase">
                     {selectedEntityTrace.type === 'entity' ? 'Entidad' : selectedEntityTrace.type === 'school' ? 'Escuela' : 'Turno fijo'}
                   </span>
                 </div>
