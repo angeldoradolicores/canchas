@@ -8,7 +8,7 @@ import {
   LayoutList, Calendar as CalendarIcon, Plus, X, Download, Clock,
   ChevronLeft, ChevronRight, Wrench, Search, AlertTriangle, Bell,
   Receipt, DollarSign, Sparkles, Camera, Phone, BarChart3, Repeat,
-  Table, LayoutGrid, Building2, MessageCircle, History
+  Table, LayoutGrid, Building2, MessageCircle, History, Gift, Ban, ShieldOff
 } from 'lucide-react';
 import { useToday } from '@/lib/use-today';
 import { ManualBookingModal } from '@/components/booking/ManualBookingModal';
@@ -242,6 +242,94 @@ export default function BookingsPage() {
     phase?: 'morphed' | 'departing';
   } | null>(null);
   const [bumpTab, setBumpTab] = useState<string | null>(null);
+  // Aviso persistente del cambio de estado: se queda visible mientras se guarda y unos segundos después.
+  const [statusToast, setStatusToast] = useState<{
+    id: number;
+    text: string;
+    customerName?: string;
+    targetTab: string;
+    targetLabel: string;
+    color: 'sky' | 'emerald' | 'rose';
+    state: 'saving' | 'saved' | 'error';
+    error?: string;
+  } | null>(null);
+  const statusToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Celulares bloqueados (no pueden enviar reservas en línea al complejo) ──
+  const [blockedList, setBlockedList] = useState<{ company_id: string; company_name: string; phone: string; reason: string | null; created_at: string }[]>([]);
+  const [showBlockedList, setShowBlockedList] = useState(false);
+  const [blockTarget, setBlockTarget] = useState<any | null>(null);
+  const [blockReason, setBlockReason] = useState('');
+  const [blockRejectPending, setBlockRejectPending] = useState(true);
+  const [blockBusy, setBlockBusy] = useState(false);
+  const [blockError, setBlockError] = useState('');
+  const phoneKeyOf = (p?: string | null) => {
+    const d = (p || '').replace(/\D/g, '');
+    return d.length >= 7 ? d.slice(-10) : '';
+  };
+  const blockedPhoneSet = useMemo(() => new Set(blockedList.map(b => b.phone)), [blockedList]);
+
+  const authHeaders = async (): Promise<Record<string, string>> => {
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
+    return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  };
+
+  const loadBlockedList = useCallback(async () => {
+    try {
+      const res = await fetch('/api/bookings/blocked-phones', { headers: await authHeaders() });
+      if (!res.ok) return;
+      const json = await res.json();
+      setBlockedList(Array.isArray(json.blocked) ? json.blocked : []);
+    } catch { /* no crítico */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => { if (user?.id) void loadBlockedList(); }, [user?.id, loadBlockedList]);
+
+  // Reservas pendientes (de jugadores, no manuales) del mismo celular, para rechazarlas al bloquear.
+  const pendingOfPhone = (phone: string) => bookings.filter(b =>
+    b.status === 'pending' && b.source !== 'owner_panel' && phoneKeyOf(b.customer_phone) === phone);
+
+  const confirmBlockPhone = async () => {
+    if (!blockTarget) return;
+    setBlockBusy(true); setBlockError('');
+    try {
+      const res = await fetch('/api/bookings/blocked-phones', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({ booking_id: blockTarget.id, reason: blockReason.trim() || null }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { setBlockError(json.error || 'No se pudo bloquear.'); return; }
+
+      const phone = json.phone as string;
+      const ids = blockRejectPending ? pendingOfPhone(phone).map(b => b.id) : [];
+      if (ids.length) {
+        setBookings(prev => prev.map(b => ids.includes(b.id)
+          ? { ...b, status: 'cancelled', payment_status: 'rejected', reviewed_at: new Date().toISOString() } : b));
+        await fetch('/api/bookings/batch-action', {
+          method: 'POST', headers: await authHeaders(), body: JSON.stringify({ ids, action: 'cancel' }),
+        }).catch(() => null);
+      }
+      await loadBlockedList();
+      setStatusToast({
+        id: Date.now(), color: 'rose', state: 'saved', targetTab: 'cancelled', targetLabel: 'Canceladas',
+        text: `Celular ${phone} bloqueado`,
+        customerName: ids.length ? `${ids.length} ${ids.length === 1 ? 'reserva pendiente rechazada' : 'reservas pendientes rechazadas'}` : undefined,
+      });
+      setBlockTarget(null); setBlockReason('');
+    } catch {
+      setBlockError('Sin conexión. Inténtalo de nuevo.');
+    } finally {
+      setBlockBusy(false);
+    }
+  };
+
+  const unblockPhone = async (companyId: string, phone: string) => {
+    const res = await fetch('/api/bookings/blocked-phones', {
+      method: 'DELETE', headers: await authHeaders(), body: JSON.stringify({ company_id: companyId, phone }),
+    }).catch(() => null);
+    if (res?.ok) setBlockedList(prev => prev.filter(b => !(b.company_id === companyId && b.phone === phone)));
+  };
 
   // Modal / Pestaña flotante para horarios interactivos
   const [selectedSlotDetail, setSelectedSlotDetail] = useState<{
@@ -605,6 +693,10 @@ export default function BookingsPage() {
     text: string,
     customerName?: string
   ) => {
+    const toastId = Date.now();
+    if (statusToastTimerRef.current) clearTimeout(statusToastTimerRef.current);
+    setStatusToast({ id: toastId, text, customerName, targetTab, targetLabel, color, state: 'saving' });
+
     // Fase 1: Transformación visual inmediata (el usuario ve cambiar el badge, color e ícono con brillo)
     setAnimatingCard({
       bookingIds: ids,
@@ -616,22 +708,34 @@ export default function BookingsPage() {
     });
     setBumpTab(targetTab);
 
-    // Fase 2: Tras mostrar el cambio de estado con claridad (750ms), iniciar salida suave hacia la pestaña
+    // Fase 2: Tras mostrar el cambio de estado con claridad, iniciar salida suave hacia la pestaña
     setTimeout(() => {
       setAnimatingCard(prev => prev ? { ...prev, phase: 'departing' } : null);
-    }, 750);
+    }, 1600);
 
     // Fase 3: Concluir animación completa
     setTimeout(() => {
       setAnimatingCard(null);
-    }, 1300);
+    }, 2300);
 
     setTimeout(() => {
       setBumpTab(null);
-    }, 2400);
+    }, 3500);
+    return toastId;
+  };
+
+  // Marca el aviso como guardado (o con error) y lo deja visible unos segundos más.
+  const finishStatusToast = (toastId: number, ok: boolean, error?: string) => {
+    setStatusToast(prev => prev && prev.id === toastId ? { ...prev, state: ok ? 'saved' : 'error', error } : prev);
+    if (statusToastTimerRef.current) clearTimeout(statusToastTimerRef.current);
+    statusToastTimerRef.current = setTimeout(() => {
+      setStatusToast(prev => prev && prev.id === toastId ? null : prev);
+    }, ok ? 5000 : 9000);
+    if (!ok) fetchBookingsRef.current(true);
   };
 
   const updateStatus = async (id: string, newStatus: 'confirmed' | 'cancelled') => {
+    let toastId = 0;
     try {
       const bTarget = bookings.find(b => b.id === id);
       if (newStatus === 'confirmed') {
@@ -641,7 +745,7 @@ export default function BookingsPage() {
         const bal = calculateRemainingBalance(tPrice, dAmount, remPaid);
         const targetTab = bal > 0 ? 'pending_payment' : 'paid';
         const targetLabel = bal > 0 ? 'Por Cobrar' : 'Cobradas';
-        triggerStatusAnimation(
+        toastId = triggerStatusAnimation(
           [id],
           targetTab,
           targetLabel,
@@ -650,7 +754,7 @@ export default function BookingsPage() {
           bTarget?.customer_name
         );
       } else if (newStatus === 'cancelled') {
-        triggerStatusAnimation(
+        toastId = triggerStatusAnimation(
           [id],
           'cancelled',
           'Canceladas',
@@ -675,12 +779,16 @@ export default function BookingsPage() {
         },
         body: JSON.stringify({ ids: [id], action: newStatus === 'confirmed' ? 'confirm' : 'cancel' }),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         console.error('[updateStatus] error:', json?.error);
+        if (toastId) finishStatusToast(toastId, false, json?.error || 'No se pudo guardar el cambio.');
+      } else if (toastId) {
+        finishStatusToast(toastId, true);
       }
     } catch (err) {
       console.error('[updateStatus] unexpected error:', err);
+      if (toastId) finishStatusToast(toastId, false, 'Sin conexión. Revisa tu internet e inténtalo de nuevo.');
     }
   };
 
@@ -795,13 +903,15 @@ export default function BookingsPage() {
 
   const confirmBatchApprove = async () => {
     if (!batchApproveConfirm) return;
-    setBatchApproving(true);
     const { ids, totalPrice, depositAmount, name } = batchApproveConfirm;
+    // Cerramos el modal de inmediato: el aviso flotante muestra el progreso del guardado.
+    setBatchApproveConfirm(null);
+    let toastId = 0;
     try {
       const bal = calculateRemainingBalance(totalPrice, depositAmount, 0);
       const targetTab = bal > 0 ? 'pending_payment' : 'paid';
       const targetLabel = bal > 0 ? 'Por Cobrar' : 'Cobradas';
-      triggerStatusAnimation(
+      toastId = triggerStatusAnimation(
         ids,
         targetTab,
         targetLabel,
@@ -825,20 +935,17 @@ export default function BookingsPage() {
         },
         body: JSON.stringify({ ids, action: 'confirm' }),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (res.ok) {
-        setBookings(prev => prev.map(b => ids.includes(b.id)
-          ? { ...b, status: 'confirmed', payment_status: 'verified', reviewed_at: new Date().toISOString() }
-          : b
-        ));
+        finishStatusToast(toastId, true);
       } else {
         console.error('[confirmBatchApprove] error:', json?.error);
+        finishStatusToast(toastId, false, json?.error || 'No se pudo aprobar.');
       }
     } catch (err) {
       console.error('[confirmBatchApprove] unexpected error:', err);
+      if (toastId) finishStatusToast(toastId, false, 'Sin conexión. Revisa tu internet e inténtalo de nuevo.');
     }
-    setBatchApproving(false);
-    setBatchApproveConfirm(null);
   };
 
   // Rechazar todas las reservas de un grupo en batch (una sola query)
@@ -850,10 +957,11 @@ export default function BookingsPage() {
 
   const confirmBatchCancel = async () => {
     if (!batchCancelConfirm) return;
-    setBatchCancelling(true);
     const { ids } = batchCancelConfirm;
+    setBatchCancelConfirm(null);
+    let toastId = 0;
     try {
-      triggerStatusAnimation(
+      toastId = triggerStatusAnimation(
         ids,
         'cancelled',
         'Canceladas',
@@ -877,20 +985,17 @@ export default function BookingsPage() {
         },
         body: JSON.stringify({ ids, action: 'cancel' }),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (res.ok) {
-        setBookings(prev => prev.map(b => ids.includes(b.id)
-          ? { ...b, status: 'cancelled', payment_status: 'rejected', reviewed_at: new Date().toISOString() }
-          : b
-        ));
+        finishStatusToast(toastId, true);
       } else {
         console.error('[confirmBatchCancel] error:', json?.error);
+        finishStatusToast(toastId, false, json?.error || 'No se pudo cancelar.');
       }
     } catch (err) {
       console.error('[confirmBatchCancel] unexpected error:', err);
+      if (toastId) finishStatusToast(toastId, false, 'Sin conexión. Revisa tu internet e inténtalo de nuevo.');
     }
-    setBatchCancelling(false);
-    setBatchCancelConfirm(null);
   };
 
   // Manejar actualización exitosa del pago restante en local físico sin caídas
@@ -952,8 +1057,9 @@ export default function BookingsPage() {
       const depositAmt = Number(bObj?.deposit_amount || 0);
       const remainingBal = Math.max(0, totalCost - depositAmt - totalPaidCalc);
 
+      let payToastId = 0;
       if (remainingBal <= 0) {
-        triggerStatusAnimation(
+        payToastId = triggerStatusAnimation(
           targetIds,
           'paid',
           'Cobradas',
@@ -962,7 +1068,7 @@ export default function BookingsPage() {
           bObj?.customer_name
         );
       } else {
-        triggerStatusAnimation(
+        payToastId = triggerStatusAnimation(
           targetIds,
           'pending_payment',
           'Por Cobrar',
@@ -971,6 +1077,8 @@ export default function BookingsPage() {
           bObj?.customer_name
         );
       }
+      // El pago ya quedó guardado en el modal: el aviso pasa directo a «guardado».
+      finishStatusToast(payToastId, true);
     }
 
     // Recargar datos en segundo plano para sincronizar al 100% con Supabase
@@ -1149,6 +1257,8 @@ export default function BookingsPage() {
       let matchStatus = true;
       if (filterStatus === 'manual') {
         matchStatus = b.source === 'owner_panel';
+      } else if (filterStatus === 'bonus') {
+        matchStatus = b.source === 'loyalty_reward' && b.status !== 'cancelled';
       } else if (filterStatus === 'pending') {
         matchStatus = b.status === 'pending';
       } else if (filterStatus === 'pending_payment') {
@@ -1485,6 +1595,13 @@ export default function BookingsPage() {
             <Building2 size={15} /> Contratos & Trazabilidad
           </button> */}
           <button
+            onClick={() => { setShowBlockedList(true); void loadBlockedList(); }}
+            className="flex items-center gap-2 px-3 py-2 border border-border bg-card hover:bg-secondary text-xs font-bold rounded-xl transition-all w-full sm:w-auto justify-center cursor-pointer shadow-xs"
+            title="Celulares que no pueden enviar reservas en línea a tu complejo"
+          >
+            <Ban size={15} className="text-rose-600" /> Bloqueados{blockedList.length ? ` (${blockedList.length})` : ''}
+          </button>
+          <button
             onClick={() => setShowContractModal(true)}
             className="flex items-center gap-2 px-3 py-2 border border-violet-500/40 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl transition-all w-full sm:w-auto justify-center cursor-pointer shadow-xs"
           >
@@ -1636,6 +1753,7 @@ export default function BookingsPage() {
                 { key: 'pending_payment', label: 'Por Cobrar', color: 'bg-sky-500' },
                 { key: 'paid', label: 'Cobradas', color: 'bg-emerald-500' },
                 { key: 'cancelled', label: 'Canceladas', color: 'bg-rose-500' },
+                { key: 'bonus', label: 'Bonos', color: 'bg-violet-500' },
               ].map((st) => {
                 const isActive = filterStatus === st.key;
                 const rangeDates = getDaysRange(selectedDate, calView);
@@ -1646,6 +1764,8 @@ export default function BookingsPage() {
                     matchSt = true;
                   } else if (st.key === 'manual') {
                     matchSt = b.source === 'owner_panel';
+                  } else if (st.key === 'bonus') {
+                    matchSt = b.source === 'loyalty_reward' && b.status !== 'cancelled';
                   } else if (st.key === 'pending') {
                     matchSt = b.status === 'pending';
                   } else if (st.key === 'pending_payment') {
@@ -1765,6 +1885,11 @@ export default function BookingsPage() {
                   icon: '🎉',
                   title: 'Sin pagos completos registrados',
                   desc: 'Cuando registres un cobro de saldo, aparecerá en esta sección.',
+                },
+                bonus: {
+                  icon: '🎁',
+                  title: 'Sin horas de bono',
+                  desc: 'Aquí verás las horas que tus jugadores reservaron gratis con una promoción del complejo.',
                 },
                 manual: {
                   icon: '📋',
@@ -2003,6 +2128,12 @@ export default function BookingsPage() {
                           </span>
                         )}
 
+                        {group.source === 'loyalty_reward' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-violet-50 text-violet-700 border border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800 rounded-lg" title="Hora gratis canjeada con una promoción del complejo">
+                            <Gift size={10} /> Bono
+                          </span>
+                        )}
+
                         {isManual && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 rounded-lg">
                             <Wrench size={10} /> Manual
@@ -2088,6 +2219,22 @@ export default function BookingsPage() {
                             >
                               WhatsApp
                             </a>
+                            {group.source !== 'owner_panel' && phoneKeyOf(group.customer_phone) && (
+                              blockedPhoneSet.has(phoneKeyOf(group.customer_phone)) ? (
+                                <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 px-1.5 py-0.5 bg-rose-50 dark:bg-rose-950/40 rounded border border-rose-200/60 dark:border-rose-800/40 inline-flex items-center gap-1" title="Este celular no puede enviar reservas en línea a tu complejo">
+                                  <Ban size={10} /> Bloqueado
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); setBlockError(''); setBlockRejectPending(true); setBlockTarget(group); }}
+                                  className="text-[10px] font-bold text-rose-600 dark:text-rose-400 hover:underline px-1.5 py-0.5 rounded border border-rose-200/60 dark:border-rose-800/40 inline-flex items-center gap-1 cursor-pointer"
+                                  title="Impedir que este celular haga más reservas en línea (por ejemplo, si aparta horas y no paga)"
+                                >
+                                  <Ban size={10} /> Bloquear
+                                </button>
+                              )
+                            )}
                           </div>
                         )}
                       </div>
@@ -3254,6 +3401,119 @@ export default function BookingsPage() {
       )}
 
       {/* Notificación Flotante Toast para Nuevas Reservas Entrantes en Tiempo Real */}
+      {blockTarget && (() => {
+        const phone = phoneKeyOf(blockTarget.customer_phone);
+        const pend = pendingOfPhone(phone);
+        return (
+          <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => !blockBusy && setBlockTarget(null)}>
+            <div className="w-full max-w-md rounded-3xl bg-card border border-border shadow-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+              <div className="flex items-start gap-3">
+                <span className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 flex items-center justify-center shrink-0"><Ban size={20} /></span>
+                <div className="min-w-0">
+                  <h3 className="font-black text-base">¿Bloquear el celular {blockTarget.customer_phone}?</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {blockTarget.customer_name ? <><strong>{blockTarget.customer_name}</strong> ya </> : 'Ya '}no podrá enviar reservas en línea a este complejo con ese celular.
+                    Tú sí puedes seguir registrándole reservas manuales y turnos fijos. Puedes desbloquearlo cuando quieras.
+                  </p>
+                </div>
+              </div>
+              {pend.length > 0 && (
+                <label className="flex items-start gap-2 rounded-xl border border-border bg-secondary/40 p-3 text-sm cursor-pointer">
+                  <input type="checkbox" className="mt-0.5" checked={blockRejectPending} onChange={(e) => setBlockRejectPending(e.target.checked)} />
+                  <span>Rechazar también sus <strong>{pend.length}</strong> {pend.length === 1 ? 'reserva pendiente' : 'reservas pendientes'} para liberar esas horas.</span>
+                </label>
+              )}
+              <label className="block text-xs font-semibold">Motivo (opcional, solo lo ves tú)
+                <input value={blockReason} maxLength={200} onChange={(e) => setBlockReason(e.target.value)} placeholder="Ej.: aparta horas y no paga"
+                  className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+              </label>
+              {blockError && <p className="text-xs font-semibold text-red-600">{blockError}</p>}
+              <div className="flex gap-2">
+                <button type="button" disabled={blockBusy} onClick={() => setBlockTarget(null)} className="flex-1 rounded-xl border border-border py-2.5 text-sm font-bold hover:bg-secondary cursor-pointer">Cancelar</button>
+                <button type="button" disabled={blockBusy} onClick={() => void confirmBlockPhone()} className="flex-1 rounded-xl bg-rose-600 hover:bg-rose-700 text-white py-2.5 text-sm font-bold inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60">
+                  {blockBusy ? <Loader2 size={16} className="animate-spin" /> : <Ban size={16} />} Bloquear
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {showBlockedList && (
+        <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowBlockedList(false)}>
+          <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-3xl bg-card border border-border shadow-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-black text-base flex items-center gap-2"><Ban size={18} className="text-rose-600" /> Celulares bloqueados</h3>
+                <p className="text-xs text-muted-foreground mt-1">No pueden enviar reservas en línea a tu complejo. Para bloquear uno, usa el botón «Bloquear» junto al celular en una reserva.</p>
+              </div>
+              <button type="button" onClick={() => setShowBlockedList(false)} aria-label="Cerrar" className="p-1.5 rounded-lg hover:bg-secondary cursor-pointer"><X size={16} /></button>
+            </div>
+            {blockedList.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">No tienes celulares bloqueados.</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {blockedList.map(b => (
+                  <li key={b.company_id + b.phone} className="py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-bold text-sm">{b.phone}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {b.company_name ? `${b.company_name} · ` : ''}desde {new Date(b.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'America/Bogota' })}
+                        {b.reason ? ` · ${b.reason}` : ''}
+                      </p>
+                    </div>
+                    <button type="button" onClick={() => void unblockPhone(b.company_id, b.phone)}
+                      className="shrink-0 inline-flex items-center gap-1 rounded-xl border border-border px-3 py-1.5 text-xs font-bold hover:bg-secondary cursor-pointer">
+                      <ShieldOff size={13} /> Desbloquear
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
+      {statusToast && (
+        <div className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[1200] w-[calc(100%-2rem)] max-w-md animate-in slide-in-from-bottom-4 fade-in duration-300" role="status" aria-live="polite">
+          <div className={`rounded-2xl border shadow-2xl px-4 py-3 flex items-center gap-3 backdrop-blur-xl ${statusToast.state === 'error'
+            ? 'bg-red-50/95 border-red-300 text-red-900 dark:bg-red-950/90 dark:border-red-800 dark:text-red-100'
+            : statusToast.color === 'rose'
+              ? 'bg-rose-50/95 border-rose-200 text-rose-900 dark:bg-rose-950/90 dark:border-rose-800 dark:text-rose-100'
+              : statusToast.color === 'sky'
+                ? 'bg-sky-50/95 border-sky-200 text-sky-900 dark:bg-sky-950/90 dark:border-sky-800 dark:text-sky-100'
+                : 'bg-emerald-50/95 border-emerald-200 text-emerald-900 dark:bg-emerald-950/90 dark:border-emerald-800 dark:text-emerald-100'}`}>
+            <div className="shrink-0">
+              {statusToast.state === 'saving' ? <Loader2 size={20} className="animate-spin" />
+                : statusToast.state === 'error' ? <AlertTriangle size={20} />
+                : statusToast.color === 'rose' ? <XCircle size={20} /> : <CheckCircle size={20} />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-black leading-tight">
+                {statusToast.state === 'error' ? 'No se guardó el cambio' : statusToast.text.replace(/\s*Moviendo a .*$/, '')}
+              </p>
+              <p className="text-xs opacity-80 mt-0.5 leading-snug">
+                {statusToast.state === 'saving' && 'Guardando… puedes seguir trabajando.'}
+                {statusToast.state === 'saved' && `${statusToast.customerName ? statusToast.customerName + ' · ' : ''}Ahora está en «${statusToast.targetLabel}».`}
+                {statusToast.state === 'error' && (statusToast.error || 'Inténtalo de nuevo.') + ' La lista se recargó.'}
+              </p>
+            </div>
+            {statusToast.state !== 'error' && filterStatus !== statusToast.targetTab && (
+              <button
+                type="button"
+                onClick={() => { setFilterStatus(statusToast.targetTab); setStatusToast(null); }}
+                className="shrink-0 text-xs font-black px-3 py-1.5 rounded-xl bg-white/70 dark:bg-white/10 border border-black/10 dark:border-white/20 hover:bg-white"
+              >
+                Ver
+              </button>
+            )}
+            <button type="button" onClick={() => setStatusToast(null)} aria-label="Cerrar aviso" className="shrink-0 p-1 rounded-lg opacity-70 hover:opacity-100">
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {liveNotification && (
         <aside
           role="status"

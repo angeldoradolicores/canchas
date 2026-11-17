@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { ChevronDown, Gift, MapPin, ZoomIn } from 'lucide-react';
+import { ChevronDown, ExternalLink, Gift, History, IdCard, MapPin, Sparkles, Swords, ZoomIn } from 'lucide-react';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
 
 export const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -14,7 +14,7 @@ export type Promotion = {
   redeem_days: number | null;
   weekdays: number[];
   ends_at: string;
-  period?: 'week' | 'month' | 'campaign';
+  period?: 'day' | 'week' | 'biweek' | 'month' | 'campaign';
   image_url?: string | null;
   redeem_pitch_ids?: string[] | null;
   redeem_pitches?: { id: string; name: string }[] | null;
@@ -42,6 +42,22 @@ export function describePromotion(p: Promotion) {
   const reservas = plural(p.required_bookings, 'reserva', 'reservas');
   const horas = plural(p.gift_hours, 'hora gratis', 'horas gratis');
   const days = describeDays(p.weekdays);
+  if (p.period === 'day') {
+    return {
+      headline: `Reserva ${reservas} el mismo día y gana ${horas}`,
+      usage: p.redeem_days
+        ? `Úsalas ${days} durante los ${plural(p.redeem_days, 'día', 'días')} siguientes.`
+        : `Úsalas ${days} ese mismo día.`,
+    };
+  }
+  if (p.period === 'biweek') {
+    return {
+      headline: `Reserva ${reservas} en la misma quincena y gana ${horas}`,
+      usage: p.redeem_days
+        ? `Úsalas ${days} durante los ${plural(p.redeem_days, 'día', 'días')} siguientes.`
+        : `Úsalas ${days} antes de que termine esa quincena (del 1 al 15 o del 16 a fin de mes).`,
+    };
+  }
   if (p.period === 'week') {
     return {
       headline: `Reserva ${reservas} en la misma semana y gana ${horas}`,
@@ -64,16 +80,24 @@ export function describePromotion(p: Promotion) {
   };
 }
 
-export function PromotionCard({ p, compact = false }: { p: Promotion; compact?: boolean }) {
+/** Columnas según cuántas tarjetas hay: con 1 ocupa todo el ancho, con 2 se reparten a la mitad. */
+export function sectionGridClass(count: number) {
+  if (count <= 1) return 'grid grid-cols-1 gap-4 w-full min-w-0';
+  if (count === 2) return 'grid grid-cols-1 sm:grid-cols-2 gap-4 w-full min-w-0';
+  return 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full min-w-0';
+}
+
+export function PromotionCard({ p, compact = false, wide = false }: { p: Promotion; compact?: boolean; wide?: boolean }) {
   const d = describePromotion(p);
   const [zoom, setZoom] = useState(false);
+  const horizontal = wide && !compact && !!p.image_url;
   return (
-    <article className="rounded-2xl bg-card border border-border overflow-hidden min-w-0 flex flex-col h-full">
+    <article className={`rounded-2xl bg-card border border-border overflow-hidden min-w-0 flex flex-col h-full ${horizontal ? 'md:flex-row' : ''}`}>
       {p.image_url && (
         <button
           type="button"
           onClick={() => setZoom(true)}
-          className={`group relative block w-full bg-secondary cursor-zoom-in ${compact ? 'aspect-[21/9]' : 'aspect-[16/9]'}`}
+          className={`group relative block w-full bg-secondary cursor-zoom-in shrink-0 ${compact ? 'aspect-[21/9]' : 'aspect-[16/9]'} ${horizontal ? 'md:w-1/2 lg:w-[45%] md:aspect-auto md:min-h-[260px]' : ''}`}
           aria-label={`Ver imagen de ${p.title}`}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -84,9 +108,9 @@ export function PromotionCard({ p, compact = false }: { p: Promotion; compact?: 
           </span>
         </button>
       )}
-      <div className="p-3.5 sm:p-4 space-y-1.5 flex-1">
-        <h3 className="font-bold break-words text-foreground">{p.title}</h3>
-        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">{d.headline}.</p>
+      <div className={`p-3.5 sm:p-4 space-y-1.5 flex-1 ${wide && !compact ? 'md:p-6 md:space-y-2.5 md:flex md:flex-col md:justify-center' : ''}`}>
+        <h3 className={`font-bold break-words text-foreground ${wide && !compact ? 'md:text-xl' : ''}`}>{p.title}</h3>
+        <p className={`text-sm font-semibold text-emerald-700 dark:text-emerald-400 ${wide && !compact ? 'md:text-lg' : ''}`}>{d.headline}.</p>
         <p className="text-xs text-muted-foreground">{d.usage}</p>
         <p className="text-xs text-foreground flex items-start gap-1">
           <MapPin size={13} className="text-emerald-600 shrink-0 mt-0.5" />
@@ -126,8 +150,8 @@ export function PitchPromotions({ companyId }: { companyId: string }) {
       <h2 className="text-lg sm:text-xl font-bold mb-4 flex items-center gap-2 text-foreground">
         <Gift size={20} className="text-emerald-600 shrink-0" /> Promociones del complejo
       </h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full min-w-0">
-        {items.map(p => <PromotionCard key={p.id} p={p} />)}
+      <div className={sectionGridClass(items.length)}>
+        {items.map(p => <PromotionCard key={p.id} p={p} wide={items.length === 1} />)}
       </div>
     </section>
   );
@@ -137,7 +161,7 @@ export function PitchPromotions({ companyId }: { companyId: string }) {
 export function BookingPromotionsTab({ companyId, isLoggedIn }: { companyId: string; isLoggedIn: boolean }) {
   const items = useCompanyPromotions(companyId);
   const [open, setOpen] = useState(false);
-  if (!items.length) return null;
+  if (!items.length) return isLoggedIn ? null : <GuestSignupCallout standalone />;
 
   return (
     <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 overflow-hidden w-full min-w-0">
@@ -170,19 +194,58 @@ export function BookingPromotionsTab({ companyId, isLoggedIn }: { companyId: str
               las reservas que el complejo registró con tu número.
             </p>
           ) : (
-            <div className="rounded-xl bg-emerald-600/10 border border-emerald-600/20 p-3 text-xs space-y-1.5">
-              <p className="font-bold text-foreground">Regístrate para no perder tu conteo</p>
-              <p className="text-muted-foreground">
-                Como invitado tu reserva suma con el celular que escribas, pero solo con una cuenta puedes ver y canjear tus horas
-                gratis. Cuando reserves con tu cuenta y ese mismo celular, el conteo anterior se une a tu cuenta.
-              </p>
-              <a className="font-bold underline text-emerald-700 dark:text-emerald-400" href="/register" target="_blank" rel="noopener noreferrer">
-                Crear mi cuenta en otra pestaña
-              </a>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Como invitado tu reserva suma con el celular que escribas. Para ver y canjear tus horas gratis necesitas una cuenta (mira abajo).
+            </p>
           )}
         </div>
       )}
+      {!isLoggedIn && <GuestSignupCallout />}
     </section>
+  );
+}
+
+/** Invitación visible a crear cuenta: se muestra siempre al invitado, sin tener que abrir la pestaña. */
+export function GuestSignupCallout({ standalone = false }: { standalone?: boolean }) {
+  const perks = [
+    { icon: <Gift size={15} />, text: 'Acumula reservas y canjea tus horas gratis' },
+    { icon: <Swords size={15} />, text: 'Crea retos y encuentra rivales en la comunidad' },
+    { icon: <IdCard size={15} />, text: 'Tu tarjeta de jugador con tus partidos y estadísticas' },
+    { icon: <History size={15} />, text: 'Todas tus reservas y comprobantes en un solo lugar' },
+  ];
+  return (
+    <div className={`${standalone ? 'w-full min-w-0' : 'm-3.5 mt-0 sm:m-4 sm:mt-0'} rounded-2xl overflow-hidden border-2 border-emerald-600 bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-lg shadow-emerald-900/20`}>
+      <div className="p-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <span className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+            <Sparkles size={20} />
+          </span>
+          <div className="min-w-0">
+            <p className="font-black text-base leading-tight">{standalone ? 'Crea tu cuenta gratis y juega más' : 'Regístrate gratis y no pierdas tu conteo'}</p>
+            <p className="text-xs text-white/85 mt-1 leading-snug">
+              Como invitado tu reserva suma con tu celular, pero solo con una cuenta puedes ver y canjear tus horas gratis.
+              Al crearla con ese mismo celular, el conteo anterior se une a tu cuenta.
+            </p>
+          </div>
+        </div>
+        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {perks.map(p => (
+            <li key={p.text} className="flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold">
+              <span className="shrink-0 text-emerald-100">{p.icon}</span>
+              <span>{p.text}</span>
+            </li>
+          ))}
+        </ul>
+        <a
+          href="/register"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-2 w-full rounded-xl bg-white text-emerald-800 font-black text-sm py-3 hover:bg-emerald-50 transition-colors"
+        >
+          Crear mi cuenta gratis <ExternalLink size={14} />
+        </a>
+        <p className="text-[11px] text-center text-white/75">Se abre en otra pestaña: no pierdes la reserva que estás haciendo.</p>
+      </div>
+    </div>
   );
 }

@@ -18,3 +18,5 @@ node_modules
 *.log
 npm-debug.log*
 tsconfig.tsbuildinfo
+# Resultados de pruebas de carga
+loadtest/resultados/

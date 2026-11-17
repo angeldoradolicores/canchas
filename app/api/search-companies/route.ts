@@ -20,8 +20,13 @@ export async function GET(req: NextRequest) {
     return createRateLimitErrorResponse(rateLimit);
   }
 
-  const q    = req.nextUrl.searchParams.get('q')    || '';
-  const city = req.nextUrl.searchParams.get('city') || '';
+  // Solo letras, números, espacios y signos comunes de nombres. Además de evitar comodines de
+  // ILIKE (% _), impide que textos con forma de SQL hagan que el firewall de Supabase bloquee
+  // la consulta (antes eso terminaba en error 500).
+  const clean = (v: string | null, max: number) =>
+    (v || '').normalize('NFC').replace(/[^\p{L}\p{N} .&'-]/gu, ' ').replace(/'|-{2,}/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+  const q    = clean(req.nextUrl.searchParams.get('q'), 60);
+  const city = clean(req.nextUrl.searchParams.get('city'), 40);
 
   // Búsquedas muy cortas: responder sin tocar la DB
   if (q.length < 2) {
@@ -79,7 +84,8 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (err: any) {
-    console.error('[search-companies] Exception:', err);
-    return NextResponse.json([], { status: 500 });
+    console.error('[search-companies] Exception:', err?.message || err);
+    // Sin resultados en vez de 500: una búsqueda fallida no debe parecer una caída del servidor.
+    return NextResponse.json([], { status: 200, headers: { 'Cache-Control': 'no-store' } });
   }
 }

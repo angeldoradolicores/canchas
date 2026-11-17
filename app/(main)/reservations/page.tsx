@@ -3,11 +3,12 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth-context';
-import { Loader2, CalendarDays, MapPin, X, Share2, Ticket, Clock, CheckCircle, XCircle, AlertCircle, LayoutGrid, ChevronDown, Sparkles, Download, Info, Sparkles as SparklesIcon, CalendarCheck2 } from 'lucide-react';
+import { Loader2, CalendarDays, MapPin, X, Share2, Ticket, Clock, CheckCircle, XCircle, AlertCircle, LayoutGrid, ChevronDown, Sparkles, Download, Info, Sparkles as SparklesIcon, CalendarCheck2, Search } from 'lucide-react';
 import Link from 'next/link';
 import { toPng } from 'html-to-image';
 
-type DateFilterType = 'todas' | 'hoy' | 'pasados_3' | 'pasados_7' | 'historial';
+type DateFilterType = 'todas' | 'hoy' | 'proximas' | 'pasados_3' | 'pasados_7' | 'historial' | 'dia';
+type DateBasis = 'partido' | 'reserva';
 
 interface BookingBanner {
   type: 'today' | 'other_date';
@@ -19,6 +20,9 @@ interface BookingBanner {
 export default function UserReservationsPage() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [dateFilter, setDateFilter] = useState<DateFilterType>('hoy');
+  const [dateBasis, setDateBasis] = useState<DateBasis>('partido');
+  const [exactDay, setExactDay] = useState('');
+  const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<'todas' | 'confirmed' | 'pending' | 'cancelled'>('todas');
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
@@ -344,25 +348,37 @@ export default function UserReservationsPage() {
     },
   };
 
+  const normalizedSearch = searchText.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const filteredBookings = bookings.filter(b => {
     if (dateFilter === 'todas') return true;
 
-    const bookingDate = new Date(b.start_time);
+    // El jugador puede filtrar por el día del partido o por el día en que hizo la reserva.
+    const rawDate = dateBasis === 'reserva' ? (b.created_at || b.start_time) : b.start_time;
+    const bookingDay = new Date(rawDate);
+    bookingDay.setHours(0, 0, 0, 0);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const bookingDay = new Date(bookingDate);
-    bookingDay.setHours(0, 0, 0, 0);
+    if (dateFilter === 'dia') {
+      if (!exactDay) return true;
+      const [y, m, d] = exactDay.split('-').map(Number);
+      return bookingDay.getTime() === new Date(y, m - 1, d).getTime();
+    }
 
-    {/* Cambiamos el orden de la resta para contar días hacia atrás de forma positiva */ }
-    const diffTime = today.getTime() - bookingDay.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    // Días hacia atrás (positivo = pasado).
+    const diffDays = Math.round((today.getTime() - bookingDay.getTime()) / (1000 * 60 * 60 * 24));
 
     if (dateFilter === 'hoy') return diffDays === 0;
+    if (dateFilter === 'proximas') return diffDays <= 0;
     if (dateFilter === 'pasados_3') return diffDays >= 0 && diffDays <= 3;
     if (dateFilter === 'pasados_7') return diffDays >= 0 && diffDays <= 7;
     if (dateFilter === 'historial') return diffDays > 7;
     return true;
+  }).filter(b => {
+    if (!normalizedSearch) return true;
+    const haystack = [b.pitches?.name, b.pitches?.companies?.name, b.pitches?.companies?.zone, b.pitches?.companies?.address]
+      .filter(Boolean).join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return haystack.includes(normalizedSearch);
   }).filter(b => {
     if (statusFilter === 'todas') return true;
     return b.status === statusFilter;
@@ -753,35 +769,86 @@ export default function UserReservationsPage() {
           </div>
         </div>
       </div>
-      {/* Selector de Fecha Estilizado */}
-      <div className="flex items-center justify-between sm:justify-end gap-2 pt-1 px-1">
-        <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#4D715B] flex items-center gap-1">
-        </span>
+      {/* Búsqueda y filtro por fecha */}
+      <div className="page-filter-bar bg-[#CDE0D1]/70 border border-[#BACFC0] rounded-2xl p-3 flex flex-col gap-3">
+        <div className="relative">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4D715B] pointer-events-none" />
+          <input
+            type="search"
+            value={searchText}
+            onChange={(e) => { setSearchText(e.target.value); setBannerDismissed(true); }}
+            placeholder="Buscar por complejo, cancha o zona"
+            className="w-full rounded-xl border border-[#BACFC0] bg-[#DCE7DE] pl-9 pr-3 py-2 text-sm font-semibold text-[#054D27] placeholder:text-[#4D715B]/70 outline-none focus:ring-2 focus:ring-[#008744]/20"
+          />
+        </div>
 
-        <div className="relative inline-block min-w-[170px]">
-          <select
-            value={dateFilter}
-            onChange={(e) => { setDateFilter(e.target.value as DateFilterType); setBannerDismissed(true); }}
-            className="page-filter-bar page-header-text-primary w-full appearance-none cursor-pointer outline-none text-xs font-black rounded-xl pl-3 pr-8 py-2 transition-all shadow-xs border bg-[#CDE0D1]/70 text-[#054D27] border-[#BACFC0] hover:bg-[#CDE0D1] focus:ring-2 focus:ring-[#008744]/20"
-          >
-            <option value="todas" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">
-              Cualquier fecha
-            </option>
-            <option value="hoy" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">
-              Hoy
-            </option>
-            <option value="pasados_3" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">
-              Últimos 3 días
-            </option>
-            <option value="pasados_7" className="bg-[#DCE7DE] text-[#054D27] font-bold py-1.5">
-              Últimos 7 días
-            </option>
-          </select>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <div className="flex rounded-xl bg-[#DCE7DE]/60 border border-[#BACFC0] p-0.5 shrink-0" role="group" aria-label="Qué fecha usar">
+            {([
+              { id: 'partido', label: 'Fecha del partido' },
+              { id: 'reserva', label: 'Cuándo reservé' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => {
+                  setDateBasis(opt.id);
+                  setBannerDismissed(true);
+                  if (opt.id === 'reserva' && dateFilter === 'proximas') setDateFilter('pasados_7');
+                }}
+                className={`flex-1 px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-black transition-colors whitespace-nowrap ${dateBasis === opt.id ? 'bg-[#054D27] text-white shadow-xs' : 'text-[#4D715B] hover:text-[#054D27]'}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
 
-          <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none text-[#054D27]">
-            <ChevronDown size={14} strokeWidth={2.5} />
+          <div className="flex gap-2 flex-1">
+            <div className="relative flex-1 min-w-[150px]">
+              <select
+                value={dateFilter}
+                onChange={(e) => { setDateFilter(e.target.value as DateFilterType); setBannerDismissed(true); }}
+                className="page-header-text-primary w-full appearance-none cursor-pointer outline-none text-xs font-black rounded-xl pl-3 pr-8 py-2 border bg-[#DCE7DE] text-[#054D27] border-[#BACFC0] focus:ring-2 focus:ring-[#008744]/20"
+              >
+                <option value="todas">Cualquier fecha</option>
+                <option value="hoy">Hoy</option>
+                {dateBasis === 'partido' && <option value="proximas">Próximas (hoy en adelante)</option>}
+                <option value="pasados_3">Últimos 3 días</option>
+                <option value="pasados_7">Últimos 7 días</option>
+                <option value="historial">Hace más de 7 días</option>
+                <option value="dia">Elegir un día…</option>
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none text-[#054D27]">
+                <ChevronDown size={14} strokeWidth={2.5} />
+              </div>
+            </div>
+            {dateFilter === 'dia' && (
+              <input
+                type="date"
+                value={exactDay}
+                onChange={(e) => setExactDay(e.target.value)}
+                aria-label={dateBasis === 'reserva' ? 'Día en que reservé' : 'Día del partido'}
+                className="rounded-xl border border-[#BACFC0] bg-[#DCE7DE] px-2 py-1.5 text-xs font-black text-[#054D27] outline-none focus:ring-2 focus:ring-[#008744]/20"
+              />
+            )}
           </div>
         </div>
+
+        {(normalizedSearch || dateFilter !== 'hoy' || dateBasis !== 'partido') && (
+          <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-[#4D715B]">
+            <span>
+              {groupedMyBookings.length} {groupedMyBookings.length === 1 ? 'resultado' : 'resultados'}
+              {dateBasis === 'reserva' ? ' según el día en que reservaste' : ''}
+            </span>
+            <button
+              type="button"
+              onClick={() => { setSearchText(''); setDateBasis('partido'); setDateFilter('todas'); setExactDay(''); }}
+              className="underline underline-offset-2 hover:text-[#054D27]"
+            >
+              Limpiar filtros
+            </button>
+          </div>
+        )}
       </div>
 
 
@@ -796,6 +863,19 @@ export default function UserReservationsPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-8">
+          {groupedMyBookings.length === 0 && (
+            <div className="dashboard-card text-center py-12 border-dashed border-2">
+              <p className="font-bold text-sm mb-1">No hay reservas con estos filtros</p>
+              <p className="text-xs text-muted-foreground mb-4">Prueba otra fecha, cambia entre «Fecha del partido» y «Cuándo reservé», o borra la búsqueda.</p>
+              <button
+                type="button"
+                onClick={() => { setSearchText(''); setDateBasis('partido'); setDateFilter('todas'); setExactDay(''); setStatusFilter('todas'); }}
+                className="btn-primary text-xs px-4 py-2"
+              >
+                Ver todas mis reservas
+              </button>
+            </div>
+          )}
           <SectionGroup
             title="Aprobadas"
             items={confirmed}

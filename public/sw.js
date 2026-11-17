@@ -1,5 +1,5 @@
 // Service Worker para Cancheros PWA (Acceso Directo y Soporte Offline)
-const CACHE_NAME = 'cancheros-pwa-v2';
+const CACHE_NAME = 'cancheros-pwa-v3';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -139,8 +139,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || '⚽ Cancheros: Reserva por aprobar';
   const options = {
     body: data.body || 'Un cliente subió su comprobante de pago y espera tu aprobación.',
-    icon: data.icon || '/icon-192x192.png',
-    badge: data.badge || '/icon-96x96.png',
+    icon: data.icon || '/icon-192x192.png?v=4',
+    badge: '/badge-96.png',
     tag: data.tag || 'booking-pending-alert',
     renotify: true,
     requireInteraction: true,

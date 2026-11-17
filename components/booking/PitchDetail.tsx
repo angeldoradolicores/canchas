@@ -1,6 +1,6 @@
 'use client';
 
-import { PitchPromotions } from './ComplexPromotions';
+import { PitchPromotions, sectionGridClass } from './ComplexPromotions';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowRight, Clock3, Heart, MapPin, ShieldCheck, CalendarDays, Calendar, CheckCircle, Loader2, Grid, X, ChevronLeft, ChevronRight, Trophy, CheckCircle2, Phone, Users, Building2, Layers, LandPlot, Check, Copy, Warehouse, Sun } from 'lucide-react';
 import { Pitch } from '@/lib/types';
@@ -377,23 +377,26 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
     return `${h12}:00 ${ampm}`;
   }
   const toggleTime = (slot: string) => {
-    if (!isOwnPitch && isSlotPassed(selectedDate, slot, 5)) {
+    if (!isOwnPitch && isSlotPassed(selectedDate, slot)) {
       setAlertState({
         isOpen: true,
         type: 'warning',
         title: '⏰ Horario no disponible',
-        message: 'Esta hora ya ha pasado (límite de 5 minutos de gracia superado). Por favor elige un horario posterior para continuar.',
+        message: 'Esta hora ya pasó la tolerancia para reservar en línea. Elige un horario posterior o comunícate con el complejo.',
       });
       return;
     }
     if (selectedTimes.includes(slot)) {
       setSelectedTimes(prev => prev.filter(s => s !== slot));
-    } else if (selectedTimes.length >= 4) {
+    } else if (selectedTimes.length >= (user ? 4 : 2)) {
       setAlertState({
         isOpen: true,
         type: 'warning',
-        title: '⏰ Límite de horas alcanzado',
-        message: 'Solo puedes reservar un máximo de 4 horas por transacción. Si necesitas más tiempo, crea una nueva reserva.',
+        title: user ? '⏰ Límite de horas alcanzado' : '⏰ Máximo 2 horas como invitado',
+        message: user
+          ? 'Solo puedes reservar un máximo de 4 horas por transacción. Si necesitas más tiempo, crea una nueva reserva.'
+          : 'Como invitado puedes reservar hasta 2 horas a la vez. Crea tu cuenta gratis para reservar hasta 4 horas, acumular horas gratis y crear retos.',
+        ...(user ? {} : { showCancel: true, cancelText: 'Seguir como invitado', confirmText: 'Crear mi cuenta', onConfirm: () => { window.open('/register', '_blank', 'noopener'); } }),
       });
     } else {
       setSelectedTimes(prev => [...prev, slot].sort());
@@ -1282,7 +1285,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                         const ampm = hNum < 12 ? 'am' : 'pm';
                         const h12 = hNum === 0 ? 12 : hNum > 12 ? hNum - 12 : hNum;
                         const slotPrice = getSlotPrice(slot);
-                        const isPassed = isSlotPassed(selectedDate, slot, 5);
+                        const isPassed = isSlotPassed(selectedDate, slot);
 
                         let secondsLeft = 0;
                         if (isDraft && slotData?.expires_at) {
@@ -1318,7 +1321,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                             type="button"
                             onClick={() => toggleTime(slot)}
                             className={`p-2 sm:p-2 rounded-2xl sm:rounded-xl border text-center transition-all select-none font-bold text-[11px] sm:text-xs relative overflow-hidden ${btnClass}`}
-                            title={isPassed ? (isOwnPitch ? 'Horario en curso o transcurrido (habilitado para dueño)' : 'Esta hora ya ha pasado (límite de 5 minutos de gracia superado)') : undefined}
+                            title={isPassed ? (isOwnPitch ? 'Horario en curso o transcurrido (habilitado para dueño)' : 'Esta hora ya pasó la tolerancia para reservar en línea') : undefined}
                           >
                             <span className="block leading-tight">{h12}:00</span>
                             <span className="text-[9px] uppercase opacity-75">{ampm}</span>
@@ -1387,7 +1390,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
             )}
 
             {/* Advertencia para Dueño reservando horas pasadas o en curso */}
-            {isOwnPitch && selectedTimes.some(slot => isSlotPassed(selectedDate, slot, 5)) && (
+            {isOwnPitch && selectedTimes.some(slot => isSlotPassed(selectedDate, slot)) && (
               <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 dark:text-amber-400 text-xs flex items-center gap-2.5 font-medium">
                 <span className="text-base shrink-0">⚠️</span>
                 <span><strong>Modo Dueño/Administrador:</strong> Has seleccionado horarios que ya iniciaron o pasaron. Cuentas con permiso para agendarlos en tu propia cancha.</span>
@@ -1600,10 +1603,10 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
               <h2 className="text-lg sm:text-xl font-bold mb-4 flex items-center gap-2 text-foreground">
                 <Trophy size={20} className="text-emerald-600 shrink-0" /> Campeonatos del complejo
               </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full min-w-0">
+              <div className={sectionGridClass(tournaments.length)}>
                 {tournaments.map(t => (
-                  <Link href="/tournaments" key={t.id} className="group rounded-2xl bg-card border border-border overflow-hidden min-w-0 flex flex-col hover:border-emerald-500/50 transition-colors">
-                    <div className="relative aspect-[16/9] w-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white">
+                  <Link href="/tournaments" key={t.id} className={`group rounded-2xl bg-card border border-border overflow-hidden min-w-0 flex flex-col hover:border-emerald-500/50 transition-colors ${tournaments.length === 1 ? 'md:flex-row' : ''}`}>
+                    <div className={`relative aspect-[16/9] w-full shrink-0 ${tournaments.length === 1 ? 'md:w-1/2 lg:w-[45%] md:aspect-auto md:min-h-[260px]' : ''} bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white`}>
                       {t.media_urls?.[0] ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={t.media_urls[0]} alt={t.name} loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
@@ -1611,9 +1614,9 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                         <Trophy size={40} className="opacity-90" />
                       )}
                     </div>
-                    <div className="p-3.5 sm:p-4 flex items-start justify-between gap-3 flex-1">
+                    <div className={`p-3.5 sm:p-4 flex items-start justify-between gap-3 flex-1 ${tournaments.length === 1 ? 'md:p-6 md:items-center' : ''}`}>
                       <div className="min-w-0">
-                        <h3 className="font-bold capitalize text-foreground break-words group-hover:text-emerald-700 dark:group-hover:text-emerald-400">{t.name}</h3>
+                        <h3 className={`font-bold capitalize text-foreground break-words ${tournaments.length === 1 ? 'md:text-xl' : ''} group-hover:text-emerald-700 dark:group-hover:text-emerald-400`}>{t.name}</h3>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           Inicia: {t.start_date ? new Date(t.start_date.slice(0, 10) + 'T12:00:00').toLocaleDateString('es-CO') : 'Fecha por anunciar'}
                         </p>
@@ -1638,10 +1641,10 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
               <h2 className="text-lg sm:text-xl font-bold mb-4 flex items-center gap-2 text-foreground">
                 <Users size={20} className="text-primary shrink-0" /> Escuelas del complejo
               </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full min-w-0">
+              <div className={sectionGridClass(schools.length)}>
                 {schools.map(s => (
-                  <Link href="/schools" key={s.id} className="group rounded-2xl bg-card border border-border overflow-hidden min-w-0 flex flex-col hover:border-primary/50 transition-colors">
-                    <div className="relative aspect-[16/9] w-full bg-secondary flex items-center justify-center text-muted-foreground">
+                  <Link href="/schools" key={s.id} className={`group rounded-2xl bg-card border border-border overflow-hidden min-w-0 flex flex-col hover:border-primary/50 transition-colors ${schools.length === 1 ? 'md:flex-row' : ''}`}>
+                    <div className={`relative aspect-[16/9] w-full shrink-0 ${schools.length === 1 ? 'md:w-1/2 lg:w-[45%] md:aspect-auto md:min-h-[260px]' : ''} bg-secondary flex items-center justify-center text-muted-foreground`}>
                       {s.logo_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={s.logo_url} alt={s.name} loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
@@ -1649,9 +1652,9 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                         <Users size={40} />
                       )}
                     </div>
-                    <div className="p-3.5 sm:p-4 space-y-1.5 flex-1">
-                      <h3 className="font-bold capitalize text-foreground break-words group-hover:text-primary">{s.name}</h3>
-                      <p className="text-xs text-muted-foreground line-clamp-2">{s.description || 'Formación deportiva'}</p>
+                    <div className={`p-3.5 sm:p-4 space-y-1.5 flex-1 ${schools.length === 1 ? 'md:p-6 md:space-y-2.5 md:flex md:flex-col md:justify-center' : ''}`}>
+                      <h3 className={`font-bold capitalize text-foreground break-words group-hover:text-primary ${schools.length === 1 ? 'md:text-xl' : ''}`}>{s.name}</h3>
+                      <p className={`text-xs text-muted-foreground ${schools.length === 1 ? 'md:text-sm md:line-clamp-4' : 'line-clamp-2'}`}>{s.description || 'Formación deportiva'}</p>
                       <span className="inline-block text-[11px] font-bold rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 px-2 py-0.5">
                         Categorías: {s.categories || 'General'}
                       </span>

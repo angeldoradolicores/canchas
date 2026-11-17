@@ -577,7 +577,7 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
   // Limpiar horas seleccionadas si la fecha cambia y alguna ya pasó
   useEffect(() => {
     if (selectedDate && selectedHours.length > 0) {
-      setSelectedHours(prev => prev.filter(slot => !isSlotPassed(selectedDate, slot, 5)));
+      setSelectedHours(prev => prev.filter(slot => !isSlotPassed(selectedDate, slot)));
     }
   }, [selectedDate]);
 
@@ -1320,32 +1320,35 @@ export function ExploreView({ onBook, onOpen }: ExploreViewProps) {
                           const hNum = parseInt(slot.split(':')[0]);
                           const ampm = hNum < 12 ? 'am' : 'pm';
                           const h12 = hNum === 0 ? 12 : hNum > 12 ? hNum - 12 : hNum;
-                          const isPassed = isSlotPassed(selectedDate, slot, 5);
+                          const isPassed = isSlotPassed(selectedDate, slot);
 
                           return (
                             <button
                               key={slot}
                               type="button"
                               disabled={isPassed}
-                              title={isPassed ? 'Esta hora ya ha pasado (límite de 5 minutos de gracia superado)' : undefined}
+                              title={isPassed ? 'Esta hora ya pasó la tolerancia para reservar en línea' : undefined}
                               onClick={() => {
                                 if (isPassed) {
                                   setAlertState({
                                     isOpen: true,
                                     type: 'warning',
                                     title: '⏰ Horario no disponible',
-                                    message: 'Esta hora ya ha pasado (límite de 5 minutos de gracia superado). Por favor elige un horario posterior.',
+                                    message: 'Esta hora ya pasó la tolerancia para reservar en línea. Elige un horario posterior o comunícate con el complejo.',
                                   });
                                   return;
                                 }
                                 if (selectedHours.includes(slot)) {
                                   setSelectedHours(prev => prev.filter(x => x !== slot));
-                                } else if (selectedHours.length >= 4) {
+                                } else if (selectedHours.length >= (user ? 4 : 2)) {
                                   setAlertState({
                                     isOpen: true,
                                     type: 'warning',
-                                    title: '⏰ Límite de horas alcanzado',
-                                    message: 'Solo puedes reservar un máximo de 4 horas por transacción. Si necesitas más tiempo, crea una nueva reserva.',
+                                    title: user ? '⏰ Límite de horas alcanzado' : '⏰ Máximo 2 horas como invitado',
+                                    message: user
+                                      ? 'Solo puedes reservar un máximo de 4 horas por transacción. Si necesitas más tiempo, crea una nueva reserva.'
+                                      : 'Como invitado puedes reservar hasta 2 horas a la vez. Crea tu cuenta gratis para reservar hasta 4 horas, acumular horas gratis y crear retos.',
+                                    ...(user ? {} : { showCancel: true, cancelText: 'Seguir como invitado', confirmText: 'Crear mi cuenta', onConfirm: () => { window.open('/register', '_blank', 'noopener'); } }),
                                   });
                                 } else {
                                   setSelectedHours(prev => [...prev, slot]);

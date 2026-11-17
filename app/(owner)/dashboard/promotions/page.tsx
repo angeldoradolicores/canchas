@@ -1,14 +1,30 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { Gift, ImagePlus, Loader2, Trash2, CalendarRange, CalendarDays, Sparkles } from 'lucide-react';
+import { Gift, ImagePlus, Loader2, Trash2, CalendarRange, CalendarDays, CalendarCheck, Clock, Sparkles, Info, StopCircle } from 'lucide-react';
 import { dayNames, PromotionCard, type Promotion } from '@/components/booking/ComplexPromotions';
 
-type Period = 'week' | 'month' | 'campaign';
+type Period = 'day' | 'week' | 'biweek' | 'month' | 'campaign';
+
+const PERIOD_OPTIONS: { value: Period; label: string; help: string; word: string }[] = [
+  { value: 'day', label: 'El mismo día', help: 'Ej.: si reserva 2 horas el mismo día, gana 1 hora gratis. El conteo vuelve a cero cada día.', word: 'día' },
+  { value: 'week', label: 'Cada semana (lunes a domingo)', help: 'Suman las reservas de lunes a domingo. Cada lunes empieza un conteo nuevo.', word: 'semana' },
+  { value: 'biweek', label: 'Cada quincena (1–15 y 16–fin de mes)', help: 'Ideal para quienes pagan por quincena. El conteo vuelve a cero el 1 y el 16 de cada mes.', word: 'quincena' },
+  { value: 'month', label: 'Cada mes', help: 'Suman todas las reservas del mes calendario. El día 1 empieza un conteo nuevo.', word: 'mes' },
+  { value: 'campaign', label: 'Durante toda la promoción', help: 'Las reservas se acumulan desde hoy hasta que termine la promoción, sin reiniciarse. Por cada meta cumplida gana el regalo.', word: 'promoción' },
+];
 
 const TEMPLATES: { key: string; label: string; hint: string; icon: any; values: { title: string; period: Period; required: number; hours: number; weekdays: number[]; untilPeriodEnd: boolean; days: number } }[] = [
   {
     key: 'week', label: 'Semanal', hint: '2 reservas en la semana → 1 hora gratis sábado o domingo', icon: CalendarDays,
     values: { title: 'Fin de semana gratis', period: 'week', required: 2, hours: 1, weekdays: [6, 0], untilPeriodEnd: true, days: 7 },
+  },
+  {
+    key: 'day', label: 'Mismo día', hint: '2 horas el mismo día → 1 hora gratis ese día', icon: Clock,
+    values: { title: 'Juega más hoy', period: 'day', required: 2, hours: 1, weekdays: [0, 1, 2, 3, 4, 5, 6], untilPeriodEnd: false, days: 15 },
+  },
+  {
+    key: 'biweek', label: 'Quincenal', hint: '5 reservas en la quincena → 1 hora gratis', icon: CalendarCheck,
+    values: { title: 'Premio de quincena', period: 'biweek', required: 5, hours: 1, weekdays: [0, 1, 2, 3, 4, 5, 6], untilPeriodEnd: true, days: 15 },
   },
   {
     key: 'month', label: 'Mensual', hint: '20 reservas en el mes → 1 hora gratis', icon: CalendarRange,
@@ -109,7 +125,8 @@ export default function PromotionsPage() {
   const ownPromos = items.filter(p => companies.some(c => c.id === p.company_id));
   const companyPitches = pitches.filter(p => p.company_id === companyId);
   const activeCount = ownPromos.filter(p => p.company_id === companyId).length;
-  const periodWord = period === 'week' ? 'semana' : 'mes';
+  const periodInfo = PERIOD_OPTIONS.find(o => o.value === period) || PERIOD_OPTIONS[1];
+  const periodWord = periodInfo.word;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -133,12 +150,16 @@ export default function PromotionsPage() {
       {ownPromos.length > 0 && (
         <section className="space-y-3">
           <h2 className="font-bold">Promociones activas ({ownPromos.length})</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
             {ownPromos.map(p => (
-              <div key={p.id} className="space-y-2">
-                <PromotionCard p={p} />
-                <button disabled={busy} onClick={() => { if (confirm('¿Finalizar esta promoción? Los regalos ya ganados se conservan.')) void send({ action: 'stop', id: p.id }); }}
-                  className="text-sm font-semibold text-red-600 underline cursor-pointer">Finalizar promoción</button>
+              <div key={p.id} className="flex flex-col gap-2 min-w-0">
+                <div className="flex-1 min-h-0">
+                  <PromotionCard p={p} />
+                </div>
+                <button type="button" disabled={busy} onClick={() => { if (confirm('¿Finalizar esta promoción? Los regalos ya ganados se conservan.')) void send({ action: 'stop', id: p.id }); }}
+                  className="inline-flex items-center justify-center gap-1.5 w-full rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300 cursor-pointer disabled:opacity-50">
+                  <StopCircle size={15} /> Finalizar promoción
+                </button>
               </div>
             ))}
           </div>
@@ -150,7 +171,7 @@ export default function PromotionsPage() {
         <form onSubmit={submit} className="rounded-3xl border border-border bg-card p-4 sm:p-6 space-y-5 min-w-0">
           <fieldset>
             <legend className="font-bold mb-2 text-sm">1. Elige un tipo</legend>
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 grid-cols-2 lg:grid-cols-3">
               {TEMPLATES.map(t => (
                 <button type="button" key={t.key} onClick={() => applyTemplate(t.key)}
                   className={`text-left rounded-2xl border p-3 transition-colors cursor-pointer ${template === t.key ? 'border-emerald-600 bg-emerald-500/10' : 'border-border hover:border-emerald-500/50'}`}>
@@ -175,9 +196,7 @@ export default function PromotionsPage() {
             </label>
             <label className="text-sm">Cómo se cuentan las reservas
               <select value={period} onChange={e => { const v = e.target.value as Period; setPeriod(v); if (v === 'campaign') setUntilPeriodEnd(false); }} className={inputCls}>
-                <option value="week">Cada semana (lunes a domingo)</option>
-                <option value="month">Cada mes</option>
-                <option value="campaign">Durante toda la promoción</option>
+                {PERIOD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </label>
             <label className="text-sm">Reservas aprobadas necesarias
@@ -189,6 +208,10 @@ export default function PromotionsPage() {
             <label className="text-sm">Promoción vigente hasta
               <input type="date" required value={endsAt} min={new Date().toISOString().slice(0, 10)} onChange={e => setEndsAt(e.target.value)} className={inputCls} />
             </label>
+            <p className="sm:col-span-2 -mt-1 flex items-start gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-xs text-foreground">
+              <Info size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+              <span><strong>{periodInfo.label}:</strong> {periodInfo.help}</span>
+            </p>
           </div>
 
           <fieldset>

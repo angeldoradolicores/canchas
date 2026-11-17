@@ -16,7 +16,8 @@ import { CancelBookingModal } from '@/components/booking/CancelBookingModal';
 import { CustomAlertModal, AlertModalState } from '@/components/ui/CustomAlertModal';
 import { isCombinedPitch, getLinkedPitchIds, getConflictingPitchIds } from '@/lib/combined-pitch-utils';
 import { PaymentMethodLogo } from '@/components/ui/PaymentMethodLogo';
-import { isSlotPassed } from '@/lib/utils';
+import { preloadTurnstile } from '@/lib/turnstile-client';
+import { isSlotPassed, getSlotSecondsToClose, formatCountdown, slotCloseLabel, BOOKING_GRACE_MINUTES } from '@/lib/utils';
 
 
 const DEFAULT_TIME_SLOTS = [
@@ -170,7 +171,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
 
   const [currentPitch, setCurrentPitch] = useState<Pitch>(pitch);
   const [siblingPitches, setSiblingPitches] = useState<Pitch[]>([]);
-  const [complexInfo, setComplexInfo] = useState<{ id: string; name: string; address?: string; zone?: string } | null>(null);
+  const [complexInfo, setComplexInfo] = useState<{ id: string; name: string; address?: string; zone?: string; owner_phone?: string | null } | null>(null);
 
   useEffect(() => {
     setCurrentPitch(pitch);
@@ -303,7 +304,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         if (compId) {
           const { data, error } = await supabase
             .from('pitches')
-            .select('*, companies(id, name, address, zone, owner_id)')
+            .select('*, companies(id, name, address, zone, owner_id, owner_phone)')
             .eq('company_id', compId)
             .order('created_at', { ascending: true });
 
@@ -317,14 +318,14 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
         // Fallback: buscar por el id del pitch actual para obtener su company_id
         const { data: selfData } = await supabase
           .from('pitches')
-          .select('*, companies(id, name, address, zone, owner_id)')
+          .select('*, companies(id, name, address, zone, owner_id, owner_phone)')
           .eq('id', currentPitch.id)
           .single();
 
         if (selfData?.company_id) {
           const { data: siblings } = await supabase
             .from('pitches')
-            .select('*, companies(id, name, address, zone, owner_id)')
+            .select('*, companies(id, name, address, zone, owner_id, owner_phone)')
             .eq('company_id', selfData.company_id)
             .order('created_at', { ascending: true });
 
@@ -670,24 +671,102 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     }
   }, [step, secondsLeft, loading, activeBooking, triggerExpiredAlert]);
 
+  // Cuenta regresiva para horas de hoy a las que les quedan menos de 5 minutos para cerrarse.
+  const [graceNow, setGraceNow] = useState(() => Date.now());
+  const lateSlot = (() => {
+    if (isOwnPitch) return null;
+    let best: { slot: string; left: number } | null = null;
+    for (const s of selectedTimes) {
+      const left = getSlotSecondsToClose(selectedDate, s, undefined, new Date(graceNow));
+      if (left !== null && (!best || left < best.left)) best = { slot: s, left };
+    }
+    return best;
+  })();
+  // Se refresca cada segundo si alguna hora elegida es de hoy (para avisar en cuanto entre en los últimos 5 min).
+  const hasStartedSelection = !isOwnPitch && selectedTimes.length > 0 && selectedDate === today;
+  useEffect(() => {
+    if (!hasStartedSelection) return;
+    setGraceNow(Date.now());
+    const t = setInterval(() => setGraceNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [hasStartedSelection]);
+
+  // Invitados: precargar el CAPTCHA invisible para que apartar la hora no espere.
+  useEffect(() => { if (!user) preloadTurnstile(); }, [user]);
+
+  const complexPhone = ((currentPitch as any)?.contact_phone || complexInfo?.owner_phone || (currentPitch as any)?.companies?.owner_phone || '').toString().replace(/\D/g, '');
+  const callHint = complexPhone
+    ? ` Si no alcanzas, llama al complejo al ${complexPhone} y pídele que te la reserve.`
+    : ' Si no alcanzas, llama al complejo y pídele que te la reserve.';
+
+  const closedSlot = !isOwnPitch ? selectedTimes.find(s => isSlotPassed(selectedDate, s, undefined, new Date(graceNow))) : undefined;
+  const closingBanner = lateSlot ? (
+<div role="alert" className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 font-medium ${lateSlot.left <= 60 ? 'bg-red-500/10 border-red-500/40 text-red-700 dark:text-red-300' : 'bg-amber-500/10 border-amber-500/40 text-amber-800 dark:text-amber-300'}`}>
+                  <Clock3 size={18} className="shrink-0 mt-0.5" />
+                  <div className="space-y-1.5 min-w-0">
+                    <p>
+                      {lateSlot.left <= BOOKING_GRACE_MINUTES * 60 ? <>La hora de las <strong>{lateSlot.slot}</strong> ya empezó. </> : null}
+                      Se puede reservar hasta las <strong>{slotCloseLabel(lateSlot.slot)}</strong>: te quedan{' '}
+                      <strong className="font-black tabular-nums text-sm">{formatCountdown(lateSlot.left)}</strong>{' '}
+                      para terminar la reserva y subir el comprobante. Después el sistema no lo permite.
+                    </p>
+                    {complexPhone ? (
+                      <a href={`tel:${complexPhone}`} className="inline-flex items-center gap-1.5 font-bold underline underline-offset-2">
+                        <Phone size={13} /> Si no alcanzas, llama al complejo: {complexPhone}
+                      </a>
+                    ) : (
+                      <p className="font-bold">Si no alcanzas, llama al complejo.</p>
+                    )}
+                  </div>
+                </div>
+  ) : closedSlot ? (
+    <div role="alert" className="p-3 rounded-xl border text-xs flex items-start gap-2.5 font-medium bg-red-500/10 border-red-500/40 text-red-700 dark:text-red-300">
+      <Clock3 size={18} className="shrink-0 mt-0.5" />
+      <div className="space-y-1.5 min-w-0">
+        <p>La hora de las <strong>{closedSlot}</strong> se cerró para reservas en línea a las <strong>{slotCloseLabel(closedSlot)}</strong>. Quita esa hora o elige otra.</p>
+        {complexPhone ? (
+          <a href={`tel:${complexPhone}`} className="inline-flex items-center gap-1.5 font-bold underline underline-offset-2">
+            <Phone size={13} /> Llama al complejo para jugar ahora: {complexPhone}
+          </a>
+        ) : (
+          <p className="font-bold">Comunícate con el complejo si quieres jugar ahora.</p>
+        )}
+      </div>
+    </div>
+  ) : null;
+
   const toggleTime = (slot: string) => {
-    if (!isOwnPitch && isSlotPassed(selectedDate, slot, 5)) {
+    if (!isOwnPitch && isSlotPassed(selectedDate, slot)) {
       setAlertState({
         isOpen: true,
         type: 'warning',
         title: '⏰ Horario no disponible',
-        message: 'Esta hora ya ha pasado (límite de 5 minutos de gracia superado). Por favor elige un horario posterior.',
+        message: `Esta hora se cerró para reservas en línea a las ${slotCloseLabel(slot)}. Elige un horario posterior.` + (complexPhone
+          ? ` Si quieres jugar ahora, llama al complejo al ${complexPhone}.`
+          : ' Si quieres jugar ahora, llama al complejo.'),
       });
       return;
     }
-    if (selectedTimes.includes(slot)) {
-      setSelectedTimes(prev => prev.filter(s => s !== slot));
-    } else if (selectedTimes.length >= 4) {
+    const graceLeft = !isOwnPitch ? getSlotSecondsToClose(selectedDate, slot) : null;
+    if (graceLeft !== null && !selectedTimes.includes(slot)) {
       setAlertState({
         isOpen: true,
         type: 'warning',
-        title: '⏰ Límite de horas alcanzado',
-        message: 'Solo puedes reservar un máximo de 4 horas por transacción. Si necesitas más tiempo, crea una nueva reserva.',
+        title: graceLeft <= BOOKING_GRACE_MINUTES * 60 ? '⏳ Esta hora ya empezó' : '⏳ Queda poco tiempo',
+        message: `La hora de las ${slot} se puede reservar hasta las ${slotCloseLabel(slot)}. Te quedan ${formatCountdown(graceLeft)} para terminar la reserva y subir el comprobante; después el sistema ya no lo permite.` + callHint,
+      });
+    }
+    if (selectedTimes.includes(slot)) {
+      setSelectedTimes(prev => prev.filter(s => s !== slot));
+    } else if (selectedTimes.length >= (user ? 4 : 2)) {
+      setAlertState({
+        isOpen: true,
+        type: 'warning',
+        title: user ? '⏰ Límite de horas alcanzado' : '⏰ Máximo 2 horas como invitado',
+        message: user
+          ? 'Solo puedes reservar un máximo de 4 horas por transacción. Si necesitas más tiempo, crea una nueva reserva.'
+          : 'Como invitado puedes reservar hasta 2 horas a la vez. Crea tu cuenta gratis para reservar hasta 4 horas, acumular horas gratis y crear retos.',
+        ...(user ? {} : { showCancel: true, cancelText: 'Seguir como invitado', confirmText: 'Crear mi cuenta', onConfirm: () => { window.open('/register', '_blank', 'noopener'); } }),
       });
     } else {
       setSelectedTimes(prev => [...prev, slot].sort());
@@ -1322,7 +1401,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                         const ampm = hNum < 12 ? 'am' : 'pm';
                         const h12 = hNum === 0 ? 12 : hNum > 12 ? hNum - 12 : hNum;
                         const slotPrice = getSlotPrice(slot);
-                        const isPassed = isSlotPassed(selectedDate, slot, 5);
+                        const isPassed = isSlotPassed(selectedDate, slot);
                         const canClick = !isTaken && (!isPassed || isOwnPitch);
 
                         let btnClass = 'bg-card hover:bg-primary/10 border-border text-foreground hover:border-primary/40';
@@ -1349,7 +1428,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                             type="button"
                             onClick={() => toggleTime(slot)}
                             className={`p-2 sm:p-2.5 rounded-xl border text-center transition-all select-none font-bold relative min-w-0 flex flex-col items-center justify-center ${btnClass}`}
-                            title={isPassed ? (isOwnPitch ? 'Horario en curso o pasado (habilitado para dueño)' : 'Esta hora ya ha pasado (límite de 5 minutos de gracia superado)') : undefined}
+                            title={isPassed ? (isOwnPitch ? 'Horario en curso o pasado (habilitado para dueño)' : 'Esta hora ya pasó la tolerancia para reservar en línea') : undefined}
                           >
                             {isTaken ? (
                               <div className="flex flex-col items-center justify-center w-full">
@@ -1395,7 +1474,9 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                 </div>
               </div>
 
-              {isOwnPitch && selectedTimes.some(slot => isSlotPassed(selectedDate, slot, 5)) && (
+              {closingBanner}
+
+              {isOwnPitch && selectedTimes.some(slot => isSlotPassed(selectedDate, slot)) && (
                 <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs flex items-center gap-2.5 font-medium">
                   <span className="text-base shrink-0">⚠️</span>
                   <span><strong>Modo Dueño/Administrador:</strong> Has seleccionado horarios que ya avanzaron o pasaron. Tienes autorización para reservarlos en tu propia cancha.</span>
@@ -1584,6 +1665,8 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                         );
                       })()}
                     </div>
+
+                    {closingBanner}
 
                     {/* Divisor sutil */}
                     <div className="relative flex py-0.5 items-center">

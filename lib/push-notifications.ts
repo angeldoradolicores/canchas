@@ -97,7 +97,7 @@ export function triggerSystemNotification(title: string, body: string, url: stri
         reg.showNotification(title, {
           body,
           icon: '/icon-192x192.png',
-          badge: '/icon-96x96.png',
+          badge: '/badge-96.png',
           vibrate: [350, 120, 350, 120, 500],
           data: { url },
           tag: 'booking-pending-alert',

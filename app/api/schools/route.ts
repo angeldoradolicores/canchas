@@ -87,16 +87,20 @@ export async function GET(req: NextRequest) {
       .select('*, pitches(id, name, image_url, city, companies(name, zone))');
 
     if (pitch_id) {
- const {data: pitch}=await supabase.from('pitches').select('company_id').eq('id',pitch_id).maybeSingle();
- const {data: siblings}=pitch?.company_id ? await supabase.from('pitches').select('id').eq('company_id',pitch.company_id) : {data:null};
- query=query.in('pitch_id',siblings?.map(p=>p.id) || [pitch_id]);
- }
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pitch_id)) return NextResponse.json({ error: 'Cancha inválida' }, { status: 400 });
+      // Una sola consulta: la cancha, su complejo y todas las canchas hermanas (antes eran 2 seguidas).
+      const { data: pitch } = await supabase.from('pitches').select('company_id, companies(pitches(id))').eq('id', pitch_id).maybeSingle();
+      const siblings = ((pitch as any)?.companies?.pitches || []).map((x: any) => x.id);
+      query = query.in('pitch_id', siblings.length ? siblings : [pitch_id]);
+    }
 
     const { data, error } = await query.order('created_at', { ascending: false });
     if (error) return NextResponse.json(safeServerErrorResponse(error, 'Error al obtener las escuelas.'), { status: 500 });
 
     const enriched = (data || []).map(enrichSchoolRow);
-    return NextResponse.json({ success: true, data: enriched });
+    return NextResponse.json({ success: true, data: enriched }, {
+      headers: { 'Cache-Control': pitch_id ? 'public, s-maxage=30, stale-while-revalidate=120' : 'no-store' },
+    });
   } catch (err: any) {
     return NextResponse.json(safeServerErrorResponse(err, 'Error al obtener las escuelas.'), { status: 500 });
   }

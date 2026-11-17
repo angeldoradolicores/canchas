@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       title: title || '⚽ Cancheros: Reserva por aprobar',
       body: message || 'Un cliente subió su comprobante de pago y espera tu confirmación.',
       icon: '/icon-192x192.png',
-      badge: '/icon-96x96.png',
+      badge: '/badge-96.png',
       url: url || '/dashboard/bookings',
       vibrate: [350, 150, 350, 150, 500],
       tag: 'booking-pending-alert',

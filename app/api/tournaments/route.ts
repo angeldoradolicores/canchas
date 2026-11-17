@@ -44,16 +44,19 @@ export async function GET(req: NextRequest) {
       .order('start_date', { ascending: true });
 
     if (pitchId) {
-      if (pitchId) {
- const {data: pitch}=await supabase.from('pitches').select('company_id').eq('id',pitchId).maybeSingle();
- const {data: siblings}=pitch?.company_id ? await supabase.from('pitches').select('id').eq('company_id',pitch.company_id) : {data:null};
- query=query.in('pitch_id',siblings?.map(p=>p.id) || [pitchId]);
- }
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pitchId)) return NextResponse.json({ error: 'Cancha inválida' }, { status: 400 });
+      // Una sola consulta: la cancha, su complejo y todas las canchas hermanas (antes eran 2 seguidas).
+      const { data: pitch } = await supabase.from('pitches').select('company_id, companies(pitches(id))').eq('id', pitchId).maybeSingle();
+      const siblings = ((pitch as any)?.companies?.pitches || []).map((x: any) => x.id);
+      query = query.in('pitch_id', siblings.length ? siblings : [pitchId]);
     }
 
     const { data, error } = await query;
     if (error) return NextResponse.json(safeServerErrorResponse(error, 'Error al obtener los torneos.'), { status: 500 });
-    return NextResponse.json({ success: true, data: data || [] });
+    // Datos públicos del detalle de cancha: el CDN de Vercel los sirve 30 s sin tocar la base.
+    return NextResponse.json({ success: true, data: data || [] }, {
+      headers: { 'Cache-Control': pitchId ? 'public, s-maxage=30, stale-while-revalidate=120' : 'no-store' },
+    });
   } catch (err: any) {
     return NextResponse.json(safeServerErrorResponse(err, 'Error al obtener los torneos.'), { status: 500 });
   }

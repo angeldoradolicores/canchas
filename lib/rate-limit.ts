@@ -27,13 +27,18 @@ function purgeExpiredRecords(now: number, maxAgeMs: number = 300 * 1000) {
  * Obtiene la IP del cliente a partir de los headers de la solicitud
  */
 export function getClientIp(req: NextRequest): string {
-  // IMPORTANTE: el cliente puede falsificar X-Forwarded-For. Solo se debe confiar en
-  // la IP que añade NUESTRO proxy de borde. `cf-connecting-ip` lo pone Cloudflare y no
-  // es reescribible por el cliente cuando se está detrás de CF. Para X-Forwarded-For
-  // tomamos la IP situada a `TRUSTED_PROXY_HOPS` saltos del final (la que insertó
-  // nuestro proxy), no la primera (que el atacante controla).
-  const cfIp = req.headers.get('cf-connecting-ip');
-  if (cfIp) return cfIp.trim();
+  // IMPORTANTE: el cliente puede enviar cualquier header. Solo se confía en los que
+  // pone NUESTRO borde y que el cliente no puede reescribir:
+  //  - Vercel (producción actual) sobrescribe x-real-ip / x-forwarded-for / x-vercel-forwarded-for.
+  //  - cf-connecting-ip SOLO si la app está detrás de Cloudflare (TRUST_CLOUDFLARE=1);
+  //    sin Cloudflare un bot podía inventarlo en cada petición y saltarse el límite.
+  if (process.env.TRUST_CLOUDFLARE === '1') {
+    const cfIp = req.headers.get('cf-connecting-ip');
+    if (cfIp) return cfIp.trim();
+  }
+
+  const vercelIp = req.headers.get('x-vercel-forwarded-for');
+  if (vercelIp) return vercelIp.split(',')[0].trim();
 
   const realIp = req.headers.get('x-real-ip');
   if (realIp) return realIp.trim();
@@ -90,9 +95,12 @@ export function checkRateLimit(
     // Cota dura del almacén para evitar agotamiento de memoria por claves distintas.
     if (rateLimitStore.size > 50_000) {
       purgeExpiredRecords(now, windowMs);
-      if (rateLimitStore.size > 50_000) {
-        // Bajo presión extrema, denegar en vez de crecer sin límite.
-        return { success: false, limit: options.limit, remaining: 0, resetTime: 1, retryAfter: 1 };
+      // Bajo presión extrema se descartan las claves más antiguas (orden de inserción del Map).
+      // Antes se negaba el servicio a TODOS: un bot con muchas IPs podía tumbar la app.
+      let toDrop = rateLimitStore.size - 45_000;
+      for (const k of rateLimitStore.keys()) {
+        if (toDrop-- <= 0) break;
+        rateLimitStore.delete(k);
       }
     }
     record = { timestamps: [] };

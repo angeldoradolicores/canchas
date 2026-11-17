@@ -23,8 +23,8 @@ const SUPABASE_ANON_KEY = __ENV.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUz
 
 // ── 2. SETUP: OBTIENE TOKEN JWT DINÁMICAMENTE ANTES DE LA PRUEBA ──
 export function setup() {
-  const email = __ENV.EMAIL || 'goldeorocoll@gmail.com';
-  const password = __ENV.PASSWORD || 'Miael2017m..';
+  const email = __ENV.EMAIL;
+  const password = __ENV.PASSWORD; // nunca escribir contraseñas en el código
 
   const loginRes = http.post(
     `${SUPABASE_URL}/auth/v1/token?grant_type=password`,

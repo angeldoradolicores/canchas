@@ -11,7 +11,7 @@ const PROMO_COLUMNS = 'id,company_id,title,required_bookings,gift_hours,redeem_d
 const campaign = z.object({
   company_id: uuid,
   title: z.string().trim().min(3).max(120),
-  period: z.enum(['week', 'month', 'campaign']),
+  period: z.enum(['day', 'week', 'biweek', 'month', 'campaign']),
   required_bookings: z.number().int().min(1).max(1000),
   gift_hours: z.number().int().min(1).max(24),
   // null = el regalo se usa hasta el final de la misma semana/mes.
@@ -183,8 +183,11 @@ export async function POST(req: NextRequest) {
     });
     if (error) {
       const tooMany = error.message?.includes('Too many active promotions');
+      const periodPending = error.message?.includes('complex_promotions_period_check');
       return NextResponse.json({
-        error: tooMany ? 'Puedes tener máximo 10 promociones activas. Finaliza alguna para publicar otra.' : 'No se pudo crear la promoción. Inténtalo de nuevo.',
+        error: tooMany ? 'Puedes tener máximo 10 promociones activas. Finaliza alguna para publicar otra.'
+          : periodPending ? 'Esta forma de contar aún no está activa. Elige semana, mes o toda la promoción.'
+          : 'No se pudo crear la promoción. Inténtalo de nuevo.',
       }, { status: 409 });
     }
     return NextResponse.json({ success: true });

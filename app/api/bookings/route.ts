@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { sanitizeReceipt } from '@/lib/receipt-security';
 import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
+import { checkRateLimit, createRateLimitErrorResponse, getClientIp } from '@/lib/rate-limit';
+import { hashClientIp, quotaErrorMessage, verifyTurnstile, GUEST_MAX_HOURS } from '@/lib/booking-guard';
 import { getAuthenticatedUser, isPlatformAdmin } from '@/lib/auth-guard';
 import {
   BookingCancelDraftSchema,
@@ -15,7 +16,7 @@ import { fetchConflictingPitchIds } from '@/lib/combined-pitch-utils';
 import { uploadToR2, isR2Configured } from '@/lib/storage/r2';
 import { safeServerErrorResponse } from '@/lib/error-handler';
 import { withCache, cache, TTL } from '@/lib/cache';
-import { isSlotPassed } from '@/lib/utils';
+import { isSlotPassed, BOOKING_GRACE_MINUTES } from '@/lib/utils';
 import { validateImageUpload } from '@/lib/image-upload-validator';
 
 
@@ -215,8 +216,25 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const { pitch_id, selected_date, selected_times } = parseResult.data;
+      const { pitch_id, selected_date, selected_times, turnstile_token } = parseResult.data;
       const effectiveUserId = verifiedUserId;
+      const clientIpHash = hashClientIp(req);
+
+      // Invitados: máximo de horas por reserva y CAPTCHA invisible (frena bots que intentan apartar todo).
+      if (!verifiedUserId) {
+        if (selected_times.length > GUEST_MAX_HOURS) {
+          return NextResponse.json({
+            error: `Como invitado puedes reservar hasta ${GUEST_MAX_HOURS} horas a la vez. Crea tu cuenta gratis para reservar hasta 4 horas.`,
+            code: 'GUEST_LIMIT',
+          }, { status: 429 });
+        }
+        if (!await verifyTurnstile(turnstile_token, getClientIp(req))) {
+          return NextResponse.json({
+            error: 'No pudimos verificar que eres una persona. Recarga la página e inténtalo de nuevo.',
+            code: 'CAPTCHA',
+          }, { status: 403 });
+        }
+      }
 
       // OPTIMIZACIÓN DE VELOCIDAD: estas 3 consultas son independientes entre sí
       // (ninguna necesita el resultado de otra) pero antes se esperaban una tras
@@ -246,9 +264,9 @@ export async function POST(req: NextRequest) {
       }
 
       // Validar si el horario ya pasó: permitido ÚNICAMENTE para el dueño en su propia cancha
-      if (!isOwnerOfThisPitch && selected_times.some((slot: string) => isSlotPassed(selected_date, slot, 5))) {
+      if (!isOwnerOfThisPitch && selected_times.some((slot: string) => isSlotPassed(selected_date, slot))) {
         return NextResponse.json(
-          { error: 'No puedes reservar horarios que ya pasaron (límite de 5 minutos de gracia superado).' },
+          { error: `Esta hora ya empezó y pasó la tolerancia de ${BOOKING_GRACE_MINUTES} minutos para reservar en línea. Comunícate con el complejo.` },
           { status: 400 }
         );
       }
@@ -265,6 +283,7 @@ export async function POST(req: NextRequest) {
       }
 
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutos de bloqueo
+      const lockedBookingIds: string[] = [];
 
       const inserts = selected_times.map((slot: string) => {
         const { startIso, endIso } = computeSlotIsoTimes(selected_date, slot);
@@ -275,12 +294,24 @@ export async function POST(req: NextRequest) {
           end_time: endIso,
           status: 'draft',
           expires_at: expiresAt,
-                  lock_token: guestToken,
+          lock_token: guestToken,
+          client_ip_hash: clientIpHash,
         };
       });
 
+      // Si el límite anti-acaparamiento salta a mitad de camino, se liberan las horas ya apartadas en esta petición.
+      const quotaFail = async (err: { message?: string } | null | undefined) => {
+        const msg = quotaErrorMessage(err);
+        if (!msg) return null;
+        if (lockedBookingIds.length) {
+          // Se marcan como vencidas (no se borran: pueden ser filas reutilizadas con historial).
+          await supabase.from('bookings').update({ expires_at: new Date(Date.now() - 1000).toISOString() })
+            .in('id', lockedBookingIds).eq('status', 'draft');
+        }
+        return NextResponse.json({ error: msg, code: 'QUOTA' }, { status: 429 });
+      };
+
       const now = new Date();
-      const lockedBookingIds: string[] = [];
 
       for (const item of inserts) {
         const { data: conflictRows } = await supabase
@@ -328,6 +359,7 @@ export async function POST(req: NextRequest) {
                   source: null,
                   expires_at: expiresAt,
                   lock_token: guestToken,
+                  client_ip_hash: clientIpHash,
                   end_time: item.end_time,
                 })
                 .eq('id', existing.id)
@@ -340,6 +372,8 @@ export async function POST(req: NextRequest) {
                 lockedBookingIds.push(updated.id);
                 continue;
               } else {
+                const q = await quotaFail(upErr);
+                if (q) return q;
                 return NextResponse.json({error:'Horario modificado por otra solicitud'}, {status:409});
               }
             } else {
@@ -366,7 +400,8 @@ export async function POST(req: NextRequest) {
                 payment_proof_url: null,
                 source: null,
                 expires_at: expiresAt,
-                  lock_token: guestToken,
+                lock_token: guestToken,
+                client_ip_hash: clientIpHash,
                 end_time: item.end_time,
               })
               .eq('id', existing.id)
@@ -379,6 +414,8 @@ export async function POST(req: NextRequest) {
               lockedBookingIds.push(updated.id);
               continue;
             } else {
+              const q = await quotaFail(upErr);
+              if (q) return q;
               return NextResponse.json({error:'Horario modificado por otra solicitud'}, {status:409});
             }
           }
@@ -392,6 +429,8 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (insErr) {
+          const q = await quotaFail(insErr);
+          if (q) return q;
           // Garantía anti-solape de la BD (constraint de exclusión / trigger): hora ya tomada.
           if (insErr.code === '23P01' || insErr.message?.includes('SLOT_TAKEN')) {
             return NextResponse.json(
@@ -456,6 +495,7 @@ export async function POST(req: NextRequest) {
                   source: null,
                   expires_at: expiresAt,
                   lock_token: guestToken,
+                  client_ip_hash: clientIpHash,
                   end_time: item.end_time,
                 })
                 .eq('id', conflictRow.id)
@@ -468,6 +508,8 @@ export async function POST(req: NextRequest) {
                 lockedBookingIds.push(taken.id);
                 continue;
               }
+              const q2 = await quotaFail(takeErr);
+              if (q2) return q2;
             }
           }
           console.error('[lock_booking insert error]', insErr);
@@ -539,9 +581,9 @@ export async function POST(req: NextRequest) {
       }
 
       // Validar si el horario ya pasó: permitido ÚNICAMENTE para el dueño en su propia cancha
-      if (!isOwnerOfThisPitch && selected_times.some((slot: string) => isSlotPassed(selected_date, slot, 5))) {
+      if (!isOwnerOfThisPitch && selected_times.some((slot: string) => isSlotPassed(selected_date, slot))) {
         return NextResponse.json(
-          { error: 'No puedes reservar horarios que ya pasaron (límite de 5 minutos de gracia superado).' },
+          { error: `Esta hora ya empezó y pasó la tolerancia de ${BOOKING_GRACE_MINUTES} minutos para reservar en línea. Comunícate con el complejo.` },
           { status: 400 }
         );
       }
@@ -633,7 +675,11 @@ export async function POST(req: NextRequest) {
           p_pitch: pitch_id, p_name: customer_name.trim(), p_phone: customer_phone || '',
           p_proof: paymentProofUrl
         });
-        if (error) return NextResponse.json({error:'El bloqueo expiró o no te pertenece. Selecciona de nuevo el horario.'}, {status:409});
+        if (error) {
+          const quotaMsg = quotaErrorMessage(error);
+          if (quotaMsg) return NextResponse.json({ error: quotaMsg, code: 'QUOTA' }, { status: 429 });
+          return NextResponse.json({error:'El bloqueo expiró o no te pertenece. Selecciona de nuevo el horario.'}, {status:409});
+        }
         const submitted = (data || []) as any[];
         // Liberar la caché de disponibilidad para que las horas tomadas se vean de inmediato.
         try { cache.invalidatePrefix(`availability:${pitch_id}:${selected_date}`); } catch { /* no crítico */ }

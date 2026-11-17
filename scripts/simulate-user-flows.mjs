@@ -20,8 +20,8 @@ function getArg(flag, fallback = '') {
 }
 
 const BASE_URL = (getArg('--url') || process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
-const LOGIN_EMAIL = getArg('--email') || process.env.LOGIN_EMAIL || 'goldeorocoll@gmail.com';
-const LOGIN_PASSWORD = getArg('--password') || process.env.LOGIN_PASSWORD || 'Miael2017m..';
+const LOGIN_EMAIL = getArg('--email') || process.env.LOGIN_EMAIL;
+const LOGIN_PASSWORD = getArg('--password') || process.env.LOGIN_PASSWORD;
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';

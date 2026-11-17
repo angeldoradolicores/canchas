@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { Pitch } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/client';
+import { getTurnstileToken } from '@/lib/turnstile-client';
 
 export interface ActiveBookingData {
   pitch: Pitch;
@@ -190,10 +191,8 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
     // Garantiza que si el usuario liberó la cancha en su teléfono u otra sesión, se salga en este dispositivo
     const checkStillLockedInDb = async () => {
       try {
-        const { data, error } = await supabase
-          .from('bookings')
-          .select('id, status')
-          .in('id', bookingIds);
+        // RPC segura: los invitados ya no pueden leer la tabla bookings (solo id y estado de SUS bloqueos).
+        const { data, error } = await supabase.rpc('get_booking_statuses', { p_ids: bookingIds.slice(0, 24) });
 
         if (error || !data) return;
 
@@ -353,6 +352,8 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
       setLockError(null);
 
       try {
+        // Invitados: CAPTCHA invisible (solo si está configurado).
+        const turnstileToken = user ? null : await getTurnstileToken();
         const res = await fetch('/api/bookings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -363,6 +364,7 @@ export function ActiveBookingProvider({ children }: { children: React.ReactNode 
               user_id: user?.id || null,
               selected_date: date,
               selected_times: times,
+              turnstile_token: turnstileToken,
             },
           }),
         });

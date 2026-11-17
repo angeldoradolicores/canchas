@@ -20,6 +20,7 @@ export const BookingLockSchema = z.object({
     .min(1, 'Debes seleccionar al menos una hora')
     .max(4, 'No puedes reservar más de 4 horas por sesión'),
   user_id: z.string().optional().nullable(),
+  turnstile_token: z.string().max(2048).optional().nullable(),
 });
 
 export const BookingCreateSchema = z.object({
