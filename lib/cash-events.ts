@@ -39,6 +39,7 @@ export type CashEvent = {
   kind: 'deposit' | 'abono';
   key: string;
   bookingId: string;
+  pitchId: string;
   customer: string;
   pitch: string;
   method: string;
@@ -53,6 +54,7 @@ export function getCashEvents(bookings: any[]): CashEvent[] {
     if (!countsForMoney(b)) continue;
     const base = {
       bookingId: b.id,
+      pitchId: String(b.pitch_id || ''),
       customer: String(b.customer_name || 'Cliente'),
       pitch: String(b.pitches?.name || 'Cancha'),
     };

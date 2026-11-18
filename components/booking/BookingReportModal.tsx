@@ -622,7 +622,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
         <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600;">${formatCOP(e.customRate)}/h</td>
         <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700;">${e.confirmedBookings}</td>
         <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:800;color:#0f766e;">${formatCOP(e.totalBilled)}</td>
-        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;color:#b45309;font-weight:700;">${e.totalReceivable > 0 ? formatCOP(e.totalReceivable) : '$0'}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;color:#1d4ed8;font-weight:700;">${e.totalReceivable > 0 ? formatCOP(e.totalReceivable) : '$0'}</td>
       </tr>
     `).join('');
 
@@ -685,7 +685,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
     </div>
     <div class="kpi-card">
       <div class="lbl">Saldo Pendiente por Cobrar</div>
-      <div class="val" style="color:#b45309;">${formatCOP(pendingBalance)}</div>
+      <div class="val" style="color:#1d4ed8;">${formatCOP(pendingBalance)}</div>
       <div class="sub">Cobro en taquilla / crédito</div>
     </div>
     <div class="kpi-card">
@@ -949,7 +949,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
   </div>
 
   <div style="background:${ent.allTimeHistory?.totalReceivable > 0 ? '#fffbeb' : '#f0fdf4'};border:1px solid ${ent.allTimeHistory?.totalReceivable > 0 ? '#fde68a' : '#bbf7d0'};padding:10px 16px;border-radius:10px;margin-bottom:20px;font-size:12px;color:#0f172a;">
-    <strong>Estado de cuenta:</strong> Pagado <strong>${formatCOP(ent.ledger?.paid || 0)}</strong> · Saldo restante <strong style="color:#b45309;">${formatCOP(ent.allTimeHistory?.totalReceivable || 0)}</strong>
+    <strong>Estado de cuenta:</strong> Pagado <strong>${formatCOP(ent.ledger?.paid || 0)}</strong> · Saldo restante <strong style="color:#1d4ed8;">${formatCOP(ent.allTimeHistory?.totalReceivable || 0)}</strong>
   </div>
 
   <h3 style="font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;color:#0f172a;">Registro de Abonos</h3>
@@ -970,7 +970,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
         <td>${r.kind === 'abono' ? 'Abono' : 'Anticipo'}</td>
         <td>${escapeHtml(cashMethodLabel(r.method))}</td>
         <td style="text-align:right;font-weight:800;color:#0f766e;">${formatCOP(r.amount)}</td>
-        <td style="text-align:right;color:#b45309;">${formatCOP(r.remaining)}</td>
+        <td style="text-align:right;color:#1d4ed8;">${formatCOP(r.remaining)}</td>
       </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;padding:12px;">Aún no hay abonos registrados</td></tr>'}
     </tbody>
   </table>
@@ -1172,7 +1172,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Kpi tone="primary" label="Dinero recibido en el periodo" value={formatCOP(depositRevenue)} hint={`Anticipos: ${formatCOP(depositRevenue - abonosRevenue)} · Abonos: ${formatCOP(abonosRevenue)}`} icon={<Wallet size={16} />} />
-                <Kpi tone="amber" label="Saldo por cobrar" value={formatCOP(pendingBalance)} hint="Reservas aprobadas del periodo que aún deben" icon={<AlertTriangle size={16} />} />
+                <Kpi tone="blue" label="Saldo por cobrar" value={formatCOP(pendingBalance)} hint="Reservas aprobadas del periodo que aún deben" icon={<AlertTriangle size={16} />} />
               </div>
 
               <Card title="Anticipos y abonos recibidos" icon={<Wallet size={15} />}>
@@ -1372,7 +1372,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
                 <Kpi label="Clientes con convenio" value={`${entitiesReport.totalEntities}`} hint="Turnos fijos, entidades y escuelas" icon={<Building2 size={16} />} />
                 <Kpi label="Partidos aprobados" value={`${entitiesReport.totalMatchesAll}`} hint="En el período" icon={<CheckCircle2 size={16} className="text-emerald-500" />} />
                 <Kpi tone="primary" label="Facturado" value={formatCOP(entitiesReport.totalBilledAll)} hint={`Promedio ${formatCOP(entitiesReport.avgRateAll)} por partido`} icon={<DollarSign size={16} />} />
-                <Kpi tone="amber" label="Por cobrar" value={formatCOP(entitiesReport.totalReceivableAll)} hint="Saldo que aún deben (valor − abonos)" icon={<AlertTriangle size={16} />} />
+                <Kpi tone="blue" label="Por cobrar" value={formatCOP(entitiesReport.totalReceivableAll)} hint="Saldo que aún deben (valor − abonos)" icon={<AlertTriangle size={16} />} />
               </div>
 
               <div className="flex flex-col sm:flex-row gap-2">
@@ -1418,7 +1418,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
                           <p className="text-[10px] text-muted-foreground">Facturado</p>
                         </div>
                         <div className="rounded-xl bg-secondary/40 p-2">
-                          <p className={`text-sm font-black leading-tight mt-1 ${ent.totalReceivable > 0 ? 'text-amber-600' : 'text-muted-foreground'}`}>{formatCOP(ent.totalReceivable)}</p>
+                          <p className={`text-sm font-black leading-tight mt-1 ${ent.totalReceivable > 0 ? 'text-blue-700 dark:text-blue-300' : 'text-muted-foreground'}`}>{formatCOP(ent.totalReceivable)}</p>
                           <p className="text-[10px] text-muted-foreground">Por cobrar</p>
                         </div>
                       </div>
@@ -1683,12 +1683,13 @@ function paymentLabel(method: string) {
     : 'Efectivo';
 }
 
-function Kpi({ label, value, hint, icon, tone }: { label: string; value: string; hint: string; icon: React.ReactNode; tone?: 'primary' | 'amber' | 'rose' }) {
+function Kpi({ label, value, hint, icon, tone }: { label: string; value: string; hint: string; icon: React.ReactNode; tone?: 'primary' | 'amber' | 'rose' | 'blue' }) {
   const toneCls = tone === 'primary' ? 'border-primary/30 bg-primary/5'
     : tone === 'amber' ? 'border-amber-500/30 bg-amber-500/5'
+    : tone === 'blue' ? 'border-blue-500/30 bg-blue-500/5'
     : tone === 'rose' ? 'border-rose-500/30 bg-rose-500/5'
     : 'border-border bg-card';
-  const valueCls = tone === 'amber' ? 'text-amber-600 dark:text-amber-400' : tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : 'text-foreground';
+  const valueCls = tone === 'amber' ? 'text-amber-600 dark:text-amber-400' : tone === 'blue' ? 'text-blue-700 dark:text-blue-300' : tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : 'text-foreground';
   return (
     <div className={`rounded-2xl border p-3.5 sm:p-4 min-w-0 ${toneCls}`}>
       <div className="flex items-center justify-between gap-2 text-muted-foreground">

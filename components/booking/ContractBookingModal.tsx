@@ -32,7 +32,7 @@ import { getLinkedPitchIds } from '@/lib/combined-pitch-utils';
 interface ContractBookingModalProps {
   pitches: Pitch[];
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (info?: { customerName: string; count: number; pending: number }) => void;
   initialEntityName?: string;
   initialClientType?: 'standard' | 'entity' | 'school';
   existingBookings?: any[];
@@ -154,6 +154,47 @@ function formatDateFriendly(dateStr: string): string {
   }
 }
 
+/** Precio de una hora en una cancha (el mismo que ve el jugador: custom_pricing[hora] o la tarifa base). */
+function pitchSlotPrice(p: any, slot: string): number {
+  const v = Number(p?.custom_pricing?.[slot]);
+  return Number.isFinite(v) && v > 0 ? v : Number(p?.price_per_hour || 0);
+}
+
+/** Horas de la cancha agrupadas por precio: [{from:'06:00', to:'17:00', price}] (to = última hora del tramo). */
+function pitchPriceRanges(p: any): { from: string; to: string; price: number }[] {
+  const custom = p?.custom_pricing?.time_slots;
+  const slots: string[] = (Array.isArray(custom) && custom.length ? [...custom] : ALL_SLOTS).sort();
+  const out: { from: string; to: string; price: number }[] = [];
+  for (const sl of slots) {
+    const price = pitchSlotPrice(p, sl);
+    const last = out[out.length - 1];
+    const prevHour = last ? parseInt(last.to) : -2;
+    if (last && last.price === price && parseInt(sl) === prevHour + 1) last.to = sl;
+    else out.push({ from: sl, to: sl, price });
+  }
+  return out;
+}
+
+/** Fecha de hoy en Colombia (YYYY-MM-DD). */
+function todayBogota(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+}
+
+function addDaysYmd(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + days, 12);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
+/** Primera fecha (YYYY-MM-DD) desde `fromYmd` (incluida) que cae en ese día de la semana. */
+function nextDateForDay(fromYmd: string, dayKey: number): string {
+  const [y, m, d] = fromYmd.split('-').map(Number);
+  const wd = new Date(y, m - 1, d, 12).getDay();
+  return addDaysYmd(fromYmd, (dayKey - wd + 7) % 7);
+}
+
+const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
 export interface ContractSession {
   key: string;
   weekNum: number;
@@ -247,11 +288,9 @@ export function ContractBookingModal({
   // 3. Duración & Horarios
   const [duration, setDuration] = useState<string>('1m');
   const [customWeeks, setCustomWeeks] = useState<number>(8);
-  const [startDate, setStartDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split('T')[0];
-  });
+  // Desde qué día se cuenta el turno fijo. Por defecto HOY: cada día de la semana elegido muestra
+  // su fecha (ej. "Sáb 21 nov"), así no hace falta escoger la "fecha del primer partido".
+  const [startDate, setStartDate] = useState(() => todayBogota());
   const [selectedDays, setSelectedDays] = useState<number[]>([6]); // Sábado por defecto
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]); // Vacío por defecto para que elija viendo disponibilidad previa
 
@@ -270,21 +309,26 @@ export function ContractBookingModal({
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  // Entidades/escuelas guardadas: SOLO las de este complejo (sus canchas). Antes la lista del
+  // navegador era una sola para todos los complejos y salían las de otros.
+  const complexPitchIds = useMemo(() => new Set(pitches.map(p => p.id)), [pitches]);
+  const entitiesStorageKey = `canchas_saved_entities:${(pitches[0] as any)?.company_id || 'sin_complejo'}`;
+
   // Cargar entidades guardadas desde localStorage y desde historial de reservas existentes
   useEffect(() => {
     let stored: SavedEntityRecord[] = [];
     try {
-      const raw = localStorage.getItem('canchas_saved_entities');
+      const raw = localStorage.getItem(entitiesStorageKey);
       if (raw) stored = JSON.parse(raw);
     } catch { /* noop */ }
 
     const map = new Map<string, SavedEntityRecord>();
     stored.forEach(e => {
-      if (e.name) map.set(e.name.trim().toLowerCase(), e);
+      if (e.name && (!e.pitchId || complexPitchIds.has(e.pitchId))) map.set(e.name.trim().toLowerCase(), e);
     });
 
     if (Array.isArray(existingBookings) && existingBookings.length > 0) {
-      existingBookings.forEach((b: any) => {
+      existingBookings.filter((b: any) => complexPitchIds.has(b.pitch_id)).forEach((b: any) => {
         const entName = (b.client_entity_name || '').trim();
         const custName = (b.customer_name || '').trim();
         const phone = (b.customer_phone || '').trim();
@@ -323,7 +367,7 @@ export function ContractBookingModal({
     }
 
     setSavedEntities(Array.from(map.values()));
-  }, [existingBookings]);
+  }, [existingBookings, entitiesStorageKey, complexPitchIds]);
 
   // Guardar entidad manualmente
   const handleSaveCurrentEntity = (e?: React.MouseEvent) => {
@@ -347,7 +391,7 @@ export function ContractBookingModal({
       const existing = savedEntities.filter(s => s.name.toLowerCase() !== primary.toLowerCase());
       const next = [record, ...existing].slice(0, 100);
       setSavedEntities(next);
-      localStorage.setItem('canchas_saved_entities', JSON.stringify(next));
+      localStorage.setItem(entitiesStorageKey, JSON.stringify(next));
       setEntitySavedNotice(`¡${primary} guardado exitosamente para futuros contratos!`);
       setTimeout(() => setEntitySavedNotice(null), 3000);
     } catch { /* noop */ }
@@ -447,12 +491,14 @@ export function ContractBookingModal({
 
   const totalSessions = allSessions.length;
 
-  /** Precio de una hora: el que escribió el dueño, o la tarifa base si dejó el campo vacío. */
+  /** Precio de una hora: el que escribió el dueño; si lo dejó vacío, la tarifa pactada o el precio
+   *  de esa hora en la cancha (el mismo que ve el jugador). */
   const priceForSlot = useCallback((slot: string) => {
     const raw = slotPrices[slot];
     if (raw !== undefined && raw !== '' && !isNaN(Number(raw))) return Number(raw);
-    return effectiveRate;
-  }, [slotPrices, effectiveRate]);
+    if (customRate && !isNaN(Number(customRate)) && Number(customRate) > 0) return Number(customRate);
+    return pitchSlotPrice(selectedPitch, slot);
+  }, [slotPrices, customRate, selectedPitch]);
 
   const totalPrice = allSessions.reduce((sum, s) => sum + priceForSlot(s.baseSlot), 0);
   const slotPriceValues = selectedSlots.map(priceForSlot);
@@ -688,7 +734,7 @@ export function ContractBookingModal({
       try {
         const entName = (clientType !== 'standard' ? clientEntityName : customerName).trim();
         if (entName) {
-          const raw = localStorage.getItem('canchas_saved_entities');
+          const raw = localStorage.getItem(entitiesStorageKey);
           const stored: any[] = raw ? JSON.parse(raw) : [];
           const filtered = stored.filter(s => s.name.toLowerCase() !== entName.toLowerCase());
           const newRec = {
@@ -701,20 +747,20 @@ export function ContractBookingModal({
             paymentMethod,
             pitchId: selectedPitch?.id,
           };
-          localStorage.setItem('canchas_saved_entities', JSON.stringify([newRec, ...filtered].slice(0, 100)));
+          localStorage.setItem(entitiesStorageKey, JSON.stringify([newRec, ...filtered].slice(0, 100)));
         }
       } catch { /* noop */ }
 
       setSuccessMsg(finishMsg);
       setTimeout(() => {
-        onSuccess();
+        onSuccess({ customerName: primaryName, count: totalCreated, pending: contractTotalPrice });
       }, 1800);
     } catch (err: any) {
       setError(err.message || 'Error al crear el turno fijo');
     } finally {
       setLoading(false);
     }
-  }, [selectedPitch, selectedDays, selectedSlots, customerName, customerPhone, customerNote, allDates, allSessions, effectiveRate, avgRate, totalPrice, priceForSlot, pricesVary, clientType, clientEntityName, paymentMethod, paymentChannel, billingScheme, occupiedSessions, supabase, onSuccess]);
+  }, [selectedPitch, selectedDays, selectedSlots, customerName, customerPhone, customerNote, allDates, allSessions, effectiveRate, avgRate, totalPrice, priceForSlot, pricesVary, clientType, clientEntityName, paymentMethod, paymentChannel, billingScheme, occupiedSessions, supabase, onSuccess, entitiesStorageKey]);
 
   // ── Navegación entre pasos ──────────────────────────────────────────────────
 
@@ -1179,15 +1225,19 @@ export function ContractBookingModal({
                         <p className="text-xs text-muted-foreground">
                           {(p as any).type || 'Fútbol 5'} · {(p as any).surface || 'Sintética'}
                         </p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs font-bold text-[#008744]">
-                            Base: {formatCOP(p.price_per_hour || 0)}/h
+                        {customRate && Number(customRate) > 0 && (
+                          <span className="inline-block mt-1 text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-green-500/15 text-green-700 dark:text-green-300">
+                            Pactado: {formatCOP(Number(customRate))}/h
                           </span>
-                          {customRate && Number(customRate) !== p.price_per_hour && (
-                            <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-green-500/15 text-green-700 dark:text-green-300">
-                              Pactado: {formatCOP(Number(customRate))}/h
+                        )}
+                        {/* Precio de cada hora en esta cancha */}
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {pitchPriceRanges(p).map(r => (
+                            <span key={r.from} className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-secondary border border-border text-foreground">
+                              {r.from === r.to ? fmt12(r.from) : `${fmt12(r.from)} – ${fmt12(r.to)}`}
+                              <span className="font-black text-green-700 dark:text-green-400"> {formatCOP(r.price)}</span>
                             </span>
-                          )}
+                          ))}
                         </div>
                       </div>
                       {isSel && (
@@ -1253,43 +1303,58 @@ export function ContractBookingModal({
                 )}
               </div>
 
-              {/* Fecha de inicio */}
+              {/* Días de la semana: cada uno muestra la fecha de su primer partido */}
               <div>
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                  Fecha del Primer Partido
-                </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  min={new Date().toISOString().split('T')[0]}
-                  onChange={e => setStartDate(e.target.value)}
-                  className="border border-border bg-card rounded-xl px-3 py-2 text-xs font-semibold"
-                />
-              </div>
-
-              {/* Días de la semana */}
-              <div>
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                  Días de la semana en que juegan
-                </label>
+                <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+                    Días de la semana en que juegan
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={startDate <= todayBogota()}
+                      onClick={() => setStartDate(prev => { const t = todayBogota(); const n = addDaysYmd(prev, -7); return n < t ? t : n; })}
+                      className="px-2 py-1 rounded-lg border border-border bg-card text-[10px] font-bold text-muted-foreground hover:bg-secondary disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      ← Semana anterior
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStartDate(prev => addDaysYmd(prev, 7))}
+                      className="px-2 py-1 rounded-lg border border-border bg-card text-[10px] font-bold text-muted-foreground hover:bg-secondary cursor-pointer"
+                    >
+                      Semana siguiente →
+                    </button>
+                  </div>
+                </div>
                 <div className="grid grid-cols-7 gap-1.5">
                   {DAYS_OF_WEEK.map(d => {
                     const isSel = selectedDays.includes(d.key);
+                    const first = nextDateForDay(startDate, d.key);
+                    const [, fm, fd] = first.split('-').map(Number);
+                    const isToday = first === todayBogota();
                     return (
                       <button
                         key={d.key}
                         type="button"
                         onClick={() => toggleDay(d.key)}
-                        className={`py-2 rounded-xl text-xs font-black border-2 transition-all cursor-pointer text-center ${isSel
+                        className={`py-1.5 rounded-xl border-2 transition-all cursor-pointer text-center leading-tight ${isSel
                           ? 'bg-green-600 text-white border-green-600 shadow-sm'
                           : 'bg-card border-border text-muted-foreground hover:border-green-400/40'
                           }`}
                       >
-                        {d.label}
+                        <span className="block text-[10px] font-bold uppercase">{d.label}</span>
+                        <span className={`block text-base font-black ${isSel ? 'text-white' : 'text-foreground'}`}>{fd}</span>
+                        <span className="block text-[9px] font-semibold opacity-80">{isToday ? 'hoy' : MONTHS_SHORT[fm - 1]}</span>
                       </button>
                     );
                   })}
                 </div>
+                {allDates.length > 0 && (
+                  <p className="mt-2 text-xs font-semibold text-foreground">
+                    Primer partido: <span className="font-black text-green-700 dark:text-green-400 capitalize">{formatDateFriendly(allDates[0])}</span>
+                  </p>
+                )}
               </div>
 
               {/* Horas del turno con indicador visual de disponibilidad PREVIA */}
@@ -1402,7 +1467,7 @@ export function ContractBookingModal({
                       <DollarSign size={14} className="text-green-600" /> Precio de cada hora
                     </span>
                     <span className="text-[10px] text-muted-foreground font-semibold">
-                      Vacío = tarifa de la cancha ({formatCOP(effectiveRate)})
+                      Vacío = precio de esa hora en la cancha
                     </span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1414,7 +1479,7 @@ export function ContractBookingModal({
                           type="text"
                           inputMode="numeric"
                           autoComplete="off"
-                          placeholder={fmtThousands(String(effectiveRate))}
+                          placeholder={fmtThousands(String(priceForSlot(slot)))}
                           value={fmtThousands(slotPrices[slot] ?? '')}
                           onChange={e => {
                             const digits = e.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 9);

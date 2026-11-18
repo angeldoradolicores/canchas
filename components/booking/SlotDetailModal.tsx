@@ -543,11 +543,11 @@ export function SlotDetailModal({
                 </div>
               )}
 
-              <div className={`p-2.5 rounded-xl border ${isCreditOrContract ? 'bg-amber-500/10 border-amber-500/20' : (balance > 0 ? 'bg-sky-500/10 border-sky-500/20' : 'bg-secondary/30 border-border/70')}`}>
-                <p className={`text-[10px] uppercase font-bold ${isCreditOrContract ? 'text-amber-700 dark:text-amber-300' : (balance > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-muted-foreground')}`}>
+              <div className={`p-2.5 rounded-xl border ${isCreditOrContract ? 'bg-blue-500/10 border-blue-500/25' : (balance > 0 ? 'bg-blue-500/10 border-blue-500/25' : 'bg-secondary/30 border-border/70')}`}>
+                <p className={`text-[10px] uppercase font-bold ${isCreditOrContract ? 'text-blue-700 dark:text-blue-300' : (balance > 0 ? 'text-blue-700 dark:text-blue-300' : 'text-muted-foreground')}`}>
                   {isCreditOrContract ? 'Por Cobrar' : 'Saldo Restante'}
                 </p>
-                <p className={`font-black text-xs sm:text-sm mt-0.5 ${isCreditOrContract ? 'text-amber-700 dark:text-amber-300' : (balance > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-foreground')}`}>
+                <p className={`font-black text-xs sm:text-sm mt-0.5 ${isCreditOrContract ? 'text-blue-700 dark:text-blue-300' : (balance > 0 ? 'text-blue-700 dark:text-blue-300' : 'text-foreground')}`}>
                   ${Math.max(0, isCreditOrContract ? (tPrice - remPaid) : balance).toLocaleString('es-CO')}
                 </p>
               </div>

@@ -617,7 +617,7 @@ export function RemainingPaymentModal({
                       </p>
                       <p>
                         <strong className="text-foreground">Saldo restante:</strong>{' '}
-                        <span className="font-bold text-amber-600 dark:text-amber-400">
+                        <span className="font-bold text-blue-700 dark:text-blue-300">
                           {formatCOP(Math.max(0, totalPrice - depositAmount - paymentHistory.slice(0, idx + 1).reduce((sum, e) => sum + Number(e.amount || 0), 0)))}
                         </span>
                       </p>

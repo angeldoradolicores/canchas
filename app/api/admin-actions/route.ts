@@ -680,7 +680,7 @@ export async function POST(req: NextRequest) {
 
           if (updateErr) {
             if (isContract) {
-              skippedConflicts.push({ slot: item.start_time, reason: updateErr.message });
+              skippedConflicts.push({ slot: item.start_time, reason: 'No se pudo guardar esta hora' });
               continue;
             }
             return NextResponse.json(safeServerErrorResponse(updateErr, 'Error al actualizar la reserva.'), { status: 500 });
@@ -719,7 +719,7 @@ export async function POST(req: NextRequest) {
               return NextResponse.json({ error: `La hora ${item.start_time.substring(11, 16)} ya está ocupada.` }, { status: 400 });
             }
             if (isContract) {
-              skippedConflicts.push({ slot: item.start_time, reason: insertErr.message });
+              skippedConflicts.push({ slot: item.start_time, reason: 'No se pudo guardar esta hora' });
               continue;
             }
             return NextResponse.json(safeServerErrorResponse(insertErr, 'Error al crear la reserva.'), { status: 500 });
@@ -846,6 +846,7 @@ export async function POST(req: NextRequest) {
       const conflictingPitchIds = await fetchConflictingPitchIds(supabase, pitch_id);
       const createdBookings: any[] = [];
       const skippedConflicts: any[] = [];
+      const insertedIds: string[] = [];
 
       // Construir todos los inserts (soporta lista explícita de sesiones o producto fecha × slot)
       const rawSessions = Array.isArray(payload?.sessions) ? payload.sessions : [];
@@ -872,7 +873,7 @@ export async function POST(req: NextRequest) {
                 start_time: startIso,
                 end_time: endIso,
                 status: 'confirmed',
-                payment_status: billingScheme === 'por_sesion' ? 'pending' : 'verified',
+                payment_status: 'verified',
                 source: 'owner_panel',
                 booking_type: 'contract',
                 ...(itemPrice !== undefined ? { total_price: itemPrice, custom_rate: itemPrice } : {}),
@@ -887,7 +888,7 @@ export async function POST(req: NextRequest) {
                 start_time: startIso,
                 end_time: endIso,
                 status: 'confirmed',
-                payment_status: billingScheme === 'por_sesion' ? 'pending' : 'verified',
+                payment_status: 'verified',
                 source: 'owner_panel',
                 booking_type: 'contract',
                 ...(itemPrice !== undefined ? { total_price: itemPrice, custom_rate: itemPrice } : {}),
@@ -914,7 +915,7 @@ export async function POST(req: NextRequest) {
                 start_time: startIso,
                 end_time: endIso,
                 status: 'confirmed',
-                payment_status: billingScheme === 'por_sesion' ? 'pending' : 'verified',
+                payment_status: 'verified',
                 source: 'owner_panel',
                 booking_type: 'contract',
                 ...(effectivePrice !== undefined ? { total_price: effectivePrice, custom_rate: effectivePrice } : {}),
@@ -929,7 +930,7 @@ export async function POST(req: NextRequest) {
                 start_time: startIso,
                 end_time: endIso,
                 status: 'confirmed',
-                payment_status: billingScheme === 'por_sesion' ? 'pending' : 'verified',
+                payment_status: 'verified',
                 source: 'owner_panel',
                 booking_type: 'contract',
                 ...(effectivePrice !== undefined ? { total_price: effectivePrice, custom_rate: effectivePrice } : {}),
@@ -948,7 +949,7 @@ export async function POST(req: NextRequest) {
       // ── Ajuste del payment_status según billing_scheme ─────────────────────
       // 'por_sesion': cada reserva queda como 'pending' (se cobra al llegar al partido)
       // Planes (mes_anticipado, etc.): queda como 'verified' (se cobra el plan completo al inicio)
-      const contractPaymentStatus = billingScheme === 'por_sesion' ? 'pending' : 'verified';
+      const contractPaymentStatus = 'verified';
 
       // Helper para normalizar timestamps a clave ISO UTC para comparación infalible
       const toIsoKey = (s: string | Date) => {
@@ -1008,7 +1009,7 @@ export async function POST(req: NextRequest) {
           customer_phone: item.base.customer_phone,
           end_time: item.base.end_time,
           status: 'confirmed',
-          payment_status: billingScheme === 'por_sesion' ? 'pending' : 'verified',
+          payment_status: 'verified',
           source: 'owner_panel',
           reviewed_at: new Date().toISOString(),
           reviewed_by: ownerId,
@@ -1028,7 +1029,7 @@ export async function POST(req: NextRequest) {
           customer_phone: item.base.customer_phone,
           end_time: item.base.end_time,
           status: 'confirmed',
-          payment_status: billingScheme === 'por_sesion' ? 'pending' : 'verified',
+          payment_status: 'verified',
           source: 'owner_panel',
           reviewed_at: new Date().toISOString(),
           reviewed_by: ownerId,
@@ -1059,7 +1060,7 @@ export async function POST(req: NextRequest) {
           }
 
           if (updateErr) {
-            skippedConflicts.push({ slot: item.start_time, reason: updateErr.message });
+            skippedConflicts.push({ slot: item.start_time, reason: 'No se pudo guardar esta hora' });
           } else if (updated) {
             createdBookings.push(updated);
           }
@@ -1109,15 +1110,19 @@ export async function POST(req: NextRequest) {
               // Garantía anti-solape de la BD (incluye canchas combinadas/hijas).
               skippedConflicts.push({ slot: item.start_time, reason: 'Hora ya ocupada (solape con otra cancha vinculada)' });
             } else {
-              skippedConflicts.push({ slot: item.start_time, reason: insertErr.message });
+              skippedConflicts.push({ slot: item.start_time, reason: 'No se pudo guardar esta hora' });
             }
           } else if (inserted) {
             createdBookings.push(inserted);
+            insertedIds.push(inserted.id);
           }
         }
       }
 
       if (payload?.strict && skippedConflicts.length > 0) {
+        // Todo o nada: no dejar un turno fijo a medias. Se borran las filas NUEVAS de este intento
+        // (las reutilizadas ya existían y no se tocan más).
+        if (insertedIds.length) await supabase.from('bookings').delete().in('id', insertedIds);
         return NextResponse.json({
           success: false,
           error: `No se puede guardar el turno fijo: Se detectaron ${skippedConflicts.length} horario(s) en conflicto ya ocupados. No está permitido omitir fechas de turno fijo.`,

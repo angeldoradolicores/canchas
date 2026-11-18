@@ -27,6 +27,7 @@ import {
   getTotalPaid as _getTotalPaid,
   type PaymentEntry,
 } from '@/lib/remaining-payment-utils';
+import { getOutstandingMap, bookingIncome } from '@/lib/cash-events';
 import { getContractBillingInfo } from '@/lib/contract-billing';
 import { SlotDetailModal } from '@/components/booking/SlotDetailModal';
 import {
@@ -130,6 +131,16 @@ function cleanCustomerName(raw: string | null | undefined): string {
     .replace(/CID:[a-zA-Z0-9_-]+/gi, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
+}
+
+/** Nombre a mostrar en la agenda: la entidad / escuela si la hay; si no, el cliente. */
+function bookingDisplayName(b: any): string {
+  if (!b) return '';
+  const ent = String(b.client_entity_name || '').trim();
+  if (ent) return ent;
+  const m = String(b.note || '').match(/(?:ENTIDAD|ESCUELA):\s*([^·\]]+)/i);
+  if (m && m[1].trim()) return m[1].trim();
+  return cleanCustomerName(b.customer_name);
 }
 
 function isContractOrCreditBooking(b: any): boolean {
@@ -649,6 +660,29 @@ export default function BookingsPage() {
     return toastId;
   };
 
+  // Aviso al crear una reserva manual o un turno fijo: confirma que se generó y en qué pestaña quedó.
+  const showCreatedToast = (kind: 'manual' | 'contract', info?: { customerName: string; count: number; pending: number }) => {
+    const pending = Number(info?.pending || 0) > 0;
+    const n = info?.count || 0;
+    const text = kind === 'contract'
+      ? `Turno fijo creado${n ? `: ${n} ${n === 1 ? 'partido' : 'partidos'}` : ''}`
+      : `Reserva manual creada${n > 1 ? ` (${n} horas)` : ''}`;
+    if (statusToastTimerRef.current) clearTimeout(statusToastTimerRef.current);
+    const id = Date.now();
+    setStatusToast({
+      id, text, customerName: info?.customerName,
+      targetTab: pending ? 'pending_payment' : 'paid',
+      targetLabel: pending ? 'Por Cobrar' : 'Cobradas',
+      color: pending ? 'sky' : 'emerald',
+      state: 'saved',
+    });
+    setBumpTab(pending ? 'pending_payment' : 'paid');
+    setTimeout(() => setBumpTab(null), 3500);
+    statusToastTimerRef.current = setTimeout(() => {
+      setStatusToast(prev => prev && prev.id === id ? null : prev);
+    }, 6000);
+  };
+
   // Marca el aviso como guardado (o con error) y lo deja visible unos segundos más.
   const finishStatusToast = (toastId: number, ok: boolean, error?: string) => {
     setStatusToast(prev => prev && prev.id === toastId ? { ...prev, state: ok ? 'saved' : 'error', error } : prev);
@@ -1039,6 +1073,9 @@ export default function BookingsPage() {
   }, []);
 
   // Historial acumulado y contador de canchas jugadas por cada cliente
+  // Saldo de cada reserva con la regla única del dinero (anticipo + abonos, abonos compartidos de turno fijo).
+  const outstandingById = useMemo(() => getOutstandingMap(bookings), [bookings]);
+
   const customerStats = useMemo(() => {
     const map: Record<string, { total: number; confirmed: number; name: string; phone: string }> = {};
     bookings.forEach(b => {
@@ -2204,7 +2241,7 @@ export default function BookingsPage() {
                         )}
                         {group.status === 'confirmed' && (
                           group.is_credit_contract ? (
-                            <span className="text-[11px] font-black text-amber-600 dark:text-amber-400 mt-0.5 block">
+                            <span className="text-[11px] font-black text-blue-700 dark:text-blue-300 mt-0.5 block">
                               Por Cobrar: ${Math.max(0, tPrice - dAmount - (group.remaining_amount_paid || 0)).toLocaleString('es-CO')}
                             </span>
                           ) : isFullyPaid ? (
@@ -2212,7 +2249,7 @@ export default function BookingsPage() {
                               <CheckCircle size={10} /> Saldo pagado
                             </span>
                           ) : (
-                            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 mt-0.5 block">
+                            <span className="text-[11px] font-bold text-blue-700 dark:text-blue-300 mt-0.5 block">
                               Saldo: ${balance.toLocaleString('es-CO')}
                             </span>
                           )
@@ -2663,6 +2700,10 @@ export default function BookingsPage() {
                                   const remInfo = getBookingRemainingPayment(b);
                                   const remPaid = bPaidHist > 0 ? bPaidHist : Number(remInfo?.amount || b.remaining_amount_paid || 0);
                                   const balance = Math.max(0, tPrice - dAmount - remPaid);
+                                  // Lo pagado de ESTE partido (anticipo + abonos que le tocan) y lo que falta.
+                                  const rowPrice = bookingIncome(b);
+                                  const rowOutstanding = outstandingById.has(b.id) ? (outstandingById.get(b.id) || 0) : Math.max(0, rowPrice - dAmount - remPaid);
+                                  const rowPaid = Math.max(0, rowPrice - rowOutstanding);
                                   const phoneClean = b.customer_phone ? b.customer_phone.replace(/\D/g, '') : '';
 
                                   // Fecha y hora en que se creó la reserva
@@ -2740,24 +2781,22 @@ export default function BookingsPage() {
                                         )}
                                       </td>
 
-                                      {/* Abono */}
+                                      {/* Abono: anticipo + abonos recibidos que cubren este partido */}
                                       <td className="p-3 text-right whitespace-nowrap">
-                                        {isContract || b.payment_method === 'cuenta_cobrar' ? (
+                                        {b.status !== 'confirmed' ? (
+                                          dAmount > 0 ? (
+                                            <span className="font-black text-foreground">${dAmount.toLocaleString('es-CO')}</span>
+                                          ) : <span className="text-muted-foreground">$0</span>
+                                        ) : rowPaid > 0 ? (
                                           <div>
-                                            <span className="font-black text-green-600 dark:text-green-400">$0</span>
-                                            <span className="block text-[9px] text-muted-foreground font-bold">Cuenta Cobrar</span>
-                                          </div>
-                                        ) : dAmount > 0 ? (
-                                          <div>
-                                            <span className="font-black text-emerald-600 dark:text-emerald-400">
-                                              ${dAmount.toLocaleString('es-CO')}
-                                            </span>
-                                            <span className="block text-[8px] text-muted-foreground font-bold">
-                                              {b.deposit_amount ? 'Real en DB' : 'Calculado 50%'}
-                                            </span>
+                                            <span className="font-black text-emerald-600 dark:text-emerald-400">${rowPaid.toLocaleString('es-CO')}</span>
+                                            <span className="block text-[9px] text-muted-foreground font-bold">{rowOutstanding <= 0 ? 'Pagado completo' : 'Anticipo y abonos'}</span>
                                           </div>
                                         ) : (
-                                          <span className="text-muted-foreground">$0</span>
+                                          <div>
+                                            <span className="font-black text-muted-foreground">$0</span>
+                                            <span className="block text-[9px] text-muted-foreground font-bold">Sin abonos</span>
+                                          </div>
                                         )}
                                       </td>
 
@@ -2765,7 +2804,7 @@ export default function BookingsPage() {
                                       <td className="p-3 text-right whitespace-nowrap">
                                         <div className="flex flex-col items-end">
                                           <span className="font-black text-foreground">
-                                            ${tPrice.toLocaleString('es-CO')}
+                                            ${rowPrice.toLocaleString('es-CO')}
                                           </span>
                                           {isPlanContract && contractInfo && (
                                             <span className="text-[9px] font-extrabold text-green-600 dark:text-green-400">
@@ -2787,18 +2826,14 @@ export default function BookingsPage() {
                                             {b.status === 'confirmed' ? 'Aprobado' : (b.status === 'pending' ? 'Por Aprobar' : 'Cancelado')}
                                           </span>
 
-                                          {isContract || b.payment_method === 'cuenta_cobrar' ? (
-                                            <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">
-                                              Por Cobrar: ${Math.max(0, tPrice - dAmount - remPaid).toLocaleString('es-CO')}
-                                            </span>
-                                          ) : b.status === 'confirmed' ? (
-                                            balance <= 0 && (dAmount + remPaid > 0 || tPrice === 0) ? (
+                                          {b.status === 'confirmed' ? (
+                                            rowOutstanding <= 0 ? (
                                               <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
                                                 Pagado
                                               </span>
                                             ) : (
-                                              <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">
-                                                Saldo: ${balance.toLocaleString('es-CO')}
+                                              <span className="text-[9px] font-bold text-blue-700 dark:text-blue-300">
+                                                {isContract || b.payment_method === 'cuenta_cobrar' ? 'Por Cobrar' : 'Saldo'}: ${rowOutstanding.toLocaleString('es-CO')}
                                               </span>
                                             )
                                           ) : null}
@@ -2811,8 +2846,11 @@ export default function BookingsPage() {
                                           <button
                                             type="button"
                                             onClick={() => {
+                                              // Solo las horas de ESTE día: antes se pasaban todas las fechas del
+                                              // turno fijo y el detalle repetía la misma hora muchas veces.
+                                              const bDay = getLocalDateString(b.start_time);
                                               const relBookings = (isPlanContract && contractInfo && contractInfo.relatedBookingIds.length > 0)
-                                                ? bookings.filter((x: any) => contractInfo.relatedBookingIds.includes(x.id))
+                                                ? bookings.filter((x: any) => contractInfo.relatedBookingIds.includes(x.id) && getLocalDateString(x.start_time) === bDay)
                                                 : [b];
                                               setSelectedSlotDetail({
                                                 pitch: b.pitches || entry.pitch,
@@ -2933,10 +2971,11 @@ export default function BookingsPage() {
             setShowManualBooking(false);
             setManualBookingPrefill(null);
           }}
-          onSuccess={() => {
+          onSuccess={(info) => {
             setShowManualBooking(false);
             setManualBookingPrefill(null);
             fetchBookingsAndPitches();
+            showCreatedToast('manual', info);
           }}
           initialPitchId={manualBookingPrefill?.pitchId}
           initialDate={manualBookingPrefill?.date}
@@ -3418,9 +3457,10 @@ export default function BookingsPage() {
           pitches={pitches}
           existingBookings={bookings}
           onClose={() => setShowContractModal(false)}
-          onSuccess={() => {
+          onSuccess={(info) => {
             setShowContractModal(false);
             fetchBookingsAndPitches();
+            showCreatedToast('contract', info);
           }}
         />
       )}
@@ -3868,7 +3908,7 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, allBooki
               className={`relative p-2 rounded-xl border text-center transition-all flex flex-col justify-center min-h-[72px] cursor-pointer hover:ring-2 hover:ring-primary/60 hover:scale-[1.02] active:scale-95 select-none ${bgClass}`}
               title={
                 effectiveBooking
-                  ? `Ver detalle: ${effectiveBooking.customer_name || 'Reserva'}${isMulti && userGroupInfo ? ` (${userGroupInfo.allBookings.length} horas: ${userGroupInfo.distinctPitchNames.join(', ')} · Total: $${userGroupInfo.totalPrice.toLocaleString('es-CO')})` : ''}`
+                  ? `Ver detalle: ${bookingDisplayName(effectiveBooking) || 'Reserva'}${isMulti && userGroupInfo ? ` (${userGroupInfo.allBookings.length} horas: ${userGroupInfo.distinctPitchNames.join(', ')} · Total: $${userGroupInfo.totalPrice.toLocaleString('es-CO')})` : ''}`
                   : !isOperating
                     ? 'Horario no operativo / cerrado'
                     : 'Toca para ver o registrar reserva manual'
@@ -3915,8 +3955,8 @@ function PitchScheduleCard({ pitch, selectedDate, supabase, allPitches, allBooki
 
               {effectiveBooking && effectiveBooking.status !== 'draft' && (
                 <div className="mt-1 text-[10px] font-semibold leading-tight space-y-0.5">
-                  <div className="truncate text-foreground font-bold text-[9px]" title={effectiveBooking.customer_name}>
-                    {effectiveBooking.customer_name || '—'}
+                  <div className="truncate text-foreground font-bold text-[9px]" title={bookingDisplayName(effectiveBooking)}>
+                    {bookingDisplayName(effectiveBooking) || '—'}
                   </div>
 
                   {isManual ? (
@@ -4152,7 +4192,7 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, allBookings, 
                         className={`min-h-[36px] p-1 flex flex-col justify-center text-center transition-all cursor-pointer hover:ring-2 hover:ring-primary/60 hover:scale-[1.03] active:scale-95 select-none ${cellClass} ${mergeClass}`}
                         title={
                           slotBooking
-                            ? `Ver detalle reserva: ${slotBooking.customer_name || 'Reserva'}${isMultiHour && userGroupInfo ? ` (${userGroupInfo.allBookings.length} horas: ${userGroupInfo.distinctPitchNames.join(', ')} · Total: $${userGroupInfo.totalPrice.toLocaleString('es-CO')})` : ''}`
+                            ? `Ver detalle reserva: ${bookingDisplayName(slotBooking) || 'Reserva'}${isMultiHour && userGroupInfo ? ` (${userGroupInfo.allBookings.length} horas: ${userGroupInfo.distinctPitchNames.join(', ')} · Total: $${userGroupInfo.totalPrice.toLocaleString('es-CO')})` : ''}`
                             : !isOperating
                               ? 'Cerrado'
                               : 'Toca para reservar'
@@ -4176,8 +4216,8 @@ function PitchGridMatrixCard({ pitch, dates, supabase, allPitches, allBookings, 
                                     </span> */}
                                   </div>
                                 )}
-                                <div className="text-[10px] font-bold leading-tight truncate w-full" title={slotBooking.customer_name}>
-                                  {slotBooking.customer_name || 'Reservado'}
+                                <div className="text-[10px] font-bold leading-tight truncate w-full" title={bookingDisplayName(slotBooking)}>
+                                  {bookingDisplayName(slotBooking) || 'Reservado'}
                                 </div>
                               </>
                             )}

@@ -433,9 +433,11 @@ export function OwnerDashboard() {
   const avgIncome = confirmed.length > 0 ? Math.round(totalIncome / confirmed.length) : 0;
   const confirmRate = filteredBookings.length > 0 ? Math.round((confirmed.length / filteredBookings.length) * 100) : 0;
 
+  // Ingresos por cancha = dinero RECIBIDO en el periodo (anticipos y abonos por fecha del pago),
+  // no el valor de las reservas que se juegan en el periodo.
   const incomeByPitch = pitches.map(p => {
-    const pb = confirmed.filter(b => b.pitch_id === p.id);
-    return { name: p.name || 'Cancha', income: pb.reduce((s, b) => s + getBookingIncome(b), 0), count: pb.length, id: p.id };
+    const evs = periodCash.filter(ev => ev.pitchId === p.id);
+    return { name: p.name || 'Cancha', income: evs.reduce((s, ev) => s + ev.amount, 0), count: evs.length, id: p.id };
   }).sort((a, b) => b.income - a.income);
 
   const demandByPitch = pitches.map(p => ({
@@ -752,13 +754,13 @@ export function OwnerDashboard() {
           </div>
         </div>
 
-        <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between shadow-sm">
+        <div className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-between shadow-sm">
           <div>
-            <span className="text-[10px] font-black uppercase text-amber-800 dark:text-amber-300 tracking-wider block">Por Cobrar en Cancha</span>
-            <span className="text-lg font-black text-amber-700 dark:text-amber-400">{fmt(pendingCollection)}</span>
+            <span className="text-[10px] font-black uppercase text-blue-800 dark:text-blue-300 tracking-wider block">Por Cobrar en Cancha</span>
+            <span className="text-lg font-black text-blue-700 dark:text-blue-300">{fmt(pendingCollection)}</span>
             <span className="text-[10px] text-muted-foreground block mt-0.5">Saldo pendiente al momento de jugar</span>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold shrink-0">
             <Wallet size={20} />
           </div>
         </div>
@@ -952,7 +954,7 @@ export function OwnerDashboard() {
             <h2 className="text-sm font-extrabold text-foreground flex items-center gap-2">
               <DollarSign size={15} className="text-primary" /> Ingresos por cancha
             </h2>
-            <p className="text-xs text-muted-foreground">Solo reservas confirmadas</p>
+            <p className="text-xs text-muted-foreground">Dinero recibido en el periodo · Anticipos y abonos</p>
           </div>
           {incomeByPitch.length === 0 ? <p className="text-xs text-muted-foreground mt-4">Sin datos aún.</p> : (
             <div className="mt-4 space-y-3">
@@ -967,7 +969,7 @@ export function OwnerDashboard() {
                     <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
                       <div className="h-full bg-primary rounded-full transition-all duration-700" style={{ width: `${(p.income / maxIncome) * 100}%` }} />
                     </div>
-                    <p className="text-[10px] text-muted-foreground">{p.count} reservas confirmadas</p>
+                    <p className="text-[10px] text-muted-foreground">{p.count === 0 ? 'Sin pagos en el periodo' : `${p.count} ${p.count === 1 ? 'pago recibido' : 'pagos recibidos'}`}</p>
                   </div>
                 );
               })}

@@ -114,7 +114,7 @@ export function ManualBookingModal({
 }: {
   pitches: Pitch[];
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (info?: { customerName: string; count: number; pending: number }) => void;
   initialPitchId?: string;
   initialDate?: string;
   initialTime?: string;
@@ -301,7 +301,12 @@ export function ManualBookingModal({
         }
       }
 
-      onSuccess();
+      const dep = depositAmount && !isNaN(Number(depositAmount)) ? Number(depositAmount) : 0;
+      onSuccess({
+        customerName: customerName.trim(),
+        count: data.booking_ids?.length || selectedTimes.length,
+        pending: Math.max(0, totalPrice - dep),
+      });
     } catch (err: any) {
       setError(err.message);
       setLoading(false);
