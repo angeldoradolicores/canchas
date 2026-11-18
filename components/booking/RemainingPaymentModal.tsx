@@ -25,6 +25,8 @@ interface RemainingPaymentModalProps {
   onSuccess: (updatedPayment: any, bookingIds?: string[]) => void;
   /** Turno fijo "por sesión": cobrar solo la sesión o la totalidad del plan. */
   collectMode?: 'session' | 'total';
+  /** Sesión puntual (fecha) elegida para pagar en un turno fijo por sesión. */
+  sessionId?: string;
 }
 
 /**
@@ -94,6 +96,7 @@ export function RemainingPaymentModal({
   allBookings,
   onSuccess,
   collectMode,
+  sessionId,
 }: RemainingPaymentModalProps) {
   const targetBooking = bookingGroup || booking;
 
@@ -128,14 +131,23 @@ export function RemainingPaymentModal({
   const sessionTarget = useMemo(() => {
     if (!isSessionContract) return null;
     const out = getOutstandingMap(planBookings);
+    // Fecha elegida por el dueño en la tarjeta o en el aviso de cobros.
+    if (sessionId && planBookings.some((b: any) => b.id === sessionId) && (out.get(sessionId) || 0) > 0) {
+      return { ids: [sessionId], amount: out.get(sessionId) || 0 };
+    }
     const ownIds: string[] = (targetBooking?.bookings || [targetBooking]).map((b: any) => b?.id).filter(Boolean);
     const ownDue = ownIds.reduce((s2, id) => s2 + (out.get(id) || 0), 0);
-    if (ownDue > 0) return { ids: ownIds, amount: ownDue };
+    if (ownDue > 0 && ownIds.length === 1) return { ids: ownIds, amount: ownDue };
     const next = [...planBookings]
       .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
       .find(b => (out.get(b.id) || 0) > 0);
     return next ? { ids: [next.id], amount: out.get(next.id) || 0 } : { ids: ownIds, amount: 0 };
-  }, [isSessionContract, planBookings, targetBooking]);
+  }, [isSessionContract, planBookings, targetBooking, sessionId]);
+  const sessionLabel = (() => {
+    const b = sessionTarget ? planBookings.find((x: any) => x.id === sessionTarget.ids[0]) : null;
+    if (!b) return '1 partido';
+    return new Date(b.start_time).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+  })();
 
   // Historial de pagos de todas las reservas del grupo
   const paymentHistory = useMemo(() => {
@@ -742,7 +754,7 @@ export function RemainingPaymentModal({
                   <label className="text-xs font-bold text-foreground">¿Qué vas a cobrar?</label>
                   <div className="grid grid-cols-2 gap-2">
                     {([
-                      { id: 'session', label: 'Pagar sesión', amount: Math.min(sessionTarget?.amount || 0, remainingToCollect), hint: '1 partido' },
+                      { id: 'session', label: 'Pagar sesión', amount: Math.min(sessionTarget?.amount || 0, remainingToCollect), hint: sessionLabel },
                       { id: 'total', label: 'Cobrar totalidad', amount: remainingToCollect, hint: `${planBookings.length} partidos` },
                     ] as const).map(opt => {
                       const active = mode === opt.id;

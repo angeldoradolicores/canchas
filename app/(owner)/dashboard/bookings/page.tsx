@@ -18,6 +18,7 @@ import { ContractBookingModal } from '@/components/booking/ContractBookingModal'
 import { CustomMonthCalendar } from '@/components/explore/CustomMonthCalendar';
 import { isCombinedPitch, getConflictingPitchIds } from '@/lib/combined-pitch-utils';
 import { RemainingPaymentModal } from '@/components/booking/RemainingPaymentModal';
+import { CollectionReminders } from '@/components/booking/CollectionReminders';
 import {
   getBookingRemainingPayment,
   getBookingOriginalProof,
@@ -131,6 +132,16 @@ function cleanCustomerName(raw: string | null | undefined): string {
     .replace(/CID:[a-zA-Z0-9_-]+/gi, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
+}
+
+/**
+ * Clave para sumar las canchas de un cliente: SOLO su celular (últimos 10 dígitos).
+ * Sin celular no se suma a nadie: antes se usaba el nombre y se mezclaban clientes con
+ * nombres iguales o parecidos.
+ */
+function customerPhoneKey(b: any): string {
+  const digits = String(b?.customer_phone || '').replace(/\D/g, '');
+  return digits.length >= 7 ? digits.slice(-10) : '';
 }
 
 /** Nombre a mostrar en la agenda: la entidad / escuela si la hay; si no, el cliente. */
@@ -1080,7 +1091,7 @@ export default function BookingsPage() {
     const map: Record<string, { total: number; confirmed: number; name: string; phone: string }> = {};
     bookings.forEach(b => {
       if (!b) return;
-      const key = (b.customer_phone || b.customer_name || '').trim().toLowerCase();
+      const key = customerPhoneKey(b);
       if (!key) return;
       if (!map[key]) {
         map[key] = { total: 0, confirmed: 0, name: b.customer_name || 'Cliente', phone: b.customer_phone || '' };
@@ -1225,12 +1236,10 @@ export default function BookingsPage() {
         matchStatus = b.status === 'pending';
       } else if (filterStatus === 'pending_payment') {
         // Reservas confirmadas con saldo pendiente por cobrar en el local
-        const { hasPendingBalance } = getBookingEffectiveFinancials(b);
-        matchStatus = b.status === 'confirmed' && hasPendingBalance;
+        matchStatus = b.status === 'confirmed' && (outstandingById.get(b.id) || 0) > 0;
       } else if (filterStatus === 'paid') {
         // Reservas confirmadas con saldo 100% cubierto / pagado
-        const { isPaid } = getBookingEffectiveFinancials(b);
-        matchStatus = b.status === 'confirmed' && isPaid;
+        matchStatus = b.status === 'confirmed' && outstandingById.has(b.id) && (outstandingById.get(b.id) || 0) <= 0;
       } else if (filterStatus === 'confirmed') {
         matchStatus = b.status === 'confirmed';
       } else if (filterStatus === 'cancelled') {
@@ -1265,7 +1274,7 @@ export default function BookingsPage() {
 
       return matchStatus && matchDate && matchQuery;
     });
-  }, [bookings, filterStatus, listDateFilter, selectedDate, calView, searchQuery, getDaysRange]);
+  }, [bookings, filterStatus, listDateFilter, selectedDate, calView, searchQuery, getDaysRange, outstandingById]);
 
   // Todas las pendientes del complejo en total
   const allPendingBookings = useMemo(() => {
@@ -1299,10 +1308,13 @@ export default function BookingsPage() {
       const bDateStr = getLocalDateString(b.start_time);
       const bContract = getContractBillingInfo(b, bookings);
       const isContractPlan = bContract.isContract && bContract.isPlanBilling;
+      // Turno fijo "por sesión": todas sus fechas van en UNA sola tarjeta (se elige qué sesión cobrar).
+      const sessionContractId = bContract.isContract && !bContract.isPlanBilling ? bContract.contractId : null;
 
       // Buscar si ya existe un grupo que pertenezca a la misma reserva/transacción
       const existingGroup = groupsList.find((g: any) => {
         if (g.status !== b.status) return false;
+        if (sessionContractId || g.session_contract_id) return g.session_contract_id === sessionContractId;
 
         // 0. Si es un CONTRATO / TURNO FIJO con modalidad agrupada
         // CADA CONTRATO SE COBRA POR SEPARADO (no mezclar contratos de 280k con otros de 300k del mismo usuario)
@@ -1449,6 +1461,7 @@ export default function BookingsPage() {
         groupsList.push({
           key,
           id: b.id,
+          session_contract_id: sessionContractId,
           pitch_id: b.pitch_id,
           pitch_ids: [b.pitch_id],
           pitch_names: [b.pitches?.name || 'Cancha'],
@@ -1514,6 +1527,20 @@ export default function BookingsPage() {
           </span>
         </div>
       )}
+
+      {/* Aviso: pagos que se deben cobrar hoy y saldos vencidos */}
+      <CollectionReminders
+        bookings={bookings}
+        outstanding={outstandingById}
+        onCollect={(b, sessionId) => {
+          setSelectedBookingForRemainingPayment(
+            sessionId
+              ? { ...b, bookings: [b], __collectMode: 'session', __sessionId: sessionId }
+              : { ...b, bookings: [b] }
+          );
+        }}
+        onSeeAll={() => { setViewMode('list'); setFilterStatus('pending_payment'); setListDateFilter('all'); }}
+      />
 
       {/* Header Principal */}
       <div className="card-heading flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-4 rounded-2xl border border-border shadow-sm">
@@ -1962,12 +1989,16 @@ export default function BookingsPage() {
                     const total = planBs.reduce((sum2: number, x: any) => sum2 + bookingIncome(x), 0);
                     const due = planBs.reduce((sum2: number, x: any) => sum2 + (outstandingById.get(x.id) || 0), 0);
                     const sessionDue = (group.bookings || []).reduce((sum2: number, x: any) => sum2 + (outstandingById.get(x.id) || 0), 0);
-                    return { count: planBs.length, total, due, sessionDue };
+                    const todayYmd = getLocalDateString(new Date().toISOString());
+                    const sessions = [...planBs]
+                      .sort((a: any, c: any) => new Date(a.start_time).getTime() - new Date(c.start_time).getTime())
+                      .map((x: any) => ({ id: x.id, start: x.start_time, due: outstandingById.get(x.id) || 0, isToday: getLocalDateString(x.start_time) === todayYmd, isPast: getLocalDateString(x.start_time) < todayYmd }));
+                    return { count: planBs.length, total, due, sessionDue, sessions };
                   })()
                   : null;
                 if (sessionPlan && group.status === 'confirmed') {
-                  balance = sessionPlan.sessionDue;
-                  isFullyPaid = sessionPlan.sessionDue <= 0;
+                  balance = sessionPlan.due;
+                  isFullyPaid = sessionPlan.due <= 0;
                 }
                 const isNewlyArrived = group.bookings.some((b: any) => newlyArrivedIds.has(b.id));
 
@@ -2158,7 +2189,7 @@ export default function BookingsPage() {
                         })()}
                         {/* Contador de Partidos del Cliente */}
                         {(() => {
-                          const custKey = (group.customer_phone || group.customer_name || '').trim().toLowerCase();
+                          const custKey = customerPhoneKey(group);
                           const matches = customerStats[custKey]?.confirmed || 0;
                           return matches > 0 ? (
                             <div className="mt-1 flex items-center gap-1">
@@ -2259,7 +2290,7 @@ export default function BookingsPage() {
                         {group.status === 'confirmed' && (
                           group.is_credit_contract ? (
                             <span className="text-[11px] font-black text-blue-700 dark:text-blue-300 mt-0.5 block">
-                              Por Cobrar: ${Math.max(0, tPrice - dAmount - (group.remaining_amount_paid || 0)).toLocaleString('es-CO')}
+                              Por Cobrar: ${(sessionPlan ? sessionPlan.due : Math.max(0, tPrice - dAmount - (group.remaining_amount_paid || 0))).toLocaleString('es-CO')}
                             </span>
                           ) : isFullyPaid ? (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
@@ -2359,19 +2390,39 @@ export default function BookingsPage() {
                           </div>
                         )}
                         {sessionPlan && group.status === 'confirmed' && sessionPlan.due > 0 && (
-                          <div className="mt-1.5 flex flex-wrap gap-1.5">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedBookingForRemainingPayment({ ...group, total_price: tPrice, __collectMode: 'session' });
-                              }}
-                              className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-700/60 rounded-xl shadow-2xs transition-all cursor-pointer"
-                              title="Cobrar solo un partido"
-                            >
-                              <DollarSign size={13} className="text-emerald-600 dark:text-emerald-400" />
-                              <span>{sessionPlan.sessionDue > 0 ? `Pagar sesión ($${sessionPlan.sessionDue.toLocaleString('es-CO')})` : 'Pagar próxima sesión'}</span>
-                            </button>
+                          <div className="mt-2 space-y-1.5">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Elige la fecha a pagar</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {sessionPlan.sessions.map((ss: any) => {
+                                const paid = ss.due <= 0;
+                                return (
+                                  <button
+                                    key={ss.id}
+                                    type="button"
+                                    disabled={paid}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedBookingForRemainingPayment({ ...group, total_price: tPrice, __collectMode: 'session', __sessionId: ss.id });
+                                    }}
+                                    title={paid ? 'Sesión pagada' : `Pagar esta sesión ($${ss.due.toLocaleString('es-CO')})`}
+                                    className={`px-2 py-1 rounded-lg border text-[11px] font-bold leading-tight text-left transition-colors ${paid
+                                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 cursor-default'
+                                      : ss.isToday
+                                        ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700 cursor-pointer'
+                                        : ss.isPast
+                                          ? 'border-rose-400/60 bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20 cursor-pointer'
+                                          : 'border-border bg-card text-foreground hover:bg-secondary cursor-pointer'}`}
+                                  >
+                                    <span className="block capitalize">
+                                      {ss.isToday ? 'Hoy' : new Date(ss.start).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Bogota' })}
+                                    </span>
+                                    <span className="block text-[10px] font-semibold opacity-90">
+                                      {paid ? 'Pagada ✓' : `$${ss.due.toLocaleString('es-CO')}${ss.isPast ? ' · vencida' : ''}`}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
                             <button
                               type="button"
                               onClick={(e) => {
@@ -2730,7 +2781,7 @@ export default function BookingsPage() {
                                   const isPlanContract = !!(contractInfo?.isContract && contractInfo?.isPlanBilling);
                                   const sDate = new Date(b.start_time);
                                   const eDate = b.end_time ? new Date(b.end_time) : new Date(sDate.getTime() + 3600000);
-                                  const custKey = (b.customer_phone || b.customer_name || '').trim().toLowerCase();
+                                  const custKey = customerPhoneKey(b);
                                   const confirmedMatches = customerStats[custKey]?.confirmed || 0;
                                   const baseSessionPrice = Number(b.total_price || b.pitches?.price_per_hour || entry.pitch.price_per_hour || 80000);
                                   const tPrice = (isPlanContract && contractInfo && contractInfo.cycleToCollect > 0)
@@ -3076,7 +3127,7 @@ export default function BookingsPage() {
             setManualBookingPrefill({ pitchId: p.id, date: d, time: s });
             setShowManualBooking(true);
           }}
-          customerMatchesCount={selectedSlotDetail?.booking ? (customerStats[(selectedSlotDetail.booking.customer_phone || selectedSlotDetail.booking.customer_name || '').trim().toLowerCase()]?.confirmed || 0) : 0}
+          customerMatchesCount={selectedSlotDetail?.booking ? ((customerPhoneKey(selectedSlotDetail.booking) ? customerStats[customerPhoneKey(selectedSlotDetail.booking)]?.confirmed || 0 : 0)) : 0}
           onOpenContractTrace={(targetBooking) => {
             setReportInitialEntityTarget(targetBooking || selectedSlotDetail?.booking);
             setReportInitialTab('entities');
@@ -3379,6 +3430,7 @@ export default function BookingsPage() {
           booking={selectedBookingForRemainingPayment}
           allBookings={bookings}
           collectMode={selectedBookingForRemainingPayment.__collectMode}
+          sessionId={selectedBookingForRemainingPayment.__sessionId}
           onSuccess={handleRemainingPaymentSuccess}
         />
       )}

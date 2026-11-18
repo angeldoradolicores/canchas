@@ -308,12 +308,20 @@ export function ContractBookingModal({
 
     if (Array.isArray(existingBookings) && existingBookings.length > 0) {
       existingBookings.filter((b: any) => complexPitchIds.has(b.pitch_id)).forEach((b: any) => {
-        const entName = (b.client_entity_name || '').trim();
+        // Nombre de la entidad/escuela: columna propia o, en reservas viejas, el "ENTIDAD: X" de la nota.
+        const noteEnt = String(b.note || '').match(/(ENTIDAD|ESCUELA):\s*([^·\]]+)/i);
+        const entName = ((b.client_entity_name || '') || (noteEnt ? noteEnt[2] : '')).trim();
         const custName = (b.customer_name || '').trim();
         const phone = (b.customer_phone || '').trim();
-        const cType: 'standard' | 'entity' | 'school' = b.client_type === 'school' ? 'school' : (b.client_type === 'entity' ? 'entity' : 'standard');
+        const cType: 'standard' | 'entity' | 'school' = b.client_type === 'school' || noteEnt?.[1]?.toUpperCase() === 'ESCUELA'
+          ? 'school'
+          : (b.client_type === 'entity' || noteEnt ? 'entity' : 'standard');
 
-        if (entName && !map.has(entName.toLowerCase())) {
+        // Si la reserva es de una entidad/escuela, SOLO se guarda la entidad (el responsable va
+        // dentro como contacto). Antes, desde la 2.ª hora del mismo contrato, el responsable se
+        // agregaba aparte como si fuera otro cliente.
+        if (entName) {
+          if (map.has(entName.toLowerCase())) return;
           map.set(entName.toLowerCase(), {
             name: entName,
             clientType: cType !== 'standard' ? cType : 'entity',
@@ -324,7 +332,7 @@ export function ContractBookingModal({
             paymentMethod: b.payment_method,
             pitchId: b.pitch_id,
           });
-        } else if (custName && (b.booking_type === 'contract' || b.contract_id || b.note?.includes('CID:'))) {
+        } else if (custName && cType === 'standard' && (b.booking_type === 'contract' || b.contract_id || b.note?.includes('CID:'))) {
           const cleanName = custName
             .replace(/\[(Turno Fijo|Contrato|ENTIDAD|ESCUELA)[^\]]*\]/gi, '')
             .replace(/CID:[a-zA-Z0-9_-]+/gi, '')
@@ -345,7 +353,12 @@ export function ContractBookingModal({
       });
     }
 
-    setSavedEntities(Array.from(map.values()));
+    // Quitar "particulares" que en realidad son el responsable de una entidad/escuela guardada.
+    const contactNames = new Set(
+      Array.from(map.values()).filter(e => e.clientType !== 'standard').map(e => (e.contactName || '').trim().toLowerCase()).filter(Boolean)
+    );
+    const list = Array.from(map.values()).filter(e => !(e.clientType === 'standard' && contactNames.has(e.name.trim().toLowerCase())));
+    setSavedEntities(list);
   }, [existingBookings, entitiesStorageKey, complexPitchIds]);
 
   // Guardar entidad manualmente

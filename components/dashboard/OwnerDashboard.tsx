@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase/client';
 import { BookingReportModal } from '@/components/booking/BookingReportModal';
 import { playPendingAlertSound, triggerSystemNotification } from '@/lib/push-notifications';
 import { getCashEvents, getOutstandingMap } from '@/lib/cash-events';
+import { CollectionReminders } from '@/components/booking/CollectionReminders';
 
 type DateFilter = 'hoy' | 'ayer' | 'semana' | 'mes' | 'total';
 
@@ -589,6 +590,8 @@ export function OwnerDashboard() {
           </button>
         </div>
       )}
+      {/* Aviso: pagos que se deben cobrar hoy y saldos vencidos */}
+      <CollectionReminders bookings={allBookings} outstanding={outstanding} seeAllHref="/dashboard/bookings?status=pending_payment" />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="min-w-0">
