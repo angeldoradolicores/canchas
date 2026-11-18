@@ -63,8 +63,8 @@ for (let round = 0; round < ROUNDS; round++) {
   for (const p of players) {
     contestants.push({ kind: 'jugador', token: p.token, run: () => call('/api/bookings', { method: 'POST', token: p.token, body: { action: 'lock_booking', payload: { pitch_id: CFG.pitch, selected_date: DATE, selected_times: [slot], turnstile_token: process.env.TURNSTILE_TEST_TOKEN || null } } }) });
   }
-  contestants.push({ kind: 'manual dueño', run: () => call('/api/admin-actions', { method: 'POST', token: owner.token, body: { action: 'create_manual_booking', payload: { pitch_id: CFG.pitch, date: DATE, selected_times: [slot], customer_name: 'PRUEBA CARGA manual', customer_phone: '', total_price: 0, deposit_amount: 0, payment_method: 'efectivo' } } }) });
-  contestants.push({ kind: 'turno fijo', run: () => call('/api/admin-actions', { method: 'POST', token: owner.token, body: { action: 'create_contract_batch', payload: { pitch_id: CFG.pitch, dates: [DATE], selected_times: [slot], customer_name: 'PRUEBA CARGA turno fijo', customer_phone: '', payment_method: 'efectivo' } } }) });
+  contestants.push({ kind: 'manual dueño', run: () => call('/api/admin-actions', { method: 'POST', token: owner.token, body: { action: 'create_manual_booking', payload: { pitch_id: CFG.pitch, date: DATE, selected_times: [slot], customer_name: `${process.env.AUDIT_MARK || 'PRUEBA AUDITORIA'} manual`, customer_phone: '', total_price: 0, deposit_amount: 0, payment_method: 'efectivo' } } }) });
+  contestants.push({ kind: 'turno fijo', run: () => call('/api/admin-actions', { method: 'POST', token: owner.token, body: { action: 'create_contract_batch', payload: { pitch_id: CFG.pitch, dates: [DATE], selected_times: [slot], customer_name: `${process.env.AUDIT_MARK || 'PRUEBA AUDITORIA'} turno fijo`, customer_phone: '', payment_method: 'efectivo' } } }) });
   if (CFG.linkedPitch) {
     const cookie = guestCookie();
     contestants.push({ kind: 'cancha vinculada', cookie, run: () => call('/api/bookings', { method: 'POST', cookie, body: { action: 'lock_booking', payload: { pitch_id: CFG.linkedPitch, selected_date: DATE, selected_times: [slot], turnstile_token: process.env.TURNSTILE_TEST_TOKEN || null } } }) });
@@ -74,7 +74,7 @@ for (let round = 0; round < ROUNDS; round++) {
       contestants.push({ kind: 'BD directa', run: async () => {
         const t0 = performance.now();
         const r = await rest('/rest/v1/bookings', { method: 'POST', key: CFG.service, prefer: 'return=representation',
-          body: { pitch_id: CFG.pitch, start_time: startIso, end_time: endIso, status: 'pending', customer_name: 'PRUEBA CARGA BD', total_price: 0 } });
+          body: { pitch_id: CFG.pitch, start_time: startIso, end_time: endIso, status: 'pending', customer_name: `${process.env.AUDIT_MARK || 'PRUEBA AUDITORIA'} BD`, total_price: 0 } });
         return { status: r.status, json: r.json, text: r.text, ms: performance.now() - t0 };
       } });
     }
@@ -138,7 +138,7 @@ for (const d of created.drafts) {
 }
 if (created.ownerIds.length) {
   const r = await call('/api/bookings/batch-action', { method: 'POST', token: owner.token, body: { ids: created.ownerIds, action: 'cancel' } });
-  if (r.status !== 200) warn('No se pudieron cancelar las reservas del dueño', `${r.status} ${r.text.slice(0, 120)} — cancélalas a mano (cliente "PRUEBA CARGA")`);
+  if (r.status !== 200) warn('No se pudieron cancelar las reservas del dueño', `${r.status} ${r.text.slice(0, 120)} — cancélalas a mano (cliente "PRUEBA AUDITORIA")`);
 }
 if (created.dbIds.length) {
   await rest(`/rest/v1/bookings?id=in.(${created.dbIds.join(',')})`, { method: 'DELETE', key: CFG.service });

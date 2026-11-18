@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { safeServerErrorResponse } from '@/lib/error-handler';
 import { getConflictingPitchIds } from '@/lib/combined-pitch-utils';
+import { getAuthenticatedUser, isPlatformAdmin, verifyCompanyOwnership } from '@/lib/auth-guard';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -96,11 +97,27 @@ function parseBookingHours(startTime: string, endTime?: string): { startH: numbe
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { companyId, pitchId, forTomorrow = false, date } = body;
+    // Solo el dueño del complejo (o un admin de plataforma): la respuesta incluye
+    // nombres de clientes e ids de reserva. Antes cualquiera sin sesión podía leerlos.
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 });
+    }
 
-    if (!companyId) {
+    const body = await req.json().catch(() => null);
+    const { companyId, pitchId, forTomorrow = false, date } = (body || {}) as any;
+
+    if (!companyId || typeof companyId !== 'string' || !/^[0-9a-f-]{36}$/i.test(companyId)) {
       return NextResponse.json({ success: false, error: 'companyId requerido' }, { status: 400 });
+    }
+    if (date !== undefined && (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date))) {
+      return NextResponse.json({ success: false, error: 'Fecha inválida' }, { status: 400 });
+    }
+    if (pitchId !== undefined && pitchId !== 'all' && (typeof pitchId !== 'string' || !/^[0-9a-f-]{36}$/i.test(pitchId))) {
+      return NextResponse.json({ success: false, error: 'Cancha inválida' }, { status: 400 });
+    }
+    if (!isPlatformAdmin(user) && !(await verifyCompanyOwnership(user.id, companyId))) {
+      return NextResponse.json({ success: false, error: 'No tienes permiso sobre este complejo' }, { status: 403 });
     }
 
     // 1. Verificar empresa

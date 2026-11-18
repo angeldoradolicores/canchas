@@ -627,7 +627,7 @@ export default function CreateStatusPage() {
             const todayYmd = bogotaNow().ymd;
             const hRes = await fetch('/api/generate-status', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers,
               body: JSON.stringify({
                 companyId: currentCompany.id,
                 pitchId: firstPitchId || 'all',
@@ -778,9 +778,14 @@ export default function CreateStatusPage() {
     setNotice(null);
     try {
       const ymd = tomorrow ? addDays(bogotaNow().ymd, 1) : bogotaNow().ymd;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
       const res = await fetch('/api/generate-status', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify({ companyId, pitchId, forTomorrow: tomorrow, date: ymd }),
       });
       const json = await res.json();

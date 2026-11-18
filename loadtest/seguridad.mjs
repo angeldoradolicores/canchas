@@ -96,6 +96,19 @@ for (const [path, opts, label] of [
   const r = await call(path, opts);
   report(denied(r.status) || r.status === 429, `Sin sesión: ${label}`, `HTTP ${r.status}`);
 }
+{
+  // Hallazgo 2026-11-18: /api/generate-status devolvía sin sesión los nombres de los
+  // clientes y los ids de reserva de cualquier complejo. Se prueba con un complejo real
+  // (público) y con varias fechas: nunca debe responder datos ni nombres.
+  const companies = await fetch(`${CFG.supabase}/rest/v1/companies?select=id&limit=3`, {
+    headers: { apikey: CFG.anon },
+  }).then((r) => r.json()).catch(() => []);
+  const ids = Array.isArray(companies) && companies.length ? companies.map((c) => c.id) : [FAKE_UUID];
+  for (const companyId of ids) {
+    const r = await call('/api/generate-status', { method: 'POST', body: { companyId } });
+    report(denied(r.status) && !/customer_name/.test(r.text), 'Sin sesión: estado de horas con nombres de clientes (generate-status)', `HTTP ${r.status}`);
+  }
+}
 
 // ── 6. Usuario jugador intentando acciones del dueño (IDOR) ────────────────
 console.log('\n── 6. Jugador con sesión intentando acciones del dueño');

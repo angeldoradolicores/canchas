@@ -578,6 +578,19 @@ export async function POST(req: NextRequest) {
       const conflictingPitchIds = await fetchConflictingPitchIds(supabase, pitch_id);
       const createdBookings: any[] = [];
       const skippedConflicts: any[] = [];
+      // Reserva manual = todo o nada: si una hora falla, se liberan las que ya se guardaron
+      // en esta misma petición (antes quedaban confirmadas aunque el dueño viera un error).
+      // Se cancelan en vez de borrarse porque unique_pitch_time reutiliza la fila.
+      const failManual = async (body: any, status: number) => {
+        if (!isContract && createdBookings.length) {
+          const { error: rbErr } = await supabase
+            .from('bookings')
+            .update({ status: 'cancelled' })
+            .in('id', createdBookings.map((b: any) => b.id));
+          if (rbErr) console.error('[admin-actions] No se pudo deshacer la reserva manual parcial:', rbErr);
+        }
+        return NextResponse.json(body, { status });
+      };
 
       for (const item of inserts) {
         // Verificar conflictos en la cancha actual y canchas combinadas/hijas vinculadas
@@ -599,13 +612,13 @@ export async function POST(req: NextRequest) {
             continue;
           }
           const isLinked = activeConflict.pitch_id !== pitch_id;
-          return NextResponse.json(
+          return failManual(
             {
               error: isLinked
                 ? `La hora ${item.start_time.substring(11, 16)} no está disponible: cancha combinada o individual vinculada ya reservada.`
                 : `La hora ${item.start_time.substring(11, 16)} ya está ocupada.`
             },
-            { status: 400 }
+            409
           );
         }
 
@@ -626,9 +639,9 @@ export async function POST(req: NextRequest) {
                 skippedConflicts.push({ slot: item.start_time, reason: 'Hora en proceso por otro usuario' });
                 continue;
               }
-              return NextResponse.json(
+              return failManual(
                 { error: `La hora ${item.start_time.substring(11, 16)} está siendo reservada por otro usuario.` },
-                { status: 400 }
+                409
               );
             }
           }
@@ -664,18 +677,33 @@ export async function POST(req: NextRequest) {
             reviewed_by: ownerId,
           };
 
-          let { data: updated, error: updateErr } = await supabase
+          // Condición anti-carrera: solo se reutiliza la fila si SIGUE en el estado que se leyó
+          // (p. ej. cancelada). Si un jugador la tomó en este instante, no se le "roba".
+          const reuseGuard = (q: any) => {
+            let g = q.eq('id', existing.id).eq('status', existing.status);
+            if (existing.status === 'draft') g = g.lte('expires_at', new Date().toISOString());
+            return g;
+          };
+          let { data: updated, error: updateErr } = await reuseGuard(supabase
             .from('bookings')
-            .update((_supportsContractColumns === false) ? updatePayloadBase : updatePayloadExtended)
-            .eq('id', existing.id)
+            .update((_supportsContractColumns === false) ? updatePayloadBase : updatePayloadExtended))
             .select()
-            .single();
+            .maybeSingle();
 
           if (updateErr && (updateErr.code === 'PGRST204' || updateErr.code === '42703' || updateErr.message?.includes('column') || updateErr.message?.includes('schema cache'))) {
             _supportsContractColumns = false;
-            const retry = await supabase.from('bookings').update(updatePayloadBase).eq('id', existing.id).select().single();
+            const retry = await reuseGuard(supabase.from('bookings').update(updatePayloadBase)).select().maybeSingle();
             updated = retry.data;
             updateErr = retry.error;
+          }
+
+          const takenMeanwhile = !updateErr && !updated;
+          if (takenMeanwhile || updateErr?.code === '23P01' || updateErr?.code === '23505' || updateErr?.message?.includes('SLOT_TAKEN')) {
+            if (isContract) {
+              skippedConflicts.push({ slot: item.start_time, reason: 'Hora ya ocupada' });
+              continue;
+            }
+            return failManual({ error: `La hora ${item.start_time.substring(11, 16)} ya está ocupada.` }, 409);
           }
 
           if (updateErr) {
@@ -683,7 +711,7 @@ export async function POST(req: NextRequest) {
               skippedConflicts.push({ slot: item.start_time, reason: 'No se pudo guardar esta hora' });
               continue;
             }
-            return NextResponse.json(safeServerErrorResponse(updateErr, 'Error al actualizar la reserva.'), { status: 500 });
+            return failManual(safeServerErrorResponse(updateErr, 'Error al actualizar la reserva.'), 500);
           }
           if (updated) createdBookings.push(updated);
         } else {
@@ -716,13 +744,13 @@ export async function POST(req: NextRequest) {
                 skippedConflicts.push({ slot: item.start_time, reason: 'Hora ya ocupada' });
                 continue;
               }
-              return NextResponse.json({ error: `La hora ${item.start_time.substring(11, 16)} ya está ocupada.` }, { status: 400 });
+              return failManual({ error: `La hora ${item.start_time.substring(11, 16)} ya está ocupada.` }, 409);
             }
             if (isContract) {
               skippedConflicts.push({ slot: item.start_time, reason: 'No se pudo guardar esta hora' });
               continue;
             }
-            return NextResponse.json(safeServerErrorResponse(insertErr, 'Error al crear la reserva.'), { status: 500 });
+            return failManual(safeServerErrorResponse(insertErr, 'Error al crear la reserva.'), 500);
           }
           if (inserted) createdBookings.push(inserted);
         }
@@ -847,6 +875,7 @@ export async function POST(req: NextRequest) {
       const createdBookings: any[] = [];
       const skippedConflicts: any[] = [];
       const insertedIds: string[] = [];
+      const reusedIds: string[] = [];
 
       // Construir todos los inserts (soporta lista explícita de sesiones o producto fecha × slot)
       const rawSessions = Array.isArray(payload?.sessions) ? payload.sessions : [];
@@ -982,24 +1011,20 @@ export async function POST(req: NextRequest) {
         const itemKey = toIsoKey(item.start_time);
         const conflictRows = conflictsByTime[itemKey] || [];
 
-        // Para contratos: solo bloqueamos si hay una reserva activa de cliente externo
-        // (pending o confirmed desde fuentes distintas al panel del dueño en esta cancha principal)
-        // Las reservas confirmed/pending propias del owner_panel en la misma cancha se reutilizan (update)
+        // El turno fijo respeta TODA reserva activa (decisión del negocio 2026-11-18): también
+        // las manuales del propio dueño. Antes las sobrescribía sin avisar ("Juan, martes 8 pm"
+        // desaparecía al crear un turno fijo de los martes a las 8 pm).
         const activeConflict = conflictRows.find((b: any) => {
-          // Siempre bloquear si hay reserva activa en cancha vinculada/combinada (no la misma)
-          if (b.pitch_id !== pitch_id) {
-            if (['confirmed', 'pending'].includes(b.status)) return true;
-            if (b.status === 'draft' && b.expires_at && new Date(b.expires_at) > new Date()) return true;
-          } else {
-            // En la misma cancha: bloquear solo reservas de clientes externos (no owner_panel)
-            if (b.source !== 'owner_panel' && ['confirmed', 'pending'].includes(b.status)) return true;
-            if (b.status === 'draft' && b.expires_at && new Date(b.expires_at) > new Date()) return true;
-          }
+          if (['confirmed', 'pending'].includes(b.status)) return true;
+          if (b.status === 'draft' && b.expires_at && new Date(b.expires_at) > new Date()) return true;
           return false;
         });
 
         if (activeConflict) {
-          skippedConflicts.push({ slot: item.start_time, reason: 'Hora ya ocupada por reserva de cliente externo' });
+          skippedConflicts.push({
+            slot: item.start_time,
+            reason: activeConflict.source === 'owner_panel' ? 'Ya hay una reserva del panel en esa hora' : 'Hora ya ocupada',
+          });
           continue;
         }
 
@@ -1044,25 +1069,36 @@ export async function POST(req: NextRequest) {
         const existing = conflictRows.find((b: any) => b.pitch_id === pitch_id) || null;
 
         if (existing) {
+          // Condición anti-carrera: solo se reutiliza la fila si SIGUE en el estado que se leyó
+          // (p. ej. cancelada). Si un jugador la tomó en este instante, no se le "roba".
+          const reuseGuard = (q: any) => {
+            let g = q.eq('id', existing.id).eq('status', existing.status);
+            if (existing.status === 'draft') g = g.lte('expires_at', new Date().toISOString());
+            return g;
+          };
           let updatePayload = (_supportsContractColumns === false) ? updatePayloadBase : updatePayloadExtended;
-          let { data: updated, error: updateErr } = await supabase
+          let { data: updated, error: updateErr } = await reuseGuard(supabase
             .from('bookings')
-            .update(updatePayload)
-            .eq('id', existing.id)
+            .update(updatePayload))
             .select()
-            .single();
+            .maybeSingle();
 
           if (updateErr && (updateErr.code === 'PGRST204' || updateErr.code === '42703' || updateErr.message?.includes('column') || updateErr.message?.includes('schema cache'))) {
             _supportsContractColumns = false;
-            const retry = await supabase.from('bookings').update(updatePayloadBase).eq('id', existing.id).select().single();
+            const retry = await reuseGuard(supabase.from('bookings').update(updatePayloadBase)).select().maybeSingle();
             updated = retry.data;
             updateErr = retry.error;
           }
 
-          if (updateErr) {
-            skippedConflicts.push({ slot: item.start_time, reason: 'No se pudo guardar esta hora' });
-          } else if (updated) {
+          if (!updateErr && !updated) {
+            skippedConflicts.push({ slot: item.start_time, reason: 'Hora ya ocupada' });
+          } else if (updateErr) {
+            const taken = updateErr.code === '23P01' || updateErr.code === '23505' || updateErr.message?.includes('SLOT_TAKEN');
+            if (!taken) console.error('[admin-actions] turno fijo: no se pudo reutilizar la hora', updateErr);
+            skippedConflicts.push({ slot: item.start_time, reason: taken ? 'Hora ya ocupada' : 'No se pudo guardar esta hora' });
+          } else {
             createdBookings.push(updated);
+            reusedIds.push(updated.id);
           }
         } else {
           // Insertar nueva, con fallback automático si las columnas extendidas no existen en DB
@@ -1123,9 +1159,12 @@ export async function POST(req: NextRequest) {
         // Todo o nada: no dejar un turno fijo a medias. Se borran las filas NUEVAS de este intento
         // (las reutilizadas ya existían y no se tocan más).
         if (insertedIds.length) await supabase.from('bookings').delete().in('id', insertedIds);
+        // Las filas reutilizadas eran canceladas o borradores vencidos: vuelven a quedar libres
+        // (antes quedaban confirmadas y el turno fijo quedaba a medias).
+        if (reusedIds.length) await supabase.from('bookings').update({ status: 'cancelled' }).in('id', reusedIds);
         return NextResponse.json({
           success: false,
-          error: `No se puede guardar el turno fijo: Se detectaron ${skippedConflicts.length} horario(s) en conflicto ya ocupados. No está permitido omitir fechas de turno fijo.`,
+          error: `No se puede guardar el turno fijo: ${skippedConflicts.length} horario(s) ya están ocupados (${skippedConflicts.slice(0, 5).map((c: any) => `${String(c.slot).slice(0, 10)} ${String(c.slot).slice(11, 16)}`).join(', ')}${skippedConflicts.length > 5 ? '…' : ''}). Libera esas horas o elige otras.`,
           skipped_conflicts: skippedConflicts,
           total_created: createdBookings.length,
           total_skipped: skippedConflicts.length,
