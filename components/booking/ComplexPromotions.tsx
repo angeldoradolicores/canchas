@@ -147,7 +147,7 @@ function useCompanyPromotions(companyId: string) {
     fetch('/api/promotions?company_id=' + encodeURIComponent(companyId))
       .then(r => r.json())
       .then(j => { if (active) setItems(Array.isArray(j.promotions) ? j.promotions : []); })
-      .catch(() => {});
+      .catch(() => { });
     return () => { active = false; };
   }, [companyId]);
   return items;
@@ -220,18 +220,14 @@ export function BookingPromotionsTab({ companyId, isLoggedIn }: { companyId: str
 /** Invitación visible a crear cuenta: se muestra siempre al invitado, sin tener que abrir la pestaña. */
 export function GuestSignupCallout({ standalone = false }: { standalone?: boolean }) {
   const perks = [
-    { icon: <Gift size={14} />, text: 'Canjea horas gratis' },
+    { icon: <Gift size={14} />, text: 'Ganas horas gratis' },
     { icon: <Swords size={14} />, text: 'Crea retos' },
-    { icon: <IdCard size={14} />, text: 'Tarjeta de jugador' },
-    { icon: <History size={14} />, text: 'Tus reservas' },
   ];
   return (
     <div className={`${standalone ? 'w-full min-w-0' : 'm-3.5 mt-0 sm:m-4 sm:mt-0'} rounded-2xl overflow-hidden border-2 border-emerald-600 bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-lg shadow-emerald-900/20`}>
       <div className="p-3.5 space-y-2.5">
         <div className="flex items-center gap-2.5">
-          <span className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-            <Sparkles size={18} />
-          </span>
+
           <div className="min-w-0">
             <p className="font-black text-sm leading-tight">{standalone ? 'Crea tu cuenta gratis' : 'Regístrate y guarda tu conteo'}</p>
             <p className="text-[11px] text-white/85 leading-snug">Usa el mismo celular y tus reservas se suman.</p>

@@ -20,3 +20,6 @@ npm-debug.log*
 tsconfig.tsbuildinfo
 # Resultados de pruebas de carga
 loadtest/resultados/
+
+# Workflows de n8n (nunca subir: pueden llevar claves)
+n8n-privado/

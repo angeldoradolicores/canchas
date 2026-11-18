@@ -36,6 +36,7 @@ echo; echo "═══════ 2/4 DOBLE RESERVA ═══════"
 node loadtest/doble-reserva.mjs || FAILS=$((FAILS+1))
 node loadtest/doble-reserva-escenarios.mjs || FAILS=$((FAILS+1))
 node loadtest/precios-pagos.mjs || FAILS=$((FAILS+1))
+node loadtest/acaparamiento.mjs || FAILS=$((FAILS+1))
 
 echo; echo "═══════ 3/4 CARGA ($PROFILE) ═══════"
 k6 run --quiet -e PROFILE="$PROFILE" loadtest/carga.k6.js || FAILS=$((FAILS+1))
