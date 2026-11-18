@@ -413,7 +413,10 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          if (existing.status === 'cancelled') {
+          // Cancelada / rechazada / vencida: la hora está libre YA, sin esperar su expires_at.
+          // (Antes se exigía expires_at vencido: si el jugador cancelaba su intento, la hora
+          // quedaba bloqueada hasta 5 min — síntoma "a las 11:00 no deja, a las 11:05 sí".)
+          if (existing.status !== 'draft') {
             const { data: updated, error: upErr } = await supabase
               .from('bookings')
               .update({
@@ -430,8 +433,7 @@ export async function POST(req: NextRequest) {
                 end_time: item.end_time,
               })
               .eq('id', existing.id)
-                .eq('status', existing.status)
-                .or(`expires_at.is.null,expires_at.lte.${now.toISOString()}`)
+              .eq('status', existing.status)
               .select()
               .single();
 
@@ -519,8 +521,8 @@ export async function POST(req: NextRequest) {
                   end_time: item.end_time,
                 })
                 .eq('id', conflictRow.id)
-                .eq('status', 'draft')
-                .or(isMine(conflictRow) ? 'id.not.is.null' : `expires_at.is.null,expires_at.lte.${now.toISOString()}`)
+                .eq('status', conflictRow.status)
+                .or(conflictRow.status !== 'draft' || isMine(conflictRow) ? 'id.not.is.null' : `expires_at.is.null,expires_at.lte.${now.toISOString()}`)
                 .select()
                 .maybeSingle();
 
