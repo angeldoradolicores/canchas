@@ -109,8 +109,13 @@ export async function sendEvolutionWhatsAppText(instanceName: string, toPhone: s
   const tryInstances = [instanceName];
   if (instanceName.toLowerCase() !== instanceName) tryInstances.push(instanceName.toLowerCase());
   if (instanceName.toUpperCase() !== instanceName) tryInstances.push(instanceName.charAt(0).toUpperCase() + instanceName.slice(1));
-  if (CENTRAL_WHATSAPP_INSTANCE && !tryInstances.includes(CENTRAL_WHATSAPP_INSTANCE)) {
-    tryInstances.push(CENTRAL_WHATSAPP_INSTANCE);
+  // Respaldo: la instancia central. En Evolution los nombres distinguen mayúsculas
+  // ("Cancheros" ≠ "cancheros"), así que se prueba también en minúscula; antes, si la
+  // instancia del complejo estaba desconectada, el respaldo fallaba y no salía ningún mensaje.
+  if (CENTRAL_WHATSAPP_INSTANCE) {
+    for (const c of [CENTRAL_WHATSAPP_INSTANCE, CENTRAL_WHATSAPP_INSTANCE.toLowerCase()]) {
+      if (!tryInstances.includes(c)) tryInstances.push(c);
+    }
   }
 
   for (const inst of [...new Set(tryInstances)]) {
@@ -158,8 +163,13 @@ export async function sendEvolutionWhatsAppMedia(
   const tryInstances = [instanceName];
   if (instanceName.toLowerCase() !== instanceName) tryInstances.push(instanceName.toLowerCase());
   if (instanceName.toUpperCase() !== instanceName) tryInstances.push(instanceName.charAt(0).toUpperCase() + instanceName.slice(1));
-  if (CENTRAL_WHATSAPP_INSTANCE && !tryInstances.includes(CENTRAL_WHATSAPP_INSTANCE)) {
-    tryInstances.push(CENTRAL_WHATSAPP_INSTANCE);
+  // Respaldo: la instancia central. En Evolution los nombres distinguen mayúsculas
+  // ("Cancheros" ≠ "cancheros"), así que se prueba también en minúscula; antes, si la
+  // instancia del complejo estaba desconectada, el respaldo fallaba y no salía ningún mensaje.
+  if (CENTRAL_WHATSAPP_INSTANCE) {
+    for (const c of [CENTRAL_WHATSAPP_INSTANCE, CENTRAL_WHATSAPP_INSTANCE.toLowerCase()]) {
+      if (!tryInstances.includes(c)) tryInstances.push(c);
+    }
   }
 
   for (const inst of [...new Set(tryInstances)]) {
