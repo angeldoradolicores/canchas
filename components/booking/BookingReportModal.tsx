@@ -246,11 +246,21 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
       }
     });
 
-    return Object.values(map).sort((a, b) => b.revenue - a.revenue);
-  }, [inRangeBookings, safePitches]);
+    // Ingresos = dinero RECIBIDO en el período (anticipos + abonos, por fecha del pago).
+    // "revenue" queda solo como valor de las reservas aprobadas del período.
+    const received: Record<string, { amount: number; payments: number }> = {};
+    periodPayments.forEach(ev => {
+      const r = (received[ev.pitchId] ||= { amount: 0, payments: 0 });
+      r.amount += ev.amount;
+      r.payments++;
+    });
+    return Object.values(map)
+      .map(c => ({ ...c, received: received[c.id]?.amount || 0, payments: received[c.id]?.payments || 0 }))
+      .sort((a, b) => b.received - a.received || b.revenue - a.revenue);
+  }, [inRangeBookings, safePitches, periodPayments]);
 
-  const topCourt = byCourt.length > 0 && byCourt[0].revenue > 0 ? byCourt[0] : null;
-  const maxCourtRevenue = Math.max(...byCourt.map(c => c.revenue), 1);
+  const topCourt = byCourt.length > 0 && byCourt[0].received > 0 ? byCourt[0] : null;
+  const maxCourtRevenue = Math.max(...byCourt.map(c => c.received), 1);
 
   // ── Horas Más Activas (Horarios Pico) ───────────────────────────────────────
   const byHour = useMemo(() => {
@@ -570,9 +580,9 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
     const courtRows = byCourt.map((c, i) => `
       <tr>
         <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;font-weight:700;color:#0f172a;">${i + 1}. ${c.name}</td>
-        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:600;">${c.count}</td>
-        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:800;color:#0f766e;">${formatCOP(c.revenue)}</td>
-        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;color:#64748b;font-weight:600;">${pct(c.revenue, totalRevenue)}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:600;">${c.payments}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:800;color:#0f766e;">${formatCOP(c.received)}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;text-align:right;color:#64748b;font-weight:600;">${pct(c.received, depositRevenue)}</td>
       </tr>
     `).join('');
 
@@ -719,13 +729,13 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
   </div>
 
   <div class="section">
-    <div class="section-title"> Rendimiento y Cuota de Facturación por Cancha</div>
+    <div class="section-title"> Dinero recibido por cancha (anticipos y abonos del período)</div>
     <table>
       <thead>
         <tr>
           <th>Cancha</th>
-          <th style="text-align:center;">Partidos</th>
-          <th style="text-align:right;">Recaudo Total</th>
+          <th style="text-align:center;">Pagos</th>
+          <th style="text-align:right;">Dinero recibido</th>
           <th style="text-align:right;">Participación</th>
         </tr>
       </thead>
@@ -1194,7 +1204,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
               </Card>
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <MiniStat label="Cancha que más vende" value={topCourt?.name || '—'} hint={topCourt ? formatCOP(topCourt.revenue) : 'Sin datos'} />
+                <MiniStat label="Cancha que más recibe" value={topCourt?.name || "—"} hint={topCourt ? formatCOP(topCourt.received) : "Sin pagos"} />
                 <MiniStat label="Hora más pedida" value={peakHour?.label || '—'} hint={peakHour ? `${peakHour.count} reservas` : 'Sin datos'} />
                 <MiniStat label="Clientes distintos" value={`${uniqueCustomersCount}`} hint="Con reservas aprobadas" />
                 <MiniStat label="Valor promedio" value={formatCOP(averageTicket)} hint="Por reserva aprobada" />
@@ -1230,7 +1240,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
                   {byCourt.length === 0 ? <Empty text="Aún no tienes canchas con reservas." /> : (
                     <div className="space-y-3">
                       {byCourt.slice(0, 5).map(c => (
-                        <BarRow key={c.id} label={c.name} value={formatCOP(c.revenue)} sub={`${c.count} reservas`} pct={(c.revenue / maxCourtRevenue) * 100} />
+                        <BarRow key={c.id} label={c.name} value={formatCOP(c.received)} sub={c.payments === 0 ? 'Sin pagos en el período' : `${c.payments} ${c.payments === 1 ? 'pago recibido' : 'pagos recibidos'}`} pct={(c.received / maxCourtRevenue) * 100} />
                       ))}
                     </div>
                   )}
@@ -1436,22 +1446,23 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
           {/* ═══════ CANCHAS ═══════ */}
           {activeTab === 'pitches' && (
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">Cuánto deja cada cancha en el período y cuántas reservas se cancelaron.</p>
+              <p className="text-sm text-muted-foreground">Dinero recibido por cancha en el período (anticipos y abonos, el día en que se pagaron) y cuántas reservas se cancelaron.</p>
               {byCourt.length === 0 ? <Empty text="Sin datos en este período." /> : byCourt.map((c, i) => {
-                const avg = c.count > 0 ? Math.round(c.revenue / c.count) : 0;
+                const avg = c.payments > 0 ? Math.round(c.received / c.payments) : 0;
                 return (
                   <div key={c.id} className="rounded-2xl border border-border bg-card p-4">
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-bold text-foreground min-w-0 truncate"><span className="text-muted-foreground mr-1.5">{i + 1}.</span>{c.name}</p>
-                      <p className="font-black text-foreground shrink-0">{formatCOP(c.revenue)}</p>
+                      <p className="font-black text-foreground shrink-0">{formatCOP(c.received)}</p>
                     </div>
                     <div className="mt-2 h-2.5 w-full rounded-full bg-secondary overflow-hidden">
-                      <div className="h-full rounded-full bg-primary" style={{ width: `${Math.round((c.revenue / maxCourtRevenue) * 100)}%` }} />
+                      <div className="h-full rounded-full bg-primary" style={{ width: `${Math.round((c.received / maxCourtRevenue) * 100)}%` }} />
                     </div>
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                      <span><strong className="text-foreground">{c.count}</strong> reservas aprobadas</span>
-                      <span>Promedio <strong className="text-foreground">{formatCOP(avg)}</strong></span>
-                      <span>{pct(c.revenue, totalRevenue)} del total</span>
+                      <span><strong className="text-foreground">{c.payments}</strong> {c.payments === 1 ? 'pago recibido' : 'pagos recibidos'}</span>
+                      {c.payments > 0 && <span>Promedio por pago <strong className="text-foreground">{formatCOP(avg)}</strong></span>}
+                      <span>{pct(c.received, depositRevenue)} del dinero recibido</span>
+                      <span><strong className="text-foreground">{c.count}</strong> reservas aprobadas · valor {formatCOP(c.revenue)}</span>
                       {c.cancelledCount > 0 && <span className="text-rose-500">{c.cancelledCount} canceladas</span>}
                     </div>
                   </div>

@@ -12,6 +12,7 @@ import {
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
+import DepartmentMunicipalitySelect from '@/components/maps/DepartmentMunicipalitySelect';
 import { PaymentMethodLogo } from '@/components/ui/PaymentMethodLogo';
 import { getFriendlyErrorMessage } from '@/lib/error-handler';
 
@@ -1784,30 +1785,18 @@ export default function EditPitchPage({ params }: { params: Promise<{ id: string
 
             {/* Departamento y Ciudad */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1">
-                  <span>Departamento *</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ej: Nariño"
-                  value={department}
-                  onChange={e => setDepartment(e.target.value)}
-                  className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1">
-                  <span>Ciudad / Municipio *</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ej: Pasto"
-                  value={city}
-                  onChange={e => setCity(e.target.value)}
-                  className="w-full px-4 py-2.5 text-sm border border-border rounded-xl bg-background outline-none focus:border-emerald-600 transition-colors font-medium"
-                />
-              </div>
+              <DepartmentMunicipalitySelect
+                department={department}
+                city={city}
+                onDepartmentChange={setDepartment}
+                onCityChange={setCity}
+                onMunicipalityPicked={(mLat, mLng) => {
+                  // Centra el mapa en el municipio si el marcador está lejos (> ~15 km); el dueño
+                  // luego ubica el punto exacto de su cancha.
+                  const far = lat == null || lng == null || Math.hypot(lat - mLat, lng - mLng) > 0.14;
+                  if (far) { setLat(mLat); setLng(mLng); }
+                }}
+              />
               {/* <div className="space-y-1.5 sm:col-span-1">
                 <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1">
                   <MapPin size={12} className="text-emerald-500" />

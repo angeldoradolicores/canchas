@@ -817,6 +817,23 @@ export default function LocationPicker({
 
   return (
     <div className="space-y-3">
+      {/* Guía: buscar el complejo como aparece en Google Maps */}
+      <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-3 sm:p-3.5 flex gap-3">
+        <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+          <MapPin size={18} />
+        </div>
+        <div className="min-w-0 text-xs leading-relaxed">
+          <p className="font-black text-sm text-foreground">Aquí agregas la ubicación de tu cancha</p>
+          <p className="text-muted-foreground mt-0.5">
+            Escribe el <strong className="text-foreground">nombre de tu complejo tal como aparece en Google Maps</strong> y elígelo de la lista.
+            Así tus clientes te encuentran y, con un toque, Google Maps los lleva hasta tu cancha.
+          </p>
+          <p className="text-muted-foreground mt-1">
+            ¿No aparece? Busca tu barrio o dirección y arrastra el marcador al sitio exacto.
+          </p>
+        </div>
+      </div>
+
       {/* Buscador de ubicación */}
       <div ref={suggestionsRef} className="relative">
         <div className="flex gap-2">
@@ -827,7 +844,7 @@ export default function LocationPicker({
             />
             <input
               type="text"
-              placeholder="Escribe el nombre de la cancha o barrio (ej: Los Campeones)..."
+              placeholder="Nombre de tu complejo en Google Maps (ej: Los Campeones)"
               value={searchQuery}
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={(e) => {

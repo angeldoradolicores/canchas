@@ -7,8 +7,32 @@ import { Loader2, CalendarDays, MapPin, X, Share2, Ticket, Clock, CheckCircle, X
 import Link from 'next/link';
 import { toPng } from 'html-to-image';
 
-type DateFilterType = 'todas' | 'hoy' | 'proximas' | 'pasados_3' | 'pasados_7' | 'historial' | 'dia';
-type DateBasis = 'partido' | 'reserva';
+type TabKey = 'proximas' | 'pasadas' | 'todas';
+type StatusKey = 'todas' | 'confirmed' | 'pending' | 'cancelled';
+
+/** Día (YYYY-MM-DD) en hora de Colombia. */
+function ymdBogota(d: Date | string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date(d));
+}
+
+function addDays(ymd: string, n: number): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + n, 12));
+  return dt.toISOString().slice(0, 10);
+}
+
+/** Encabezado de cada día de la lista: "Hoy", "Mañana", "Ayer" o "Sábado 21 de noviembre". */
+function dayHeading(ymd: string, today: string): string {
+  if (ymd === today) return 'Hoy';
+  if (ymd === addDays(today, 1)) return 'Mañana';
+  if (ymd === addDays(today, -1)) return 'Ayer';
+  const [y, m, d] = ymd.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d, 12));
+  const sameYear = ymd.slice(0, 4) === today.slice(0, 4);
+  return dt.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', ...(sameYear ? {} : { year: 'numeric' }), timeZone: 'UTC' });
+}
+
+const normalize = (t: string) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 interface BookingBanner {
   type: 'today' | 'other_date';
@@ -19,11 +43,11 @@ interface BookingBanner {
 
 export default function UserReservationsPage() {
   const [bookings, setBookings] = useState<any[]>([]);
-  const [dateFilter, setDateFilter] = useState<DateFilterType>('hoy');
-  const [dateBasis, setDateBasis] = useState<DateBasis>('partido');
+  // null = todavía no se eligió: se abre en "Próximas" si hay, si no en "Pasadas".
+  const [tab, setTab] = useState<TabKey | null>(null);
   const [exactDay, setExactDay] = useState('');
   const [searchText, setSearchText] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'todas' | 'confirmed' | 'pending' | 'cancelled'>('todas');
+  const [statusFilter, setStatusFilter] = useState<StatusKey>('todas');
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
@@ -348,40 +372,17 @@ export default function UserReservationsPage() {
     },
   };
 
-  const normalizedSearch = searchText.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const normalizedSearch = normalize(searchText.trim());
+  const todayYmd = ymdBogota(new Date());
+  // Búsqueda (complejo, cancha, zona, dirección o fecha escrita: "21 nov", "sábado"), estado y día exacto.
   const filteredBookings = bookings.filter(b => {
-    if (dateFilter === 'todas') return true;
-
-    // El jugador puede filtrar por el día del partido o por el día en que hizo la reserva.
-    const rawDate = dateBasis === 'reserva' ? (b.created_at || b.start_time) : b.start_time;
-    const bookingDay = new Date(rawDate);
-    bookingDay.setHours(0, 0, 0, 0);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (dateFilter === 'dia') {
-      if (!exactDay) return true;
-      const [y, m, d] = exactDay.split('-').map(Number);
-      return bookingDay.getTime() === new Date(y, m - 1, d).getTime();
-    }
-
-    // Días hacia atrás (positivo = pasado).
-    const diffDays = Math.round((today.getTime() - bookingDay.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (dateFilter === 'hoy') return diffDays === 0;
-    if (dateFilter === 'proximas') return diffDays <= 0;
-    if (dateFilter === 'pasados_3') return diffDays >= 0 && diffDays <= 3;
-    if (dateFilter === 'pasados_7') return diffDays >= 0 && diffDays <= 7;
-    if (dateFilter === 'historial') return diffDays > 7;
-    return true;
-  }).filter(b => {
+    if (statusFilter !== 'todas' && b.status !== statusFilter) return false;
+    if (exactDay && ymdBogota(b.start_time) !== exactDay) return false;
     if (!normalizedSearch) return true;
-    const haystack = [b.pitches?.name, b.pitches?.companies?.name, b.pitches?.companies?.zone, b.pitches?.companies?.address]
-      .filter(Boolean).join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const when = new Date(b.start_time).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Bogota' });
+    const haystack = normalize([b.pitches?.name, b.pitches?.companies?.name, b.pitches?.companies?.zone, b.pitches?.companies?.address, when]
+      .filter(Boolean).join(' '));
     return haystack.includes(normalizedSearch);
-  }).filter(b => {
-    if (statusFilter === 'todas') return true;
-    return b.status === statusFilter;
   });
 
   const groupedMyBookings = (() => {
@@ -459,9 +460,25 @@ export default function UserReservationsPage() {
     return groups.sort((a: any, b: any) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
   })();
 
-  const confirmed = groupedMyBookings.filter((b: any) => b.status === 'confirmed');
-  const pending = groupedMyBookings.filter((b: any) => b.status === 'pending');
-  const cancelled = groupedMyBookings.filter((b: any) => b.status === 'cancelled');
+  // Próximas = partidos de hoy en adelante; Pasadas = días anteriores.
+  const upcomingGroups = groupedMyBookings.filter((g: any) => ymdBogota(g.start_time) >= todayYmd);
+  const pastGroups = groupedMyBookings.filter((g: any) => ymdBogota(g.start_time) < todayYmd);
+  const activeTab: TabKey = exactDay ? 'todas' : (tab ?? (upcomingGroups.length > 0 || bookings.length === 0 ? 'proximas' : 'pasadas'));
+  const visibleGroups = activeTab === 'proximas'
+    ? [...upcomingGroups].sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+    : activeTab === 'pasadas' ? pastGroups : groupedMyBookings;
+
+  // Secciones por día del partido.
+  const daySections: { ymd: string; items: any[] }[] = [];
+  visibleGroups.forEach((g: any) => {
+    const ymd = ymdBogota(g.start_time);
+    const last = daySections[daySections.length - 1];
+    if (last && last.ymd === ymd) last.items.push(g);
+    else daySections.push({ ymd, items: [g] });
+  });
+
+  const hasFilters = !!normalizedSearch || statusFilter !== 'todas' || !!exactDay;
+  const clearFilters = () => { setSearchText(''); setStatusFilter('todas'); setExactDay(''); };
 
   const BookingCard = ({ b }: { b: any }) => {
     const status = statusConfig[b.status] || statusConfig.pending;
@@ -592,19 +609,22 @@ export default function UserReservationsPage() {
   };
 
 
-  const SectionGroup = ({ title, items, icon }: { title: string; items: any[]; icon: React.ReactNode }) => {
-    if (items.length === 0) return null;
+  const DaySection = ({ ymd, items }: { ymd: string; items: any[] }) => {
+    const isToday = ymd === todayYmd;
     return (
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          {icon}
-          <h2 className="font-bold text-sm uppercase tracking-wider text-muted-foreground">{title}</h2>
-          <span className="text-xs font-bold bg-border text-muted-foreground px-2 py-0.5 rounded-full">{items.length}</span>
+      <section>
+        <div className="py-1 mb-2 flex items-center gap-2">
+          <h2 className={`text-xs font-black uppercase tracking-wider capitalize ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
+            {dayHeading(ymd, todayYmd)}
+          </h2>
+          {isToday && <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />}
+          <span className="flex-1 h-px bg-border" />
+          <span className="text-[10px] font-bold text-muted-foreground">{items.length} {items.length === 1 ? 'reserva' : 'reservas'}</span>
         </div>
         <div className="flex flex-col gap-3">
           {items.map(b => <BookingCard key={b.id} b={b} />)}
         </div>
-      </div>
+      </section>
     );
   };
 
@@ -643,7 +663,7 @@ export default function UserReservationsPage() {
                 </p>
                 <p className="text-xs text-sky-700/80 dark:text-sky-300/70 mt-0.5">
                   Tu reserva en <strong>{newBookingBanner.pitchName}</strong> es para el <strong className="capitalize">{newBookingBanner.bookingDateStr}</strong>.
-                  El filtro actual muestra «Hoy» — cámbialo para ver tu reserva.
+                  La encuentras en «Próximas».
                 </p>
               </>
             )}
@@ -652,10 +672,10 @@ export default function UserReservationsPage() {
           <div className="flex items-center gap-2 shrink-0">
             {newBookingBanner.type === 'other_date' && (
               <button
-                onClick={() => { setDateFilter('todas'); setBannerDismissed(true); }}
+                onClick={() => { setTab('proximas'); clearFilters(); setBannerDismissed(true); }}
                 className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-xl transition-colors whitespace-nowrap"
               >
-                Ver todas las fechas
+                Ver próximas
               </button>
             )}
             <button
@@ -700,157 +720,97 @@ export default function UserReservationsPage() {
         </div>
       )}
 
-      {/* ── Contenedor Principal (Header + Filtros de Mis Reservas) ── */}
-      <div className="page-header-banner bg-[#DCE7DE] border border-[#C8DACB] rounded-3xl p-4 sm:p-6 mb-8 shadow-xs">
-
-        {/* Encabezado: Título y Contador / Badge Resumen */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-[#C8DACB]">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <CalendarDays className="page-header-text-primary text-[#054D27]" size={26} strokeWidth={2.5} />
-              <h1 className="page-header-text-primary text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
-                Mis Reservas
-              </h1>
-            </div>
-            <p className="page-header-text-secondary text-xs sm:text-sm text-[#4D715B] font-medium mt-1 leading-relaxed">
-              Verifica el estado de tus reservas, comparte el ticket con los detalles de fecha, hora y dirección, y envíaselo a tus compañeros.            </p>
-          </div>
-
-          {/* Badge Resumen de Reservas */}
-          {/* {filteredBookings.length > 0 && (
-            <div className="flex items-center gap-2 bg-[#CDE0D1]/70 border border-[#BACFC0] px-4 py-2.5 rounded-xl shrink-0 self-start sm:self-auto">
-              <span className="text-xs sm:text-sm font-black text-[#054D27]">
-                {filteredBookings.length} {filteredBookings.length === 1 ? 'reserva' : 'reservas'} · {confirmed.length} {confirmed.length === 1 ? 'aprobada' : 'aprobadas'}
-              </span>
-            </div>
-          )} */}
+      {/* ── Encabezado ── */}
+      <div className="page-header-banner bg-[#DCE7DE] border border-[#C8DACB] rounded-3xl p-4 sm:p-5 mb-4 shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <CalendarDays className="page-header-text-primary text-[#054D27]" size={24} strokeWidth={2.5} />
+          <h1 className="page-header-text-primary text-2xl sm:text-3xl font-black text-[#054D27] uppercase tracking-tight">
+            Mis Reservas
+          </h1>
         </div>
+        <p className="page-header-text-secondary text-xs sm:text-sm text-[#4D715B] font-medium mt-1">
+          Revisa el estado de tus partidos y comparte el ticket con tus compañeros.
+        </p>
 
-        {/* Controles y Filtros */}
-        <div className="flex flex-col gap-4">
-          {/* Filtro por Estado */}
-          <div>
-            <h2 className="page-header-text-secondary text-[10px] font-extrabold text-[#4D715B] uppercase tracking-wider mb-2 px-1">
-              Filtrar por estado
-            </h2>
-
-            <div className="page-filter-bar bg-[#CDE0D1]/70 border border-[#BACFC0] rounded-2xl p-1 mb-6">
-              <div className="flex items-center w-full">
-                {[
-                  { id: 'todas', label: 'Todas', showIcon: true },
-                  { id: 'confirmed', label: 'Aprobadas', showIcon: false },
-                  { id: 'pending', label: 'Revisión', showIcon: false },
-                  { id: 'cancelled', label: 'Canceladas', showIcon: false },
-                ].map((f) => {
-                  const isActive = statusFilter === f.id;
-                  return (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => setStatusFilter(f.id as any)}
-                      className={`page-filter-btn flex-1 py-2 px-1 sm:px-2 rounded-xl text-[11px] sm:text-xs font-black transition-all duration-200 select-none flex items-center justify-center gap-1 leading-tight text-center ${isActive
-                        ? 'page-filter-btn-active bg-[#DCE7DE] text-[#054D27] shadow-xs border border-[#BACFC0]'
-                        : 'text-[#4D715B] hover:text-[#054D27] hover:bg-[#DCE7DE]/50'
-                        }`}
-                    >
-                      {f.showIcon && (
-                        <LayoutGrid
-                          size={13}
-                          strokeWidth={2.5}
-                          className={`shrink-0 ${isActive ? 'text-[#008744]' : 'text-[#4D715B]'}`}
-                        />
-                      )}
-                      <span>{f.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      {/* Búsqueda y filtro por fecha */}
-      <div className="page-filter-bar bg-[#CDE0D1]/70 border border-[#BACFC0] rounded-2xl p-3 flex flex-col gap-3">
-        <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4D715B] pointer-events-none" />
-          <input
-            type="search"
-            value={searchText}
-            onChange={(e) => { setSearchText(e.target.value); setBannerDismissed(true); }}
-            placeholder="Buscar por complejo, cancha o zona"
-            className="w-full rounded-xl border border-[#BACFC0] bg-[#DCE7DE] pl-9 pr-3 py-2 text-sm font-semibold text-[#054D27] placeholder:text-[#4D715B]/70 outline-none focus:ring-2 focus:ring-[#008744]/20"
-          />
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-          <div className="flex rounded-xl bg-[#DCE7DE]/60 border border-[#BACFC0] p-0.5 shrink-0" role="group" aria-label="Qué fecha usar">
-            {([
-              { id: 'partido', label: 'Fecha del partido' },
-              { id: 'reserva', label: 'Cuándo reservé' },
-            ] as const).map((opt) => (
+        {/* Pestañas: Próximas · Pasadas · Todas */}
+        <div className="page-filter-bar mt-4 bg-[#CDE0D1]/70 border border-[#BACFC0] rounded-2xl p-1 grid grid-cols-3 gap-1" role="tablist">
+          {([
+            { id: 'proximas', label: 'Próximas', count: upcomingGroups.length },
+            { id: 'pasadas', label: 'Pasadas', count: pastGroups.length },
+            { id: 'todas', label: 'Todas', count: groupedMyBookings.length },
+          ] as const).map(t => {
+            const isActive = activeTab === t.id;
+            return (
               <button
-                key={opt.id}
+                key={t.id}
                 type="button"
-                onClick={() => {
-                  setDateBasis(opt.id);
-                  setBannerDismissed(true);
-                  if (opt.id === 'reserva' && dateFilter === 'proximas') setDateFilter('pasados_7');
-                }}
-                className={`flex-1 px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-black transition-colors whitespace-nowrap ${dateBasis === opt.id ? 'bg-[#054D27] text-white shadow-xs' : 'text-[#4D715B] hover:text-[#054D27]'}`}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => { setTab(t.id); setExactDay(''); setBannerDismissed(true); }}
+                className={`page-filter-btn py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-1.5 ${isActive
+                  ? 'page-filter-btn-active bg-[#DCE7DE] text-[#054D27] shadow-xs border border-[#BACFC0]'
+                  : 'text-[#4D715B] hover:text-[#054D27]'}`}
               >
-                {opt.label}
+                {t.label}
+                <span className={`text-[10px] min-w-5 px-1.5 py-0.5 rounded-full ${isActive ? 'bg-[#054D27] text-white' : 'bg-[#DCE7DE]/70 text-[#4D715B]'}`}>{t.count}</span>
               </button>
-            ))}
-          </div>
+            );
+          })}
+        </div>
 
-          <div className="flex gap-2 flex-1">
-            <div className="relative flex-1 min-w-[150px]">
+        {/* Búsqueda + estado + ir a un día, en una sola fila */}
+        <div className="mt-3 flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1 min-w-0">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4D715B] pointer-events-none" />
+            <input
+              type="search"
+              value={searchText}
+              onChange={(e) => { setSearchText(e.target.value); setBannerDismissed(true); }}
+              placeholder="Buscar complejo, cancha, zona o fecha (ej. 21 nov)"
+              className="w-full rounded-xl border border-[#BACFC0] bg-[#DCE7DE] pl-9 pr-3 py-2 text-sm font-semibold text-[#054D27] placeholder:text-[#4D715B]/70 outline-none focus:ring-2 focus:ring-[#008744]/20"
+            />
+          </div>
+          <div className="flex gap-2">
+            <div className="relative flex-1 sm:flex-none sm:w-40">
               <select
-                value={dateFilter}
-                onChange={(e) => { setDateFilter(e.target.value as DateFilterType); setBannerDismissed(true); }}
-                className="page-header-text-primary w-full appearance-none cursor-pointer outline-none text-xs font-black rounded-xl pl-3 pr-8 py-2 border bg-[#DCE7DE] text-[#054D27] border-[#BACFC0] focus:ring-2 focus:ring-[#008744]/20"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusKey)}
+                aria-label="Estado de la reserva"
+                className="w-full appearance-none cursor-pointer outline-none text-xs font-black rounded-xl pl-3 pr-8 py-2.5 border bg-[#DCE7DE] text-[#054D27] border-[#BACFC0] focus:ring-2 focus:ring-[#008744]/20"
               >
-                <option value="todas">Cualquier fecha</option>
-                <option value="hoy">Hoy</option>
-                {dateBasis === 'partido' && <option value="proximas">Próximas (hoy en adelante)</option>}
-                <option value="pasados_3">Últimos 3 días</option>
-                <option value="pasados_7">Últimos 7 días</option>
-                <option value="historial">Hace más de 7 días</option>
-                <option value="dia">Elegir un día…</option>
+                <option value="todas">Todos los estados</option>
+                <option value="confirmed">Aprobadas</option>
+                <option value="pending">En revisión</option>
+                <option value="cancelled">Canceladas</option>
               </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none text-[#054D27]">
-                <ChevronDown size={14} strokeWidth={2.5} />
-              </div>
+              <ChevronDown size={14} strokeWidth={2.5} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-[#054D27]" />
             </div>
-            {dateFilter === 'dia' && (
+            <label className="relative flex-1 sm:flex-none sm:w-40 flex items-center rounded-xl border border-[#BACFC0] bg-[#DCE7DE] px-2.5 focus-within:ring-2 focus-within:ring-[#008744]/20">
+              <CalendarDays size={14} className="text-[#4D715B] shrink-0" />
               <input
                 type="date"
                 value={exactDay}
-                onChange={(e) => setExactDay(e.target.value)}
-                aria-label={dateBasis === 'reserva' ? 'Día en que reservé' : 'Día del partido'}
-                className="rounded-xl border border-[#BACFC0] bg-[#DCE7DE] px-2 py-1.5 text-xs font-black text-[#054D27] outline-none focus:ring-2 focus:ring-[#008744]/20"
+                onChange={(e) => { setExactDay(e.target.value); setBannerDismissed(true); }}
+                aria-label="Ir a un día"
+                title="Ir a un día"
+                className="w-full min-w-0 bg-transparent pl-1.5 py-2 text-xs font-black text-[#054D27] outline-none"
               />
-            )}
+            </label>
           </div>
         </div>
 
-        {(normalizedSearch || dateFilter !== 'hoy' || dateBasis !== 'partido') && (
-          <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-[#4D715B]">
+        {hasFilters && (
+          <div className="mt-2.5 flex items-center justify-between gap-2 text-[11px] font-bold text-[#4D715B]">
             <span>
-              {groupedMyBookings.length} {groupedMyBookings.length === 1 ? 'resultado' : 'resultados'}
-              {dateBasis === 'reserva' ? ' según el día en que reservaste' : ''}
+              {visibleGroups.length} {visibleGroups.length === 1 ? 'resultado' : 'resultados'}
+              {exactDay ? ` el ${dayHeading(exactDay, todayYmd).toLowerCase()}` : ''}
             </span>
-            <button
-              type="button"
-              onClick={() => { setSearchText(''); setDateBasis('partido'); setDateFilter('todas'); setExactDay(''); }}
-              className="underline underline-offset-2 hover:text-[#054D27]"
-            >
+            <button type="button" onClick={clearFilters} className="underline underline-offset-2 hover:text-[#054D27]">
               Limpiar filtros
             </button>
           </div>
         )}
       </div>
-
 
       {bookings.length === 0 ? (
         <div className="dashboard-card text-center py-20 border-dashed border-2">
@@ -861,36 +821,29 @@ export default function UserReservationsPage() {
           <p className="text-sm text-muted-foreground mb-6">Aún no has armado partido. ¡Explora las canchas y reserva tu próximo encuentro!</p>
           <Link href="/" className="btn-primary">Buscar Canchas</Link>
         </div>
+      ) : visibleGroups.length === 0 ? (
+        <div className="dashboard-card text-center py-12 border-dashed border-2">
+          <p className="font-bold text-sm mb-1">
+            {hasFilters ? 'No hay reservas con esa búsqueda' : activeTab === 'proximas' ? 'No tienes partidos próximos' : 'No tienes partidos pasados'}
+          </p>
+          <p className="text-xs text-muted-foreground mb-4">
+            {hasFilters ? 'Prueba con otra palabra, otro estado u otro día.' : activeTab === 'proximas' ? 'Tus reservas anteriores están en «Pasadas».' : 'Cuando juegues, tus partidos quedarán aquí.'}
+          </p>
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            {hasFilters && (
+              <button type="button" onClick={clearFilters} className="btn-primary text-xs px-4 py-2">Limpiar filtros</button>
+            )}
+            {!hasFilters && activeTab === 'proximas' && pastGroups.length > 0 && (
+              <button type="button" onClick={() => setTab('pasadas')} className="btn-primary text-xs px-4 py-2">Ver pasadas</button>
+            )}
+            {!hasFilters && activeTab === 'proximas' && (
+              <Link href="/" className="px-4 py-2 rounded-xl border border-border text-xs font-bold hover:bg-secondary">Buscar canchas</Link>
+            )}
+          </div>
+        </div>
       ) : (
-        <div className="flex flex-col gap-8">
-          {groupedMyBookings.length === 0 && (
-            <div className="dashboard-card text-center py-12 border-dashed border-2">
-              <p className="font-bold text-sm mb-1">No hay reservas con estos filtros</p>
-              <p className="text-xs text-muted-foreground mb-4">Prueba otra fecha, cambia entre «Fecha del partido» y «Cuándo reservé», o borra la búsqueda.</p>
-              <button
-                type="button"
-                onClick={() => { setSearchText(''); setDateBasis('partido'); setDateFilter('todas'); setExactDay(''); setStatusFilter('todas'); }}
-                className="btn-primary text-xs px-4 py-2"
-              >
-                Ver todas mis reservas
-              </button>
-            </div>
-          )}
-          <SectionGroup
-            title="Aprobadas"
-            items={confirmed}
-            icon={<CheckCircle size={16} className="text-emerald-500" />}
-          />
-          <SectionGroup
-            title="En Revisión"
-            items={pending}
-            icon={<AlertCircle size={16} className="text-amber-500" />}
-          />
-          <SectionGroup
-            title="Canceladas"
-            items={cancelled}
-            icon={<XCircle size={16} className="text-red-500" />}
-          />
+        <div className="flex flex-col gap-5">
+          {daySections.map(sec => <DaySection key={sec.ymd} ymd={sec.ymd} items={sec.items} />)}
         </div>
       )}
 
