@@ -628,7 +628,9 @@ export async function POST(req: NextRequest) {
           buffer = await sanitizeReceipt(buffer);
           const contentType = 'image/jpeg';
           const ext = 'jpeg';
-          const filePath = `receipts/${effectiveUserId || 'guest'}_${Date.now()}.${ext}`;
+          // Nombre impredecible: antes era solo la hora en milisegundos y se podía adivinar
+          // (la hora casi coincide con expires_at, que es público vía get_pitch_occupancy).
+          const filePath = `receipts/${effectiveUserId || 'guest'}_${randomUUID()}.${ext}`;
 
           if (isR2Configured()) {
             try {

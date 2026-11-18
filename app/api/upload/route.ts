@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { sanitizeReceipt, sanitizePromotionImage, optimizePublicImage } from '@/lib/receipt-security';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -90,7 +91,8 @@ export async function POST(req: NextRequest) {
     const folder = uploadType === 'receipt' ? 'comprobantes' : `${uploadType}s`;
     const userPrefix = user?.id || 'public';
     const timestamp = Date.now();
-    const randomSuffix = Math.random().toString(36).substring(2, 9);
+    // Sufijo criptográfico (antes Math.random, ~36 bits y no criptográfico).
+    const randomSuffix = randomUUID().replace(/-/g, '');
     // Ruta generada desde el servidor, nunca desde datos del cliente
     const filePath = `${folder}/${userPrefix}/${timestamp}_${randomSuffix}.${ext}`;
     const isPrivate = uploadType === 'receipt';

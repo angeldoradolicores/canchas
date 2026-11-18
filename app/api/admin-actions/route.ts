@@ -44,6 +44,26 @@ function computeSlotIsoTimes(selectedDate: string, slot: string) {
 // Caché en memoria para verificar si la BD tiene columnas 'note' y 'booking_type'
 let _supportsContractColumns: boolean | null = null;
 
+// Las canchas unidas (cancha combinada) solo pueden ser del MISMO complejo.
+async function keepSameCompanyLinks(supabase: any, companyId: string, custom: any) {
+  const ids = Array.isArray(custom?.linked_pitch_ids) ? custom.linked_pitch_ids.filter((x: any) => typeof x === 'string').slice(0, 20) : null;
+  if (!ids) return custom;
+  if (!ids.length) return { ...custom, linked_pitch_ids: [] };
+  const { data } = await supabase.from('pitches').select('id').eq('company_id', companyId).in('id', ids);
+  const own = new Set((data || []).map((p: any) => p.id));
+  return { ...custom, linked_pitch_ids: ids.filter((id: string) => own.has(id)) };
+}
+
+// Precio y porcentaje de anticipo dentro de rangos válidos (antes aceptaba -5 o 500%).
+function safePrice(raw: any, fallback: number) {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 && n <= 10_000_000 ? Math.round(n) : fallback;
+}
+function safePercentage(raw: any, fallback = 50) {
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : fallback;
+}
+
 export async function POST(req: NextRequest) {
   // ── 1. RATE LIMITING: 40 peticiones por minuto ──
   const rateLimit = checkRateLimit(req, {
@@ -287,8 +307,8 @@ export async function POST(req: NextRequest) {
           surface: typeof payload.surface === 'string' ? payload.surface : 'Sintética',
           tone: typeof payload.tone === 'string' ? payload.tone : 'field-emerald',
           price_per_hour: data.price_per_hour,
-          booking_percentage: Number(payload.booking_percentage) || 50,
-          custom_pricing: mergedCustomPricing,
+          booking_percentage: safePercentage(payload.booking_percentage),
+          custom_pricing: await keepSameCompanyLinks(supabase, company.id, mergedCustomPricing),
           payment_methods: Array.isArray(payload.payment_methods) ? payload.payment_methods : [],
           amenities: amenitiesString,
           contact_phone: typeof payload.contact_phone === 'string' ? payload.contact_phone.slice(0, 25) : null,
@@ -387,9 +407,9 @@ export async function POST(req: NextRequest) {
         supported_types: payload.supported_types || [payload.type || 'Fútbol 5'],
         surface: payload.surface || 'Sintética',
         tone: payload.tone || 'field-emerald',
-        price_per_hour: parseFloat(payload.price) || 80000,
-        booking_percentage: payload.booking_percentage || 50,
-        custom_pricing: mergedCustomPricing,
+        price_per_hour: safePrice(payload.price, 80000),
+        booking_percentage: safePercentage(payload.booking_percentage),
+        custom_pricing: await keepSameCompanyLinks(supabase, (await supabase.from('pitches').select('company_id').eq('id', pitch_id).single()).data?.company_id || '', mergedCustomPricing),
         payment_methods: payload.payment_methods || [],
         amenities: amenitiesString,
         contact_phone: payload.contact_phone || null,
