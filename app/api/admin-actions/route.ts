@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+import { notifyContractChange } from '@/lib/whatsapp-notifications';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse } from '@/lib/rate-limit';
 import { getAuthenticatedUser, verifyPitchOwnership } from '@/lib/auth-guard';
@@ -1125,6 +1126,10 @@ export async function POST(req: NextRequest) {
           total_skipped: skippedConflicts.length,
         }, { status: 409 });
       }
+
+      // Aviso al cliente por WhatsApp con el resumen del turno fijo (no retrasa la respuesta).
+      const createdIds = createdBookings.map(b => b.id).filter(Boolean);
+      if (createdIds.length > 0) after(() => notifyContractChange(createdIds, 'created'));
 
       return NextResponse.json({
         success: true,

@@ -240,14 +240,8 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   });
 
   const { user, profile } = useAuth();
-  const isOwnerUser = profile?.role === 'owner' || profile?.role === 'superadmin' || user?.user_metadata?.role === 'owner';
-
-  // ── Determinar si el usuario es dueño de la cancha ACTUAL (no de cualquier cancha) ──
-  const currentPitchOwnerId =
-    (currentPitch as any)?.companies?.owner_id ||
-    (currentPitch as any)?.company?.owner_id ||
-    null;
-  const isOwnPitch = !!(isOwnerUser && user?.id && currentPitchOwnerId === user.id);
+  // Las horas pasadas NUNCA se pueden reservar desde la vista de jugador, ni siquiera el
+  // dueño en su propia cancha: él lo hace desde su panel (reserva manual o turno fijo).
   const supabase = createClient();
 
   // Datos de contacto del jugador (autocompletado para invitados o usuarios logueados)
@@ -674,7 +668,6 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   // Cuenta regresiva para horas de hoy a las que les quedan menos de 5 minutos para cerrarse.
   const [graceNow, setGraceNow] = useState(() => Date.now());
   const lateSlot = (() => {
-    if (isOwnPitch) return null;
     let best: { slot: string; left: number } | null = null;
     for (const s of selectedTimes) {
       const left = getSlotSecondsToClose(selectedDate, s, undefined, new Date(graceNow));
@@ -683,7 +676,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     return best;
   })();
   // Se refresca cada segundo si alguna hora elegida es de hoy (para avisar en cuanto entre en los últimos 5 min).
-  const hasStartedSelection = !isOwnPitch && selectedTimes.length > 0 && selectedDate === today;
+  const hasStartedSelection = selectedTimes.length > 0 && selectedDate === today;
   useEffect(() => {
     if (!hasStartedSelection) return;
     setGraceNow(Date.now());
@@ -699,7 +692,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
     ? ` Si no alcanzas, llama al complejo al ${complexPhone} y pídele que te la reserve.`
     : ' Si no alcanzas, llama al complejo y pídele que te la reserve.';
 
-  const closedSlot = !isOwnPitch ? selectedTimes.find(s => isSlotPassed(selectedDate, s, undefined, new Date(graceNow))) : undefined;
+  const closedSlot = selectedTimes.find(s => isSlotPassed(selectedDate, s, undefined, new Date(graceNow)));
   const closingBanner = lateSlot ? (
 <div role="alert" className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 font-medium ${lateSlot.left <= 60 ? 'bg-red-500/10 border-red-500/40 text-red-700 dark:text-red-300' : 'bg-amber-500/10 border-amber-500/40 text-amber-800 dark:text-amber-300'}`}>
                   <Clock3 size={18} className="shrink-0 mt-0.5" />
@@ -736,7 +729,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
   ) : null;
 
   const toggleTime = (slot: string) => {
-    if (!isOwnPitch && isSlotPassed(selectedDate, slot)) {
+    if (isSlotPassed(selectedDate, slot)) {
       setAlertState({
         isOpen: true,
         type: 'warning',
@@ -747,7 +740,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
       });
       return;
     }
-    const graceLeft = !isOwnPitch ? getSlotSecondsToClose(selectedDate, slot) : null;
+    const graceLeft = getSlotSecondsToClose(selectedDate, slot);
     if (graceLeft !== null && !selectedTimes.includes(slot)) {
       setAlertState({
         isOpen: true,
@@ -1402,7 +1395,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                         const h12 = hNum === 0 ? 12 : hNum > 12 ? hNum - 12 : hNum;
                         const slotPrice = getSlotPrice(slot);
                         const isPassed = isSlotPassed(selectedDate, slot);
-                        const canClick = !isTaken && (!isPassed || isOwnPitch);
+                        const canClick = !isTaken && !isPassed;
 
                         let btnClass = 'bg-card hover:bg-primary/10 border-border text-foreground hover:border-primary/40';
                         if (isTaken) {
@@ -1410,13 +1403,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                             ? 'bg-orange-50 text-orange-400 border-orange-200 cursor-not-allowed overflow-hidden dark:bg-orange-950/20 dark:border-orange-900/30'
                             : 'bg-red-50 text-red-300 border-red-200 cursor-not-allowed overflow-hidden dark:bg-red-950/20 dark:border-red-900/30';
                         } else if (isPassed) {
-                          if (isOwnPitch) {
-                            btnClass = isSel
-                              ? 'bg-amber-600 text-white border-amber-500 shadow-md ring-2 ring-amber-500/30 scale-105'
-                              : 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-600 dark:text-amber-400 cursor-pointer';
-                          } else {
-                            btnClass = 'bg-secondary/30 text-muted-foreground/40 border-border/40 cursor-not-allowed opacity-50';
-                          }
+                          btnClass = 'bg-secondary/30 text-muted-foreground/40 border-border/40 cursor-not-allowed opacity-50';
                         } else if (isSel) {
                           btnClass = 'bg-primary text-white border-primary shadow-md ring-2 ring-primary/30 scale-105';
                         }
@@ -1428,7 +1415,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                             type="button"
                             onClick={() => toggleTime(slot)}
                             className={`p-2 sm:p-2.5 rounded-xl border text-center transition-all select-none font-bold relative min-w-0 flex flex-col items-center justify-center ${btnClass}`}
-                            title={isPassed ? (isOwnPitch ? 'Horario en curso o pasado (habilitado para dueño)' : 'Esta hora ya pasó la tolerancia para reservar en línea') : undefined}
+                            title={isPassed ? 'Esta hora ya pasó la tolerancia para reservar en línea' : undefined}
                           >
                             {isTaken ? (
                               <div className="flex flex-col items-center justify-center w-full">
@@ -1448,14 +1435,7 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
                             ) : isPassed ? (
                               <div className="flex flex-col items-center justify-center w-full">
                                 <span className="text-xs sm:text-sm block leading-tight text-muted-foreground/50">{h12}:00</span>
-                                <span className={`text-[8px] uppercase font-black tracking-wider mt-0.5 ${isOwnPitch ? (isSel ? 'text-white/90' : 'text-amber-600 dark:text-amber-400') : 'text-muted-foreground/60'}`}>
-                                  {isOwnPitch ? 'YA INICIÓ' : 'YA PASÓ'}
-                                </span>
-                                {isOwnPitch && (
-                                  <span className={`text-[8.5px] sm:text-[9px] block mt-0.5 font-semibold ${isSel ? 'text-white/90 font-bold' : 'text-amber-600 dark:text-amber-400'}`}>
-                                    ${slotPrice.toLocaleString('es-CO')}
-                                  </span>
-                                )}
+                                <span className="text-[8px] uppercase font-black tracking-wider mt-0.5 text-muted-foreground/60">YA PASÓ</span>
                               </div>
                             ) : (
                               <>
@@ -1475,13 +1455,6 @@ export function BookingFlow({ pitch, onBack, onFinish, preselectedTimes = [], pr
               </div>
 
               {closingBanner}
-
-              {isOwnPitch && selectedTimes.some(slot => isSlotPassed(selectedDate, slot)) && (
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs flex items-center gap-2.5 font-medium">
-                  <span className="text-base shrink-0">⚠️</span>
-                  <span><strong>Modo Dueño/Administrador:</strong> Has seleccionado horarios que ya avanzaron o pasaron. Tienes autorización para reservarlos en tu propia cancha.</span>
-                </div>
-              )}
 
               {error && <p className="auth-error">{error}</p>}
 

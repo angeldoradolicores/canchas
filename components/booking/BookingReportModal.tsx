@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { getCashEvents, sumCash } from '@/lib/cash-events';
+import { getCashEvents, getOutstandingMap, getPaymentLedger } from '@/lib/cash-events';
 import {
   X,
   BarChart3,
@@ -25,8 +25,10 @@ import {
   Sparkles,
   CalendarDays,
   FileSpreadsheet,
-  Search
+  Search,
+  Wallet
 } from 'lucide-react';
+import { formatPaymentMethod } from '@/lib/remaining-payment-utils';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -190,7 +192,19 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
 
   // Dinero recibido en el rango, por la FECHA DEL PAGO (anticipos y cada abono el día que se registró),
   // sin importar la fecha del partido. Así un abono de turno fijo suma el día en que se hizo.
-  const depositRevenue = useMemo(() => sumCash(getCashEvents(safeBookings), from, to).total, [safeBookings, from, to]);
+  const allCashEvents = useMemo(() => getCashEvents(safeBookings), [safeBookings]);
+  const periodPayments = useMemo(
+    () => allCashEvents.filter(ev => ev.at >= from.getTime() && ev.at <= to.getTime()).sort((a, b) => b.at - a.at),
+    [allCashEvents, from, to],
+  );
+  const depositRevenue = useMemo(() => periodPayments.reduce((s, ev) => s + ev.amount, 0), [periodPayments]);
+  const abonosRevenue = useMemo(() => periodPayments.filter(ev => ev.kind === 'abono').reduce((s, ev) => s + ev.amount, 0), [periodPayments]);
+  // Saldo real (valor − anticipo − abonos) de las reservas aprobadas del periodo.
+  const outstandingMap = useMemo(() => getOutstandingMap(safeBookings), [safeBookings]);
+  const pendingBalance = useMemo(
+    () => confirmedBookings.reduce((s, b) => s + (outstandingMap.get(b.id) || 0), 0),
+    [confirmedBookings, outstandingMap],
+  );
 
   const lostRevenue = useMemo(() => {
     return cancelledBookings.reduce((sum, b) => sum + getBookingIncome(b), 0);
@@ -339,6 +353,8 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
       totalBilled: number;
       totalReceivable: number;
       daysPlayed: { date: string; time: string; status: string; pitch: string; iso: string; price: number }[];
+      bookings: any[];
+      ledger: ReturnType<typeof getPaymentLedger> | null;
       allTimeHistory: {
         totalMatches: number;
         totalBilled: number;
@@ -393,6 +409,8 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
           totalBilled: 0,
           totalReceivable: 0,
           daysPlayed: [],
+          bookings: [],
+          ledger: null,
           allTimeHistory: {
             totalMatches: 0,
             totalBilled: 0,
@@ -404,6 +422,8 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
 
       const rec = map[key];
       const inc = getBookingIncome(b);
+      rec.bookings.push(b);
+      const owed = b.status === 'confirmed' ? (outstandingMap.get(b.id) || 0) : 0;
 
       // Agregar a trazabilidad histórica multianual
       if (b.start_time) {
@@ -415,9 +435,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
 
           rec.allTimeHistory.totalMatches++;
           if (b.status === 'confirmed') rec.allTimeHistory.totalBilled += inc;
-          if (b.payment_method === 'cuenta_cobrar' || b.payment_method === 'credito') {
-            rec.allTimeHistory.totalReceivable += inc;
-          }
+          rec.allTimeHistory.totalReceivable += owed;
 
           if (!rec.allTimeHistory.byYear[year]) {
             rec.allTimeHistory.byYear[year] = { year, matches: 0, total: 0, months: {} };
@@ -458,9 +476,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
             rec.pendingBookings++;
           }
 
-          if (b.payment_method === 'cuenta_cobrar' || b.payment_method === 'credito') {
-            rec.totalReceivable += inc;
-          }
+          rec.totalReceivable += owed;
 
           if (b.start_time) {
             rec.daysPlayed.push({
@@ -476,6 +492,8 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
       }
     });
 
+    // Abonos del cliente con el saldo que quedó después de cada uno.
+    for (const rec of Object.values(map)) rec.ledger = getPaymentLedger(rec.bookings);
     const list = Object.values(map).sort((a, b) => b.allTimeHistory.totalBilled - a.allTimeHistory.totalBilled);
     const totalEntities = list.length;
     const totalBilledAll = list.reduce((s, e) => s + (e.totalBilled || e.allTimeHistory.totalBilled), 0);
@@ -491,7 +509,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
       totalMatchesAll,
       avgRateAll,
     };
-  }, [safeBookings, from, to]);
+  }, [safeBookings, from, to, outstandingMap]);
 
   // Si se solicita abrir la trazabilidad de un contrato específico directamente
   useEffect(() => {
@@ -548,7 +566,6 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
     const periodLabel = PERIOD_OPTIONS.find(p => p.key === period)?.label || 'Período';
     const dateRange = `${from.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })} – ${to.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}`;
     const generatedAt = new Date().toLocaleString('es-CO', { dateStyle: 'long', timeStyle: 'short', timeZone: 'America/Bogota' });
-    const pendingBalance = Math.max(0, totalRevenue - depositRevenue);
 
     const courtRows = byCourt.map((c, i) => `
       <tr>
@@ -756,6 +773,34 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
     </table>
   </div>` : ''}
 
+  ${periodPayments.length > 0 ? `
+  <div class="section">
+    <div class="section-title">Anticipos y abonos recibidos en el periodo (${formatCOP(depositRevenue)})</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha del pago</th>
+          <th>Cliente</th>
+          <th>Cancha</th>
+          <th>Tipo</th>
+          <th>Medio</th>
+          <th style="text-align:right;">Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${periodPayments.map(ev => `
+        <tr>
+          <td style="padding:8px 14px;border-bottom:1px solid #e2e8f0;">${paymentDate(ev.at)}</td>
+          <td style="padding:8px 14px;border-bottom:1px solid #e2e8f0;font-weight:700;">${escapeHtml(cleanClientName(ev.customer) || 'Cliente')}</td>
+          <td style="padding:8px 14px;border-bottom:1px solid #e2e8f0;">${escapeHtml(ev.pitch)}</td>
+          <td style="padding:8px 14px;border-bottom:1px solid #e2e8f0;">${ev.kind === 'abono' ? 'Abono' : 'Anticipo'}</td>
+          <td style="padding:8px 14px;border-bottom:1px solid #e2e8f0;">${escapeHtml(cashMethodLabel(ev.method))}</td>
+          <td style="padding:8px 14px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:800;color:#0f766e;">${formatCOP(ev.amount)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>` : ''}
+
   ${entityRows.length > 0 ? `
   <div class="section">
     <div class="section-title">Control Corporativo: Entidades, Escuelas y Turnos Fijos</div>
@@ -767,7 +812,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
           <th style="text-align:right;">Tarifa Acordada</th>
           <th style="text-align:center;">Partidos</th>
           <th style="text-align:right;">Total Facturado</th>
-          <th style="text-align:right;">Por Cobrar (Crédito)</th>
+          <th style="text-align:right;">Saldo por Cobrar</th>
         </tr>
       </thead>
       <tbody>
@@ -806,7 +851,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
     win.document.write(html);
     win.document.close();
     setTimeout(() => { win.focus(); win.print(); }, 400);
-  }, [period, from, to, companyName, byCourt, byHour, cancelledBookings, totalRevenue, depositRevenue, confirmedCount, totalBookingsCount, successRate, averageTicket, cancelledCount, cancellationRate, lostRevenue, topCustomers, uniqueCustomersCount, entitiesReport, peakHour]);
+  }, [period, from, to, companyName, byCourt, byHour, cancelledBookings, totalRevenue, depositRevenue, pendingBalance, periodPayments, confirmedCount, totalBookingsCount, successRate, averageTicket, cancelledCount, cancellationRate, lostRevenue, topCustomers, uniqueCustomersCount, entitiesReport, peakHour]);
 
   // ── Impresión de Hoja de Trazabilidad y Estado de Cuenta Individual ───────────
   const handlePrintSingleTraceability = useCallback((ent: any) => {
@@ -903,11 +948,32 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
     </div>
   </div>
 
-  ${ent.allTimeHistory?.totalReceivable > 0 ? `
-    <div style="background:#fffbeb;border:1px solid #fde68a;padding:10px 16px;border-radius:10px;margin-bottom:20px;font-size:12px;color:#92400e;">
-      <strong>⚠️ Cuenta por Cobrar Vigente:</strong> Se registran <strong>${formatCOP(ent.allTimeHistory.totalReceivable)}</strong> bajo modalidad de Crédito / Cuenta por Cobrar.
-    </div>
-  ` : ''}
+  <div style="background:${ent.allTimeHistory?.totalReceivable > 0 ? '#fffbeb' : '#f0fdf4'};border:1px solid ${ent.allTimeHistory?.totalReceivable > 0 ? '#fde68a' : '#bbf7d0'};padding:10px 16px;border-radius:10px;margin-bottom:20px;font-size:12px;color:#0f172a;">
+    <strong>Estado de cuenta:</strong> Pagado <strong>${formatCOP(ent.ledger?.paid || 0)}</strong> · Saldo restante <strong style="color:#b45309;">${formatCOP(ent.allTimeHistory?.totalReceivable || 0)}</strong>
+  </div>
+
+  <h3 style="font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;color:#0f172a;">Registro de Abonos</h3>
+  <table style="margin-bottom:20px;">
+    <thead>
+      <tr>
+        <th>Fecha del pago</th>
+        <th>Tipo</th>
+        <th>Medio</th>
+        <th style="text-align:right;">Valor</th>
+        <th style="text-align:right;">Saldo restante</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${(ent.ledger?.rows || []).map((r: any) => `
+      <tr>
+        <td>${paymentDate(r.at)}</td>
+        <td>${r.kind === 'abono' ? 'Abono' : 'Anticipo'}</td>
+        <td>${escapeHtml(cashMethodLabel(r.method))}</td>
+        <td style="text-align:right;font-weight:800;color:#0f766e;">${formatCOP(r.amount)}</td>
+        <td style="text-align:right;color:#b45309;">${formatCOP(r.remaining)}</td>
+      </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;padding:12px;">Aún no hay abonos registrados</td></tr>'}
+    </tbody>
+  </table>
 
   <h3 style="font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;color:#0f172a;">Historial Cronológico de Turnos (Meses y Años)</h3>
   <table>
@@ -1104,6 +1170,29 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
                 <Kpi tone="rose" label="Canceladas" value={`${cancelledCount}`} hint={`${formatCOP(lostRevenue)} que no ingresó`} icon={<XCircle size={16} />} />
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Kpi tone="primary" label="Dinero recibido en el periodo" value={formatCOP(depositRevenue)} hint={`Anticipos: ${formatCOP(depositRevenue - abonosRevenue)} · Abonos: ${formatCOP(abonosRevenue)}`} icon={<Wallet size={16} />} />
+                <Kpi tone="amber" label="Saldo por cobrar" value={formatCOP(pendingBalance)} hint="Reservas aprobadas del periodo que aún deben" icon={<AlertTriangle size={16} />} />
+              </div>
+
+              <Card title="Anticipos y abonos recibidos" icon={<Wallet size={15} />}>
+                {periodPayments.length === 0 ? <Empty text="No se recibieron pagos en este período." /> : (
+                  <ul className="divide-y divide-border/60 max-h-80 overflow-y-auto">
+                    {periodPayments.map(ev => (
+                      <li key={ev.key} className="flex items-center justify-between gap-3 py-2">
+                        <span className="min-w-0">
+                          <span className="block text-sm font-bold text-foreground truncate capitalize">{(cleanClientName(ev.customer) || 'Cliente').toLowerCase()}</span>
+                          <span className="block text-[11px] text-muted-foreground truncate">
+                            {paymentDate(ev.at)} · {ev.pitch} · {ev.kind === 'abono' ? 'Abono' : 'Anticipo'} · {cashMethodLabel(ev.method)}
+                          </span>
+                        </span>
+                        <span className="text-sm font-black text-green-600 dark:text-green-400 shrink-0">+{formatCOP(ev.amount)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <MiniStat label="Cancha que más vende" value={topCourt?.name || '—'} hint={topCourt ? formatCOP(topCourt.revenue) : 'Sin datos'} />
                 <MiniStat label="Hora más pedida" value={peakHour?.label || '—'} hint={peakHour ? `${peakHour.count} reservas` : 'Sin datos'} />
@@ -1283,7 +1372,7 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
                 <Kpi label="Clientes con convenio" value={`${entitiesReport.totalEntities}`} hint="Turnos fijos, entidades y escuelas" icon={<Building2 size={16} />} />
                 <Kpi label="Partidos aprobados" value={`${entitiesReport.totalMatchesAll}`} hint="En el período" icon={<CheckCircle2 size={16} className="text-emerald-500" />} />
                 <Kpi tone="primary" label="Facturado" value={formatCOP(entitiesReport.totalBilledAll)} hint={`Promedio ${formatCOP(entitiesReport.avgRateAll)} por partido`} icon={<DollarSign size={16} />} />
-                <Kpi tone="amber" label="Por cobrar" value={formatCOP(entitiesReport.totalReceivableAll)} hint="Crédito / cuenta por cobrar" icon={<AlertTriangle size={16} />} />
+                <Kpi tone="amber" label="Por cobrar" value={formatCOP(entitiesReport.totalReceivableAll)} hint="Saldo que aún deben (valor − abonos)" icon={<AlertTriangle size={16} />} />
               </div>
 
               <div className="flex flex-col sm:flex-row gap-2">
@@ -1457,11 +1546,38 @@ export function BookingReportModal({ isOpen, onClose, bookings = [], pitches = [
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-4 border-b border-border bg-secondary/15 shrink-0">
               <MiniStat label="Tarifa acordada" value={`${formatCOP(selectedEntityTrace.customRate)}/h`} hint={paymentLabel(selectedEntityTrace.paymentMethod)} />
               <MiniStat label="Partidos" value={`${selectedEntityTrace.allTimeHistory?.totalMatches || 0}`} hint="Todo el historial" />
-              <MiniStat label="Facturado" value={formatCOP(selectedEntityTrace.allTimeHistory?.totalBilled || 0)} hint="Partidos aprobados" />
-              <MiniStat label="Por cobrar" value={formatCOP(selectedEntityTrace.allTimeHistory?.totalReceivable || 0)} hint="Saldo pendiente" />
+              <MiniStat label="Valor del contrato" value={formatCOP(selectedEntityTrace.allTimeHistory?.totalBilled || 0)} hint="Partidos aprobados" />
+              <MiniStat label="Saldo restante" value={formatCOP(selectedEntityTrace.allTimeHistory?.totalReceivable || 0)} hint={`Pagado: ${formatCOP(selectedEntityTrace.ledger?.paid || 0)}`} />
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <section className="rounded-2xl border border-border bg-card overflow-hidden">
+                <div className="px-3.5 py-2.5 bg-green-500/10 flex items-center justify-between gap-2">
+                  <span className="text-xs font-black text-foreground flex items-center gap-1.5"><Wallet size={13} className="text-green-600" /> Registro de abonos</span>
+                  <span className="text-[11px] font-bold text-muted-foreground">
+                    Pagado {formatCOP(selectedEntityTrace.ledger?.paid || 0)} · Resta <span className="text-amber-600 dark:text-amber-400">{formatCOP(selectedEntityTrace.allTimeHistory?.totalReceivable || 0)}</span>
+                  </span>
+                </div>
+                {!selectedEntityTrace.ledger?.rows?.length ? (
+                  <p className="px-3.5 py-3 text-xs text-muted-foreground">Aún no hay abonos registrados. Todo el valor está por cobrar.</p>
+                ) : (
+                  <ul className="divide-y divide-border/50">
+                    {[...selectedEntityTrace.ledger.rows].reverse().map((r: any) => (
+                      <li key={r.key} className="px-3.5 py-2.5 flex items-center justify-between gap-3 text-xs">
+                        <span className="min-w-0">
+                          <span className="block font-bold text-foreground">{paymentDate(r.at)} · {r.kind === 'abono' ? 'Abono' : 'Anticipo'}</span>
+                          <span className="block text-muted-foreground truncate">{cashMethodLabel(r.method)}{r.notes && r.kind === 'abono' ? ` · ${r.notes}` : ''}</span>
+                        </span>
+                        <span className="text-right shrink-0">
+                          <span className="block font-black text-green-600 dark:text-green-400">+{formatCOP(r.amount)}</span>
+                          <span className="block text-[10px] text-muted-foreground">Saldo: {formatCOP(r.remaining)}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
               {Object.keys(selectedEntityTrace.allTimeHistory?.byYear || {}).length === 0 ? (
                 <Empty text="No hay partidos registrados para este cliente." />
               ) : (
@@ -1542,6 +1658,22 @@ function normalizePhone(phone: unknown) {
 
 function shortDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'America/Bogota' });
+}
+
+function escapeHtml(v: unknown) {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+}
+
+function paymentDate(at: number) {
+  return new Date(at).toLocaleString('es-CO', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Bogota' });
+}
+
+/** Medio de pago de un anticipo (efectivo/transferencia…) o de un abono (cash/transfer/card…). */
+function cashMethodLabel(method: string) {
+  const m = String(method || '');
+  if (!m) return 'Sin especificar';
+  if (['cash', 'transfer', 'card', 'other', 'split', 'nequi', 'daviplata'].includes(m)) return formatPaymentMethod(m);
+  return paymentLabel(m);
 }
 
 function paymentLabel(method: string) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@supabase/supabase-js';
-import { notifyBookingStatusChange } from '@/lib/whatsapp-notifications';
+import { notifyBookingStatusChange, notifyContractChange, isContractBookingRow } from '@/lib/whatsapp-notifications';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,12 +99,14 @@ export async function POST(req: NextRequest) {
     // 5. Insert notifications in DB for each affected booking's user
     const { data: updatedBookings } = await supabase
       .from('bookings')
-      .select('id, user_id, start_time, customer_name')
+      .select('id, user_id, start_time, customer_name, booking_type, billing_scheme, note')
       .in('id', validIds);
 
     if (updatedBookings && updatedBookings.length > 0) {
+      const contractIds = updatedBookings.filter(isContractBookingRow).map((b: any) => b.id);
+      // Los turnos fijos y reservas manuales quedan a nombre del dueño: no se avisa a sí mismo.
       const notifs = updatedBookings
-        .filter((b: any) => b.user_id)
+        .filter((b: any) => b.user_id && b.user_id !== user.id)
         .map((b: any) => {
           const st = new Date(b.start_time);
           const timeStr = st.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
@@ -127,9 +129,11 @@ export async function POST(req: NextRequest) {
       }
 
       // 6. Trigger WhatsApp notification immediately
-      const firstId = validIds[0];
+      const firstId = validIds.find(id => !contractIds.includes(id));
       try {
-        await notifyBookingStatusChange(firstId, newStatus);
+        // Turno fijo: un solo mensaje con el resumen de los partidos afectados.
+        if (contractIds.length > 0) await notifyContractChange(contractIds, newStatus);
+        if (firstId) await notifyBookingStatusChange(firstId, newStatus);
       } catch (e) {
         console.error('[batch-action] notify-status error:', e);
       }

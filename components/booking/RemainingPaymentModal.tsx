@@ -593,14 +593,17 @@ export function RemainingPaymentModal({
                         <span className="font-black text-foreground">
                           {formatCOP(entry.amount)}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => startEditPayment(entry)}
-                          className="text-[10px] text-primary hover:underline flex items-center gap-0.5 cursor-pointer font-bold"
-                          title="Editar este abono"
-                        >
-                          <Edit3 size={10} /> Editar
-                        </button>
+                        {/* Con el pago completo el historial queda cerrado: ya no se edita. */}
+                        {!isFullyPaid && (
+                          <button
+                            type="button"
+                            onClick={() => startEditPayment(entry)}
+                            className="text-[10px] text-primary hover:underline flex items-center gap-0.5 cursor-pointer font-bold"
+                            title="Editar este abono"
+                          >
+                            <Edit3 size={10} /> Editar
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="text-[11px] space-y-0.5 text-muted-foreground">
@@ -611,6 +614,12 @@ export function RemainingPaymentModal({
                       <p>
                         <strong className="text-foreground">Fecha:</strong>{' '}
                         {fmtDate(entry.at)}
+                      </p>
+                      <p>
+                        <strong className="text-foreground">Saldo restante:</strong>{' '}
+                        <span className="font-bold text-amber-600 dark:text-amber-400">
+                          {formatCOP(Math.max(0, totalPrice - depositAmount - paymentHistory.slice(0, idx + 1).reduce((sum, e) => sum + Number(e.amount || 0), 0)))}
+                        </span>
                       </p>
                       {entry.notes && (
                         <p>

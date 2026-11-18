@@ -516,3 +516,86 @@ export async function notifyBookingStatusChange(bookingId: string, newStatus: 'c
     console.error('[notifyBookingStatusChange] Error:', err);
   }
 }
+
+const CONTRACT_SCHEME_LABELS: Record<string, string> = {
+  mes_anticipado: 'Mensualidad anticipada',
+  mes_vencido: 'Mensualidad vencida',
+  por_sesion: 'Pago por partido',
+  quincenal_anticipado: 'Quincenal anticipado',
+  quincenal_vencido: 'Quincenal vencido',
+  total_anticipado: 'Pago total anticipado',
+};
+
+/** ¿La reserva es de un turno fijo / contrato? */
+export function isContractBookingRow(b: any): boolean {
+  const note = String(b?.note || '');
+  const name = String(b?.customer_name || '');
+  return b?.booking_type === 'contract' || !!b?.billing_scheme ||
+    note.includes('[TURNO FIJO') || note.includes('CID:') || name.includes('[Turno Fijo');
+}
+
+/**
+ * WhatsApp al cliente de un TURNO FIJO: cuando se registra y cuando cambia de estado.
+ * Un solo mensaje con el resumen (días, horario, fechas, partidos y valor), no una hora por línea.
+ */
+export async function notifyContractChange(bookingIds: string[], event: 'created' | 'confirmed' | 'cancelled') {
+  try {
+    const ids = Array.from(new Set((bookingIds || []).filter(Boolean))).slice(0, 1500);
+    if (ids.length === 0) return;
+    const rows: any[] = [];
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select(`id, customer_name, customer_phone, start_time, end_time, total_price, custom_rate, billing_scheme,
+                 pitches!inner ( name, companies!inner ( name, whatsapp_instance_name ) )`)
+        .in('id', ids.slice(i, i + 200));
+      if (error) return;
+      rows.push(...(data || []));
+    }
+    if (rows.length === 0) return;
+    rows.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+
+    const first: any = rows[0];
+    const phone = first.customer_phone;
+    if (!phone || formatWhatsAppPhone(phone).length < 10) return;
+    if (isDuplicate(`contract_${event}_${first.id}_${rows.length}`, 60000)) return;
+
+    const company = first.pitches?.companies;
+    const instanceName = company?.whatsapp_instance_name || CENTRAL_WHATSAPP_INSTANCE;
+    if (!instanceName) return;
+
+    const tz = { timeZone: 'America/Bogota' } as const;
+    const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('es-CO', { ...tz, weekday: 'long', day: 'numeric', month: 'long' });
+    const fmtHour = (iso: string) => new Date(iso).toLocaleTimeString('es-CO', { ...tz, hour: 'numeric', minute: '2-digit', hour12: true });
+    const weekdays = Array.from(new Set(rows.map(r => new Date(r.start_time).toLocaleDateString('es-CO', { ...tz, weekday: 'long' }))));
+    const hours = Array.from(new Set(rows.map(r => `${fmtHour(r.start_time)} – ${fmtHour(r.end_time || r.start_time)}`)));
+    const total = rows.reduce((s, r) => s + Number(r.total_price || r.custom_rate || 0), 0);
+    const pitchNames = Array.from(new Set(rows.map(r => r.pitches?.name).filter(Boolean))).join(' + ');
+    const last: any = rows[rows.length - 1];
+    const scheme = CONTRACT_SCHEME_LABELS[first.billing_scheme] || '';
+    const n = rows.length;
+
+    const header = `🏟️ *${String(company?.name || 'Complejo').toUpperCase()}*\n⚽ *${pitchNames.toUpperCase()}*\n`;
+    const summary =
+      `🗓️ *DÍAS:* ${weekdays.join(', ')}\n` +
+      `⏰ *HORARIO:* ${hours.join(' · ')}\n` +
+      `📆 *DESDE:* ${fmtDay(first.start_time)}\n` +
+      `📆 *HASTA:* ${fmtDay(last.start_time)}\n` +
+      `🔢 *PARTIDOS:* ${n}\n` +
+      (total > 0 ? `💵 *VALOR:* $${total.toLocaleString('es-CO')}${scheme ? ` (${scheme})` : ''}\n` : '');
+
+    let msg: string;
+    if (event === 'created') {
+      msg = `📅 *¡TU TURNO FIJO QUEDÓ REGISTRADO!*\n\n${header}${summary}\nTe esperamos cada semana. Si necesitas cambiar algo, comunícate con el complejo.`;
+    } else if (event === 'confirmed') {
+      msg = `✅ *¡TU TURNO FIJO FUE CONFIRMADO!*\n\n${header}${summary}`;
+    } else if (n === 1) {
+      msg = `❌ *SE CANCELÓ UN PARTIDO DE TU TURNO FIJO*\n\n${header}📅 *FECHA:* ${fmtDay(first.start_time)}\n⏰ *HORARIO:* ${hours[0]}\n\nLos demás partidos de tu turno fijo siguen igual. Si tienes dudas, comunícate con el complejo.`;
+    } else {
+      msg = `❌ *SE CANCELARON ${n} PARTIDOS DE TU TURNO FIJO*\n\n${header}${summary}\nSi tienes dudas, comunícate con el complejo.`;
+    }
+    await sendEvolutionWhatsAppText(instanceName, phone, msg);
+  } catch (err) {
+    console.error('[notifyContractChange] Error:', err);
+  }
+}

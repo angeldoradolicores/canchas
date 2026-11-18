@@ -85,12 +85,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
 
   // Auth & Favorites & ActiveBooking hooks
   const { user, profile } = useAuth();
-  const isOwnerUser = profile?.role === 'owner' || profile?.role === 'superadmin' || user?.user_metadata?.role === 'owner';
-  const currentPitchOwnerId =
-    (currentPitch as any)?.companies?.owner_id ||
-    (currentPitch as any)?.company?.owner_id ||
-    null;
-  const isOwnPitch = !!(isOwnerUser && user?.id && currentPitchOwnerId === user.id);
+  // Horas pasadas: nunca se reservan desde la vista de jugador (ni el dueño); él usa su panel.
   const { isFavorite: checkFav, toggleFavorite: doToggleFav, isFavoriteComplex, toggleFavoriteComplex } = useFavorites();
   const complexId = currentPitch.company_id || (currentPitch as any)?.companies?.id || (currentPitch as any)?.company?.id;
   const isFavorite = complexId ? isFavoriteComplex(complexId) : checkFav(currentPitch.id);
@@ -377,7 +372,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
     return `${h12}:00 ${ampm}`;
   }
   const toggleTime = (slot: string) => {
-    if (!isOwnPitch && isSlotPassed(selectedDate, slot)) {
+    if (isSlotPassed(selectedDate, slot)) {
       setAlertState({
         isOpen: true,
         type: 'warning',
@@ -1297,9 +1292,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
 
                         let btnClass = 'bg-card hover:bg-primary/10 border-border text-foreground';
                         if (isSel) {
-                          btnClass = isPassed && isOwnPitch
-                            ? 'bg-amber-600 text-white border-amber-500 shadow-md ring-2 ring-amber-500/30'
-                            : 'bg-primary text-white border-primary shadow-md';
+                          btnClass = 'bg-primary text-white border-primary shadow-md';
                         } else if (isTaken) {
                           if (isDraft) {
                             btnClass = 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/40 ring-1 ring-amber-500/20 cursor-not-allowed';
@@ -1307,21 +1300,17 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                             btnClass = 'bg-red-500/10 text-red-400 border-red-500/20 cursor-not-allowed opacity-60';
                           }
                         } else if (isPassed) {
-                          if (isOwnPitch) {
-                            btnClass = 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-500 dark:text-amber-400 cursor-pointer';
-                          } else {
-                            btnClass = 'bg-secondary/30 text-muted-foreground/40 border-border/40 cursor-not-allowed opacity-50';
-                          }
+                          btnClass = 'bg-secondary/30 text-muted-foreground/40 border-border/40 cursor-not-allowed opacity-50';
                         }
 
                         return (
                           <button
                             key={`${activeTimeCategory}-${slot}`}
-                            disabled={isTaken || (!isOwnPitch && isPassed)}
+                            disabled={isTaken || isPassed}
                             type="button"
                             onClick={() => toggleTime(slot)}
                             className={`p-2 sm:p-2 rounded-2xl sm:rounded-xl border text-center transition-all select-none font-bold text-[11px] sm:text-xs relative overflow-hidden ${btnClass}`}
-                            title={isPassed ? (isOwnPitch ? 'Horario en curso o transcurrido (habilitado para dueño)' : 'Esta hora ya pasó la tolerancia para reservar en línea') : undefined}
+                            title={isPassed ? 'Esta hora ya pasó la tolerancia para reservar en línea' : undefined}
                           >
                             <span className="block leading-tight">{h12}:00</span>
                             <span className="text-[9px] uppercase opacity-75">{ampm}</span>
@@ -1332,14 +1321,7 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                             )}
                             {isPassed && !isTaken && (
                               <div className="mt-0.5">
-                                <span className={`text-[8.5px] font-black uppercase block tracking-tight ${isOwnPitch ? (isSel ? 'text-white/90' : 'text-amber-500 dark:text-amber-400') : 'text-muted-foreground/60'}`}>
-                                  {isOwnPitch ? 'Ya inició' : 'Ya pasó'}
-                                </span>
-                                {isOwnPitch && (
-                                  <span className={`text-[8.5px] block font-semibold ${isSel ? 'text-white/90' : 'text-amber-500 dark:text-amber-400'}`}>
-                                    ${slotPrice.toLocaleString('es-CO')}
-                                  </span>
-                                )}
+                                <span className="text-[8.5px] font-black uppercase block tracking-tight text-muted-foreground/60">Ya pasó</span>
                               </div>
                             )}
 
@@ -1386,14 +1368,6 @@ export function PitchDetail({ pitch, onBack, onBook, initialDate, initialTimes, 
                   <span>Total estimado:</span>
                   <span className="text-primary">${totalPrice.toLocaleString('es-CO')}</span>
                 </div>
-              </div>
-            )}
-
-            {/* Advertencia para Dueño reservando horas pasadas o en curso */}
-            {isOwnPitch && selectedTimes.some(slot => isSlotPassed(selectedDate, slot)) && (
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 dark:text-amber-400 text-xs flex items-center gap-2.5 font-medium">
-                <span className="text-base shrink-0">⚠️</span>
-                <span><strong>Modo Dueño/Administrador:</strong> Has seleccionado horarios que ya iniciaron o pasaron. Cuentas con permiso para agendarlos en tu propia cancha.</span>
               </div>
             )}
 

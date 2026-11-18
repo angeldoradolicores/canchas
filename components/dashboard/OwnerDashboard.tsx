@@ -13,8 +13,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { BookingReportModal } from '@/components/booking/BookingReportModal';
 import { playPendingAlertSound, triggerSystemNotification } from '@/lib/push-notifications';
-import { getBookingRemainingPayment } from '@/lib/remaining-payment-utils';
-import { getCashEvents } from '@/lib/cash-events';
+import { getCashEvents, getOutstandingMap } from '@/lib/cash-events';
 
 type DateFilter = 'hoy' | 'ayer' | 'semana' | 'mes' | 'total';
 
@@ -136,51 +135,6 @@ function getLocalDateString(dateInput: string | Date): string {
 
 function getBookingIncome(b: any): number {
   return Number(b.total_price || b.pitches?.price_per_hour || 0);
-}
-
-function getBookingDeposit(b: any): number {
-  if (!b) return 0;
-  if (b.deposit_amount !== undefined && b.deposit_amount !== null && Number(b.deposit_amount) > 0) {
-    return Number(b.deposit_amount);
-  }
-  // Fallback si no tiene deposit_amount pero es reserva web de cliente
-  if (b.source !== 'owner_panel' && b.pitches && !b.is_loyalty_free) {
-    const customPricing = b.pitches.custom_pricing || {};
-    const isFixed = customPricing.booking_type === 'fixed';
-    const pct = customPricing.booking_percentage || b.pitches.booking_percentage || 50;
-    const tPrice = getBookingIncome(b);
-    if (isFixed) {
-      return Number(customPricing.booking_fixed || 0);
-    }
-    return (tPrice * Number(pct)) / 100;
-  }
-  return 0;
-}
-
-// Abonos/saldos cobrados en el local (pagos parciales registrados después del anticipo).
-function getBookingAbonos(b: any): number {
-  if (!b) return 0;
-  const rem = getBookingRemainingPayment(b);
-  return Number(rem?.amount || b.remaining_amount_paid || 0);
-}
-
-// Monto REALMENTE cobrado de una reserva.
-// Regla: una reserva del panel del dueño (manual / turno fijo) marcada como pagada
-// (payment_status 'verified') y que NO sea a crédito ni cuenta por cobrar, se considera
-// COBRADA en su totalidad (se pagó por adelantado en el local). El resto se cobra por
-// anticipo + abonos, con tope en el valor total.
-function getBookingCollected(b: any): number {
-  if (!b) return 0;
-  const total = getBookingIncome(b);
-  if (b.is_loyalty_free) return 0;
-  const method = b.payment_method;
-  const paidInFull =
-    b.source === 'owner_panel' &&
-    b.payment_status === 'verified' &&
-    method !== 'credito' &&
-    method !== 'cuenta_cobrar';
-  if (paidInFull) return total;
-  return Math.min(getBookingDeposit(b) + getBookingAbonos(b), total);
 }
 
 function MiniBarChart({
@@ -472,8 +426,10 @@ export function OwnerDashboard() {
   const totalRemainingPaid = periodCash.filter(ev => ev.kind === 'abono').reduce((s, ev) => s + ev.amount, 0);
   const totalDeposits = periodCash.filter(ev => ev.kind === 'deposit').reduce((s, ev) => s + ev.amount, 0);
   const totalCollected = totalDeposits + totalRemainingPaid;
-  // Por cobrar: saldo que aún deben las reservas del periodo.
-  const pendingCollection = Math.max(0, totalIncome - confirmed.reduce((s, b) => s + getBookingCollected(b), 0));
+  // Por cobrar: saldo que aún deben las reservas del periodo (valor − anticipo − abonos), con la
+  // misma regla que la gestión de reservas. Una reserva manual sin abono queda aquí completa.
+  const outstanding = useMemo(() => getOutstandingMap(allBookings), [allBookings]);
+  const pendingCollection = confirmed.reduce((s, b) => s + (outstanding.get(b.id) || 0), 0);
   const avgIncome = confirmed.length > 0 ? Math.round(totalIncome / confirmed.length) : 0;
   const confirmRate = filteredBookings.length > 0 ? Math.round((confirmed.length / filteredBookings.length) * 100) : 0;
 
@@ -706,8 +662,8 @@ export function OwnerDashboard() {
           <StatCard
             icon={<DollarSign size={18} className="text-primary shrink-0" />}
             title="Total Facturado"
-            value={fmt(totalIncome)}
-            sub={`Directo/anticipos: ${fmt(totalDeposits)} · Saldos: ${fmt(totalRemainingPaid)}`}
+            value={fmt(totalCollected)}
+            sub={`Dinero recibido · Anticipos: ${fmt(totalDeposits)} · Abonos: ${fmt(totalRemainingPaid)}`}
             accent="bg-primary"
             onClick={() => router.push('/dashboard/bookings')}
           />
@@ -776,9 +732,9 @@ export function OwnerDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 w-full max-w-full min-w-0">
         <div className="p-3.5 rounded-2xl bg-card border border-border flex items-center justify-between shadow-sm">
           <div>
-            <span className="text-[10px] font-black uppercase text-muted-foreground tracking-wider block">Facturado Total</span>
+            <span className="text-[10px] font-black uppercase text-muted-foreground tracking-wider block">Valor de las reservas</span>
             <span className="text-lg font-black text-foreground">{fmt(totalIncome)}</span>
-            <span className="text-[10px] text-muted-foreground block mt-0.5">{confirmed.length} reservas confirmadas</span>
+            <span className="text-[10px] text-muted-foreground block mt-0.5">{confirmed.length} confirmadas · cobrado o no</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0">
             <DollarSign size={20} />
@@ -789,7 +745,7 @@ export function OwnerDashboard() {
           <div>
             <span className="text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-300 tracking-wider block">Dinero en Caja (Recaudado)</span>
             <span className="text-lg font-black text-emerald-700 dark:text-emerald-400">{fmt(totalCollected)}</span>
-            <span className="text-[10px] text-muted-foreground block mt-0.5">Directo/anticipos: {fmt(totalDeposits)} · Saldos: {fmt(totalRemainingPaid)}</span>
+            <span className="text-[10px] text-muted-foreground block mt-0.5">Anticipos: {fmt(totalDeposits)} · Abonos: {fmt(totalRemainingPaid)}</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold shrink-0">
             <CheckCircle2 size={20} />

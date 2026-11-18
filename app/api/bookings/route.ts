@@ -5,7 +5,7 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, createRateLimitErrorResponse, getClientIp } from '@/lib/rate-limit';
 import { hashClientIp, quotaErrorMessage, verifyTurnstile, GUEST_MAX_HOURS } from '@/lib/booking-guard';
-import { getAuthenticatedUser, isPlatformAdmin } from '@/lib/auth-guard';
+import { getAuthenticatedUser } from '@/lib/auth-guard';
 import { quotaCodeOf, reportSecurityAlert } from '@/lib/security-alerts';
 import {
   BookingCancelDraftSchema,
@@ -241,10 +241,7 @@ export async function POST(req: NextRequest) {
       // (ninguna necesita el resultado de otra) pero antes se esperaban una tras
       // otra. Disparándolas en paralelo, el tiempo total pasa de la suma de las 3
       // al máximo de las 3 — sin cambiar ninguna validación ni su orden.
-      const [pitchOwnerResult, draftCountResult, conflictingPitchIds] = await Promise.all([
-        verifiedUserId
-          ? supabase.from('pitches').select('id, company_id, companies!inner(owner_id)').eq('id', pitch_id).maybeSingle()
-          : Promise.resolve({ data: null }),
+      const [draftCountResult, conflictingPitchIds] = await Promise.all([
         effectiveUserId
           ? supabase.from('bookings').select('id', { count: 'exact', head: true })
             .eq('user_id', effectiveUserId).eq('status', 'draft').gt('expires_at', new Date().toISOString())
@@ -252,20 +249,10 @@ export async function POST(req: NextRequest) {
         fetchConflictingPitchIds(supabase, pitch_id),
       ]);
 
-      // Determinar si el usuario es dueño específicamente de ESTA cancha (no de otras)
-      let isOwnerOfThisPitch = false;
-      if (verifiedUserId) {
-        const pitchOwnerCheck = (pitchOwnerResult as any)?.data;
-        const pitchOwnerId = (pitchOwnerCheck as any)?.companies?.owner_id;
-        if (pitchOwnerId && pitchOwnerId === verifiedUserId) {
-          isOwnerOfThisPitch = true;
-        } else if (isPlatformAdmin(authedUser)) {
-          isOwnerOfThisPitch = true;
-        }
-      }
-
-      // Validar si el horario ya pasó: permitido ÚNICAMENTE para el dueño en su propia cancha
-      if (!isOwnerOfThisPitch && selected_times.some((slot: string) => isSlotPassed(selected_date, slot))) {
+      // Horas que ya empezaron: en línea NADIE puede reservarlas pasada la tolerancia, ni
+      // siquiera el dueño en su propia cancha. Él lo hace desde su panel (reserva manual o
+      // turno fijo), que va por /api/admin-actions.
+      if (selected_times.some((slot: string) => isSlotPassed(selected_date, slot))) {
         return NextResponse.json(
           { error: `Esta hora ya empezó y pasó la tolerancia de ${BOOKING_GRACE_MINUTES} minutos para reservar en línea. Comunícate con el complejo.` },
           { status: 400 }
@@ -318,10 +305,24 @@ export async function POST(req: NextRequest) {
 
       const now = new Date();
 
+      // Si una hora de la selección falla, se liberan las que ya se apartaron en esta misma
+      // petición: antes quedaban bloqueadas 5 minutos y el mismo jugador no podía reintentar.
+      const fail = async (body: Record<string, unknown>, status: number) => {
+        if (lockedBookingIds.length) {
+          await supabase.from('bookings').update({ expires_at: new Date(Date.now() - 1000).toISOString() })
+            .in('id', lockedBookingIds).eq('status', 'draft');
+        }
+        return NextResponse.json(body, { status });
+      };
+      // ¿El bloqueo activo es de quien está pidiendo? (mismo usuario, o mismo invitado/dispositivo)
+      const isMine = (b: any) => verifiedUserId
+        ? b.user_id === verifiedUserId
+        : !b.user_id && !!guestToken && b.lock_token === guestToken;
+
       for (const item of inserts) {
         const { data: conflictRows } = await supabase
           .from('bookings')
-          .select('id, pitch_id, user_id, status, expires_at')
+          .select('id, pitch_id, user_id, status, expires_at, lock_token')
           .in('pitch_id', conflictingPitchIds)
           .eq('start_time', item.start_time)
           .order('created_at', { ascending: false });
@@ -335,20 +336,39 @@ export async function POST(req: NextRequest) {
         });
 
         if (linkedConflict) {
-          return NextResponse.json({
+          return fail({
             error: 'Esta hora no está disponible: la cancha vinculada (individual o combinada) ya está reservada o en proceso de reserva.',
-          }, { status: 400 });
+          }, 400);
         }
 
         const existing = (conflictRows || []).find((b: any) => b.pitch_id === pitch_id) || null;
 
         if (existing) {
           if (existing.status === 'confirmed' || existing.status === 'pending') {
-            return NextResponse.json({ error: 'Esta hora ya ha sido reservada.' }, { status: 400 });
+            return fail({ error: 'Esta hora ya ha sido reservada.' }, 400);
           }
 
           if (existing.status === 'draft') {
             const isExpired = !existing.expires_at || new Date(existing.expires_at) < now;
+
+            // Bloqueo vigente pero es MÍO (volví atrás, recargué o falló el intento anterior):
+            // se renueva en vez de hacerme esperar a que venza.
+            if (!isExpired && isMine(existing)) {
+              const { data: renewed, error: rnErr } = await supabase
+                .from('bookings')
+                .update({ expires_at: expiresAt, lock_token: guestToken, client_ip_hash: clientIpHash, end_time: item.end_time })
+                .eq('id', existing.id)
+                .eq('status', 'draft')
+                .select('id')
+                .single();
+              if (renewed && !rnErr) {
+                lockedBookingIds.push(renewed.id);
+                continue;
+              }
+              const q = await quotaFail(rnErr);
+              if (q) return q;
+              return fail({ error: 'Horario modificado por otra solicitud' }, 409);
+            }
 
             if (isExpired) {
               // El bloqueo anterior expiró — podemos reutilizar el registro
@@ -379,17 +399,17 @@ export async function POST(req: NextRequest) {
               } else {
                 const q = await quotaFail(upErr);
                 if (q) return q;
-                return NextResponse.json({error:'Horario modificado por otra solicitud'}, {status:409});
+                return fail({ error: 'Horario modificado por otra solicitud' }, 409);
               }
             } else {
               // Bloqueo activo — CUALQUIER persona (incluso el mismo usuario en otro dispositivo)
               // recibe el error. El primero que bloqueó tiene la hora.
               const secsLeft = Math.max(0, Math.floor((new Date(existing.expires_at!).getTime() - now.getTime()) / 1000));
-              return NextResponse.json({
+              return fail({
                 error: 'Esta hora ya está siendo reservada. Solo el primero en bloquearla puede continuar.',
                 secondsLeft: secsLeft,
                 expires_at: existing.expires_at,
-              }, { status: 400 });
+              }, 400);
             }
           }
 
@@ -421,7 +441,7 @@ export async function POST(req: NextRequest) {
             } else {
               const q = await quotaFail(upErr);
               if (q) return q;
-              return NextResponse.json({error:'Horario modificado por otra solicitud'}, {status:409});
+              return fail({ error: 'Horario modificado por otra solicitud' }, 409);
             }
           }
         }
@@ -438,24 +458,18 @@ export async function POST(req: NextRequest) {
           if (q) return q;
           // Garantía anti-solape de la BD (constraint de exclusión / trigger): hora ya tomada.
           if (insErr.code === '23P01' || insErr.message?.includes('SLOT_TAKEN')) {
-            return NextResponse.json(
-              { error: 'Esta hora ya ha sido reservada.' },
-              { status: 409 }
-            );
+            return fail({ error: 'Esta hora ya ha sido reservada.' }, 409);
           }
           // Regla de horas pasadas de la BD (migración 2026-11-30): mismo mensaje que la API.
           if (insErr.message?.includes('PAST_SLOT') || insErr.message?.includes('Fraude detectado')) {
-            return NextResponse.json(
-              { error: `Esta hora ya empezó y pasó la tolerancia de ${BOOKING_GRACE_MINUTES} minutos para reservar en línea. Comunícate con el complejo.` },
-              { status: 400 }
-            );
+            return fail({ error: `Esta hora ya empezó y pasó la tolerancia de ${BOOKING_GRACE_MINUTES} minutos para reservar en línea. Comunícate con el complejo.` }, 400);
           }
           // INSERT falló — lo más probable es una race condition (23505 unique constraint)
           if (insErr.code === '23505' || insErr.message?.includes('unique')) {
             // Re-fetch atómico: ver quién ganó la carrera
             const { data: conflictRow } = await supabase
               .from('bookings')
-              .select('id, user_id, status, expires_at')
+              .select('id, user_id, status, expires_at, lock_token')
               .eq('pitch_id', pitch_id)
               .eq('start_time', item.start_time)
               .maybeSingle();
@@ -469,29 +483,23 @@ export async function POST(req: NextRequest) {
                 conflictRow.status === 'confirmed' ||
                 conflictRow.status === 'pending'
               ) {
-                return NextResponse.json(
-                  { error: 'Esta hora ya ha sido reservada.' },
-                  { status: 400 }
-                );
+                return fail({ error: 'Esta hora ya ha sido reservada.' }, 400);
               }
 
               // Caso 2: Draft activo — CUALQUIER intento posterior (mismo o diferente usuario) bloqueado
-              if (conflictRow.status === 'draft' && !conflictExpired) {
+              if (conflictRow.status === 'draft' && !conflictExpired && !isMine(conflictRow)) {
                 const secsLeft = Math.max(
                   0,
                   Math.floor(
                     (new Date(conflictRow.expires_at!).getTime() - now.getTime()) / 1000
                   )
                 );
-                return NextResponse.json(
-                  {
+                return fail({
                     error:
                       'Esta hora ya está siendo reservada. Solo el primero en bloquearla puede continuar.',
                     secondsLeft: secsLeft,
                     expires_at: conflictRow.expires_at,
-                  },
-                  { status: 400 }
-                );
+                  }, 400);
               }
 
               // Caso 3: Expirado o mismo usuario → podemos tomar el slot
@@ -512,7 +520,7 @@ export async function POST(req: NextRequest) {
                 })
                 .eq('id', conflictRow.id)
                 .eq('status', 'draft')
-                .or(`expires_at.is.null,expires_at.lte.${now.toISOString()}`)
+                .or(isMine(conflictRow) ? 'id.not.is.null' : `expires_at.is.null,expires_at.lte.${now.toISOString()}`)
                 .select()
                 .maybeSingle();
 
@@ -525,10 +533,7 @@ export async function POST(req: NextRequest) {
             }
           }
           console.error('[lock_booking insert error]', insErr);
-          return NextResponse.json(
-            { error: 'No se pudo bloquear la hora: ' + insErr.message },
-            { status: 500 }
-          );
+          return fail({ error: 'No se pudo apartar la hora. Inténtalo de nuevo.' }, 500);
         }
         if (inserted) lockedBookingIds.push(inserted.id);
       }
@@ -575,31 +580,13 @@ export async function POST(req: NextRequest) {
       const effectiveUserId = verifiedUserId;
       let validPitchId = pitch_id;
 
-      // Determinar si el usuario es dueño específicamente de ESTA cancha (no de otras)
-      let isOwnerOfThisPitch = false;
-      if (verifiedUserId) {
-        const { data: pitchOwnerCheck } = await supabase
-          .from('pitches')
-          .select('id, company_id, companies!inner(owner_id)')
-          .eq('id', pitch_id)
-          .maybeSingle();
-
-        const pitchOwnerId = (pitchOwnerCheck as any)?.companies?.owner_id;
-        if (pitchOwnerId && pitchOwnerId === verifiedUserId) {
-          isOwnerOfThisPitch = true;
-        } else if (isPlatformAdmin(authedUser)) {
-          isOwnerOfThisPitch = true;
-        }
-      }
-
-      // Validar si el horario ya pasó: permitido ÚNICAMENTE para el dueño en su propia cancha
-      if (!isOwnerOfThisPitch && selected_times.some((slot: string) => isSlotPassed(selected_date, slot))) {
+      // Horas pasadas: igual que al apartar, nadie (ni el dueño) puede en línea.
+      if (selected_times.some((slot: string) => isSlotPassed(selected_date, slot))) {
         return NextResponse.json(
           { error: `Esta hora ya empezó y pasó la tolerancia de ${BOOKING_GRACE_MINUTES} minutos para reservar en línea. Comunícate con el complejo.` },
           { status: 400 }
         );
       }
-
 
       let paymentProofUrl: string | null = null;
       if (!booking_ids?.length || booking_ids.length > 4) return NextResponse.json({error:'Falta el bloqueo de la reserva'}, {status:400});

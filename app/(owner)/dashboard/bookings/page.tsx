@@ -8,7 +8,7 @@ import {
   LayoutList, Calendar as CalendarIcon, Plus, X, Download, Clock,
   ChevronLeft, ChevronRight, Wrench, Search, AlertTriangle, Bell,
   Receipt, DollarSign, Sparkles, Camera, Phone, BarChart3, Repeat,
-  Table, LayoutGrid, Building2, MessageCircle, History, Gift
+  Table, LayoutGrid, Building2, MessageCircle, Gift
 } from 'lucide-react';
 import { useToday } from '@/lib/use-today';
 import { ManualBookingModal } from '@/components/booking/ManualBookingModal';
@@ -2330,23 +2330,6 @@ export default function BookingsPage() {
                             title="Ver historial de abonos y comprobantes"
                           >
                             <Clock size={12} /> Ver Abonos (${remainingPaid.toLocaleString('es-CO')})
-                          </button>
-                        )}
-
-                        {/* Si ya está 100% pagado, botón para ver o editar */}
-                        {group.status === 'confirmed' && isFullyPaid && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedBookingForRemainingPayment({
-                                ...group,
-                                total_price: tPrice,
-                              });
-                            }}
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground underline cursor-pointer"
-                          >
-                            <History size={12} /> Historial / Editar pago
                           </button>
                         )}
 
