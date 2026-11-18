@@ -154,27 +154,6 @@ function formatDateFriendly(dateStr: string): string {
   }
 }
 
-/** Precio de una hora en una cancha (el mismo que ve el jugador: custom_pricing[hora] o la tarifa base). */
-function pitchSlotPrice(p: any, slot: string): number {
-  const v = Number(p?.custom_pricing?.[slot]);
-  return Number.isFinite(v) && v > 0 ? v : Number(p?.price_per_hour || 0);
-}
-
-/** Horas de la cancha agrupadas por precio: [{from:'06:00', to:'17:00', price}] (to = última hora del tramo). */
-function pitchPriceRanges(p: any): { from: string; to: string; price: number }[] {
-  const custom = p?.custom_pricing?.time_slots;
-  const slots: string[] = (Array.isArray(custom) && custom.length ? [...custom] : ALL_SLOTS).sort();
-  const out: { from: string; to: string; price: number }[] = [];
-  for (const sl of slots) {
-    const price = pitchSlotPrice(p, sl);
-    const last = out[out.length - 1];
-    const prevHour = last ? parseInt(last.to) : -2;
-    if (last && last.price === price && parseInt(sl) === prevHour + 1) last.to = sl;
-    else out.push({ from: sl, to: sl, price });
-  }
-  return out;
-}
-
 /** Fecha de hoy en Colombia (YYYY-MM-DD). */
 function todayBogota(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
@@ -497,7 +476,7 @@ export function ContractBookingModal({
     const raw = slotPrices[slot];
     if (raw !== undefined && raw !== '' && !isNaN(Number(raw))) return Number(raw);
     if (customRate && !isNaN(Number(customRate)) && Number(customRate) > 0) return Number(customRate);
-    return pitchSlotPrice(selectedPitch, slot);
+    return Number(selectedPitch?.price_per_hour || 0);
   }, [slotPrices, customRate, selectedPitch]);
 
   const totalPrice = allSessions.reduce((sum, s) => sum + priceForSlot(s.baseSlot), 0);
@@ -1225,20 +1204,9 @@ export function ContractBookingModal({
                         <p className="text-xs text-muted-foreground">
                           {(p as any).type || 'Fútbol 5'} · {(p as any).surface || 'Sintética'}
                         </p>
-                        {customRate && Number(customRate) > 0 && (
-                          <span className="inline-block mt-1 text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-green-500/15 text-green-700 dark:text-green-300">
-                            Pactado: {formatCOP(Number(customRate))}/h
-                          </span>
-                        )}
-                        {/* Precio de cada hora en esta cancha */}
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                          {pitchPriceRanges(p).map(r => (
-                            <span key={r.from} className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-secondary border border-border text-foreground">
-                              {r.from === r.to ? fmt12(r.from) : `${fmt12(r.from)} – ${fmt12(r.to)}`}
-                              <span className="font-black text-green-700 dark:text-green-400"> {formatCOP(r.price)}</span>
-                            </span>
-                          ))}
-                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Tarifa normal: <strong className="text-foreground">{formatCOP(p.price_per_hour || 0)}/h</strong>
+                        </p>
                       </div>
                       {isSel && (
                         <div className="w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center shrink-0 shadow-sm">
@@ -1249,6 +1217,36 @@ export function ContractBookingModal({
                   );
                 })}
               </div>
+
+              {/* Valor que se cobra por cada hora del turno fijo */}
+              {selectedPitch && (
+                <div className="p-3.5 rounded-2xl bg-green-500/10 border border-green-500/30 space-y-1.5">
+                  <label htmlFor="contract-rate" className="flex items-center gap-1.5 text-xs font-black text-foreground">
+                    <DollarSign size={14} className="text-green-600" /> Valor por hora del turno fijo
+                  </label>
+                  <div className="flex items-center gap-2 rounded-xl bg-card border border-border px-3 py-2 focus-within:ring-2 focus-within:ring-green-500/30">
+                    <span className="text-sm font-bold text-muted-foreground">$</span>
+                    <input
+                      id="contract-rate"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      placeholder={fmtThousands(String(selectedPitch.price_per_hour || 0))}
+                      value={fmtThousands(customRate)}
+                      onChange={e => {
+                        const digits = e.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 9);
+                        setCustomRate(digits);
+                      }}
+                      className="min-w-0 flex-1 bg-transparent text-base font-black text-foreground outline-none placeholder:text-muted-foreground/60"
+                    />
+                    <span className="text-xs font-bold text-muted-foreground">por hora</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Es lo que se cobra por cada partido de este turno fijo. Si lo dejas vacío se usa la tarifa normal de la cancha
+                    ({formatCOP(selectedPitch.price_per_hour || 0)}). En el siguiente paso puedes cambiar el valor de una hora específica.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -1467,7 +1465,7 @@ export function ContractBookingModal({
                       <DollarSign size={14} className="text-green-600" /> Precio de cada hora
                     </span>
                     <span className="text-[10px] text-muted-foreground font-semibold">
-                      Vacío = precio de esa hora en la cancha
+                      Vacío = valor por hora del turno fijo
                     </span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

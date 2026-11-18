@@ -23,6 +23,8 @@ export interface ContractBillingInfo {
   cycleToCollect: number; // Monto que corresponde cobrar según la modalidad
   cycleLabel: string;
   relatedBookingIds: string[];
+  /** TODAS las horas del turno fijo (sin importar el esquema). En "por sesión" relatedBookingIds es solo la sesión. */
+  planBookingIds: string[];
 }
 
 const SCHEME_LABELS: Record<BillingScheme, string> = {
@@ -54,6 +56,7 @@ export function getContractBillingInfo(
       cycleToCollect: 0,
       cycleLabel: 'Sesión individual',
       relatedBookingIds: [],
+      planBookingIds: [],
     };
   }
 
@@ -89,6 +92,7 @@ export function getContractBillingInfo(
       cycleToCollect: singlePrice,
       cycleLabel: 'Sesión individual',
       relatedBookingIds: booking.id ? [booking.id] : [],
+      planBookingIds: booking.id ? [booking.id] : [],
     };
   }
 
@@ -203,6 +207,7 @@ export function getContractBillingInfo(
   let cycleToCollect = 0;
   let cycleLabel = '';
   let relatedBookingIds: string[] = (relatedBookings.length > 0 ? relatedBookings : groupBookings).map((b: any) => b.id).filter(Boolean);
+  const planBookingIds = [...relatedBookingIds];
 
   if (scheme === 'por_sesion') {
     cycleToCollect = ratePerSession > 0 ? ratePerSession : Number(booking.total_price || 0);
@@ -232,6 +237,7 @@ export function getContractBillingInfo(
     cycleToCollect,
     cycleLabel,
     relatedBookingIds,
+    planBookingIds,
   };
 }
 

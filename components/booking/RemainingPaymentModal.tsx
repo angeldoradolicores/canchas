@@ -14,6 +14,7 @@ import {
   parsePaymentHistory, getTotalPaid
 } from '@/lib/remaining-payment-utils';
 import { getContractBillingInfo } from '@/lib/contract-billing';
+import { getOutstandingMap, bookingIncome } from '@/lib/cash-events';
 
 interface RemainingPaymentModalProps {
   isOpen: boolean;
@@ -22,6 +23,8 @@ interface RemainingPaymentModalProps {
   booking?: any;
   allBookings?: any[];
   onSuccess: (updatedPayment: any, bookingIds?: string[]) => void;
+  /** Turno fijo "por sesión": cobrar solo la sesión o la totalidad del plan. */
+  collectMode?: 'session' | 'total';
 }
 
 /**
@@ -90,6 +93,7 @@ export function RemainingPaymentModal({
   booking,
   allBookings,
   onSuccess,
+  collectMode,
 }: RemainingPaymentModalProps) {
   const targetBooking = bookingGroup || booking;
 
@@ -111,6 +115,28 @@ export function RemainingPaymentModal({
     return getContractBillingInfo(targetBooking, allBookings);
   }, [targetBooking, allBookings]);
 
+  // Turno fijo "por sesión" con varias horas: se muestra el TOTAL del plan y se puede cobrar
+  // solo la sesión o la totalidad.
+  const planBookings = useMemo(() => {
+    if (!contractInfo.isContract || contractInfo.isPlanBilling || !Array.isArray(allBookings)) return [];
+    const ids = new Set(contractInfo.planBookingIds || []);
+    return allBookings.filter((b: any) => ids.has(b.id) && b.status === 'confirmed');
+  }, [contractInfo, allBookings]);
+  const isSessionContract = planBookings.length > 1;
+  const [mode, setMode] = useState<'session' | 'total'>(collectMode || 'session');
+  // Sesión a cobrar: esta misma si debe algo; si ya está paga, la próxima que deba.
+  const sessionTarget = useMemo(() => {
+    if (!isSessionContract) return null;
+    const out = getOutstandingMap(planBookings);
+    const ownIds: string[] = (targetBooking?.bookings || [targetBooking]).map((b: any) => b?.id).filter(Boolean);
+    const ownDue = ownIds.reduce((s2, id) => s2 + (out.get(id) || 0), 0);
+    if (ownDue > 0) return { ids: ownIds, amount: ownDue };
+    const next = [...planBookings]
+      .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+      .find(b => (out.get(b.id) || 0) > 0);
+    return next ? { ids: [next.id], amount: out.get(next.id) || 0 } : { ids: ownIds, amount: 0 };
+  }, [isSessionContract, planBookings, targetBooking]);
+
   // Historial de pagos de todas las reservas del grupo
   const paymentHistory = useMemo(() => {
     if (!targetBooking) return [];
@@ -119,6 +145,7 @@ export function RemainingPaymentModal({
       const contractBookings = allBookings.filter((b: any) => contractInfo.relatedBookingIds.includes(b.id));
       if (contractBookings.length > 0) bookingsList = contractBookings;
     }
+    if (isSessionContract) bookingsList = planBookings;
     // Merge payment_history de todas las reservas del grupo, deduplicar por ID
     const allEntries: PaymentEntry[] = [];
     const seenIds = new Set<string>();
@@ -133,7 +160,7 @@ export function RemainingPaymentModal({
     }
     // Ordenar por fecha
     return allEntries.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
-  }, [targetBooking, contractInfo, allBookings]);
+  }, [targetBooking, contractInfo, allBookings, isSessionContract, planBookings]);
 
   // Total ya pagado en abonos del historial
   const totalPaidFromHistory = useMemo(() => getTotalPaid(paymentHistory), [paymentHistory]);
@@ -142,6 +169,7 @@ export function RemainingPaymentModal({
   // Independiente de qué condiciones financieras elija, excepto pago por sesión,
   // el precio a cobrar es el valor total del contrato (ej: 4 canchas x 70.000 = 280.000)
   const totalPrice = useMemo(() => {
+    if (isSessionContract) return planBookings.reduce((sum, b) => sum + bookingIncome(b), 0);
     if (contractInfo.isContract && contractInfo.isPlanBilling && contractInfo.cycleToCollect > 0) {
       return contractInfo.cycleToCollect;
     }
@@ -149,20 +177,25 @@ export function RemainingPaymentModal({
       return Number(targetBooking.total_price);
     }
     return Number(targetBooking?.total_price || 0);
-  }, [contractInfo, targetBooking]);
+  }, [contractInfo, targetBooking, isSessionContract, planBookings]);
 
   const depositAmount = useMemo(() => {
+    if (isSessionContract) return planBookings.reduce((sum, b) => sum + Number(b.deposit_amount || 0), 0);
     if (contractInfo.isContract && contractInfo.isPlanBilling && Array.isArray(allBookings) && contractInfo.relatedBookingIds.length > 0) {
       const contractBookings = allBookings.filter((b: any) => contractInfo.relatedBookingIds.includes(b.id));
       return contractBookings.reduce((sum, b) => sum + Number(b.deposit_amount || 0), 0);
     }
     return Number(targetBooking?.deposit_amount || 0);
-  }, [contractInfo, allBookings, targetBooking]);
+  }, [contractInfo, allBookings, targetBooking, isSessionContract, planBookings]);
 
   // Saldo pendiente = total - anticipo - abonos ya realizados
   const remainingToCollect = useMemo(() => {
     return Math.max(0, totalPrice - depositAmount - totalPaidFromHistory);
   }, [totalPrice, depositAmount, totalPaidFromHistory]);
+  // Lo que se sugiere cobrar ahora (en "por sesión": la sesión o la totalidad).
+  const suggestedAmount = isSessionContract && mode === 'session' && sessionTarget
+    ? Math.min(sessionTarget.amount, remainingToCollect)
+    : remainingToCollect;
 
   const initialProofUrl =
     getBookingOriginalProof(targetBooking?.payment_proof_url) ||
@@ -195,8 +228,8 @@ export function RemainingPaymentModal({
       }
     }
 
-    // Nuevo abono: el monto sugerido es el saldo restante
-    const amountToSet = remainingToCollect > 0 ? remainingToCollect : 0;
+    // Nuevo abono: el monto sugerido es el saldo restante (o la sesión)
+    const amountToSet = suggestedAmount > 0 ? suggestedAmount : 0;
     setSelectedMethods(['cash']);
     setMethodAmounts({ cash: String(amountToSet) });
     setPhotoPreview(null);
@@ -204,7 +237,7 @@ export function RemainingPaymentModal({
     setNotes('');
     setError(null);
     setEditingPaymentId(null);
-  }, [isOpen, targetBooking?.id, editingPaymentId]);
+  }, [isOpen, targetBooking?.id, editingPaymentId, mode]);
 
   // Si ya existen abonos en el historial, expandir automáticamente la sección de historial
   useEffect(() => {
@@ -218,7 +251,10 @@ export function RemainingPaymentModal({
   const bookingsList = targetBooking.bookings || [targetBooking];
   const bookingIds: string[] = useMemo(() => {
     let ids: string[] = [];
-    if (contractInfo.isContract && contractInfo.isPlanBilling && contractInfo.relatedBookingIds.length > 0) {
+    if (isSessionContract) {
+      // Sesión: solo esa hora. Totalidad: todas las horas del plan (el abono se reparte de la más próxima a la última).
+      ids = mode === 'session' && sessionTarget ? sessionTarget.ids : planBookings.map((b: any) => b.id);
+    } else if (contractInfo.isContract && contractInfo.isPlanBilling && contractInfo.relatedBookingIds.length > 0) {
       ids = contractInfo.relatedBookingIds;
     } else if (Array.isArray(targetBooking.bookings) && targetBooking.bookings.length > 0) {
       ids = targetBooking.bookings.map((b: any) => b.id);
@@ -227,7 +263,7 @@ export function RemainingPaymentModal({
     }
     const filtered = Array.from(new Set(ids.filter(Boolean)));
     return filtered.length > 0 ? filtered : (targetBooking.id ? [targetBooking.id] : []);
-  }, [targetBooking, contractInfo]);
+  }, [targetBooking, contractInfo, isSessionContract, mode, sessionTarget, planBookings]);
   const clientName = targetBooking.customer_name || 'Cliente';
   const pitchName = targetBooking.pitches?.name || 'Cancha';
 
@@ -327,7 +363,7 @@ export function RemainingPaymentModal({
     setEditingPaymentId(null);
     // Re-inicializar para nuevo abono
     setSelectedMethods(['cash']);
-    setMethodAmounts({ cash: String(remainingToCollect) });
+    setMethodAmounts({ cash: String(suggestedAmount) });
     setPhotoPreview(null);
     setPhotoFile(null);
     setNotes('');
@@ -478,7 +514,7 @@ export function RemainingPaymentModal({
                   <span className="text-[10px] text-muted-foreground block font-bold">Total del Contrato:</span>
                   <strong className="text-foreground font-black">
                     {contractInfo.totalSessions} {contractInfo.totalSessions === 1 ? 'partido' : 'partidos'}
-                    {contractInfo.isPlanBilling ? ` · ${formatCOP(totalPrice)}` : ''}
+                    {contractInfo.isPlanBilling || isSessionContract ? ` · ${formatCOP(totalPrice)}` : ''}
                   </strong>
                 </div>
               </div>
@@ -489,7 +525,7 @@ export function RemainingPaymentModal({
           <div className="grid grid-cols-3 gap-2 bg-secondary/50 p-3 rounded-2xl border border-border">
             <div className="text-center">
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                {contractInfo.isContract ? (contractInfo.isPlanBilling ? 'Total Plan' : 'Valor Sesión') : 'Total'}
+                {contractInfo.isContract ? (contractInfo.isPlanBilling || isSessionContract ? 'Total Plan' : 'Valor Sesión') : 'Total'}
               </p>
               <p className="text-xs sm:text-sm font-extrabold text-foreground mt-0.5">
                 {formatCOP(totalPrice)}
@@ -502,10 +538,10 @@ export function RemainingPaymentModal({
               </p>
             </div>
             <div className="text-center">
-              <p className="text-[10px] font-black text-amber-500 dark:text-amber-400 uppercase tracking-wider">
+              <p className="text-[10px] font-black text-blue-700 dark:text-blue-300 uppercase tracking-wider">
                 Saldo
               </p>
-              <p className={`text-xs sm:text-sm font-black mt-0.5 ${remainingToCollect <= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500 dark:text-amber-400'}`}>
+              <p className={`text-xs sm:text-sm font-black mt-0.5 ${remainingToCollect <= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-700 dark:text-blue-300'}`}>
                 {remainingToCollect <= 0 ? '✓ Pago completo' : formatCOP(remainingToCollect)}
               </p>
             </div>
@@ -700,6 +736,36 @@ export function RemainingPaymentModal({
             </div>
           ) : (
             <>
+              {/* Turno fijo por sesión: ¿cobrar la sesión o la totalidad del plan? */}
+              {isSessionContract && !editingPaymentId && remainingToCollect > 0 && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-foreground">¿Qué vas a cobrar?</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { id: 'session', label: 'Pagar sesión', amount: Math.min(sessionTarget?.amount || 0, remainingToCollect), hint: '1 partido' },
+                      { id: 'total', label: 'Cobrar totalidad', amount: remainingToCollect, hint: `${planBookings.length} partidos` },
+                    ] as const).map(opt => {
+                      const active = mode === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          disabled={opt.amount <= 0}
+                          onClick={() => setMode(opt.id)}
+                          className={`p-2.5 rounded-xl border-2 text-left transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${active
+                            ? 'border-emerald-500 bg-emerald-500/10'
+                            : 'border-border bg-card hover:bg-secondary/40'}`}
+                        >
+                          <span className="block text-xs font-black text-foreground">{opt.label}</span>
+                          <span className="block text-sm font-black text-emerald-700 dark:text-emerald-400">{formatCOP(opt.amount)}</span>
+                          <span className="block text-[10px] text-muted-foreground font-semibold">{opt.hint}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Métodos de Pago */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -760,7 +826,7 @@ export function RemainingPaymentModal({
                         handleAmountChange(selectedMethods[0], rawValue);
                       }}
                       required
-                      placeholder={formatCOP(remainingToCollect).replace('$', '')}
+                      placeholder={formatCOP(suggestedAmount).replace('$', '')}
                       className="w-full pl-8 pr-3 py-2 text-sm font-bold bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-foreground"
                     />
                   </div>

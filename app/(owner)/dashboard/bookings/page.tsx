@@ -1950,8 +1950,25 @@ export default function BookingsPage() {
                 const originalProof =
                   getBookingOriginalProof(group.payment_proof_url) ||
                   getBookingOriginalProof(group.bookings?.find((b: any) => b.payment_proof_url)?.payment_proof_url);
-                const balance = calculateRemainingBalance(tPrice, dAmount, remainingPaid);
-                const isFullyPaid = balance <= 0 && (dAmount + remainingPaid > 0 || tPrice === 0);
+                let balance = calculateRemainingBalance(tPrice, dAmount, remainingPaid);
+                let isFullyPaid = balance <= 0 && (dAmount + remainingPaid > 0 || tPrice === 0);
+                // Turno fijo "por sesión": se muestra el total del plan y se cobra la sesión o la totalidad.
+                const sessionPlanIds: string[] = (groupContractInfo?.isContract && !groupContractInfo.isPlanBilling)
+                  ? (groupContractInfo.planBookingIds || []) : [];
+                const sessionPlan = sessionPlanIds.length > 1
+                  ? (() => {
+                    const ids = new Set(sessionPlanIds);
+                    const planBs = bookings.filter((x: any) => ids.has(x.id) && x.status === 'confirmed');
+                    const total = planBs.reduce((sum2: number, x: any) => sum2 + bookingIncome(x), 0);
+                    const due = planBs.reduce((sum2: number, x: any) => sum2 + (outstandingById.get(x.id) || 0), 0);
+                    const sessionDue = (group.bookings || []).reduce((sum2: number, x: any) => sum2 + (outstandingById.get(x.id) || 0), 0);
+                    return { count: planBs.length, total, due, sessionDue };
+                  })()
+                  : null;
+                if (sessionPlan && group.status === 'confirmed') {
+                  balance = sessionPlan.sessionDue;
+                  isFullyPaid = sessionPlan.sessionDue <= 0;
+                }
                 const isNewlyArrived = group.bookings.some((b: any) => newlyArrivedIds.has(b.id));
 
                 const isMultiHour = group.bookings.length > 1;
@@ -2329,8 +2346,49 @@ export default function BookingsPage() {
                           </button>
                         )}
 
+                        {/* Turno fijo por sesión: total del plan + cobrar sesión o totalidad */}
+                        {sessionPlan && (
+                          <div className="mt-1.5 rounded-xl border border-border bg-secondary/40 px-2.5 py-1.5 text-[11px] leading-snug">
+                            <p className="font-bold text-foreground">
+                              Total del plan: ${sessionPlan.total.toLocaleString('es-CO')}
+                              <span className="font-semibold text-muted-foreground"> · {sessionPlan.count} partidos</span>
+                            </p>
+                            <p className={`font-bold ${sessionPlan.due > 0 ? 'text-blue-700 dark:text-blue-300' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                              {sessionPlan.due > 0 ? `Resta del plan: $${sessionPlan.due.toLocaleString('es-CO')}` : 'Plan pagado completo'}
+                            </p>
+                          </div>
+                        )}
+                        {sessionPlan && group.status === 'confirmed' && sessionPlan.due > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedBookingForRemainingPayment({ ...group, total_price: tPrice, __collectMode: 'session' });
+                              }}
+                              className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-700/60 rounded-xl shadow-2xs transition-all cursor-pointer"
+                              title="Cobrar solo un partido"
+                            >
+                              <DollarSign size={13} className="text-emerald-600 dark:text-emerald-400" />
+                              <span>{sessionPlan.sessionDue > 0 ? `Pagar sesión ($${sessionPlan.sessionDue.toLocaleString('es-CO')})` : 'Pagar próxima sesión'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedBookingForRemainingPayment({ ...group, total_price: tPrice, __collectMode: 'total' });
+                              }}
+                              className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 dark:text-blue-300 border border-blue-300/60 dark:border-blue-700/60 rounded-xl shadow-2xs transition-all cursor-pointer"
+                              title="Cobrar todo lo que falta del plan"
+                            >
+                              <DollarSign size={13} />
+                              <span>Cobrar totalidad (${sessionPlan.due.toLocaleString('es-CO')})</span>
+                            </button>
+                          </div>
+                        )}
+
                         {/* Botón Cobrar Saldo / Realizar Abono: visible SIEMPRE que la reserva esté confirmada y tenga saldo pendiente */}
-                        {group.status === 'confirmed' && !isFullyPaid && balance > 0 && (
+                        {!sessionPlan && group.status === 'confirmed' && !isFullyPaid && balance > 0 && (
                           <button
                             type="button"
                             onClick={(e) => {
@@ -3320,6 +3378,7 @@ export default function BookingsPage() {
           onClose={() => setSelectedBookingForRemainingPayment(null)}
           booking={selectedBookingForRemainingPayment}
           allBookings={bookings}
+          collectMode={selectedBookingForRemainingPayment.__collectMode}
           onSuccess={handleRemainingPaymentSuccess}
         />
       )}
