@@ -21,6 +21,7 @@ import {
   Layers,
   CreditCard,
   Wallet,
+  ChevronLeft,
 } from 'lucide-react';
 import { Pitch } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
@@ -62,7 +63,7 @@ const DURATIONS = [
   { key: '3m', label: 'Trimestre', desc: '3 Meses (13 semanas)', weeks: 13 },
   { key: '6m', label: 'Semestral', desc: '6 Meses (26 semanas)', weeks: 26 },
   { key: '1y', label: 'Anual (12 Meses)', desc: '1 Año (52 semanas)', weeks: 52 },
-  { key: 'custom', label: 'Personalizado', desc: 'Semanas libres', weeks: 0 },
+  { key: 'custom', label: 'Fechas a elegir', desc: 'Tú eliges días y horas', weeks: 0 },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -267,6 +268,9 @@ export function ContractBookingModal({
   // 3. Duración & Horarios
   const [duration, setDuration] = useState<string>('1m');
   const [customWeeks, setCustomWeeks] = useState<number>(8);
+  // "Fechas a elegir": cada fecha con SUS propias horas (YYYY-MM-DD → ['18:00', ...]).
+  const [customPlan, setCustomPlan] = useState<Record<string, string[]>>({});
+  const [calMonth, setCalMonth] = useState<string>(() => todayBogota().slice(0, 7));
   // Desde qué día se cuenta el turno fijo. Por defecto HOY: cada día de la semana elegido muestra
   // su fecha (ej. "Sáb 21 nov"), así no hace falta escoger la "fecha del primer partido".
   const [startDate, setStartDate] = useState(() => todayBogota());
@@ -427,7 +431,11 @@ export function ContractBookingModal({
   }, [customRate, pricePerHour]);
 
   // Fechas base del contrato según días y duración (disponibles antes de seleccionar horario)
+  const isCustom = duration === 'custom';
+  const customDates = useMemo(() => Object.keys(customPlan).sort(), [customPlan]);
+
   const contractDates = useMemo(() => {
+    if (isCustom) return customDates;
     if (selectedDays.length === 0 || effectiveWeeks <= 0) return [];
     const from = new Date(startDate + 'T12:00:00');
     const dates: string[] = [];
@@ -435,10 +443,25 @@ export function ContractBookingModal({
       generateDates(d, from, effectiveWeeks).forEach(dt => dates.push(dt));
     });
     return Array.from(new Set(dates)).sort();
-  }, [selectedDays, startDate, effectiveWeeks]);
+  }, [selectedDays, startDate, effectiveWeeks, isCustom, customDates]);
 
   // Generación detallada de todas las sesiones individuales (con soporte para cambiar fechas u horas específicas)
   const allSessions: ContractSession[] = useMemo(() => {
+    if (isCustom) {
+      const first = customDates[0];
+      const list: ContractSession[] = [];
+      for (const date of customDates) {
+        const [y, m, d] = date.split('-').map(Number);
+        const dayKey = new Date(y, m - 1, d, 12).getDay();
+        const weekNum = first ? Math.floor((Date.UTC(y, m - 1, d) - Date.parse(first + 'T00:00:00Z')) / (7 * 864e5)) + 1 : 1;
+        for (const slot of [...(customPlan[date] || [])].sort()) {
+          const key = `c_${date}_${slot}`;
+          const ov = sessionOverrides[key] || {};
+          list.push({ key, weekNum, baseDate: date, date: ov.date || date, dayKey, baseSlot: slot, slot: ov.slot || slot, isCustomized: !!(ov.date || ov.slot) });
+        }
+      }
+      return list.sort((a, b) => (a.date + a.slot).localeCompare(b.date + b.slot));
+    }
     if (selectedDays.length === 0 || effectiveWeeks <= 0 || selectedSlots.length === 0) return [];
     const from = new Date(startDate + 'T12:00:00');
     const list: ContractSession[] = [];
@@ -471,7 +494,45 @@ export function ContractBookingModal({
     }
 
     return list.sort((a, b) => (a.date + a.slot).localeCompare(b.date + b.slot));
-  }, [selectedDays, effectiveWeeks, startDate, selectedSlots, sessionOverrides]);
+  }, [selectedDays, effectiveWeeks, startDate, selectedSlots, sessionOverrides, isCustom, customDates, customPlan]);
+
+  // En "Fechas a elegir", las horas y días del resumen salen de lo que el dueño marcó.
+  useEffect(() => {
+    if (!isCustom) return;
+    const slots = Array.from(new Set(Object.values(customPlan).flat())).sort();
+    const days = Array.from(new Set(customDates.map(dt => { const [y, m, d] = dt.split('-').map(Number); return new Date(y, m - 1, d, 12).getDay(); })));
+    setSelectedSlots(slots);
+    setSelectedDays(days);
+  }, [isCustom, customPlan, customDates]);
+
+  const toggleCustomDate = (date: string) => {
+    setError('');
+    setCustomPlan(prev => {
+      const next = { ...prev };
+      if (next[date]) delete next[date];
+      else {
+        // Nueva fecha: arranca con las horas de la última fecha elegida (se pueden cambiar).
+        const last = Object.keys(prev).sort().pop();
+        next[date] = last ? [...prev[last]] : [];
+      }
+      return next;
+    });
+  };
+  const toggleCustomSlot = (date: string, slot: string) => {
+    setError('');
+    setCustomPlan(prev => {
+      const cur = prev[date] || [];
+      return { ...prev, [date]: cur.includes(slot) ? cur.filter(x => x !== slot) : [...cur, slot].sort() };
+    });
+  };
+  const applySlotsToAll = (date: string) => {
+    setCustomPlan(prev => {
+      const src = prev[date] || [];
+      const next: Record<string, string[]> = {};
+      for (const k of Object.keys(prev)) next[k] = [...src];
+      return next;
+    });
+  };
 
   // Lista única de fechas que abarca el turno fijo (usa contractDates si aún no hay slots elegidos)
   const allDates = useMemo(() => {
@@ -667,7 +728,7 @@ export function ContractBookingModal({
       const sessionsPerWeek = Math.max(1, selectedDays.length * selectedSlots.length);
       const sessionsPerMonth = sessionsPerWeek * 4;
       const weekPrice = selectedDays.length * selectedSlots.reduce((sum, sl) => sum + priceForSlot(sl), 0);
-      const monthPlanPrice = Math.round(sessionsPerMonth > 0 ? weekPrice * 4 : 0);
+      const monthPlanPrice = isCustom ? totalPrice : Math.round(sessionsPerMonth > 0 ? weekPrice * 4 : 0);
       const contractTotalPrice = totalPrice;
 
       const contractTag = `[TURNO FIJO / CONTRATO · CID:${contractId} · ESQUEMA:${billingScheme} · PLAN_TOTAL:${contractTotalPrice} · MES_TOTAL:${monthPlanPrice} · TARIFA:${avgRate} · SESIONES:${allSessions.length} · ${clientType === 'entity' ? 'ENTIDAD: ' + (clientEntityName || customerName) : clientType === 'school' ? 'ESCUELA: ' + (clientEntityName || customerName) : 'PARTICULAR'} · Cobro: ${billingSchemeLabel} · Canal: ${paymentChannel} · Tarifa: ${pricesVary ? selectedSlots.map(sl => `${fmt12(sl)} ${formatCOP(priceForSlot(sl))}`).join(', ') : formatCOP(avgRate) + '/h'} · ${DAYS_OF_WEEK.filter(d => selectedDays.includes(d.key)).map(d => d.full).join(', ')} · ${slotsText}]`;
@@ -760,7 +821,8 @@ export function ContractBookingModal({
     entity: (clientType === 'standard' && customerName.trim().length >= 2) ||
       (clientType !== 'standard' && (clientEntityName.trim().length >= 2 || customerName.trim().length >= 2)),
     pitch: !!selectedPitch,
-    schedule: selectedDays.length > 0 &&
+    schedule: (!isCustom || customDates.every(dt => (customPlan[dt] || []).length > 0)) &&
+      selectedDays.length > 0 &&
       selectedSlots.length > 0 &&
       allSessions.length > 0 &&
       occupiedSessions.length === 0,
@@ -1295,25 +1357,142 @@ export function ContractBookingModal({
                   ))}
                 </div>
 
-                {/* Opción personalizada */}
-                {duration === 'custom' && (
-                  <div className="mt-2.5 p-3 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center gap-3">
-                    <span className="text-xs font-bold text-foreground">Cantidad de semanas:</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={104}
-                      value={customWeeks}
-                      onChange={e => setCustomWeeks(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-20 px-2.5 py-1.5 rounded-lg border border-border bg-card text-center font-black text-sm"
-                    />
-                    <span className="text-xs text-muted-foreground font-semibold">
-                      ({customWeeks * selectedDays.length} turnos aprox.)
-                    </span>
-                  </div>
-                )}
               </div>
 
+              {isCustom && (
+                <div className="space-y-3">
+                  {/* Calendario: el dueño marca los días que quiera */}
+                  <div className="rounded-2xl border border-border bg-card p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <button
+                        type="button"
+                        onClick={() => setCalMonth(m => { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo - 2, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; })}
+                        disabled={calMonth <= todayBogota().slice(0, 7)}
+                        className="p-1.5 rounded-lg hover:bg-secondary disabled:opacity-30 cursor-pointer"
+                        aria-label="Mes anterior"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <p className="text-sm font-black capitalize">
+                        {(() => { const [y, mo] = calMonth.split('-').map(Number); return new Date(y, mo - 1, 1).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' }); })()}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setCalMonth(m => { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; })}
+                        className="p-1.5 rounded-lg hover:bg-secondary cursor-pointer"
+                        aria-label="Mes siguiente"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-7 gap-1 text-center">
+                      {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((d, i) => (
+                        <span key={i} className="text-[10px] font-black text-muted-foreground py-1">{d}</span>
+                      ))}
+                      {(() => {
+                        const [y, mo] = calMonth.split('-').map(Number);
+                        const firstWd = new Date(y, mo - 1, 1).getDay();
+                        const daysIn = new Date(y, mo, 0).getDate();
+                        const today = todayBogota();
+                        const cells: React.ReactNode[] = [];
+                        for (let k = 0; k < firstWd; k++) cells.push(<span key={`e${k}`} />);
+                        for (let d = 1; d <= daysIn; d++) {
+                          const ymd = `${calMonth}-${String(d).padStart(2, '0')}`;
+                          const past = ymd < today;
+                          const sel = !!customPlan[ymd];
+                          const n = customPlan[ymd]?.length || 0;
+                          cells.push(
+                            <button
+                              key={ymd}
+                              type="button"
+                              disabled={past}
+                              onClick={() => toggleCustomDate(ymd)}
+                              className={`relative h-10 rounded-lg text-xs font-bold transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-30 ${sel
+                                ? 'bg-green-600 text-white shadow-sm'
+                                : ymd === today
+                                  ? 'border border-green-500 text-foreground hover:bg-green-500/10'
+                                  : 'hover:bg-secondary text-foreground'}`}
+                            >
+                              {d}
+                              {sel && (
+                                <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[8px] font-black leading-none ${n === 0 ? 'text-amber-200' : 'text-white/90'}`}>
+                                  {n === 0 ? 'sin hora' : `${n}h`}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        }
+                        return cells;
+                      })()}
+                    </div>
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Toca los días en que juegan (puedes pasar de mes). Tocar de nuevo un día lo quita.
+                    </p>
+                  </div>
+
+                  {/* Horas de cada fecha, independientes */}
+                  {customDates.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-2">Elige al menos un día en el calendario.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Horas de cada día</label>
+                        {loadingOccupied && (
+                          <span className="text-[10px] text-green-500 flex items-center gap-1 font-semibold">
+                            <Loader2 size={11} className="animate-spin" /> Verificando disponibilidad...
+                          </span>
+                        )}
+                      </div>
+                      {customDates.map(dt => {
+                        const chosen = customPlan[dt] || [];
+                        return (
+                          <div key={dt} className={`rounded-2xl border p-3 ${chosen.length === 0 ? 'border-amber-500/50 bg-amber-500/5' : 'border-border bg-card'}`}>
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <p className="text-xs font-black text-foreground capitalize">{formatDateFriendly(dt)}</p>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {customDates.length > 1 && chosen.length > 0 && (
+                                  <button type="button" onClick={() => applySlotsToAll(dt)} className="text-[10px] font-bold text-green-700 dark:text-green-400 hover:underline cursor-pointer">
+                                    Usar estas horas en todos
+                                  </button>
+                                )}
+                                <button type="button" onClick={() => toggleCustomDate(dt)} aria-label="Quitar este día" className="p-1 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-500/10 cursor-pointer">
+                                  <X size={13} />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {ALL_SLOTS.filter(sl => !pitchAllowedSlots || pitchAllowedSlots.includes(sl)).map(sl => {
+                                const on = chosen.includes(sl);
+                                const busy = occupiedDateSlots.has(`${dt}_${sl}`);
+                                return (
+                                  <button
+                                    key={sl}
+                                    type="button"
+                                    disabled={busy && !on}
+                                    onClick={() => toggleCustomSlot(dt, sl)}
+                                    title={busy ? 'Ocupada' : undefined}
+                                    className={`px-2 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer disabled:cursor-not-allowed ${on
+                                      ? busy ? 'bg-red-600 text-white border-red-600' : 'bg-green-600 text-white border-green-600'
+                                      : busy ? 'bg-red-500/10 text-red-500/70 border-red-500/30 line-through' : 'bg-card text-foreground border-border hover:border-green-500/50'}`}
+                                  >
+                                    {fmt12(sl)}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {chosen.length === 0 && <p className="mt-1.5 text-[10px] font-bold text-amber-700 dark:text-amber-400">Elige al menos una hora para este día.</p>}
+                          </div>
+                        );
+                      })}
+                      <p className="text-xs font-bold text-foreground">
+                        {customDates.length} {customDates.length === 1 ? 'día' : 'días'} · {allSessions.length} {allSessions.length === 1 ? 'partido' : 'partidos'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!isCustom && (<>
               {/* Días de la semana: cada uno muestra la fecha de su primer partido */}
               <div>
                 <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
@@ -1469,6 +1648,8 @@ export function ContractBookingModal({
                   })}
                 </div>
               </div>
+
+              </>)}
 
               {/* Precio de cada hora del turno fijo */}
               {selectedSlots.length > 0 && (
