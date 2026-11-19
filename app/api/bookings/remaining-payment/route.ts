@@ -34,7 +34,9 @@ export async function POST(req: NextRequest) {
       notes = '',
       splits = null,
       edit_payment_id = null,
+      edit_reason = '',
     } = body;
+    const editReason = typeof edit_reason === 'string' ? edit_reason.trim().slice(0, 200) : '';
 
     const ids: string[] = Array.from(
       new Set(
@@ -144,6 +146,7 @@ export async function POST(req: NextRequest) {
 
     // 5. Para cada reserva, procesar el historial y guardar con triple fallback
     let supportsNativeRemaining = true;
+    let editedCount = 0;
 
     for (const b of bookingsData) {
       let existingHistory: any[] = existingHistories[b.id] ? [...existingHistories[b.id]] : [];
@@ -173,18 +176,29 @@ export async function POST(req: NextRequest) {
 
       if (edit_payment_id) {
         const existingIdx = existingHistory.findIndex((e: any) => e.id === edit_payment_id);
-        if (existingIdx >= 0) {
-          const old = existingHistory[existingIdx];
-          newEntry.editedAt = timestamp;
-          newEntry.editedBy = user.id;
-          newEntry.previousAmount = old.amount;
-          newEntry.previousMethod = old.method;
-          newEntry.previousNotes = old.notes || '';
-          newEntry.at = old.at; // Mantener fecha de registro original
-          existingHistory[existingIdx] = newEntry;
-        } else {
-          existingHistory.push(newEntry);
-        }
+        // Si esta reserva no tiene ese abono, no se toca (antes se le CREABA un abono nuevo).
+        if (existingIdx < 0) continue;
+        editedCount++;
+        const old = existingHistory[existingIdx];
+        const snapshot = (e: any) => ({
+          amount: Number(e.amount || 0), method: e.method || '', notes: e.notes || '', proofUrl: e.proofUrl || null,
+        });
+        // Historial de ediciones: se conserva TODO lo anterior y se agrega esta edición.
+        const priorEdits: any[] = Array.isArray(old.edits)
+          ? old.edits
+          : (old.editedAt ? [{ at: old.editedAt, by: old.editedBy, before: { amount: Number(old.previousAmount ?? old.amount), method: old.previousMethod || old.method, notes: old.previousNotes ?? old.notes ?? '' }, after: snapshot(old) }] : []);
+        const entry: any = {
+          ...newEntry,
+          at: old.at, // el abono sigue contando el día en que se recibió
+          by: old.by || newEntry.by,
+          editedAt: timestamp,
+          editedBy: user.id,
+          previousAmount: old.amount,
+          previousMethod: old.method,
+          previousNotes: old.notes || '',
+          edits: [...priorEdits, { at: timestamp, by: user.id, ...(editReason ? { reason: editReason } : {}), before: snapshot(old), after: snapshot(newEntry) }],
+        };
+        existingHistory[existingIdx] = entry;
       } else {
         existingHistory.push(newEntry);
       }
@@ -256,6 +270,10 @@ export async function POST(req: NextRequest) {
         .from('bookings')
         .update({ payment_proof_url: updatedProof })
         .eq('id', b.id);
+    }
+
+    if (edit_payment_id && editedCount === 0) {
+      return NextResponse.json({ error: 'No se encontró ese abono para editarlo. Recarga e inténtalo de nuevo.' }, { status: 404 });
     }
 
     return NextResponse.json({

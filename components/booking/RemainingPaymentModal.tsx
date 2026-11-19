@@ -104,6 +104,7 @@ export function RemainingPaymentModal({
   const [selectedMethods, setSelectedMethods] = useState<PaymentMethod[]>(['cash']);
   const [methodAmounts, setMethodAmounts] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<string>('');
+  const [editReason, setEditReason] = useState<string>('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -367,6 +368,7 @@ export function RemainingPaymentModal({
   };
 
   const startEditPayment = (entry: PaymentEntry) => {
+    setEditReason('');
     setEditingPaymentId(entry.id);
     setShowHistory(false);
   };
@@ -443,6 +445,7 @@ export function RemainingPaymentModal({
           notes,
           splits: isSplit ? splitsData : null,
           edit_payment_id: editingPaymentId || undefined,
+          edit_reason: editingPaymentId ? editReason : undefined,
         }),
       });
 
@@ -641,8 +644,8 @@ export function RemainingPaymentModal({
                         <span className="font-black text-foreground">
                           {formatCOP(entry.amount)}
                         </span>
-                        {/* Con el pago completo el historial queda cerrado: ya no se edita. */}
-                        {!isFullyPaid && (
+                        {/* Se puede editar siempre: cada cambio queda en el historial de ediciones. */}
+                        {(
                           <button
                             type="button"
                             onClick={() => startEditPayment(entry)}
@@ -674,7 +677,34 @@ export function RemainingPaymentModal({
                           <strong className="text-foreground">Nota:</strong> {entry.notes}
                         </p>
                       )}
-                      {entry.editedAt && (
+                      {Array.isArray(entry.edits) && entry.edits.length > 0 ? (
+                        <div className="mt-1 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-800 dark:text-amber-200 space-y-1.5">
+                          <p className="font-black flex items-center gap-1 uppercase tracking-wider">
+                            <History size={10} /> Historial de ediciones ({entry.edits.length})
+                          </p>
+                          <ol className="space-y-1.5">
+                            {entry.edits.map((ed, k) => (
+                              <li key={k} className="pl-2 border-l-2 border-amber-500/40">
+                                <p className="font-bold">{fmtDate(ed.at)}</p>
+                                {ed.before.amount !== ed.after.amount && (
+                                  <p>Monto: {formatCOP(ed.before.amount)} → <strong>{formatCOP(ed.after.amount)}</strong></p>
+                                )}
+                                {ed.before.method !== ed.after.method && (
+                                  <p>Método: {formatPaymentMethod(ed.before.method)} → <strong>{formatPaymentMethod(ed.after.method)}</strong></p>
+                                )}
+                                {(ed.before.notes || '') !== (ed.after.notes || '') && (
+                                  <p>Nota: «{ed.before.notes || '—'}» → «{ed.after.notes || '—'}»</p>
+                                )}
+                                {(ed.before.proofUrl || null) !== (ed.after.proofUrl || null) && <p>Se cambió el comprobante</p>}
+                                {ed.before.amount === ed.after.amount && ed.before.method === ed.after.method && (ed.before.notes || '') === (ed.after.notes || '') && (ed.before.proofUrl || null) === (ed.after.proofUrl || null) && (
+                                  <p>Sin cambios en los datos</p>
+                                )}
+                                {ed.reason && <p className="italic">Motivo: {ed.reason}</p>}
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      ) : entry.editedAt && (
                         <div className="mt-1 p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-700 dark:text-amber-300 space-y-0.5">
                           <p className="font-bold flex items-center gap-1">
                             <Edit3 size={9} /> Editado el {fmtDate(entry.editedAt)}
@@ -943,6 +973,21 @@ export function RemainingPaymentModal({
                   </button>
                 )}
               </div>
+
+              {/* Motivo de la edición (queda en el historial) */}
+              {editingPaymentId && (
+                <div>
+                  <input
+                    type="text"
+                    value={editReason}
+                    onChange={(e) => setEditReason(e.target.value)}
+                    placeholder="Motivo de la edición (ej: el cliente pagó por Nequi, no en efectivo)"
+                    maxLength={200}
+                    className="w-full px-3 py-2 text-xs bg-amber-500/5 border border-amber-500/40 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 text-foreground placeholder:text-muted-foreground"
+                  />
+                  <p className="mt-1 text-[10px] text-muted-foreground">El cambio queda guardado en el historial con la fecha y hora.</p>
+                </div>
+              )}
 
               {/* Nota opcional */}
               <div>

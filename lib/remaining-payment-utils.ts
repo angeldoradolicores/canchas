@@ -37,6 +37,17 @@ export interface PaymentEntry {
   previousAmount?: number;  // Monto anterior antes de editar
   previousMethod?: string;  // Método anterior antes de editar
   previousNotes?: string;   // Nota anterior antes de editar
+  /** Historial COMPLETO de ediciones (la más antigua primero). Nunca se borra. */
+  edits?: PaymentEdit[];
+}
+
+/** Una edición de un abono: qué tenía antes, qué quedó, cuándo y quién la hizo. */
+export interface PaymentEdit {
+  at: string;              // ISO timestamp de la edición
+  by?: string;             // ID del usuario que editó
+  reason?: string;         // Motivo escrito por el dueño (opcional)
+  before: { amount: number; method: string; notes?: string; proofUrl?: string | null };
+  after: { amount: number; method: string; notes?: string; proofUrl?: string | null };
 }
 
 /**
