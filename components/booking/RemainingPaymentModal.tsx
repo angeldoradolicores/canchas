@@ -108,6 +108,8 @@ export function RemainingPaymentModal({
   // Abonos recién editados en esta ventana: se muestran al instante con su historial.
   const [localEdits, setLocalEdits] = useState<Record<string, PaymentEntry>>({});
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  // Paso de confirmación: resumen del abono antes de guardarlo.
+  const [confirming, setConfirming] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -390,13 +392,18 @@ export function RemainingPaymentModal({
   };
 
   // Envío del cobro/abono
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (totalEntered <= 0) {
       setError('El monto a abonar debe ser mayor a cero.');
       return;
     }
+    setError(null);
+    setConfirming(true);
+  };
 
+  const doSubmit = async () => {
+    setConfirming(false);
     setSubmitting(true);
     setError(null);
 
@@ -1060,6 +1067,149 @@ export function RemainingPaymentModal({
         </form>
 
       </div>
+
+      {/* Confirmación del abono */}
+      {confirming && (() => {
+        const editingEntry = editingPaymentId ? paymentHistory.find(e => e.id === editingPaymentId) : null;
+        const oldAmount = Number(editingEntry?.amount || 0);
+        const paidBefore = depositAmount + totalPaidFromHistory - oldAmount;
+        const dueBefore = Math.max(0, totalPrice - paidBefore);
+        const dueAfter = Math.max(0, dueBefore - totalEntered);
+        const excess = Math.max(0, totalEntered - dueBefore);
+        const sessionB = isSessionContract && mode === 'session' && sessionTarget
+          ? planBookings.find((x: any) => x.id === sessionTarget.ids[0]) : null;
+        const matchDate = (sessionB || targetBooking)?.start_time;
+        const concept = isSessionContract
+          ? (mode === 'session' ? `Pago de sesión · ${sessionLabel}` : `Totalidad del plan (${planBookings.length} partidos)`)
+          : contractInfo.isContract
+            ? `${contractInfo.billingSchemeLabel}${contractInfo.isPlanBilling ? ` · ${contractInfo.totalSessions} partidos` : ''}`
+            : 'Saldo de la reserva';
+        const methodRows = selectedMethods.map(m => ({
+          label: PAYMENT_METHODS.find(x => x.id === m)?.label || m,
+          icon: PAYMENT_METHODS.find(x => x.id === m)?.icon || '',
+          amount: selectedMethods.length > 1 ? Number(methodAmounts[m] || 0) : totalEntered,
+        }));
+        const Row = ({ label, value, strong, tone }: { label: string; value: React.ReactNode; strong?: boolean; tone?: 'green' | 'blue' | 'muted' }) => (
+          <div className="flex items-center justify-between gap-3 py-1.5">
+            <span className="text-xs text-muted-foreground">{label}</span>
+            <span className={`text-sm text-right ${strong ? 'font-black' : 'font-bold'} ${tone === 'green' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'blue' ? 'text-blue-700 dark:text-blue-300' : 'text-foreground'}`}>{value}</span>
+          </div>
+        );
+        return (
+          <div className="fixed inset-0 z-[240] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in" role="dialog" aria-modal="true" aria-labelledby="confirm-abono-title">
+            <div className="bg-card w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl border border-border max-h-[92vh] overflow-y-auto">
+              <div className="p-4 sm:p-5 border-b border-border">
+                <p id="confirm-abono-title" className="text-base font-black text-foreground">
+                  {editingPaymentId ? 'Confirma la edición del abono' : 'Confirma el abono'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">Revisa los datos antes de guardar.</p>
+              </div>
+
+              <div className="p-4 sm:p-5 space-y-4">
+                {/* Monto principal */}
+                <div className="text-center rounded-2xl bg-emerald-500/10 border border-emerald-500/30 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                    {editingPaymentId ? 'Abono corregido' : 'Abono a registrar'}
+                  </p>
+                  <p className="text-3xl font-black text-emerald-700 dark:text-emerald-300 leading-tight">{formatCOP(totalEntered)}</p>
+                  {editingPaymentId && editingEntry && (
+                    <p className="text-[11px] text-muted-foreground font-semibold mt-0.5">
+                      Antes: {formatCOP(oldAmount)} · {formatPaymentMethod(editingEntry.method, editingEntry.splits)}
+                    </p>
+                  )}
+                </div>
+
+                {/* Reserva */}
+                <div className="divide-y divide-border/60">
+                  <Row label="Cliente" value={clientName} />
+                  <Row label="Cancha" value={pitchName} />
+                  {matchDate && <Row label="Partido" value={<span className="capitalize">{fmtDate(matchDate)}</span>} />}
+                  <Row label="Concepto" value={concept} />
+                </div>
+
+                {/* Métodos de pago */}
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-1">Método de pago</p>
+                  <div className="space-y-1">
+                    {methodRows.map(r => (
+                      <div key={r.label} className="flex items-center justify-between rounded-xl bg-secondary/50 border border-border px-3 py-2">
+                        <span className="text-xs font-bold text-foreground flex items-center gap-2"><span>{r.icon}</span>{r.label}</span>
+                        <span className="text-sm font-black text-foreground">{formatCOP(r.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Cuentas */}
+                <div className="rounded-2xl border border-border p-3 divide-y divide-border/60">
+                  <Row label="Valor total" value={formatCOP(totalPrice)} />
+                  <Row label="Pagado hasta ahora" value={formatCOP(paidBefore)} tone="green" />
+                  <Row label="Saldo antes de este abono" value={formatCOP(dueBefore)} />
+                  <Row label="Este abono" value={`− ${formatCOP(totalEntered)}`} tone="green" />
+                  <Row
+                    label={dueAfter <= 0 ? 'Saldo restante' : 'Queda por cobrar'}
+                    value={dueAfter <= 0 ? '✓ Pagado completo' : formatCOP(dueAfter)}
+                    strong
+                    tone={dueAfter <= 0 ? 'green' : 'blue'}
+                  />
+                </div>
+                {excess > 0 && (
+                  <div className="flex items-start gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-800 dark:text-amber-200 text-xs font-semibold">
+                    <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                    <span>Este abono supera el saldo por {formatCOP(excess)}. Revisa el monto.</span>
+                  </div>
+                )}
+
+                {/* Comprobante y nota */}
+                <div className="flex items-center gap-3 rounded-xl border border-border p-2.5">
+                  {photoPreview ? (
+                    <>
+                      <img src={photoPreview} alt="Comprobante del abono" className="w-14 h-14 object-cover rounded-lg border border-border shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1"><CheckCircle2 size={13} /> Con comprobante</p>
+                        <p className="text-[11px] text-muted-foreground">La imagen queda guardada con el abono.</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-14 h-14 rounded-lg bg-secondary border border-dashed border-border flex items-center justify-center shrink-0 text-muted-foreground"><Camera size={18} /></div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-foreground">Sin comprobante</p>
+                        <p className="text-[11px] text-muted-foreground">No se adjuntó imagen.</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+                {(notes.trim() || (editingPaymentId && editReason.trim())) && (
+                  <div className="text-xs space-y-1">
+                    {notes.trim() && <p><strong className="text-foreground">Nota:</strong> <span className="text-muted-foreground">{notes.trim()}</span></p>}
+                    {editingPaymentId && editReason.trim() && <p><strong className="text-foreground">Motivo de la edición:</strong> <span className="text-muted-foreground">{editReason.trim()}</span></p>}
+                  </div>
+                )}
+                <p className="text-[11px] text-muted-foreground">Se registra con fecha {editingPaymentId && editingEntry ? fmtDate(editingEntry.at) + ' (fecha original del abono)' : fmtDate(new Date().toISOString())}.</p>
+              </div>
+
+              <div className="p-4 sm:p-5 pt-0 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirming(false)}
+                  className="py-3 rounded-xl border border-border bg-card hover:bg-secondary text-sm font-bold text-foreground cursor-pointer"
+                >
+                  Volver a editar
+                </button>
+                <button
+                  type="button"
+                  onClick={doSubmit}
+                  autoFocus
+                  className="py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-black cursor-pointer"
+                >
+                  {editingPaymentId ? 'Sí, guardar' : 'Sí, registrar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Modal de Vista Previa de Imagen */}
       {viewingImage && (
