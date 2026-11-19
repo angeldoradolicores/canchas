@@ -549,6 +549,9 @@ export function isContractBookingRow(b: any): boolean {
  * Un solo mensaje con el resumen (días, horario, fechas, partidos y valor), no una hora por línea.
  */
 export async function notifyContractChange(bookingIds: string[], event: 'created' | 'confirmed' | 'cancelled') {
+  // Desactivado por decisión del dueño (2026-11-18): no se envían WhatsApp de turnos fijos
+  // (registrado, confirmado ni cancelado). Para reactivarlo: CONTRACT_WHATSAPP_ENABLED=1 en Vercel.
+  if (process.env.CONTRACT_WHATSAPP_ENABLED !== '1') return;
   try {
     const ids = Array.from(new Set((bookingIds || []).filter(Boolean))).slice(0, 1500);
     if (ids.length === 0) return;
