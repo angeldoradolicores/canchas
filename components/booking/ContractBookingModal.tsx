@@ -1695,8 +1695,8 @@ export function ContractBookingModal({
 
               </>)}
 
-              {/* Precio de cada hora del turno fijo */}
-              {selectedSlots.length > 0 && (
+              {/* Precio de cada hora del turno fijo (en "Fechas a elegir" cada partido ya tiene su valor) */}
+              {!isCustom && selectedSlots.length > 0 && (
                 <div className="p-3.5 rounded-2xl bg-green-500/10 border border-green-500/30 space-y-2.5">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <span className="flex items-center gap-1.5 text-xs font-black text-foreground">
