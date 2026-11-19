@@ -969,8 +969,8 @@ export default function BookingsPage() {
   };
 
   // Manejar actualización exitosa del pago restante en local físico sin caídas
-  const handleRemainingPaymentSuccess = (updatedData: any, bookingIds?: string[]) => {
-    setSelectedBookingForRemainingPayment(null);
+  const handleRemainingPaymentSuccess = (updatedData: any, bookingIds?: string[], opts?: { keepOpen?: boolean }) => {
+    if (!opts?.keepOpen) setSelectedBookingForRemainingPayment(null);
     const targetIds = Array.isArray(bookingIds)
       ? bookingIds
       : Array.isArray(updatedData?.bookingIds)
@@ -987,11 +987,16 @@ export default function BookingsPage() {
           const currentHistory = parsePaymentHistory(b);
           let newHistory: any[];
           const editIdx = currentHistory.findIndex((e: any) => e.id === updatedData?.id);
+          // Una edición trae el abono con su historial de ediciones: se reemplaza al instante.
+          const { status: _st, ...entryData } = updatedData || {};
           if (editIdx >= 0) {
             newHistory = [...currentHistory];
-            newHistory[editIdx] = updatedData;
+            newHistory[editIdx] = entryData;
+          } else if (entryData?.editedAt) {
+            // Edición de un abono que esta hora no tenía: no se agrega.
+            return b;
           } else {
-            newHistory = [...currentHistory, updatedData];
+            newHistory = [...currentHistory, entryData];
           }
 
           const totalPaid = getTotalPaid(newHistory);

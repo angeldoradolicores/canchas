@@ -147,6 +147,8 @@ export async function POST(req: NextRequest) {
     // 5. Para cada reserva, procesar el historial y guardar con triple fallback
     let supportsNativeRemaining = true;
     let editedCount = 0;
+    // El abono tal como quedó guardado (en una edición: con su fecha original y su historial).
+    let savedEntry: any = newEntry;
 
     for (const b of bookingsData) {
       let existingHistory: any[] = existingHistories[b.id] ? [...existingHistories[b.id]] : [];
@@ -199,6 +201,7 @@ export async function POST(req: NextRequest) {
           edits: [...priorEdits, { at: timestamp, by: user.id, ...(editReason ? { reason: editReason } : {}), before: snapshot(old), after: snapshot(newEntry) }],
         };
         existingHistory[existingIdx] = entry;
+        savedEntry = entry;
       } else {
         existingHistory.push(newEntry);
       }
@@ -280,7 +283,7 @@ export async function POST(req: NextRequest) {
       success: true,
       message: edit_payment_id ? 'Pago editado con éxito.' : 'Abono registrado con éxito.',
       data: {
-        ...newEntry,
+        ...savedEntry,
         status: 'completed',
       },
     });

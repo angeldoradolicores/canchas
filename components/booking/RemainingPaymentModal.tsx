@@ -22,7 +22,7 @@ interface RemainingPaymentModalProps {
   bookingGroup?: any;
   booking?: any;
   allBookings?: any[];
-  onSuccess: (updatedPayment: any, bookingIds?: string[]) => void;
+  onSuccess: (updatedPayment: any, bookingIds?: string[], opts?: { keepOpen?: boolean }) => void;
   /** Turno fijo "por sesión": cobrar solo la sesión o la totalidad del plan. */
   collectMode?: 'session' | 'total';
   /** Sesión puntual (fecha) elegida para pagar en un turno fijo por sesión. */
@@ -105,6 +105,9 @@ export function RemainingPaymentModal({
   const [methodAmounts, setMethodAmounts] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<string>('');
   const [editReason, setEditReason] = useState<string>('');
+  // Abonos recién editados en esta ventana: se muestran al instante con su historial.
+  const [localEdits, setLocalEdits] = useState<Record<string, PaymentEntry>>({});
+  const [savedNotice, setSavedNotice] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -171,9 +174,11 @@ export function RemainingPaymentModal({
         }
       }
     }
-    // Ordenar por fecha
-    return allEntries.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
-  }, [targetBooking, contractInfo, allBookings, isSessionContract, planBookings]);
+    // Ordenar por fecha (con las ediciones recién guardadas ya aplicadas)
+    return allEntries
+      .map(e => localEdits[e.id] || e)
+      .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  }, [targetBooking, contractInfo, allBookings, isSessionContract, planBookings, localEdits]);
 
   // Total ya pagado en abonos del historial
   const totalPaidFromHistory = useMemo(() => getTotalPaid(paymentHistory), [paymentHistory]);
@@ -454,6 +459,18 @@ export function RemainingPaymentModal({
         throw new Error(resJson.error || 'No se pudo registrar el abono.');
       }
 
+      if (editingPaymentId) {
+        // Edición: la ventana sigue abierta y el historial se ve de inmediato.
+        const { status: _st, ...saved } = resJson.data || {};
+        setLocalEdits(prev => ({ ...prev, [editingPaymentId]: saved as PaymentEntry }));
+        setEditingPaymentId(null);
+        setEditReason('');
+        setShowHistory(true);
+        setSavedNotice('Edición guardada. Quedó registrada en el historial.');
+        setTimeout(() => setSavedNotice(null), 4000);
+        onSuccess(resJson.data, bookingIds, { keepOpen: true });
+        return;
+      }
       onSuccess(resJson.data, bookingIds);
       onClose();
     } catch (err: any) {
@@ -575,6 +592,13 @@ export function RemainingPaymentModal({
                 {Math.round(((depositAmount + totalPaidFromHistory) / totalPrice) * 100)}% pagado
                 {paymentHistory.length > 0 && ` · ${paymentHistory.length} abono${paymentHistory.length > 1 ? 's' : ''}`}
               </p>
+            </div>
+          )}
+
+          {savedNotice && (
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold animate-in fade-in" role="status">
+              <CheckCircle2 size={15} className="shrink-0" />
+              <span>{savedNotice}</span>
             </div>
           )}
 
