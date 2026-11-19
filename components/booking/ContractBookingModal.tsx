@@ -270,6 +270,8 @@ export function ContractBookingModal({
   const [customWeeks, setCustomWeeks] = useState<number>(8);
   // "Fechas a elegir": cada fecha con SUS propias horas (YYYY-MM-DD → ['18:00', ...]).
   const [customPlan, setCustomPlan] = useState<Record<string, string[]>>({});
+  // Valor propio de cada partido en "Fechas a elegir" ('YYYY-MM-DD_HH:MM' → dígitos). Vacío = valor general de esa hora.
+  const [customPrices, setCustomPrices] = useState<Record<string, string>>({});
   const [calMonth, setCalMonth] = useState<string>(() => todayBogota().slice(0, 7));
   // Desde qué día se cuenta el turno fijo. Por defecto HOY: cada día de la semana elegido muestra
   // su fecha (ej. "Sáb 21 nov"), así no hace falta escoger la "fecha del primer partido".
@@ -553,8 +555,17 @@ export function ContractBookingModal({
     return Number(selectedPitch?.price_per_hour || 0);
   }, [slotPrices, customRate, selectedPitch]);
 
-  const totalPrice = allSessions.reduce((sum, s) => sum + priceForSlot(s.baseSlot), 0);
-  const slotPriceValues = selectedSlots.map(priceForSlot);
+  /** Valor de un partido: el que el dueño escribió para ese día y hora, o el general de esa hora. */
+  const sessionPrice = useCallback((sess: { baseDate: string; baseSlot: string }) => {
+    if (isCustom) {
+      const raw = customPrices[`${sess.baseDate}_${sess.baseSlot}`];
+      if (raw !== undefined && raw !== '' && !isNaN(Number(raw))) return Number(raw);
+    }
+    return priceForSlot(sess.baseSlot);
+  }, [isCustom, customPrices, priceForSlot]);
+
+  const totalPrice = allSessions.reduce((sum, s) => sum + sessionPrice(s), 0);
+  const slotPriceValues = isCustom && allSessions.length > 0 ? allSessions.map(sessionPrice) : selectedSlots.map(priceForSlot);
   const pricesVary = new Set(slotPriceValues).size > 1;
   const avgRate = totalSessions > 0 ? Math.round(totalPrice / totalSessions) : (slotPriceValues[0] ?? effectiveRate);
   const rateLabel = pricesVary
@@ -731,7 +742,7 @@ export function ContractBookingModal({
       const monthPlanPrice = isCustom ? totalPrice : Math.round(sessionsPerMonth > 0 ? weekPrice * 4 : 0);
       const contractTotalPrice = totalPrice;
 
-      const contractTag = `[TURNO FIJO / CONTRATO · CID:${contractId} · ESQUEMA:${billingScheme} · PLAN_TOTAL:${contractTotalPrice} · MES_TOTAL:${monthPlanPrice} · TARIFA:${avgRate} · SESIONES:${allSessions.length} · ${clientType === 'entity' ? 'ENTIDAD: ' + (clientEntityName || customerName) : clientType === 'school' ? 'ESCUELA: ' + (clientEntityName || customerName) : 'PARTICULAR'} · Cobro: ${billingSchemeLabel} · Canal: ${paymentChannel} · Tarifa: ${pricesVary ? selectedSlots.map(sl => `${fmt12(sl)} ${formatCOP(priceForSlot(sl))}`).join(', ') : formatCOP(avgRate) + '/h'} · ${DAYS_OF_WEEK.filter(d => selectedDays.includes(d.key)).map(d => d.full).join(', ')} · ${slotsText}]`;
+      const contractTag = `[TURNO FIJO / CONTRATO · CID:${contractId} · ESQUEMA:${billingScheme} · PLAN_TOTAL:${contractTotalPrice} · MES_TOTAL:${monthPlanPrice} · TARIFA:${avgRate} · SESIONES:${allSessions.length} · ${clientType === 'entity' ? 'ENTIDAD: ' + (clientEntityName || customerName) : clientType === 'school' ? 'ESCUELA: ' + (clientEntityName || customerName) : 'PARTICULAR'} · Cobro: ${billingSchemeLabel} · Canal: ${paymentChannel} · Tarifa: ${isCustom && pricesVary ? 'valor propio por fecha' : pricesVary ? selectedSlots.map(sl => `${fmt12(sl)} ${formatCOP(priceForSlot(sl))}`).join(', ') : formatCOP(avgRate) + '/h'} · ${DAYS_OF_WEEK.filter(d => selectedDays.includes(d.key)).map(d => d.full).join(', ')} · ${slotsText}]`;
       const noteWithTag = `${contractTag}${customerNote ? ` · ${customerNote}` : ''}`;
 
       setSuccessMsg(`Guardando ${allSessions.length} reservas en un solo proceso...`);
@@ -748,7 +759,7 @@ export function ContractBookingModal({
             pitch_id: selectedPitch.id,
             dates: allDates,
             selected_times: selectedSlots,
-            sessions: allSessions.map(s => ({ date: s.date, slot: s.slot, time: s.slot, price: priceForSlot(s.baseSlot) })),
+            sessions: allSessions.map(s => ({ date: s.date, slot: s.slot, time: s.slot, price: sessionPrice(s) })),
             strict: true,
             customer_name: contractCustomerName.slice(0, 100),
             customer_phone: customerPhone,
@@ -813,7 +824,7 @@ export function ContractBookingModal({
     } finally {
       setLoading(false);
     }
-  }, [selectedPitch, selectedDays, selectedSlots, customerName, customerPhone, customerNote, allDates, allSessions, effectiveRate, avgRate, totalPrice, priceForSlot, pricesVary, clientType, clientEntityName, paymentMethod, paymentChannel, billingScheme, occupiedSessions, supabase, onSuccess, entitiesStorageKey]);
+  }, [selectedPitch, selectedDays, selectedSlots, customerName, customerPhone, customerNote, allDates, allSessions, effectiveRate, avgRate, totalPrice, priceForSlot, pricesVary, clientType, clientEntityName, paymentMethod, paymentChannel, billingScheme, occupiedSessions, supabase, onSuccess, entitiesStorageKey, sessionPrice, isCustom]);
 
   // ── Navegación entre pasos ──────────────────────────────────────────────────
 
@@ -1367,7 +1378,6 @@ export function ContractBookingModal({
                       <button
                         type="button"
                         onClick={() => setCalMonth(m => { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo - 2, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; })}
-                        disabled={calMonth <= todayBogota().slice(0, 7)}
                         className="p-1.5 rounded-lg hover:bg-secondary disabled:opacity-30 cursor-pointer"
                         aria-label="Mes anterior"
                       >
@@ -1398,16 +1408,15 @@ export function ContractBookingModal({
                         for (let k = 0; k < firstWd; k++) cells.push(<span key={`e${k}`} />);
                         for (let d = 1; d <= daysIn; d++) {
                           const ymd = `${calMonth}-${String(d).padStart(2, '0')}`;
-                          const past = ymd < today;
+                          const past = ymd < today; // se permite: el dueño puede registrar partidos ya jugados
                           const sel = !!customPlan[ymd];
                           const n = customPlan[ymd]?.length || 0;
                           cells.push(
                             <button
                               key={ymd}
                               type="button"
-                              disabled={past}
                               onClick={() => toggleCustomDate(ymd)}
-                              className={`relative h-10 rounded-lg text-xs font-bold transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-30 ${sel
+                              className={`relative h-10 rounded-lg text-xs font-bold transition-all cursor-pointer ${!sel && past ? 'text-muted-foreground/60' : ''} ${sel
                                 ? 'bg-green-600 text-white shadow-sm'
                                 : ymd === today
                                   ? 'border border-green-500 text-foreground hover:bg-green-500/10'
@@ -1426,7 +1435,7 @@ export function ContractBookingModal({
                       })()}
                     </div>
                     <p className="mt-2 text-[11px] text-muted-foreground">
-                      Toca los días en que juegan (puedes pasar de mes). Tocar de nuevo un día lo quita.
+                      Toca los días en que juegan (puedes pasar de mes e incluir días pasados). Tocar de nuevo un día lo quita.
                     </p>
                   </div>
 
@@ -1481,11 +1490,37 @@ export function ContractBookingModal({
                               })}
                             </div>
                             {chosen.length === 0 && <p className="mt-1.5 text-[10px] font-bold text-amber-700 dark:text-amber-400">Elige al menos una hora para este día.</p>}
+                            {chosen.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-border/60 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                {[...chosen].sort().map(sl => {
+                                  const k = `${dt}_${sl}`;
+                                  return (
+                                    <label key={k} className="flex items-center gap-2 rounded-lg bg-secondary/40 border border-border px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-green-500/30">
+                                      <span className="text-[11px] font-black text-green-700 dark:text-green-300 w-14 shrink-0">{fmt12(sl)}</span>
+                                      <span className="text-xs font-bold text-muted-foreground">$</span>
+                                      <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        autoComplete="off"
+                                        placeholder={fmtThousands(String(priceForSlot(sl)))}
+                                        value={fmtThousands(customPrices[k] ?? '')}
+                                        onChange={e => {
+                                          const digits = e.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 9);
+                                          setCustomPrices(prev => ({ ...prev, [k]: digits }));
+                                        }}
+                                        aria-label={`Valor del partido ${formatDateFriendly(dt)} a las ${fmt12(sl)}`}
+                                        className="min-w-0 flex-1 bg-transparent text-xs font-black text-foreground outline-none placeholder:text-muted-foreground/60"
+                                      />
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
                       <p className="text-xs font-bold text-foreground">
-                        {customDates.length} {customDates.length === 1 ? 'día' : 'días'} · {allSessions.length} {allSessions.length === 1 ? 'partido' : 'partidos'}
+                        {customDates.length} {customDates.length === 1 ? 'día' : 'días'} · {allSessions.length} {allSessions.length === 1 ? 'partido' : 'partidos'} · Total {formatCOP(totalPrice)}
                       </p>
                     </div>
                   )}
@@ -1502,12 +1537,21 @@ export function ContractBookingModal({
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      disabled={startDate <= todayBogota()}
-                      onClick={() => setStartDate(prev => { const t = todayBogota(); const n = addDaysYmd(prev, -7); return n < t ? t : n; })}
-                      className="px-2 py-1 rounded-lg border border-border bg-card text-[10px] font-bold text-muted-foreground hover:bg-secondary disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                      onClick={() => setStartDate(prev => addDaysYmd(prev, -7))}
+                      className="px-2 py-1 rounded-lg border border-border bg-card text-[10px] font-bold text-muted-foreground hover:bg-secondary cursor-pointer"
                     >
                       ← Semana anterior
                     </button>
+                    <label className="flex items-center gap-1 px-2 py-0.5 rounded-lg border border-border bg-card text-[10px] font-bold text-muted-foreground" title="Empieza desde esta fecha (puede ser una fecha pasada)">
+                      Desde
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={e => e.target.value && setStartDate(e.target.value)}
+                        className="bg-transparent text-[10px] font-black text-foreground outline-none"
+                        aria-label="Fecha desde la que empieza el turno fijo"
+                      />
+                    </label>
                     <button
                       type="button"
                       onClick={() => setStartDate(prev => addDaysYmd(prev, 7))}
