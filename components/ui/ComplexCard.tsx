@@ -220,7 +220,11 @@ export function ComplexCard({ complex, onOpen, onBook, buttonText = "Reservar" }
                 </p>
               )}
 
-              <h3 className="text-sx font-bold tracking-tight text-foreground line-clamp-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors capitalize">
+              {/* Nombre completo: sin cortar, en líneas parejas (text-balance) y partiendo palabras muy largas. */}
+              <h3
+                title={complex.name}
+                className="text-sm font-bold tracking-tight leading-snug text-foreground text-balance break-words hyphens-auto group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors capitalize"
+              >
                 {complex.name}
               </h3>
 
